@@ -1,3 +1,4 @@
+import configparser
 import fnmatch
 import json
 import shutil
@@ -62,6 +63,11 @@ def project(root: Path, tests: list[str], module: str = "src/shop/price.py") -> 
     commit(root, "base")
     (root / module).write_text(PRICE)
     commit(root, "require a total of 100")
+
+
+def package_testing(command: list[str]) -> Group:
+    check = {"name": "tests", "role": "tests", "command": command}
+    return {"path": ".", "language": "python", "checks": [check]}
 
 
 def sources(directory: Path, group: Group) -> set[Path]:
@@ -161,7 +167,9 @@ def test_each_python_survivor_is_read_from_its_own_diff(
 
     monkeypatch.setattr(mutation, "run", run)
     changed = {"src/shop/price.py": {2}}
-    assert mutation.python(tmp_path, changed, ["pytest"], None, tmp_path) == (
+    assert mutation.python(
+        tmp_path, changed, package_testing(["pytest"]), None, tmp_path
+    ) == (
         2,
         [("src/shop/price.py", 2, " → ".join(boundary), False)],
     )
@@ -201,7 +209,11 @@ def test_a_mutant_that_no_test_ran_is_not_reported_as_passing_tests(
 
     monkeypatch.setattr(mutation, "run", run)
     tested, survivors = mutation.python(
-        tmp_path, {"src/shop/price.py": {2, 3}}, ["pytest"], None, tmp_path
+        tmp_path,
+        {"src/shop/price.py": {2, 3}},
+        package_testing(["pytest"]),
+        None,
+        tmp_path,
     )
     mutation.summary("python", tested, survivors, Path("."))
     lines = capsys.readouterr().out.splitlines()
@@ -233,7 +245,11 @@ def test_failed_mutmut_run_is_reported_instead_of_a_clean_result(
     monkeypatch.setattr(mutation, "run", run)
     with pytest.raises(ValueError, match="fixture 'client' not found"):
         mutation.python(
-            tmp_path, {"src/shop/price.py": {2}}, ["pytest"], None, tmp_path
+            tmp_path,
+            {"src/shop/price.py": {2}},
+            package_testing(["pytest"]),
+            None,
+            tmp_path,
         )
 
 
@@ -264,7 +280,11 @@ Filter: ('shop.price.x_discount__mutmut_*',)
 
     monkeypatch.setattr(mutation, "run", run)
     tested, survivors = mutation.python(
-        tmp_path, {"src/shop/price.py": {2}}, ["pytest"], None, tmp_path
+        tmp_path,
+        {"src/shop/price.py": {2}},
+        package_testing(["pytest"]),
+        None,
+        tmp_path,
     )
     mutation.summary("python", tested, survivors, tmp_path)
     assert capsys.readouterr().out == "python: no mutants on the changed lines.\n"
@@ -302,7 +322,9 @@ def write_stryker_config(
         return 0
 
     monkeypatch.setattr(mutation, "run", run)
-    mutation.javascript(package, {name: {2}}, ["pnpm", "test"], None, work)
+    mutation.javascript(
+        package, {name: {2}}, package_testing(["pnpm", "test"]), None, work
+    )
     return work / "stryker.json"
 
 
@@ -454,21 +476,55 @@ def test_the_mutation_run_starts_poetry_the_way_the_gates_do() -> None:
 def test_mutmut_settings_keep_the_rest_of_setup_cfg(tmp_path: Path) -> None:
     original = "[tool:pytest]\nDJANGO_SETTINGS_MODULE = app.settings\n"
     (tmp_path / "setup.cfg").write_text(original)
-    mutation.configure_mutmut(tmp_path, ["main.py"])
+    mutation.configure_mutmut(tmp_path, ["main.py"], [])
     written = (tmp_path / "setup.cfg").read_text()
     assert written.startswith(original)
     assert "[mutmut]\nsource_paths =\n\tmain.py\n" in written
     assert "also_copy" not in written
 
 
+def test_mutmut_settings_leave_out_each_performance_suite_of_the_package(
+    tmp_path: Path,
+) -> None:
+    original = "[tool:pytest]\nDJANGO_SETTINGS_MODULE = app.settings\n"
+    (tmp_path / "setup.cfg").write_text(original)
+    suites = ["tests/performance", "tests/api/performance"]
+    mutation.configure_mutmut(tmp_path, ["main.py"], suites)
+    written = (tmp_path / "setup.cfg").read_text()
+    assert written.startswith(original)
+    assert (
+        "pytest_add_cli_args =\n"
+        "\t--ignore=tests/api/performance\n\t--ignore=tests/performance\n"
+    ) in written
+    (tmp_path / "setup.cfg").unlink()
+    mutation.configure_mutmut(tmp_path, ["main.py"], ["tests/100%/performance"])
+    plain = configparser.ConfigParser()
+    plain.read(tmp_path / "setup.cfg")
+    assert plain["mutmut"]["pytest_add_cli_args"].split() == [
+        "--ignore=tests/100%/performance"
+    ]
+    (tmp_path / "setup.cfg").unlink()
+    mutation.configure_mutmut(tmp_path, ["main.py"], [])
+    assert "pytest_add_cli_args" not in (tmp_path / "setup.cfg").read_text()
+    package: Group = {
+        "path": ".",
+        "language": "python",
+        "checks": [
+            {"name": "t", "role": "tests", "command": ["pytest"]},
+            {"name": "p", "role": "performance", "command": ["pytest", *suites]},
+        ],
+    }
+    assert mutation.package_suites(package) == suites
+
+
 def test_mutmut_keeps_the_projects_own_source_paths(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text('[tool.mutmut]\nsource_paths = ["app"]\n')
-    mutation.configure_mutmut(tmp_path, ["main.py"])
+    mutation.configure_mutmut(tmp_path, ["main.py"], [])
     assert not (tmp_path / "setup.cfg").exists()
     (tmp_path / "pyproject.toml").unlink()
     for own in ("[mutmut]\n", "[mutmut] # settings\n", "  [mutmut]\n"):
         (tmp_path / "setup.cfg").write_text(f"{own}source_paths = app\n")
-        mutation.configure_mutmut(tmp_path, ["main.py"])
+        mutation.configure_mutmut(tmp_path, ["main.py"], [])
         assert (tmp_path / "setup.cfg").read_text() == f"{own}source_paths = app\n"
 
 
@@ -523,3 +579,29 @@ def test_a_capped_tool_raises_capped_and_leaves_no_process_behind(
             spawner(pid_file), tmp_path, time.monotonic() + 2, tmp_path / "log"
         )
     assert gone(pid_file)
+
+
+def test_the_python_mutation_report_runs_when_a_performance_test_fails_under_mutmut(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "repo"
+    project(root, ["uv", "run", "--no-sync", "pytest"])
+    config = json.loads((root / "hard-eng.gates.json").read_text())
+    config["packages"][0]["checks"].append(
+        {
+            "name": "performance",
+            "role": "performance",
+            "command": ["uv", "run", "--no-sync", "pytest", "tests/performance"],
+        }
+    )
+    (root / "hard-eng.gates.json").write_text(json.dumps(config))
+    (root / "tests/performance").mkdir()
+    (root / "tests/performance/test_speed.py").write_text(
+        "from pathlib import Path\n\n\n"
+        "def test_runs_outside_mutmut() -> None:\n"
+        '    assert "mutants" not in Path(__file__).parts\n'
+    )
+    assert mutation.report(root, "HEAD~1", None, sources) == 0
+    output = capsys.readouterr().out
+    assert "could not run" not in output
+    assert "src/shop/price.py:2  if total >= 100 and member: → " in output

@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 from gate_config import (
     ALL_ZERO_OBJECT_ID,
     SOURCE_FILE,
+    TEST_FOLDERS,
     changed_files,
     repository_files,
 )
@@ -734,13 +735,10 @@ def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
     return status
 
 
-TEST_DIRECTORIES = {"tests", "test", "__tests__"}
-
-
 def _is_test(path: PurePosixPath) -> bool:
     name = path.name
     return (
-        bool(TEST_DIRECTORIES.intersection(path.parts[:-1]))
+        bool(TEST_FOLDERS.intersection(path.parts[:-1]))
         or name.startswith("test_")
         or name.endswith(("_test.py", "_test.dart", "Tests.swift"))
         or bool(TEST_FILE_SUFFIX.search(name))

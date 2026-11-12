@@ -263,8 +263,10 @@ def prepare_reports(
         raise ValueError("Import Linter must run all configured contracts")
     if scanner in {"performance-junit", "performance-dart"}:
         reject_test_filters(command, directory, group.get("language"))
-        for suite in command:
-            if Path(suite).name == "performance" and not (directory / suite).is_dir():
+        from gate_config import performance_suites
+
+        for suite in performance_suites(command):
+            if not (directory / suite).is_dir():
                 raise ValueError(
                     f"HE-PERFORMANCE-SUITE: {suite} does not exist; add a test there "
                     "with a real workload and a time budget, or, after review, record a "
@@ -436,6 +438,22 @@ def shard_reports(group: Group, gate: Gate) -> None:
         keep_reports(ROOT, group, gate)
 
 
+def remembered_output(
+    group: Group,
+    gate: Gate,
+    command: list[str],
+    result: subprocess.CompletedProcess[bytes] | None,
+    log: IO[str],
+) -> str:
+    """The text of a gate log, with the step to take first when a Dart analysis lacks generated files."""
+    from process_group import generated_files_note
+
+    log.seek(0)
+    text = log.read()
+    note = generated_files_note(command, result.returncode, text) if result else ""
+    return note + remember(group, gate, text)
+
+
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -509,8 +527,9 @@ def run_limited_gate(
             finally:
                 with output_lock:
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
-                    log.seek(0)
-                    sys.stdout.write(remember(group, gate, log.read()))
+                    sys.stdout.write(
+                        remembered_output(group, gate, command, result, log)
+                    )
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         shard_reports(group, gate)

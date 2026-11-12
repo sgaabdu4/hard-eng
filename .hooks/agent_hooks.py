@@ -755,7 +755,7 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
-def session_scope(root: Path, base: str) -> tuple[str, str]:
+def session_scope(root: Path, base: str, recorded: bool = True) -> tuple[str, str]:
     """Commits already on a remote passed pre-push and are not this session's change; the commit of HEAD comes with the base."""
     listing = ["rev-list", "--first-parent", "--parents", "HEAD", "--not", "--remotes"]
     unpushed = subprocess.check_output(
@@ -773,6 +773,8 @@ def session_scope(root: Path, base: str) -> tuple[str, str]:
         ).stdout.strip()
     if not point or point == base:
         return base, head
+    if not recorded:
+        return point, head
     older = subprocess.run(
         ["git", "merge-base", "--is-ancestor", point, base],
         cwd=root,
@@ -839,7 +841,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             base = subprocess.check_output(
                 ["git", *verify], cwd=root, text=True
             ).strip()
-        base, head = session_scope(root, base)
+        base, head = session_scope(root, base, recorded)
         current = dirty_files(root, base, others)
         changed = "".join(
             f"{name}\n"
@@ -910,11 +912,11 @@ def checked_changes(
             "decision": "block",
             "reason": f"Hard Eng: another Hard Eng check holds this checkout's lock, so this turn's changes are not checked; that check may predate your last edits. You started it after your last edit → read its exit notice + fix its findings. Else → start `python3 .hooks/hard-eng.py {step}` in the background (it waits its turn) + read its exit notice. Don't claim done.",
         }
-    minutes = None if building else covering_minutes(root, passed, tip, base)
-    if minutes is None:
+    covered = None if building else covering_minutes(root, passed, tip, base)
+    if covered is None:
         returncode, output = run_check(root, base, building)
     else:
-        returncode, output, notice = 0, "", notice or passed_note(minutes)
+        returncode, output, notice = 0, "", notice or passed_note(*covered)
     if SMALL_SIZE in output:
         building, notice = False, QUICK_PASS
     decisions = show_decisions(root, changed.splitlines(), state)

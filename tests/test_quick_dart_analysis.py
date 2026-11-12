@@ -23,6 +23,13 @@ shift 2
 code=0
 if [ "$#" -eq 0 ] || [ "$1" = . ]; then
   if [ -e old.txt ]; then cat old.txt; code=3; fi
+  if [ -e missing.txt ]; then
+    echo "error - lib/a.dart:1:8 - Target of URI hasn't been generated - uri_has_not_been_generated"
+    code=3
+  fi
+  if [ -e noisy.txt ]; then
+    echo "info - lib/a.dart:1:8 - Target of URI hasn't been generated - uri_has_not_been_generated"
+  fi
   set -- $(grep -rl SEEDED lib --include='*.dart' --exclude='*.g.dart')
 elif [ -e slow ]; then
   sleep 2
@@ -113,7 +120,9 @@ def project(
     (root / "tools/dart").write_text(TOOL)
     (root / "tools/dart").chmod(0o755)
     monkeypatch.setenv("PATH", str(root / "tools") + os.pathsep + os.environ["PATH"])
-    (root / ".gitignore").write_text("__pycache__/\ntools/\ntrace\nold.txt\nslow\n")
+    (root / ".gitignore").write_text(
+        "__pycache__/\ntools/\ntrace\nold.txt\nmissing.txt\nnoisy.txt\nslow\n"
+    )
     touch(root, ["lib/a.dart", "lib/b.dart", "lib/made.g.dart"])
     configure(
         root,
@@ -275,3 +284,149 @@ def test_a_pass_on_the_changed_files_leaves_the_gate_time_and_the_old_findings_a
     assert trace(tmp_path) == ["analyze --fatal-infos lib/a.dart"]
     assert "recorded lines are fixed" not in capsys.readouterr().out
     assert json.loads(times.read_text()) == {"./types-lint": 900.0}
+
+
+GENERATED = (
+    "Generated Dart files are missing in this checkout. Run the code generation of "
+    "this package, then run the check again. Give the gate that runs it the role "
+    "`generated` in hard-eng.gates.json: a new checkout then runs it one time before "
+    "this gate."
+)
+
+
+@pytest.mark.parametrize("quick", [False, True])
+def test_a_dart_analysis_with_missing_generated_files_names_the_step(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    quick: bool,
+) -> None:
+    base = project(runner, monkeypatch)
+    (tmp_path / "missing.txt").touch()
+    (tmp_path / "lib/a.dart").write_text("// SEEDED\n")
+    assert runner.check(base=base, verify_plan=False, quick=quick) == 1
+    shown = capsys.readouterr().out
+    assert shown.count(GENERATED) == 1
+    assert shown.index(GENERATED) < shown.index("uri_has_not_been_generated")
+    assert GENERATED in agent_hooks.failure_summary(shown)
+
+
+def test_a_dart_analysis_with_other_findings_prints_no_generation_note(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    other: dict[str, object] = {
+        "name": "lint",
+        "role": "lint",
+        "command": ["sh", "-c", "echo uri_has_not_been_generated; exit 1"],
+    }
+    base = project(runner, monkeypatch, other)
+    (tmp_path / "old.txt").write_text(OLD)
+    assert runner.check(base=base, verify_plan=False) == 1
+    shown = capsys.readouterr().out
+    assert "FAIL types-lint" in shown
+    assert "FAIL lint" in shown
+    assert GENERATED[:20] not in shown
+    (tmp_path / "old.txt").unlink()
+    configure(
+        tmp_path,
+        [
+            {"name": "types-lint", "role": "types", "command": [*DART, "."]},
+            {**other, "command": ["sh", "-c", "echo uri_has_not_been_generated"]},
+        ],
+    )
+    assert runner.check(base=base, verify_plan=False) == 0
+    assert GENERATED[:20] not in capsys.readouterr().out
+
+
+def test_a_passed_dart_analysis_prints_no_generation_note_for_a_line_that_names_the_code(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    base = project(runner, monkeypatch)
+    (tmp_path / "noisy.txt").touch()
+    assert runner.check(base=base, verify_plan=False) == 0
+    shown = capsys.readouterr().out
+    assert "uri_has_not_been_generated" in shown
+    assert GENERATED[:20] not in shown
+
+
+def write_parts(root: Path, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+
+
+@pytest.mark.parametrize(
+    ("path", "files", "changed", "listed"),
+    [
+        (
+            ".",
+            {"lib/text/label.dart": "// library\n"},
+            ["lib/text/label_parts.dart"],
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+        ),
+        (
+            ".",
+            {"lib/label.dart": "// library\n"},
+            ["lib/text/deep.dart"],
+            ["lib/label.dart", "lib/text/deep.dart"],
+        ),
+        (
+            ".",
+            {"lib/text/label.dart": "// library\n"},
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+        ),
+        (
+            "app",
+            {"app/lib/text/label.dart": "// library\n"},
+            ["app/lib/text/label_parts.dart"],
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+        ),
+    ],
+)
+def test_a_changed_part_file_brings_its_library_into_the_first_run(
+    tmp_path: Path,
+    path: str,
+    files: dict[str, str],
+    changed: list[str],
+    listed: list[str],
+) -> None:
+    directive = {
+        "label_parts.dart": "part of 'label.dart';\n",
+        "deep.dart": 'part of "../label.dart";\n',
+    }
+    write_parts(tmp_path, files)
+    for name in changed:
+        base = name.rsplit("/", 1)[-1]
+        write_parts(tmp_path, {name: directive.get(base, "// fixture\n")})
+    got = changed_dart(tmp_path, [analysis(path, [*DART, "."])], set(changed))
+    assert got == {f"{path}/types-lint": listed}
+
+
+@pytest.mark.parametrize(
+    ("path", "directive", "library"),
+    [
+        (".", "part of some.name;", None),
+        (".", "part of 'missing.dart';", None),
+        ("app", "part of '../../outside.dart';", "outside.dart"),
+        (".", "part of '../../outside.dart';", "../outside.dart"),
+        (".", "part of 'package:x/y.dart';", None),
+        (".", "part of 'dart:core';", None),
+    ],
+)
+def test_a_part_file_with_no_library_file_gets_no_first_run(
+    tmp_path: Path, path: str, directive: str, library: str | None
+) -> None:
+    prefix = "" if path == "." else f"{path}/"
+    changed = f"{prefix}lib/part.dart"
+    write_parts(tmp_path, {changed: directive + "\n"})
+    if library:
+        write_parts(tmp_path, {library: "// library\n"})
+    assert changed_dart(tmp_path, [analysis(path, [*DART, "."])], {changed}) == {}

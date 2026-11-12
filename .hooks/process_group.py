@@ -105,6 +105,24 @@ def stopped_note(code: int) -> str:
     return f"\nThe check was stopped{cause}, so this gate was ended before it finished."
 
 
+GENERATED_FILES_NOTE = (
+    "Generated Dart files are missing in this checkout. Run the code generation of "
+    "this package, then run the check again. Give the gate that runs it the role "
+    "`generated` in hard-eng.gates.json: a new checkout then runs it one time before "
+    "this gate.\n"
+)
+
+
+def generated_files_note(command: list[str], code: int, output: str) -> str:
+    """The step to take when a failed Dart analysis reports generated files that do not exist."""
+    analysis = command[:2] in (["dart", "analyze"], ["flutter", "analyze"])
+    return (
+        GENERATED_FILES_NOTE
+        if code and analysis and "uri_has_not_been_generated" in output
+        else ""
+    )
+
+
 def parallel_hint(
     code: int, tests: bool, command: list[str], report: Path | None = None
 ) -> str:
@@ -221,13 +239,15 @@ def clean_start(
     """Remove the old pass record; give the start of a full check that may write a new one; a partial check or one in CI does no record work."""
     import time
 
-    if (
-        base is None
-        or partial
-        or os.environ.get("CI")
-        or plan_stage not in (None, "Complete")
-    ):
+    if partial or os.environ.get("CI") or plan_stage not in (None, "Complete"):
         return None
+    if base is None:
+        from change_size import judged_point
+        from update import update_in_diff
+
+        base = judged_point(root)
+        if base is None or update_in_diff(root, base) is not None:
+            return None
     with suppress(OSError):
         Path(lock.name).with_name(PASSED_FILE).unlink()
     commit = subprocess.run(
@@ -265,15 +285,22 @@ def fresh_pass(record: Path) -> tuple[str, str, int] | None:
     try:
         saved = json.loads(record.read_text())
         age = time.time() - saved["time"]
-        if not isinstance(saved["time"], bool) and 0 <= age <= PASSED_SECONDS:
-            return saved["head"], saved["base"], int(age // 60)
+        head, base = saved["head"], saved["base"]
+        if (
+            isinstance(head, str)
+            and isinstance(base, str)
+            and not isinstance(saved["time"], bool)
+            and 0 <= age <= PASSED_SECONDS
+        ):
+            return head, base, int(age // 60)
     except (OSError, ValueError, KeyError, TypeError):
         pass
     return None
 
 
-def passed_note(minutes: int) -> str:
-    return f"Hard Eng: the full check passed on this exact commit and base {minutes} min ago; not repeating it."
+def passed_note(minutes: int, earlier: bool = False) -> str:
+    where = "commit from an earlier base" if earlier else "commit and base"
+    return f"Hard Eng: the full check passed on this exact {where} {minutes} min ago; not repeating it."
 
 
 def passed_minutes(root: Path, revision: str, base: str) -> int | None:
@@ -293,11 +320,21 @@ def lock_and_pass(root: Path) -> tuple[bool, tuple[str, str, int] | None]:
 
 def covering_minutes(
     root: Path, passed: tuple[str, str, int] | None, tip: str | None, base: str
-) -> int | None:
-    """Minutes since a full check passed on this commit and base with a clean tree; the Git start comes last."""
-    if passed is None or passed[:2] != (tip, base):
+) -> tuple[int, bool] | None:
+    """Minutes since a full check passed on this commit with a clean tree, and whether its base is an earlier one; the Git starts come last."""
+    if passed is None or passed[0] != tip:
         return None
-    return passed[2] if clean_tree(root) == (tip, True) else None
+    earlier = passed[1] != base
+    if earlier:
+        older = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", "--end-of-options", passed[1], base],
+            cwd=root,
+            check=False,
+            capture_output=True,
+        )
+        if older.returncode != 0:
+            return None
+    return (passed[2], earlier) if clean_tree(root) == (tip, True) else None
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:

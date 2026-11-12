@@ -706,6 +706,16 @@ def test_a_removed_test_or_assertion_keeps_a_change_big(
     )
 
 
+def test_a_support_file_of_an_integration_test_is_test_code(repository: Path) -> None:
+    name = "integration_test/support/robot.dart"
+    on_base(repository, name, "void tap() {}\nvoid scroll() {}\n")
+    replace_line(repository, name, 2, "void swipe() {}")
+    assert change_size.size_verdict(repository) == (
+        False,
+        f"it removes lines from the test file {name}",
+    )
+
+
 def test_a_removed_line_of_a_test_data_file_keeps_a_change_big(
     repository: Path,
 ) -> None:

@@ -186,7 +186,14 @@ def completed_tests(path: Path, kind: str) -> int:
         ):
             raise ValueError("Test report does not contain a successful completed run")
         return passed
-    tree = junit_root(path)
+    try:
+        tree = junit_root(path)
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"The command passed but wrote no JUnit report ({'/'.join(path.parts[-2:])}). "
+            "Make the command of this gate write its JUnit report to the `report` path "
+            "that hard-eng.gates.json gives for this gate."
+        ) from None
     if tree.tag not in {"testsuites", "testsuite"}:
         raise ValueError("Expected a JUnit test report")
     if tree.findall(".//failure") or tree.findall(".//error"):
