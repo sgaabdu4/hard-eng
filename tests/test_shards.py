@@ -24,6 +24,7 @@ from reports import completed_tests, junit_root, reported_skips
 from shards import (
     merge_coverage,
     merge_junit,
+    part_command,
     require_no_path,
     shard_groups,
     split,
@@ -779,3 +780,58 @@ def test_a_listing_that_names_no_file_is_refused(
 ) -> None:
     assert run_command(runner, [sys.executable, "-c", "pass", "pytest"]) is True
     assert "pytest could not list the tests of this shard" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("extra", "held"),
+    [(["--cov"], True), (["--cov=lib", "--cov-branch"], True), ([], False)],
+)
+def test_a_shard_does_not_apply_the_coverage_minimum_of_the_project(
+    runner: ModuleType, shard_project: Path, extra: list[str], held: bool
+) -> None:
+    command = [sys.executable, "-m", "pytest", "--junitxml=j.xml", *extra]
+    check = {**shard_gate(2), "command": command}
+    group = pytest_group(".", [cast(Gate, check)])
+    chosen = shard_groups([group], "1")[0]
+    gate_1 = chosen["checks"][0]
+    run, _ = part_command(shard_project, chosen, gate_1, command, None, 300)
+    assert ("--cov-fail-under=0" in run) is held
+    assert run[-1] == str(shard_project / "tests/test_a.py")
+
+
+@pytest.mark.parametrize(
+    ("name", "text", "refused"),
+    [
+        ("pyproject.toml", "[tool.coverage.report]\nfail_under = 80\n", False),
+        ("pyproject.toml", "[tool.coverage.report]\nfail_under = 81\n", True),
+        (".coveragerc", "[report]\nfail_under = 85\n", True),
+        ("pytest.ini", "[pytest]\naddopts = --cov-fail-under=90\n", True),
+    ],
+)
+def test_the_gate_job_applies_the_coverage_minimum_of_the_project_to_the_merged_total(
+    runner: ModuleType,
+    merge_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    text: str,
+    refused: bool,
+) -> None:
+    (merge_project / name).write_text(text)
+    keep_shard(
+        merge_project, 1, ".", ["a"], (junit_text("one"), cov_json({1, 2, 3, 4}))
+    )
+    keep_shard(
+        merge_project, 2, ".", ["b"], (junit_text("two"), cov_json({4, 5, 6, 7, 8}))
+    )
+    assert run_merge(runner, merge_group(".", 2)) is refused
+    output = capsys.readouterr().out
+    if not refused:
+        assert "below the minimum" not in output
+        return
+    minimum = text.split("=")[-1].strip()
+    assert (
+        f"./tests: the merged coverage total is 80%, below the minimum of {minimum}% "
+        in output
+    )
+    assert " sets. Add tests, or lower that minimum." in output
+    assert name in output

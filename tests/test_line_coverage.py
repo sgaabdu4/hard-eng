@@ -83,6 +83,7 @@ def test_a_missing_python_coverage_report_names_the_cov_step(tmp_path: Path) -> 
     ("name", "content"),
     [
         (".coveragerc", "[run]\nomit = app/_compat.py,\n"),
+        (".coveragerc.toml", '[run]\nomit = ["app/_compat.py"]\n'),
         ("pyproject.toml", '[tool.coverage.run]\nomit = ["app/_compat.py"]\n'),
         ("setup.cfg", "[coverage:run]\nomit =\n    app/_compat.py\n"),
     ],
