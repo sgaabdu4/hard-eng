@@ -45,6 +45,11 @@ def swap(group: Group, role: str, command: list[str]) -> Group:
         ("python", "format", ["true"], "ruff format"),
         ("python", "types", ["sh", "-c", "exit 0"], "pyrefly check"),
         ("python", "dead-code", ["echo", "ruff", "check"], "vulture"),
+        ("python", "dead-code", ["true"], "vulture"),
+        ("python", "dead-code", ["skylos", "src", "--strict"], "vulture"),
+        ("python", "dead-code", ["uvx", "skylos@latest", "src", "--json"], "vulture"),
+        ("python", "dead-code", ["uvx", "skylos-lint@latest", "--strict"], "vulture"),
+        ("python", "lint", ["uvx", "skylos@latest", "--strict"], "ruff check"),
         ("javascript", "format-lint", ["bun", "run", "noop"], "biome ci"),
         ("javascript", "types", ["biome", "lint"], "tsc"),
         ("dart", "types", ["dart", "--version"], "dart analyze"),
@@ -82,6 +87,15 @@ def test_a_shared_scan_must_name_its_tool() -> None:
     [
         ("python", "lint", ["uvx", "ruff@latest", "check", "."]),
         ("python", "format", ["bash", "-c", "exec uvx ruff@0.14.0 format --check ."]),
+        (
+            "python",
+            "dead-code",
+            [
+                "bash",
+                "-c",
+                "shopt -s globstar; exec uvx skylos@latest src/**/*.py --strict",
+            ],
+        ),
         ("javascript", "format-lint", ["bun", "run", "lint"]),
         ("javascript", "types", ["bunx", "tsc", "--noEmit"]),
         ("dart", "types", ["fvm", "dart", "analyze", "--fatal-infos", "."]),
