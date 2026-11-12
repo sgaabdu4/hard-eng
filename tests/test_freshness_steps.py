@@ -162,3 +162,45 @@ def test_a_single_uv_project_gets_a_command_it_can_run_as_printed(
     assert "Run `uv add 'httpx>=0.28.1'` in a separate PR first" in step
     assert "<group>" not in step
     assert "--package" not in step
+
+
+def test_the_uv_step_keeps_the_marker_and_the_extras_of_the_declared_entry(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n'
+        "dependencies = [\"requests>=2.20; sys_platform != 'win32'\","
+        ' "rich[jupyter]>=10", "httpx[http2]>=0.20; python_version >= \'3.10\'"]\n'
+        "[dependency-groups]\ndev = [\"pytest>=8; os_name == 'posix'\"]\n"
+        "[project.optional-dependencies]\ncli = [\"click>=7; sys_platform != 'win32'\"]\n"
+    )
+    tree = (
+        "demo v0.1.0\n"
+        "├── requests v2.20.0 (latest: v2.34.2)\n"
+        "├── rich v10.0.0 (latest: v14.0.0)\n"
+        "├── httpx v0.20.0 (latest: v0.28.1)\n"
+        "├── pytest v8.0.0 (group: dev) (latest: v9.2.0)\n"
+        "└── click v7.0.0 (extra: cli) (latest: v8.1.0)\n"
+    )
+    step = uv_failure(
+        tmp_path,
+        tree,
+        ("requests", "2.34.2"),
+        ("rich", "14.0.0"),
+        ("httpx", "0.28.1"),
+        ("pytest", "9.2.0"),
+        ("click", "8.1.0"),
+    )
+    commands = [
+        part.split("`")[0] for part in step.split("Run `")[1].split("`, then `")
+    ]
+    asked = [shlex.split(command.removeprefix("uv add ")) for command in commands]
+    assert asked == [
+        [
+            "requests>=2.34.2; sys_platform != 'win32'",
+            "rich[jupyter]>=14.0.0",
+            "httpx[http2]>=0.28.1; python_version >= '3.10'",
+        ],
+        ["--group", "dev", "pytest>=9.2.0; os_name == 'posix'"],
+        ["--optional", "cli", "click>=8.1.0; sys_platform != 'win32'"],
+    ]

@@ -11,27 +11,49 @@ SECTION = re.compile(r"\((group|extra): ([^)]+)\)")
 TREE_DRAWING = "├└│ "
 
 
-def dynamic_packages(directory: Path) -> set[str]:
-    """Names of the packages whose pyproject.toml leaves the runtime dependencies to a build hook."""
+def package_folders(directory: Path) -> dict[str, Path]:
+    """The folder of each workspace package, by the name its pyproject.toml gives."""
     from project_setup import workspace_members
 
     if not (directory / "pyproject.toml").is_file():
-        return set()
+        return {}
     members = [
         found
         for pattern in workspace_members(directory, "python")
         if not pattern.startswith("!")
         for found in directory.glob(pattern)
     ]
-    names = set()
+    folders = {}
     for folder in [directory, *members]:
         file = folder / "pyproject.toml"
-        project = (
-            tomllib.loads(file.read_text()).get("project", {}) if file.is_file() else {}
-        )
-        if "dependencies" in project.get("dynamic", []):
-            names.add(str(project.get("name")))
-    return names
+        if file.is_file():
+            project = tomllib.loads(file.read_text()).get("project", {})
+            folders[str(project.get("name"))] = folder
+    return folders
+
+
+def dynamic_packages(folders: dict[str, Path]) -> set[str]:
+    """Names of the packages whose pyproject.toml leaves the runtime dependencies to a build hook."""
+    return {
+        name
+        for name, folder in folders.items()
+        if "dependencies"
+        in tomllib.loads((folder / "pyproject.toml").read_text())
+        .get("project", {})
+        .get("dynamic", [])
+    }
+
+
+def declared_requirement(
+    folder: Path, section: tuple[str, ...], name: str, target: str
+) -> str:
+    """The requirement as declared, raised to the target: extras and marker kept."""
+    from poetry_freshness import canonical, declarations
+
+    for item in declarations(folder).get(canonical(name.partition("[")[0]), []):
+        if item.options == section and not item.unsupported:
+            return f"{item.head}>={target}{item.tail}"
+    return f"{name}>={target}"
 
 
 def uv_steps(directory: Path, text: str, stale: list[Stale]) -> str:
@@ -52,14 +74,19 @@ def uv_steps(directory: Path, text: str, stale: list[Stale]) -> str:
             plans.setdefault((roots[-1], section), []).append(
                 (found["name"], targets[name])
             )
-    dynamic = dynamic_packages(directory) if any(not s for _, s in plans) else set()
+    folders = package_folders(directory)
+    dynamic = dynamic_packages(folders) if any(not s for _, s in plans) else set()
     commands: list[str] = []
     by_hand: list[str] = []
     for (package, section), entries in plans.items():
         if section or package not in dynamic:
             scope = ["--package", package] if len(roots) > 1 else []
             options = [*scope, *section]
-            quoted = [shlex.quote(f"{name}>={target}") for name, target in entries]
+            folder = folders.get(package, directory)
+            quoted = [
+                shlex.quote(declared_requirement(folder, section, name, target))
+                for name, target in entries
+            ]
             commands.append(" ".join(["uv add", *map(shlex.quote, options), *quoted]))
         else:
             raised = " and ".join(f"{name} to {target}" for name, target in entries)
