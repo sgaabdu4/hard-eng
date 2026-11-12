@@ -27,6 +27,9 @@ if [ "$#" -eq 0 ] || [ "$1" = . ]; then
     echo "error - lib/a.dart:1:8 - Target of URI hasn't been generated - uri_has_not_been_generated"
     code=3
   fi
+  if [ -e noisy.txt ]; then
+    echo "info - lib/a.dart:1:8 - Target of URI hasn't been generated - uri_has_not_been_generated"
+  fi
   set -- $(grep -rl SEEDED lib --include='*.dart' --exclude='*.g.dart')
 elif [ -e slow ]; then
   sleep 2
@@ -118,7 +121,7 @@ def project(
     (root / "tools/dart").chmod(0o755)
     monkeypatch.setenv("PATH", str(root / "tools") + os.pathsep + os.environ["PATH"])
     (root / ".gitignore").write_text(
-        "__pycache__/\ntools/\ntrace\nold.txt\nmissing.txt\nslow\n"
+        "__pycache__/\ntools/\ntrace\nold.txt\nmissing.txt\nnoisy.txt\nslow\n"
     )
     touch(root, ["lib/a.dart", "lib/b.dart", "lib/made.g.dart"])
     configure(
@@ -337,6 +340,20 @@ def test_a_dart_analysis_with_other_findings_prints_no_generation_note(
     )
     assert runner.check(base=base, verify_plan=False) == 0
     assert GENERATED[:20] not in capsys.readouterr().out
+
+
+def test_a_passed_dart_analysis_prints_no_generation_note_for_a_line_that_names_the_code(
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    base = project(runner, monkeypatch)
+    (tmp_path / "noisy.txt").touch()
+    assert runner.check(base=base, verify_plan=False) == 0
+    shown = capsys.readouterr().out
+    assert "uri_has_not_been_generated" in shown
+    assert GENERATED[:20] not in shown
 
 
 def write_parts(root: Path, files: dict[str, str]) -> None:
