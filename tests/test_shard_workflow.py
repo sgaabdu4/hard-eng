@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -193,6 +194,42 @@ def test_removing_shards_leaves_a_workflow_that_is_not_the_generated_form(
     one_job = generated(tmp_path, SOURCE, suite_config(None))
     custom = split_test_shards(suite_config(3), one_job).replace(old, new, 1)
     assert split_test_shards(suite_config(None), custom) == custom
+
+
+RESULTS = ("success", "failure", "cancelled", "skipped", "")
+
+
+@pytest.mark.parametrize("tests", RESULTS)
+@pytest.mark.parametrize("checks", RESULTS)
+def test_the_gate_job_runs_after_a_failed_job_and_merges_only_after_two_successes(
+    tmp_path: Path, checks: str, tests: str
+) -> None:
+    jobs = yaml.safe_load(generated(tmp_path, SOURCE, suite_config(3)))["jobs"]
+    assert jobs["hard-eng"]["if"] == "${{ !cancelled() }}"
+    step = next(
+        step
+        for step in jobs["hard-eng"]["steps"]
+        if step.get("name") == "Merge the test shards"
+    )
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    (stub / "python3").write_text(f"#!/bin/sh\ntouch {tmp_path}/merged\n")
+    (stub / "python3").chmod(0o755)
+    result = subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        check=False,
+        env={
+            "PATH": f"{stub}:/usr/bin:/bin",
+            "CHECKS": checks,
+            "TESTS": tests,
+            "BASE_SHA": "x",
+        },
+        capture_output=True,
+    )
+    both = (checks, tests) == ("success", "success")
+    assert (result.returncode, (tmp_path / "merged").exists()) == (
+        (0, True) if both else (1, False)
+    )
 
 
 def test_setup_refuses_shards_on_a_gate_that_does_not_run_pytest(
