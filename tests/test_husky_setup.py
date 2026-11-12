@@ -74,8 +74,16 @@ def test_husky_update_preserves_shim_and_runs_shell_launcher(
     assert installer.prepare_hook(tmp_path) == (shim, hook_chain.CHAINED_LAUNCHER)
 
 
+def write_own_workflow(target: Path) -> None:
+    (target / ".github/workflows").mkdir(parents=True, exist_ok=True)
+    (target / ".github/workflows/quality.yml").write_text(
+        "on: pull_request\njobs:\n  quality:\n    runs-on: ubuntu-latest\n"
+    )
+
+
 @pytest.mark.parametrize(
-    ("installed", "own_workflow"), [(False, False), (True, False), (False, True)]
+    ("installed", "own_workflow"),
+    [(False, False), (True, False), (False, True), (True, True)],
 )
 def test_shell_bootstrap_installs_verified_main(
     release: tuple[Path, Path, str], installed: bool, own_workflow: bool
@@ -95,17 +103,19 @@ def test_shell_bootstrap_installs_verified_main(
     commit(source, "unverified newer source")
     if installed:
         (target / "project.txt").write_text("preserved local work\n")
+        if own_workflow:
+            for name in ("hard-eng.yml", "pr-text.yml"):
+                (target / ".github/workflows" / name).unlink()
+            write_own_workflow(target)
+            commit(target, "own workflow only")
         add_origin(target)
     else:
         target = target.parent / "fresh"
         init(target)
         (target / "package.json").write_text('{"private":true}')
         (target / "bun.lock").write_text('{"lockfileVersion": 1}\n')
-    if own_workflow:
-        (target / ".github/workflows").mkdir(parents=True)
-        (target / ".github/workflows/quality.yml").write_text(
-            "on: pull_request\njobs:\n  quality:\n    runs-on: ubuntu-latest\n"
-        )
+    if own_workflow and not installed:
+        write_own_workflow(target)
     result = subprocess.run(
         ["sh", str(source / "setup.sh")],
         cwd=target,
@@ -120,7 +130,10 @@ def test_shell_bootstrap_installs_verified_main(
         assert f"update {revision} ready on" in result.stdout
         assert (target / "project.txt").read_text() == "preserved local work\n"
         metadata = json.loads(git(target, "show", marker))
-        assert (target / ".github/workflows/hard-eng.yml").is_file()
+        branch_files = git(
+            target, "ls-tree", "-r", "--name-only", update_runner.UPDATE_BRANCH
+        ).split()
+        assert (".github/workflows/hard-eng.yml" in branch_files) is not own_workflow
         workflow = ".github/workflows/pr-text.yml"
         assert git(target, "show", f"{update_runner.UPDATE_BRANCH}:{workflow}") == (
             (source / workflow).read_text().strip()

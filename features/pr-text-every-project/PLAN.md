@@ -25,6 +25,7 @@ Authority: Autonomous. The maintainer reported the fault and set the change; the
 - [x] A project with its own workflow (`.yml` or `.yaml`) and no `hard-eng.yml` receives `pr-text.yml`; no workflow file, only `pr-text.yml`, a non-workflow file and an unchanged copy give no change → `tests/test_ci_setup_pr_text.py::test_pr_text_check_is_installed_beside_any_workflow_of_the_project`.
 - [x] A maintenance-only project with `pr-text.yml` beside its nightly workflow still receives `hard-eng.yml` → `tests/test_ci_setup.py::test_maintenance_only_workflow_receives_a_quality_owner`.
 - [x] Through the real `setup.sh`, a target with its own workflow receives `pr-text.yml` and no `hard-eng.yml` → `tests/test_husky_setup.py::test_shell_bootstrap_installs_verified_main`.
+- [x] An installed project with its own workflow and no `hard-eng.yml` gets `pr-text.yml` in the update commit on `hard-eng/update`, and that commit holds no `hard-eng.yml` → `tests/test_husky_setup.py::test_shell_bootstrap_installs_verified_main` (row `installed, own workflow`).
 - [x] A UI change with no pictures gives the UI evidence problem with the edit hint → `tests/test_pr_text.py::test_remote_check_refuses_a_ui_change_without_pictures`.
 - [x] Pictures, or one unchanged note, give no problem → `tests/test_pr_text.py::test_remote_check_accepts_a_ui_change_with_pictures_or_an_unchanged_note`.
 - [x] A file outside `ui_paths` gives no problem; a rename from inside `ui_paths` gives one → `tests/test_pr_text.py::test_remote_check_matches_ui_paths_on_new_and_old_names`.
