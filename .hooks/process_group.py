@@ -277,23 +277,31 @@ def record_pass(
         temporary.replace(record)
 
 
-def passed_minutes(root: Path, revision: str, base: str) -> int | None:
-    """Minutes since a full check passed on this commit and base; any doubt is None."""
+def fresh_pass(record: Path) -> tuple[str, str, int] | None:
+    """Commit, base and age in minutes of the full pass that this record holds while it is fresh; any doubt is None."""
     import time
 
     try:
-        saved = json.loads(state_path(root, PASSED_FILE).read_text())
+        saved = json.loads(record.read_text())
         age = time.time() - saved["time"]
-        if (
-            saved["head"] == revision
-            and saved["base"] == base
-            and not isinstance(saved["time"], bool)
-            and 0 <= age <= PASSED_SECONDS
-        ):
-            return int(age // 60)
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        if not isinstance(saved["time"], bool) and 0 <= age <= PASSED_SECONDS:
+            return saved["head"], saved["base"], int(age // 60)
+    except (OSError, ValueError, KeyError, TypeError):
         pass
     return None
+
+
+def passed_note(minutes: int) -> str:
+    return f"Hard Eng: the full check passed on this exact commit and base {minutes} min ago; not repeating it."
+
+
+def passed_minutes(root: Path, revision: str, base: str) -> int | None:
+    """Minutes since a full check passed on this commit and base; any doubt is None."""
+    try:
+        found = fresh_pass(state_path(root, PASSED_FILE))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return found[2] if found and found[:2] == (revision, base) else None
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:

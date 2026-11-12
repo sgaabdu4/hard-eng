@@ -680,11 +680,23 @@ def show_decisions(root: Path, names: list[str], state: Path | None) -> str:
     )
 
 
-def check_is_running(root: Path) -> bool:
-    from process_group import check_lock_file
+def check_state(root: Path) -> tuple[bool, tuple[str, str, int] | None]:
+    """Whether another check holds this checkout's lock, and the fresh full pass of the record beside it."""
+    from process_group import PASSED_FILE, check_lock_file, fresh_pass
 
-    with check_lock_file(root) as (_, held):
-        return held
+    with check_lock_file(root) as (lock, held):
+        return held, fresh_pass(Path(lock.name).with_name(PASSED_FILE))
+
+
+def full_pass_minutes(
+    root: Path, passed: tuple[str, str, int] | None, tip: str | None, base: str
+) -> int | None:
+    """Minutes since a full check passed on this commit and base with a clean tree; the Git start comes last."""
+    from process_group import clean_tree
+
+    if passed is None or passed[:2] != (tip, base):
+        return None
+    return passed[2] if clean_tree(root) == (tip, True) else None
 
 
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
@@ -758,30 +770,31 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
-def session_scope(root: Path, base: str) -> str:
-    """Commits already on a remote passed pre-push and are not this session's change."""
+def session_scope(root: Path, base: str) -> tuple[str, str]:
+    """Commits already on a remote passed pre-push and are not this session's change; the commit of HEAD comes with the base."""
+    listing = ["rev-list", "--first-parent", "--parents", "HEAD", "--not", "--remotes"]
     unpushed = subprocess.check_output(
-        ["git", "rev-list", "--first-parent", "HEAD", "--not", "--remotes"],
-        cwd=root,
-        text=True,
-    ).split()
-    pushed = unpushed[-1] + "^" if unpushed else "HEAD"
-    point = subprocess.run(
-        ["git", "rev-parse", "--verify", "-q", pushed],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if not point:
-        return base
+        ["git", *listing], cwd=root, text=True
+    ).splitlines()
+    if unpushed:
+        head, point = unpushed[0].split()[0], "".join(unpushed[-1].split()[1:2])
+    else:
+        head = point = subprocess.run(
+            ["git", "rev-parse", "--verify", "-q", "HEAD"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    if not point or point == base:
+        return base, head
     older = subprocess.run(
         ["git", "merge-base", "--is-ancestor", point, base],
         cwd=root,
         check=False,
         capture_output=True,
     )
-    return base if older.returncode == 0 else point
+    return (base if older.returncode == 0 else point), head
 
 
 def with_freshness(root: Path, output: JsonObject) -> JsonObject:
@@ -837,7 +850,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             cwd=root,
             text=True,
         ).strip()
-        base = session_scope(root, base)
+        base, head = session_scope(root, base)
         current = dirty_files(root, base, others)
         changed = "".join(
             f"{name}\n"
@@ -859,8 +872,9 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
                 root,
                 {"systemMessage": notice + ". Planning-only; no code checks run."},
             )
+        tip = None if any(others()) else head
         return checked_changes(
-            root, payload, state, agent, (base, current, changed, notice)
+            root, payload, state, agent, (base, current, changed, notice, tip)
         )
     except failures as error:
         return {
@@ -874,12 +888,12 @@ def checked_changes(
     payload: JsonObject,
     state: Path | None,
     agent: str | None,
-    scope: tuple[str, dict[str, str], str, str],
+    scope: tuple[str, dict[str, str], str, str, str | None],
 ) -> JsonObject:
     """Run the check on the session's changes; a split keeps Semgrep's taint analysis bounded."""
     from plans import QUICK_PASS, SMALL_SIZE, build_in_progress
 
-    base, current, changed, notice = scope
+    base, current, changed, notice, tip = scope
     claim = str(
         payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
     )
@@ -899,13 +913,20 @@ def checked_changes(
                 "systemMessage": "Hard Eng: unchanged since last passing check; not rerun."
             },
         )
-    if check_is_running(root):
+    held, passed = check_state(root)
+    if held:
         step = "check --plan-stage Ready" if building else "check"
         return {
             "decision": "block",
             "reason": f"Hard Eng: another Hard Eng check holds this checkout's lock, so this turn's changes are not checked; that check may predate your last edits. You started it after your last edit → read its exit notice + fix its findings. Else → start `python3 .hooks/hard-eng.py {step}` in the background (it waits its turn) + read its exit notice. Don't claim done.",
         }
-    returncode, output = run_check(root, base, building)
+    minutes = None if building else full_pass_minutes(root, passed, tip, base)
+    if minutes is None:
+        returncode, output = run_check(root, base, building)
+    else:
+        from process_group import passed_note
+
+        returncode, output, notice = 0, "", notice or passed_note(minutes)
     if SMALL_SIZE in output:
         building, notice = False, QUICK_PASS
     decisions = show_decisions(root, changed.splitlines(), state)

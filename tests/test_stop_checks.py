@@ -15,6 +15,7 @@ import pytest
 from conftest import SOURCE, add_origin, commit, git, gone, plan_document
 from gate_config import Gate, Group, JsonObject
 from test_plans import install_native_hooks
+from test_push_check import git_starts
 
 
 def install_check(repository: Path, script: str) -> Path:
@@ -43,7 +44,7 @@ def test_a_stop_lists_the_untracked_files_while_it_finds_the_session_base(
         assert scoped.wait(timeout=5), "the listing ended before the base search"
         return untracked(root)
 
-    def scope(root: Path, base: str) -> str:
+    def scope(root: Path, base: str) -> tuple[str, str]:
         assert listing.wait(timeout=5), "the base search waited for the listing"
         scoped.set()
         return session_scope(root, base)
@@ -169,6 +170,62 @@ def test_a_branch_on_a_shared_branch_checks_only_its_own_commits(
     commit(repository, "This task")
     agent_hooks.completion(repository, payload)
     assert f"--base {shared}" in seen.read_text()
+
+
+def searched(repository: Path, base: str) -> tuple[tuple[str, str], int]:
+    """The answer of the base search and the number of Git processes that it started."""
+    found: list[tuple[str, str]] = []
+
+    def search() -> int:
+        found.append(agent_hooks.session_scope(repository, base))
+        return 0
+
+    started = len(git_starts(search))
+    return found[0], started
+
+
+def test_the_base_search_asks_git_one_time_at_the_branch_point(
+    repository: Path,
+) -> None:
+    add_origin(repository)
+    git(repository, "push", "-q", "origin", "main")
+    base = git(repository, "rev-parse", "HEAD")
+    git(repository, "checkout", "-qb", "task")
+    (repository / "work.py").write_text("value = 1\n")
+    first = commit(repository, "This task")
+    assert searched(repository, base) == ((base, first), 1)
+    (repository / "work.py").write_text("value = 2\n")
+    second = commit(repository, "More of this task")
+    assert searched(repository, first) == ((first, second), 2)
+
+
+def test_the_base_search_gives_the_base_and_the_commit_of_each_history(
+    repository: Path,
+) -> None:
+    root = git(repository, "rev-parse", "HEAD")
+    (repository / "work.py").write_text("value = 1\n")
+    local = commit(repository, "No remote yet")
+    assert searched(repository, root)[0] == (root, local)
+    add_origin(repository)
+    git(repository, "push", "-q", "origin", "main")
+    assert searched(repository, root)[0] == (local, local)
+    git(repository, "checkout", "-qb", "task")
+    (repository / "work.py").write_text("value = 2\n")
+    pushed = commit(repository, "Pushed part")
+    git(repository, "push", "-q", "origin", "task")
+    (repository / "work.py").write_text("value = 3\n")
+    tip = commit(repository, "Part that is not pushed")
+    assert searched(repository, local)[0] == (pushed, tip)
+    assert searched(repository, tip)[0] == (tip, tip)
+    git(repository, "checkout", "-q", "main")
+    (repository / "other.py").write_text("value = 1\n")
+    moved = commit(repository, "The base moves")
+    git(repository, "push", "-q", "origin", "main")
+    git(repository, "checkout", "-qb", "late", pushed)
+    git(repository, "merge", "-q", "--no-ff", "-m", "Merge the base", "main")
+    merged = git(repository, "rev-parse", "HEAD")
+    assert searched(repository, local)[0] == (pushed, merged)
+    assert moved != merged
 
 
 def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
