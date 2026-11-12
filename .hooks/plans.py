@@ -62,6 +62,7 @@ SECTIONS = (
 STAGES = ("Draft", "Ready", "Complete")
 BUILD_STEP = "During the build, run this check with --plan-stage Ready"
 DRAFT_STEP = f"; files other than plans changed, so get approval for the plan and set its Status to Ready before you build. {BUILD_STEP}"
+OTHER_PLAN = " If that plan is for another task, add a plan for this change."
 HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = re.compile(
     r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
@@ -843,7 +844,7 @@ def validate_plans(
             steps = {"Draft": DRAFT_STEP, "Ready": f". {BUILD_STEP}" * typed}
             step = steps[status] if stage == "Complete" and not explicit_stage else ""
             raise ValueError(
-                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}{step}"
+                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}{step}{OTHER_PLAN * asks_size}"
             )
         effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage
