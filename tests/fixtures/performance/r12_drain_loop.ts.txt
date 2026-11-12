@@ -1,0 +1,58 @@
+class Queue {
+  pending = new Set<Promise<void>>();
+  list: Promise<void>[] = [];
+
+  async drain(): Promise<void> {
+    while (this.pending.size > 0) {
+      await Promise.all([...this.pending]);
+    }
+  }
+
+  async drainList(): Promise<void> {
+    while (this.list.length > 0) {
+      await Promise.allSettled(this.list);
+    }
+  }
+}
+
+async function drainLocal(pending: Promise<void>[]): Promise<void> {
+  while (pending.length > 0) {
+    await Promise.all(pending);
+  }
+}
+
+async function drainSet(pending: Set<Promise<void>>): Promise<void> {
+  while (pending.size > 0) {
+    await Promise.allSettled([...pending]);
+  }
+}
+
+async function otherCollection(a: Promise<void>[], b: Promise<void>[]): Promise<void> {
+  while (a.length > 0) {
+    // ruleid: await-in-loop-javascript
+    await Promise.all(b);
+  }
+}
+
+async function secondStatement(a: Promise<void>[]): Promise<void> {
+  let count = 0;
+  while (a.length > 0) {
+    // ruleid: await-in-loop-javascript
+    await Promise.all(a);
+    count += 1;
+  }
+}
+
+async function oneItem(a: Promise<void>[]): Promise<void> {
+  while (a.length > 0) {
+    // ruleid: await-in-loop-javascript
+    await a[0];
+  }
+}
+
+async function doWhile(a: Promise<void>[]): Promise<void> {
+  do {
+    // ruleid: await-in-loop-javascript
+    await Promise.all(a);
+  } while (a.length > 0);
+}

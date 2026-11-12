@@ -2616,6 +2616,10 @@ rules:
                         regex: ^\s*for(?:\s|//[^\n]*(?:\n|$)|/\*[\s\S]*?\*/)+await\b
               - &await_in_loop_javascript_id005
                 pattern-not-inside: while (true) { ... }
+              - pattern-not-inside: while ($X.size > 0) { await Promise.all(<... $X ...>); }
+              - pattern-not-inside: while ($X.size > 0) { await Promise.allSettled(<... $X ...>); }
+              - pattern-not-inside: while ($X.length > 0) { await Promise.all(<... $X ...>); }
+              - pattern-not-inside: while ($X.length > 0) { await Promise.allSettled(<... $X ...>); }
               - &await_in_loop_javascript_id006
                 pattern-not-inside:
                   patterns:
