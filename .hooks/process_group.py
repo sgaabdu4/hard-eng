@@ -105,6 +105,24 @@ def stopped_note(code: int) -> str:
     return f"\nThe check was stopped{cause}, so this gate was ended before it finished."
 
 
+GENERATED_FILES_NOTE = (
+    "Generated Dart files are missing in this checkout. Run the code generation of "
+    "this package, then run the check again. Give the gate that runs it the role "
+    "`generated` in hard-eng.gates.json: a new checkout then runs it one time before "
+    "this gate.\n"
+)
+
+
+def generated_files_note(command: list[str], code: int, output: str) -> str:
+    """The step to take when a failed Dart analysis reports generated files that do not exist."""
+    analysis = command[:2] in (["dart", "analyze"], ["flutter", "analyze"])
+    return (
+        GENERATED_FILES_NOTE
+        if code and analysis and "uri_has_not_been_generated" in output
+        else ""
+    )
+
+
 def parallel_hint(
     code: int, tests: bool, command: list[str], report: Path | None = None
 ) -> str:
