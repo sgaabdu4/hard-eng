@@ -203,6 +203,7 @@ jobs:
       - run: echo cleanup
 """
     path.write_text(content)
+    (path.parent / "pr-text.yml").write_text((SOURCE / PR_TEXT).read_text())
     config = parse_config(
         json.dumps(
             {
