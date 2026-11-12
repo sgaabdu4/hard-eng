@@ -516,18 +516,21 @@ def gate_status(root: Path) -> str:
 
 def record_session(root: Path, payload: JsonObject) -> bool:
     """Save the session's Git base before a background update can move HEAD."""
+    from project_files import background, clean_tree
+
     state = session_state(root, payload)
-    if state is None:
+    if state is None or state.exists():
         return True
+    failures = (OSError, subprocess.SubprocessError)
     try:
-        revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=root, text=True
-        ).strip()
+        tree = clean_tree(root)
+        if tree is None:
+            return False
         state.parent.mkdir(parents=True, exist_ok=True)
-        if not state.exists():
-            dirty = dirty_files(root, revision)
-            state.write_text(json.dumps({"base": revision, "dirty": dirty}))
-    except (OSError, subprocess.SubprocessError):
+        others = None if tree[1] else background(lambda: untracked(root), failures)
+        dirty = dirty_files(root, tree[0], others) if others else {}
+        state.write_text(json.dumps({"base": tree[0], "dirty": dirty}))
+    except failures:
         return False
     return True
 
