@@ -1,13 +1,11 @@
 """Native context/completion responses; Git records scope, never gate results."""
 
-import hashlib
 import json
 import os
 import re
 import signal
 import subprocess
 import sys
-import tempfile
 from contextlib import suppress
 from pathlib import Path
 
@@ -448,6 +446,8 @@ def dirty_files(root: Path, base: str) -> dict[str, str]:
     digests = dict.fromkeys(set(names) - {""}, "")
     for name in digests:
         if (root / name).is_file():
+            import hashlib
+
             with (root / name).open("rb") as file:
                 digests[name] = hashlib.file_digest(file, "sha256").hexdigest()
     return digests
@@ -455,8 +455,7 @@ def dirty_files(root: Path, base: str) -> dict[str, str]:
 
 def gate_status(root: Path) -> str:
     """Say whether `check` can start, so an install never looks active while broken."""
-    from gate_config import load_groups
-    from update import SOURCE_FILE, install_paths
+    from gate_config import SOURCE_FILE, load_groups
 
     try:
         load_groups(root, starting=True)
@@ -498,6 +497,8 @@ def gate_status(root: Path) -> str:
     except (OSError, subprocess.SubprocessError):
         pending = []
     if pending and (root / SOURCE_FILE).exists():
+        from update import install_paths
+
         status += (
             " Uncommitted Hard Eng paths block updates + new worktrees; commit: "
             + install_paths(pending)
@@ -677,6 +678,8 @@ def check_is_running(root: Path) -> bool:
 
 
 def run_check(root: Path, base: str, building: bool) -> tuple[int, str]:
+    import tempfile
+
     with tempfile.TemporaryFile() as log:
         check: subprocess.Popen[bytes] | None = None
 

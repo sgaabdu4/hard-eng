@@ -13,7 +13,15 @@ from types import ModuleType
 import agent_hooks
 import pytest
 import update
-from conftest import CODEBASE_MEMORY, SOURCE, commit, git, load_module
+from conftest import (
+    CODEBASE_MEMORY,
+    SOURCE,
+    commit,
+    git,
+    init,
+    isolate_temporary,
+    load_module,
+)
 from gate_config import JsonObject
 from test_setup import repository, snapshot
 from test_updates import fixed_revision
@@ -523,6 +531,50 @@ def test_a_hook_event_loads_no_gate_module(event: str) -> None:
     assert run.returncode == 0, run.stderr
     code, calls, loaded = json.loads(run.stdout)
     assert (code, calls, loaded) == (0, [[event, "claude"]], [])
+
+
+EVENT_DRIVER = (
+    "import io, json, sys\n"
+    "from pathlib import Path\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "import agent_hooks\n"
+    "sys.stdin = io.StringIO(json.dumps({'session_id': 'loads'}))\n"
+    "agent_hooks.handle_event(Path(sys.argv[2]), sys.argv[3], 'claude')\n"
+    "print(json.dumps(sorted(set(sys.modules) & set(sys.argv[4:]))))\n"
+)
+UNUSED_MODULES = ["hashlib", "urllib.request", "ssl", "update", "mcp_setup"]
+# A session start gives Git a temporary file of names; a clean Stop does not.
+UNUSED_AT_STOP = [*UNUSED_MODULES, "tempfile", "shutil"]
+
+
+@pytest.mark.parametrize("event", ["session", "stop"])
+def test_a_clean_hook_event_loads_no_module_that_it_does_not_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event: str
+) -> None:
+    isolate_temporary(tmp_path, monkeypatch)
+    root = tmp_path / "project"
+    init(root)
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (root / name).write_bytes((SOURCE / name).read_bytes())
+    (root / ".hooks").mkdir()
+    (root / update.SOURCE_FILE).write_text("{}\n")
+    gate = {"name": "check", "command": ["python3", "-c", "pass"]}
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [gate]})
+    )
+    (root / ".git/info/exclude").write_text(".hard-eng/\n")
+    commit(root, "installed files")
+    started = drive(EVENT_DRIVER, str(root), "session", *UNUSED_MODULES)
+    run = (
+        started
+        if event == "session"
+        else drive(EVENT_DRIVER, str(root), "stop", *UNUSED_AT_STOP)
+    )
+    assert run.returncode == 0, run.stderr
+    output, loaded = run.stdout.splitlines()
+    expected = "Gates: ok." if event == "session" else "no code checks run"
+    assert expected in output
+    assert json.loads(loaded) == []
 
 
 def test_a_command_runs_through_the_launcher() -> None:

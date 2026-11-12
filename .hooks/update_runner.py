@@ -1,15 +1,12 @@
 """Run the scaffold update detached from agent startup, one per repository."""
 
 import fcntl
-import hashlib
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
@@ -29,11 +26,6 @@ REPAIR_SUBJECT = "Install Hard Eng"
 NOT_PUBLISHED = "Hard Eng updates start after the Hard Eng install is on the base branch of a remote."
 CI_STEP = "CI setup pending: add a `shipping` block with the project's checks and a measured ci_seconds budget to hard-eng.gates.json and merge it to the base branch, then rerun setup"
 HEX_REVISION = re.compile(r"[0-9a-f]{40}")
-OWNER = re.compile(r"hard-eng-update (\d+)")
-TEMPORARY = re.compile(
-    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check|mutation)-[a-z0-9_]{8}"
-)
-WORKTREE = re.compile(r"hard-eng-(?:update-.+/candidate|push-.+/project)")
 
 
 class UpdateRunning(ValueError):
@@ -357,98 +349,6 @@ def commit_update(
     git_commit(root, names, changes, f"Update Hard Eng to {revision}")
 
 
-def alive(process: int) -> bool:
-    try:
-        os.kill(process, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def abandoned(path: Path, owner: re.Match[str] | None) -> bool:
-    """Updaters before the lock ran under a one-hour hook, and a push's checks end within a day."""
-    if owner is not None:
-        return not alive(int(owner[1]))
-    hours = 6 if path.name == "candidate" else 24
-    try:
-        return time.time() - path.parent.stat().st_mtime > hours * 3600
-    except FileNotFoundError:
-        return False
-
-
-def sweep_temporary() -> None:
-    """Directories a killed Hard Eng process left behind; none of its runs lasts a day."""
-    for path in Path(tempfile.gettempdir()).iterdir():
-        with suppress(OSError):
-            if (
-                TEMPORARY.fullmatch(path.name)
-                and path.is_dir()
-                and not path.is_symlink()
-                and time.time() - path.stat().st_mtime > 24 * 3600
-            ):
-                shutil.rmtree(path)
-
-
-def stop_idle_watcher(worktree: Path) -> None:
-    """Git restarts a file watcher on the next command, so stopping an idle one loses nothing."""
-    with suppress(OSError, subprocess.SubprocessError):
-        index = subprocess.check_output(
-            ["git", "rev-parse", "--path-format=absolute", "--git-path", "index"],
-            cwd=worktree,
-            text=True,
-            timeout=30,
-        ).strip()
-        if time.time() - Path(index).stat().st_mtime > 24 * 3600:
-            subprocess.run(
-                ["git", "fsmonitor--daemon", "stop"],
-                cwd=worktree,
-                capture_output=True,
-                timeout=30,
-                check=False,
-            )
-
-
-def registered_worktrees(root: Path) -> list[dict[str, str]]:
-    listing = subprocess.check_output(
-        ["git", "worktree", "list", "--porcelain"], cwd=root, text=True
-    )
-    return [
-        {
-            key: value
-            for key, _, value in (line.partition(" ") for line in block.splitlines())
-        }
-        for block in listing.split("\n\n")
-    ]
-
-
-def remove_stale_candidates(root: Path) -> None:
-    """Remove candidates whose update has exited; the caller holds the lock."""
-    for fields in registered_worktrees(root):
-        path = Path(fields.get("worktree", ""))
-        owner = OWNER.fullmatch(fields.get("locked", ""))
-        if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}"):
-            if path.is_dir() and path.resolve() != root.resolve():
-                stop_idle_watcher(path)
-            continue
-        if not abandoned(path, owner):
-            continue
-        if owner is not None and not path.exists():
-            subprocess.run(
-                ["git", "worktree", "unlock", str(path)], cwd=root, check=True
-            )
-        elif not subprocess.run(
-            ["git", "worktree", "remove", "--force", "--force", str(path)],
-            cwd=root,
-            check=False,
-            timeout=120,
-        ).returncode:
-            shutil.rmtree(path.parent, ignore_errors=True)
-    sweep_temporary()
-    subprocess.run(["git", "worktree", "prune"], cwd=root, check=True, timeout=60)
-
-
 def exclusive(handle: TextIO) -> bool:
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -466,6 +366,8 @@ def locked_update(root: Path, repair: bool = False) -> str:
                 "Another Hard Eng update is already running for this repository; "
                 "wait for its result instead of starting another"
             )
+        from stale_updates import remove_stale_candidates
+
         remove_stale_candidates(root)
         try:
             outcome = prepare_update(root, repair)
@@ -480,6 +382,8 @@ def locked_update(root: Path, repair: bool = False) -> str:
 
 def update_attempt(head: str, revision: str) -> str:
     """What a refused update would see again: the release and the base tip it builds on."""
+    import hashlib
+
     return f"{revision} {hashlib.sha256(head.encode()).hexdigest()}"
 
 
@@ -668,6 +572,8 @@ def ci_step_notes(root: Path) -> list[str]:
 
 def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
+    import tempfile
+
     import hook_chain
     import update
     from ci_setup import GATES_FILE, without_workflow_gates
@@ -747,6 +653,8 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 
 
 def free_step(root: Path, worktree: Path) -> str:
+    from stale_updates import registered_worktrees
+
     if worktree == Path(registered_worktrees(root)[0]["worktree"]):
         return f"switch the main checkout to another branch with `git -C {worktree} switch <branch>`"
     return (
@@ -756,6 +664,8 @@ def free_step(root: Path, worktree: Path) -> str:
 
 
 def build_update(root: Path, base: str, repair: bool) -> str:
+    import tempfile
+
     from hook_chain import use_own_hooks
     from update import update
     from update_pr import branch_worktree, unfinished_update
@@ -930,6 +840,8 @@ def stop_group(update: "subprocess.Popen[bytes]") -> None:
 
 def run_update(root: Path) -> int:
     """Hold the repository's update lock while one update runs in its own process group."""
+    from stale_updates import remove_stale_candidates
+
     with lock_file(root).open("a") as handle:
         if not exclusive(handle):
             print(

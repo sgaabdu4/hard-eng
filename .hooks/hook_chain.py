@@ -139,7 +139,7 @@ def preserve(root: Path, hook: Path) -> bool:
 
 
 def restore_note(root: Path) -> str:
-    from update import SOURCE_FILE
+    from gate_config import SOURCE_FILE
 
     if not (root / SOURCE_FILE).exists():
         return ""

@@ -9,6 +9,7 @@ from pathlib import Path
 from gate_config import SOURCE_FILE, JsonValue
 from review_bypass import author_only_review_block
 from shipping import ShippingError, gh, load_policy
+from stale_updates import registered_worktrees
 from update_runner import (
     REPAIR_SUBJECT,
     UPDATE_BRANCH,
@@ -20,7 +21,6 @@ from update_runner import (
     last_result,
     lock_file,
     locked_update,
-    registered_worktrees,
     revision_at,
     update_base,
     update_running,

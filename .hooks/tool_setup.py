@@ -1,7 +1,6 @@
 """Provision current native tools before concurrent gate execution."""
 
 import fcntl
-import hashlib
 import importlib.util
 import json
 import os
@@ -439,6 +438,8 @@ def checkout_storage(shared: Path) -> Path:
     """This checkout's tool folder, held until exit; a push snapshot uses its owner's."""
     snapshot, _, owner = os.environ.get(TOOL_OWNER, "").partition(os.pathsep)
     checkout = Path(owner) if snapshot == str(CHECKOUT) else CHECKOUT
+    import hashlib
+
     checkouts = shared / "checkouts"
     storage = checkouts / hashlib.sha256(str(checkout).encode()).hexdigest()[:16]
     if not HELD:
@@ -671,6 +672,8 @@ def bun_node(storage: Path, environment: dict[str, str]) -> None:
         f'  printf "%s\\n" "$source" | {shlex.quote(bun)} "$@" -\n  exit $?\nfi\n'
     )
     script += f'exec {shlex.quote(bun)} "$@"\n'
+    import hashlib
+
     # Another Hard Eng revision in this checkout, such as a pushed update, writes its own.
     directory = shims / hashlib.sha256(script.encode()).hexdigest()[:16]
     directory.mkdir(parents=True, exist_ok=True)
