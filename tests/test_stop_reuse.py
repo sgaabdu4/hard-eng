@@ -12,7 +12,7 @@ import pytest
 from conftest import add_origin, commit, git
 from gate_config import JsonObject
 from shipping import ShippingPolicy
-from test_push_check import Pushed, git_starts
+from test_push_check import git_starts, prepared
 from test_stop_checks import install_check
 
 EARLIER = "Hard Eng: the full check passed on this exact commit from an earlier base 3 min ago; not repeating it."
@@ -111,7 +111,7 @@ def test_a_stop_reuses_a_full_pass_from_an_earlier_base(
     repository: Path, ancestor: bool
 ) -> None:
     git(repository, "commit", "--allow-empty", "-qm", "second")
-    runs, payload, base, head = committed_task(repository)
+    runs, payload, _base, head = committed_task(repository)
     root = git(repository, "rev-list", "--max-parents=0", "HEAD")
     if not ancestor:
         tree = git(repository, "rev-parse", f"{root}^{{tree}}")
@@ -122,22 +122,15 @@ def test_a_stop_reuses_a_full_pass_from_an_earlier_base(
     assert runs.exists() is not ancestor
 
 
-@pytest.fixture
-def pushed(
+@pytest.mark.parametrize("row", ["plain", "ci", "quick", "ready"])
+def test_a_full_check_with_no_base_writes_the_pass_record(
     runner: ModuleType,
     tmp_path: Path,
     shipping_policy: ShippingPolicy,
     monkeypatch: pytest.MonkeyPatch,
-) -> Pushed:
-    monkeypatch.delenv("CI", raising=False)
-    shipping_policy["pre_push_mutation_seconds"] = 0.0
-    return Pushed(runner, tmp_path, shipping_policy)
-
-
-@pytest.mark.parametrize("row", ["plain", "ci", "quick", "ready"])
-def test_a_full_check_with_no_base_writes_the_pass_record(
-    pushed: Pushed, monkeypatch: pytest.MonkeyPatch, row: str
+    row: str,
 ) -> None:
+    pushed = prepared(runner, tmp_path, shipping_policy, monkeypatch)
     head = pushed.task()
     if row == "ci":
         monkeypatch.setenv("CI", "1")
