@@ -3957,6 +3957,7 @@ rules:
       - pattern-not-inside: while ($C) { ... <... (...) async { ... <... await $E ...>; ... } ...>; ... }
       - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait(<... $X ...>); }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
       - pattern-not-inside: for ($I in $C) { ... return $R; }
