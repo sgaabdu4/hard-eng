@@ -10,11 +10,21 @@ from pathlib import Path, PurePosixPath
 from typing import cast
 
 from ci_jobs import CHECKOUT, IMPACT_BASE, LINUX_HEADER
+from coverage_sources import COVERAGE_FILES
 from gate_config import Gate, GateConfig, Group
 from process_group import run_in_group
 from reports import junit_root
 
 COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
+COV_FAIL_UNDER = re.compile(r"--cov-fail-under(?:=|\s+)([0-9.]+)")
+COV_SECTIONS = ("run", "report", "html", "xml", "json", "lcov", "paths")
+PYTEST_SETTINGS = (
+    "pytest.ini",
+    ".pytest.ini",
+    "pyproject.toml",
+    "tox.ini",
+    "setup.cfg",
+)
 KEPT = "coverage/shards"
 PROVEN = "proven.txt"
 RAN = "ran.txt"
@@ -220,6 +230,21 @@ def collected(
     return bases[0], {name: (bases[0] / name).stat().st_size for name in names}
 
 
+def pytest_settings(directory: Path) -> list[tuple[str, str]]:
+    return [
+        (name, (directory / name).read_text(errors="replace"))
+        for name in PYTEST_SETTINGS
+        if (directory / name).is_file()
+    ]
+
+
+def uses_coverage(directory: Path, command: list[str]) -> bool:
+    """pytest-cov takes every --cov option, so one in the command or the settings shows it runs."""
+    return any(
+        argument.startswith("--cov") for argument in runner_arguments(command)
+    ) or any("--cov" in text for _, text in pytest_settings(directory))
+
+
 def part_command(
     root: Path,
     group: Group,
@@ -230,7 +255,7 @@ def part_command(
 ) -> tuple[list[str], Path | None]:
     """The command of one shard: the gate command and the files of that shard."""
     if gate["part"] == "merge":
-        merge_reports(root, group, gate)
+        merge_reports(root, group, gate, command)
         return [], coverage
     require_no_path(root, group, gate, command)
     base, sizes = collected(root, group, gate, command, timeout)
@@ -240,7 +265,12 @@ def part_command(
     (folder / "shard-files.txt").write_text("".join(f"{name}\n" for name in names))
     for name in (gate["report"]["tests"], gate["report"]["coverage"]):
         (root / group["path"] / name).unlink(missing_ok=True)
-    return ([*command, *(str(base / name) for name in names)] if names else []), None
+    held = (
+        ["--cov-fail-under=0"] if uses_coverage(root / group["path"], command) else []
+    )
+    return (
+        [*command, *held, *(str(base / name) for name in names)] if names else []
+    ), None
 
 
 def keep_reports(root: Path, group: Group, gate: Gate) -> None:
@@ -313,7 +343,101 @@ def merge_junit(paths: list[Path], target: Path) -> None:
     ET.ElementTree(merged).write(target, encoding="utf-8", xml_declaration=True)
 
 
-def merge_reports(root: Path, group: Group, gate: Gate) -> None:
+def settings_reader(path: Path, own: bool) -> Callable[[str], dict[str, object] | None]:
+    """The sections of a coverage settings file; a file that is not coverage's own reads fewer."""
+    import configparser
+    import tomllib
+
+    if path.suffix == ".toml":
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        prefixes = ("tool.coverage.", "") if own else ("tool.coverage.",)
+
+        def toml_section(section: str) -> dict[str, object] | None:
+            for prefix in prefixes:
+                found: object = data
+                for part in (prefix + section).split("."):
+                    found = found.get(part) if isinstance(found, dict) else None
+                if isinstance(found, dict):
+                    return cast(dict[str, object], found)
+            return None
+
+        return toml_section
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(path, encoding="utf-8")
+    names = ("coverage:", "") if own else ("coverage:",)
+
+    def ini_section(section: str) -> dict[str, object] | None:
+        for prefix in names:
+            if parser.has_section(prefix + section):
+                return dict(parser[prefix + section])
+        return None
+
+    return ini_section
+
+
+def coverage_settings(directory: Path) -> tuple[str, float, int] | None:
+    """The file coverage.py reads, in its order, with its fail_under and precision."""
+    for name in COVERAGE_FILES:
+        path = directory / name
+        if not path.is_file():
+            continue
+        own = name.startswith(".coveragerc")
+        section = settings_reader(path, own)
+        if own or any(section(known) for known in COV_SECTIONS):
+            report = section("report") or {}
+            return (
+                name,
+                float(str(report.get("fail_under", 0))),
+                int(str(report.get("precision", 0))),
+            )
+    return None
+
+
+def coverage_minimum(directory: Path, command: list[str]) -> tuple[float, str, int]:
+    """The minimum, the place that sets it and the precision; the command beats the pytest settings, then coverage's file."""
+    settings = coverage_settings(directory)
+    precision = settings[2] if settings else 0
+    given = COV_FAIL_UNDER.findall(" ".join(runner_arguments(command)))
+    if given:
+        return float(given[-1]), "--cov-fail-under in the tests command", precision
+    for name, text in pytest_settings(directory):
+        found = COV_FAIL_UNDER.findall(text)
+        if found:
+            return float(found[-1]), f"--cov-fail-under in {name}", precision
+    if settings and settings[1]:
+        return settings[1], f"fail_under in {settings[0]}", precision
+    return 0.0, "", precision
+
+
+def merged_total(report: dict[str, object]) -> float:
+    """The total percent that coverage.py reports: lines and branches over statements and branches."""
+    summaries = [
+        cast(dict[str, int], entry["summary"])
+        for entry in cast(dict[str, dict[str, object]], report["files"]).values()
+    ]
+    covered = sum(s["covered_lines"] + s.get("covered_branches", 0) for s in summaries)
+    count = sum(s["num_statements"] + s.get("num_branches", 0) for s in summaries)
+    return 100.0 * covered / count if count else 100.0
+
+
+def below_minimum(total: float, minimum: float, precision: int) -> bool:
+    """The rule of coverage.py's should_fail_under: a minimum of 100 needs exactly 100."""
+    if minimum == 100.0 and total != 100.0:
+        return True
+    return round(total, precision) < minimum
+
+
+def shown(total: float, precision: int) -> str:
+    """The total as coverage.py prints it: never 0 or 100 unless the total is exactly that."""
+    near = 1.0 / 10**precision
+    if 0 < total < near:
+        total = near
+    elif 100.0 - near < total < 100:
+        total = 100.0 - near
+    return f"{round(total, precision):.{precision}f}"
+
+
+def merge_reports(root: Path, group: Group, gate: Gate, command: list[str]) -> None:
     """Write the merged test and coverage reports of shards 1 to N at the gate's report paths."""
     report, count = gate["report"], gate["shards"]
     tests: list[Path] = []
@@ -334,7 +458,16 @@ def merge_reports(root: Path, group: Group, gate: Gate) -> None:
             coverage.append(json.loads(kept[1].read_text()))
     directory = root / group["path"]
     merge_junit(tests, directory / report["tests"])
-    (directory / report["coverage"]).write_text(json.dumps(merge_coverage(coverage)))
+    merged = merge_coverage(coverage)
+    (directory / report["coverage"]).write_text(json.dumps(merged))
+    minimum, origin, precision = coverage_minimum(directory, command)
+    total = merged_total(merged)
+    if below_minimum(total, minimum, precision):
+        raise ValueError(
+            f"{group['path']}/{gate['name']}: the merged coverage total is "
+            f"{shown(total, precision)}%, below the minimum of {minimum:g}% that "
+            f"{origin} sets. Add tests, or lower that minimum."
+        )
 
 
 def split_test_shards(config: GateConfig, content: str) -> str:
