@@ -11,7 +11,6 @@ from typing import cast
 from gate_config import Group, nonproduction_source
 
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
-OMIT_SETTING = re.compile(r"(?m)^\s*omit\s*=")
 COVERAGE_FILES = (
     ".coveragerc",
     ".coveragerc.toml",
@@ -69,12 +68,39 @@ def coverage_file(
     return None
 
 
-def omit_step(directory: Path) -> str:
-    """The sentence for a package whose own coverage settings leave files out of the report."""
-    for name in COVERAGE_FILES:
-        path = directory / name
-        if path.is_file() and OMIT_SETTING.search(path.read_text(errors="replace")):
-            return f". {name} has a coverage `omit` setting: remove its entries for these files"
+def omit_step(directory: Path, missing: list[Path]) -> str:
+    """The sentence for a package whose own coverage settings leave one of these files out of the report."""
+    import configparser
+    from fnmatch import fnmatchcase
+
+    try:
+        found = coverage_file(directory)
+    except (ValueError, configparser.Error):
+        return ""
+    if found is None:
+        return ""
+    name, section = found
+    values = [(section(part) or {}).get("omit", "") for part in ("run", "report")]
+    patterns = [
+        str(entry).strip()
+        for value in values
+        for entry in (
+            value
+            if isinstance(value, list)
+            else str(value).replace(",", "\n").split("\n")
+        )
+    ]
+    forms = [
+        form
+        for file in missing
+        for form in (
+            file.name,
+            file.as_posix(),
+            (directory / file).absolute().as_posix(),
+        )
+    ]
+    if any(fnmatchcase(form, pattern) for pattern in patterns for form in forms):
+        return f". {name} has a coverage `omit` setting: remove its entries for these files"
     return ""
 
 
