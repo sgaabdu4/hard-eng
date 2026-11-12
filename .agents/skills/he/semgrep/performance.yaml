@@ -1118,7 +1118,10 @@ rules:
                         - metavariable-pattern:
                             metavariable: $...CONDITION_BODY
                             patterns:
-                              - pattern: $V = $X
+                              - pattern-either:
+                                  - pattern: $V = $X
+                                  - pattern: $A, $V = $X
+                                  - pattern: $V, $A = $X
                               - pattern-not-inside: "for $SCOPE_I in $SCOPE_C:\n  ..."
                               - pattern-not-inside: "while $SCOPE_C:\n  ..."
                               - pattern-not-inside: "def $N(...):\n  ..."
