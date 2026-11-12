@@ -209,6 +209,9 @@ RETRY_FORMS = [
     ("pyproject.toml", 'addopts = "--re' + 'runs 3"\n', "--re" + "runs"),
     ("pytest.ini", "re" + "runs = 2\n", "re" + "runs"),
     ("pytest.ini", "re" + "runs: 2\n", "re" + "runs"),
+    ("pytest.toml", "re" + "runs = 2\n", "re" + "runs"),
+    (".pytest.toml", 'addopts = ["--re' + 'runs", "3"]\n', "--re" + "runs"),
+    (".pytest.ini", "re" + "runs = 2\n", "re" + "runs"),
     ("packages/web/vitest.config.ts", "  re" + "try: 2,\n", "re" + "try:"),
     ("pkgs/a/dart_test.yaml", "re" + "try: 3\n", "re" + "try"),
     (
