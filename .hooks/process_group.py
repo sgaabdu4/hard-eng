@@ -273,8 +273,9 @@ def fresh_pass(record: Path) -> tuple[str, str, int] | None:
     return None
 
 
-def passed_note(minutes: int) -> str:
-    return f"Hard Eng: the full check passed on this exact commit and base {minutes} min ago; not repeating it."
+def passed_note(minutes: int, earlier: bool = False) -> str:
+    where = "commit from an earlier base" if earlier else "commit and base"
+    return f"Hard Eng: the full check passed on this exact {where} {minutes} min ago; not repeating it."
 
 
 def passed_minutes(root: Path, revision: str, base: str) -> int | None:
@@ -294,11 +295,21 @@ def lock_and_pass(root: Path) -> tuple[bool, tuple[str, str, int] | None]:
 
 def covering_minutes(
     root: Path, passed: tuple[str, str, int] | None, tip: str | None, base: str
-) -> int | None:
-    """Minutes since a full check passed on this commit and base with a clean tree; the Git start comes last."""
-    if passed is None or passed[:2] != (tip, base):
+) -> tuple[int, bool] | None:
+    """Minutes since a full check passed on this commit with a clean tree, and whether its base is an earlier one; the Git starts come last."""
+    if passed is None or passed[0] != tip:
         return None
-    return passed[2] if clean_tree(root) == (tip, True) else None
+    earlier = passed[1] != base
+    if earlier:
+        older = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", passed[1], base],
+            cwd=root,
+            check=False,
+            capture_output=True,
+        )
+        if older.returncode != 0:
+            return None
+    return (passed[2], earlier) if clean_tree(root) == (tip, True) else None
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:
