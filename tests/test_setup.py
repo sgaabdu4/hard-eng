@@ -427,7 +427,7 @@ def test_plain_dart_uses_native_coverage_tool(
     repository(tmp_path)
     (tmp_path / "package.json").unlink()
     authored: list[Path] = []
-    for name in ("lib", "test", "tests", "integration_test", "test_driver"):
+    for name in ("lib", "bin", "test", "tests", "integration_test", "test_driver"):
         directory = tmp_path / name
         directory.mkdir()
         path = directory / "fixture.dart"
@@ -446,7 +446,7 @@ def test_plain_dart_uses_native_coverage_tool(
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
     assert written == json_file(tmp_path, config)
-    assert "integration_test" not in config["packages"][0]["sources"]
+    assert config["packages"][0]["sources"] == ["bin", "lib"]
     for name in ("yaml", "lock"):
         tool = f".hooks/dart_declarations.pubspec.{name}"
         assert (tmp_path / tool).read_bytes() == (installer.SOURCE / tool).read_bytes()
@@ -467,7 +467,7 @@ def test_plain_dart_uses_native_coverage_tool(
     assert checks["tests"]["command"][2].startswith(
         "set -e; dart run coverage:test_with_coverage "
     )
-    assert "--report-on=test_driver" in checks["tests"]["command"][2]
+    assert "--report-on=bin" in checks["tests"]["command"][2]
     assert checks["tests"]["report"]["stdout"] is False
     scanner = tmp_path / ".dart-decimaterc.json"
     assert json.loads(scanner.read_text()) == {
