@@ -958,12 +958,11 @@ def check_scaffold_update(root: Path, base: str) -> bool:
             return False
     except (subprocess.CalledProcessError, StaleRelease):
         return False
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        from coverage_sources import require_listed_sources
+    from coverage_sources import require_listed_sources
 
-        gates = parse_config((root / "hard-eng.gates.json").read_text())
-        files = repository_files(root)
-        require_listed_sources(root, gates["packages"], files, python_only=False)
+    gates = parse_config((root / "hard-eng.gates.json").read_text())
+    files = repository_files(root)
+    require_listed_sources(root, gates["packages"], files, python_only=False)
     print(
         "Scaffold-only update: source CI verified and the gate configuration accepted.",
         flush=True,
