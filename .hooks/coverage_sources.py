@@ -212,6 +212,16 @@ TOOL_CONFIGS = frozenset(
     }
 )
 CONFIG_EXTENSIONS = {"js", "mjs", "cjs", "ts", "mts", "cts"}
+CODE_EXTENSIONS = {
+    "python": {".py"},
+    "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
+    "dart": {".dart"},
+}
+PLAYWRIGHT_TEST_DIR = re.compile(r"""\btestDir\s*:\s*(["'])(?:\./)?([^/"'\\]+)\1""")
+PLAYWRIGHT_GLOBAL = re.compile(r"""\bglobal(?:Setup|Teardown)\s*:\s*(["'])([^"']+)\1""")
+RELATIVE_IMPORT = re.compile(
+    r"""\b(?:from|import|require)\s*\(?\s*(["'])(\.\.?/[^"']*)\1"""
+)
 
 
 def root_tool_config(name: str) -> bool:
@@ -225,18 +235,74 @@ def root_tool_config(name: str) -> bool:
     )
 
 
+def playwright_test_folders(
+    directory: Path, files: list[Path], candidates: set[str]
+) -> set[str]:
+    """Candidate folders that a Playwright settings file names and whose files are all test files or reached from one."""
+    code = {
+        Path(os.path.normpath(path)): path.relative_to(directory)
+        for path in files
+        if path.is_relative_to(directory)
+        and path.suffix in CODE_EXTENSIONS["javascript"]
+    }
+    texts = {
+        path: path.read_text(errors="replace")
+        for path, relative in code.items()
+        if len(relative.parts) == 1
+        and root_tool_config(relative.name)
+        and relative.name.startswith("playwright.")
+    }
+    named = {
+        match[2]
+        for text in texts.values()
+        for match in PLAYWRIGHT_TEST_DIR.finditer(text)
+    }
+    hooks = [
+        Path(os.path.normpath(directory / match[2]))
+        for text in texts.values()
+        for match in PLAYWRIGHT_GLOBAL.finditer(text)
+    ]
+    folders = set()
+    for folder in named & candidates:
+        inside = {
+            path
+            for path, relative in code.items()
+            if relative.parts[0] == folder and len(relative.parts) > 1
+        }
+        seen = {path for path in inside if nonproduction_source(code[path])}
+        pending = [*seen, *(hook for hook in hooks if hook in inside)]
+        seen.update(pending)
+        while pending:
+            current = pending.pop()
+            for match in RELATIVE_IMPORT.finditer(current.read_text(errors="replace")):
+                base = Path(os.path.normpath(current.parent / match[2]))
+                options = [
+                    base,
+                    *(
+                        base.with_name(base.name + suffix)
+                        for suffix in CODE_EXTENSIONS["javascript"]
+                    ),
+                    *(
+                        base / f"index{suffix}"
+                        for suffix in CODE_EXTENSIONS["javascript"]
+                    ),
+                ]
+                found = next((option for option in options if option in code), None)
+                if found is not None and found not in seen:
+                    seen.add(found)
+                    pending.append(found)
+        if inside <= seen:
+            folders.add(folder)
+    return folders
+
+
 def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
     """Top-level names that hold a package's production code."""
-    extensions = {
-        "python": {".py"},
-        "javascript": {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"},
-        "dart": {".dart"},
-    }
     sources = set()
     for path in files:
         if (
             not path.is_relative_to(directory)
-            or path.suffix not in extensions[language]
+            or path.suffix not in CODE_EXTENSIONS[language]
         ):
             continue
         relative = path.relative_to(directory)
@@ -250,6 +316,8 @@ def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:
         ):
             continue
         sources.add(relative.parts[0])
+    if language == "javascript" and sources:
+        sources -= playwright_test_folders(directory, files, sources)
     return sources
 
 
