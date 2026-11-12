@@ -17,7 +17,7 @@ from contextlib import suppress
 from io import StringIO
 from pathlib import Path
 
-from gate_config import Group, parse_config
+from gate_config import Group, parse_config, performance_suites
 from process_group import run_in_group
 from python_setup import python_gate_command
 
@@ -27,7 +27,7 @@ STACK_FRAME = re.compile(r"\s+at ")
 LISTED = 20
 Survivor = tuple[str, int, str, bool]
 Result = tuple[int, list[Survivor]]
-Adapter = Callable[[Path, dict[str, set[int]], list[str], float | None, Path], Result]
+Adapter = Callable[[Path, dict[str, set[int]], Group, float | None, Path], Result]
 
 
 class Capped(Exception):
@@ -126,12 +126,13 @@ def stryker_survivors(report: object) -> Result:
 def javascript(
     directory: Path,
     files: dict[str, set[int]],
-    tests: list[str],
+    group: Group,
     deadline: float | None,
     work: Path,
 ) -> Result:
     from tool_setup import provision_batch
 
+    tests = gate_command(group, "tests")
     remaining = 600 if deadline is None else max(deadline - time.monotonic(), 1)
     provision_batch(["npm:@stryker-mutator/core@latest"], remaining)
     report, config, output = work / "report.json", work / "stryker.json", work / "log"
@@ -254,7 +255,22 @@ def mutmut_change(diff: str) -> tuple[str, str]:
     return removed[0], added[0] if added else ""
 
 
-def configure_mutmut(directory: Path, files: Iterable[str]) -> None:
+def gate_command(group: Group, role: str) -> list[str]:
+    return next(gate["command"] for gate in group["checks"] if gate.get("role") == role)
+
+
+def package_suites(group: Group) -> list[str]:
+    return [
+        suite
+        for gate in group["checks"]
+        if gate.get("role") == "performance"
+        for suite in performance_suites(gate["command"])
+    ]
+
+
+def configure_mutmut(
+    directory: Path, files: Iterable[str], suites: Iterable[str]
+) -> None:
     """Name the changed top-level paths when the project leaves mutmut to guess its layout."""
     pyproject, setup = directory / "pyproject.toml", directory / "setup.cfg"
     if pyproject.is_file() and "mutmut" in tomllib.loads(pyproject.read_text()).get(
@@ -279,7 +295,12 @@ def configure_mutmut(directory: Path, files: Iterable[str]) -> None:
     ).stdout.split("\0")
     # Tests may read any tracked file, and mutmut copies only tests/ and lockfiles.
     copies = {Path(name).parts[0] for name in tracked if name} - sources
-    settings = {"source_paths": sources, "also_copy": copies}
+    ignored = {f"--ignore={suite}" for suite in suites}
+    settings = {
+        "source_paths": sources,
+        "also_copy": copies,
+        "pytest_add_cli_args": ignored,
+    }
     section = "".join(
         f"{key} =\n" + "".join(f"\t{path}\n" for path in sorted(paths))
         for key, paths in settings.items()
@@ -299,7 +320,7 @@ def mutmut(manager: str, *arguments: str) -> list[str]:
 def python(
     directory: Path,
     files: dict[str, set[int]],
-    tests: list[str],
+    group: Group,
     deadline: float | None,
     work: Path,
 ) -> Result:
@@ -308,8 +329,8 @@ def python(
         globs |= changed_functions(name, (directory / name).read_text(), lines)
     if not globs:
         return 0, []
-    configure_mutmut(directory, files)
-    manager = "poetry" if tests[0] == "poetry" else "uv"
+    configure_mutmut(directory, files, package_suites(group))
+    manager = "poetry" if gate_command(group, "tests")[0] == "poetry" else "uv"
     output, listing = work / "log", work / "results"
     if run(mutmut(manager, "run", *globs), directory, deadline, output):
         if NO_MUTANTS in output.read_text(errors="replace"):
@@ -373,10 +394,11 @@ def dart_test_command(tests: list[str]) -> str:
 def dart(
     directory: Path,
     files: dict[str, set[int]],
-    tests: list[str],
+    group: Group,
     deadline: float | None,
     work: Path,
 ) -> Result:
+    tests = gate_command(group, "tests")
     output = work / "log"
     if run(
         ["dart", "pub", "global", "activate", "mutation_test"],
@@ -460,7 +482,7 @@ def summary(name: str, tested: int, survivors: list[Survivor], directory: Path) 
 
 def targets(
     root: Path, base: str, production: Callable[[Path, Group], set[Path]]
-) -> list[tuple[Group, list[str], dict[str, set[int]]]]:
+) -> list[tuple[Group, dict[str, set[int]]]]:
     """Packages with a supported language, a tests gate and changed production lines."""
     command = ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-color"]
     command += ["--no-ext-diff", "--no-renames", "--diff-filter=AM", base, "--"]
@@ -468,13 +490,11 @@ def targets(
     changed = changed_lines(diff.stdout)
     selected = []
     for group in parse_config((root / "hard-eng.gates.json").read_text())["packages"]:
-        tests = [
-            gate["command"] for gate in group["checks"] if gate.get("role") == "tests"
-        ]
+        has_tests = any(gate.get("role") == "tests" for gate in group["checks"])
         if (
             group.get("language") not in ADAPTERS
             or not group.get("sources")
-            or not tests
+            or not has_tests
         ):
             continue
         directory = (root / group["path"]).resolve()
@@ -484,7 +504,7 @@ def targets(
             if (lines := changed.get(path.relative_to(root.resolve()).as_posix()))
         }
         if files:
-            selected.append((group, tests[0], files))
+            selected.append((group, files))
     return selected
 
 
@@ -503,13 +523,13 @@ def report(
             "that the tests should catch.",
             flush=True,
         )
-    for group, tests, files in selected:
+    for group, files in selected:
         name = group.get("name", group["path"])
         try:
             with tempfile.TemporaryDirectory(prefix="hard-eng-mutation-") as work:
                 adapter = ADAPTERS[group.get("language", "")]
                 tested, survivors = adapter(
-                    root / group["path"], files, tests, deadline, Path(work)
+                    root / group["path"], files, group, deadline, Path(work)
                 )
         except Capped:
             print(

@@ -200,6 +200,12 @@ def repository_files(root: Path, names: list[str] | None = None) -> list[Path]:
 TEST_FOLDERS = frozenset(
     {"test", "tests", "integration_test", "test_driver", "__tests__"}
 )
+
+
+def performance_suites(command: list[str]) -> list[str]:
+    return [argument for argument in command if Path(argument).name == "performance"]
+
+
 SKIPPED_FOLDERS = TEST_FOLDERS | {"node_modules", "vendor"}
 
 

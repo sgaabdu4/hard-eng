@@ -263,8 +263,10 @@ def prepare_reports(
         raise ValueError("Import Linter must run all configured contracts")
     if scanner in {"performance-junit", "performance-dart"}:
         reject_test_filters(command, directory, group.get("language"))
-        for suite in command:
-            if Path(suite).name == "performance" and not (directory / suite).is_dir():
+        from gate_config import performance_suites
+
+        for suite in performance_suites(command):
+            if not (directory / suite).is_dir():
                 raise ValueError(
                     f"HE-PERFORMANCE-SUITE: {suite} does not exist; add a test there "
                     "with a real workload and a time budget, or, after review, record a "
