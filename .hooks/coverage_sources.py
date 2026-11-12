@@ -215,9 +215,14 @@ CONFIG_EXTENSIONS = {"js", "mjs", "cjs", "ts", "mts", "cts"}
 
 
 def root_tool_config(name: str) -> bool:
-    """A name like `next.config.ts`: tool configuration that a framework needs at the package root."""
-    tool, _, extension = name.partition(".config.")
-    return extension in CONFIG_EXTENSIONS and tool in TOOL_CONFIGS
+    """A name like `next.config.ts`, or with one more part as in `vite.config.mobile.ts`: tool configuration at the package root."""
+    tool, *middle, extension = name.split(".")
+    return (
+        extension in CONFIG_EXTENSIONS
+        and tool in TOOL_CONFIGS
+        and "config" in middle
+        and len(middle) <= 2
+    )
 
 
 def source_roots(directory: Path, language: str, files: list[Path]) -> set[str]:

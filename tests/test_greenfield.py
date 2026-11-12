@@ -339,7 +339,13 @@ def test_setup_and_check_leave_root_tool_configs_out_of_the_sources(
     repository(tmp_path)
     (tmp_path / "src").mkdir()
     (tmp_path / "src/index.ts").write_text("export const a = 1;\n")
-    for name in ("next.config.ts", "postcss.config.mjs", "playwright.config.ts"):
+    for name in (
+        "next.config.ts",
+        "postcss.config.mjs",
+        "playwright.config.ts",
+        "playwright.prod.config.ts",
+        "vite.config.mobile.ts",
+    ):
         (tmp_path / name).write_text("export default {};\n")
     config = installer.gate_config(tmp_path)
     assert config["packages"][0]["sources"] == ["src"]
@@ -352,6 +358,8 @@ def test_setup_and_check_leave_root_tool_configs_out_of_the_sources(
     [
         "scripts/build.mjs",
         "sentry.server.config.ts",
+        "vite.mobile.settings.ts",
+        "vite.a.b.config.ts",
         "auth.config.ts",
         "payload.config.ts",
         "middleware.ts",
