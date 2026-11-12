@@ -1,6 +1,8 @@
 """Order gates and run the gate chains of separate packages at the same time."""
 
 import os
+import posixpath
+import re
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path, PurePosixPath
@@ -41,6 +43,8 @@ DART_ANALYSIS = (
     ["dart", "analyze", "--fatal-infos", "."],
 )
 ANALYSIS_SETTINGS = (".yaml", ".lock", ".arb")
+PART_OF_FILE = re.compile(r"""(?m)^part\s+of\s+(?:'([^'\n]*)'|"([^"\n]*)")\s*;""")
+PART_OF_NAME = re.compile(r"(?m)^part\s+of\s+[\w.]+\s*;")
 READ_ONLY_ROLES = (
     QUICK_ROLES
     | SCAN_ROLES
@@ -80,13 +84,47 @@ def changed_dart(
     ):
         return {}
     files = sorted(PurePosixPath(name) for name in changed if name.endswith(".dart"))
-    return {
-        f"{group['path']}/{gate['name']}": [
-            str(file.relative_to(group["path"])) for file in files
-        ]
-        for group, gate in gates
-        if all(file.is_relative_to(group["path"]) for file in files)
-    }
+    listed: dict[str, list[PurePosixPath] | None] = {}
+    found: dict[str, list[str]] = {}
+    for group, gate in gates:
+        path = group["path"]
+        if not all(file.is_relative_to(path) for file in files):
+            continue
+        if path not in listed:
+            listed[path] = with_libraries(root, path, files)
+        if (known := listed[path]) is not None:
+            found[f"{path}/{gate['name']}"] = [
+                str(file.relative_to(path)) for file in known
+            ]
+    return found
+
+
+def with_libraries(
+    root: Path, path: str, files: list[PurePosixPath]
+) -> list[PurePosixPath] | None:
+    """The changed files and the library of each changed part file; None when a library cannot be named."""
+    found = set(files)
+    for file in files:
+        try:
+            text = (root / file).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        if PART_OF_NAME.search(text):
+            return None
+        if (part := PART_OF_FILE.search(text)) is None:
+            continue
+        name = part.group(1) or part.group(2)
+        if ":" in name:
+            return None
+        library = PurePosixPath(posixpath.normpath(posixpath.join(file.parent, name)))
+        if (
+            library.parts[:1] == ("..",)
+            or not library.is_relative_to(path)
+            or not (root / library).is_file()
+        ):
+            return None
+        found.add(library)
+    return sorted(found)
 
 
 def early_scan(gate: Gate) -> bool:

@@ -337,3 +337,79 @@ def test_a_dart_analysis_with_other_findings_prints_no_generation_note(
     )
     assert runner.check(base=base, verify_plan=False) == 0
     assert GENERATED[:20] not in capsys.readouterr().out
+
+
+def write_parts(root: Path, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+
+
+@pytest.mark.parametrize(
+    ("path", "files", "changed", "listed"),
+    [
+        (
+            ".",
+            {"lib/text/label.dart": "// library\n"},
+            ["lib/text/label_parts.dart"],
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+        ),
+        (
+            ".",
+            {"lib/label.dart": "// library\n"},
+            ["lib/text/deep.dart"],
+            ["lib/label.dart", "lib/text/deep.dart"],
+        ),
+        (
+            ".",
+            {"lib/text/label.dart": "// library\n"},
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+        ),
+        (
+            "app",
+            {"app/lib/text/label.dart": "// library\n"},
+            ["app/lib/text/label_parts.dart"],
+            ["lib/text/label.dart", "lib/text/label_parts.dart"],
+        ),
+    ],
+)
+def test_a_changed_part_file_brings_its_library_into_the_first_run(
+    tmp_path: Path,
+    path: str,
+    files: dict[str, str],
+    changed: list[str],
+    listed: list[str],
+) -> None:
+    directive = {
+        "label_parts.dart": "part of 'label.dart';\n",
+        "deep.dart": 'part of "../label.dart";\n',
+    }
+    write_parts(tmp_path, files)
+    for name in changed:
+        base = name.rsplit("/", 1)[-1]
+        write_parts(tmp_path, {name: directive.get(base, "// fixture\n")})
+    got = changed_dart(tmp_path, [analysis(path, [*DART, "."])], set(changed))
+    assert got == {f"{path}/types-lint": listed}
+
+
+@pytest.mark.parametrize(
+    ("path", "directive", "library"),
+    [
+        (".", "part of some.name;", None),
+        (".", "part of 'missing.dart';", None),
+        ("app", "part of '../../outside.dart';", "outside.dart"),
+        (".", "part of '../../outside.dart';", "../outside.dart"),
+        (".", "part of 'package:x/y.dart';", None),
+        (".", "part of 'dart:core';", None),
+    ],
+)
+def test_a_part_file_with_no_library_file_gets_no_first_run(
+    tmp_path: Path, path: str, directive: str, library: str | None
+) -> None:
+    prefix = "" if path == "." else f"{path}/"
+    changed = f"{prefix}lib/part.dart"
+    write_parts(tmp_path, {changed: directive + "\n"})
+    if library:
+        write_parts(tmp_path, {library: "// library\n"})
+    assert changed_dart(tmp_path, [analysis(path, [*DART, "."])], {changed}) == {}
