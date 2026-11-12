@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
-from gate_config import Group, nonproduction_source
+from gate_config import TEST_FOLDERS, Group, nonproduction_source
 
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
 COVERAGE_FILES = (
@@ -218,6 +218,7 @@ CODE_EXTENSIONS = {
     "dart": {".dart"},
 }
 PLAYWRIGHT_TEST_DIR = re.compile(r"""\btestDir\s*:\s*(["'])(?:\./)?([^/"'\\]+)\1""")
+TEST_ENDINGS = (".spec", ".test", "_test")
 PLAYWRIGHT_GLOBAL = re.compile(r"""\bglobal(?:Setup|Teardown)\s*:\s*(["'])([^"']+)\1""")
 RELATIVE_IMPORT = re.compile(
     r"""\b(?:from|import|require)\s*\(?\s*(["'])(\.\.?/[^"']*)\1"""
@@ -233,6 +234,25 @@ def root_tool_config(name: str) -> bool:
         and "config" in middle
         and len(middle) <= 2
     )
+
+
+def test_beside_its_code(relatives: set[Path]) -> bool:
+    """A test file and a production file with the same stem in one folder, or in the parent of a test folder."""
+    code = {
+        (path.parent, path.stem) for path in relatives if not nonproduction_source(path)
+    }
+    for path in relatives:
+        stem = path.stem.removesuffix(
+            next((ending for ending in TEST_ENDINGS if path.stem.endswith(ending)), "")
+        )
+        if stem == path.stem:
+            continue
+        folders = [path.parent]
+        if path.parent.name in TEST_FOLDERS:
+            folders.append(path.parent.parent)
+        if any((folder, stem) in code for folder in folders):
+            return True
+    return False
 
 
 def playwright_test_folders(
@@ -269,6 +289,8 @@ def playwright_test_folders(
             for path, relative in code.items()
             if relative.parts[0] == folder and len(relative.parts) > 1
         }
+        if not inside or test_beside_its_code({code[path] for path in inside}):
+            continue
         seen = {path for path in inside if nonproduction_source(code[path])}
         pending = [*seen, *(hook for hook in hooks if hook in inside)]
         seen.update(pending)

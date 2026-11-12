@@ -92,7 +92,9 @@ PLAYWRIGHT_PROJECT = {
         'export default { testDir: "./e2e", globalSetup: "./e2e/global-setup.ts" };\n'
     ),
     "playwright.prod.config.ts": "export default { testDir: './e2e-prod' };\n",
-    "e2e/login.spec.ts": 'import { auth } from "./fixtures/auth";\n',
+    "e2e/login.spec.ts": 'import { auth } from "./fixtures/auth";\nimport "./login.page";\n',
+    "e2e/login.page.ts": 'import "./pages/login";\n',
+    "e2e/pages/login.ts": "export const login = 1;\n",
     "e2e/fixtures/auth.ts": 'import { base } from "./base";\nexport const auth = base;\n',
     "e2e/fixtures/base.ts": "export const base = 1;\n",
     "e2e/global-setup.ts": "export default async () => {};\n",
@@ -131,6 +133,15 @@ def test_the_test_folder_of_a_playwright_settings_file_is_test_code(
             },
             "e2e",
         ),
+        (
+            {
+                "playwright.config.ts": (
+                    "const hint = \"testDir: 'server.ts'\";\nexport default {};\n"
+                ),
+                "server.ts": "export const server = 1;\n",
+            },
+            "server.ts",
+        ),
     ],
 )
 def test_a_folder_that_no_playwright_setting_names_is_still_outside_the_sources(
@@ -143,18 +154,30 @@ def test_a_folder_that_no_playwright_setting_names_is_still_outside_the_sources(
     assert source_roots(tmp_path, "javascript", files) == {"src", folder}
 
 
-def test_application_code_beside_playwright_tests_stays_a_source(
-    tmp_path: Path,
-) -> None:
-    files = write_files(
-        tmp_path,
+BESIDE_CONFIG = {"playwright.config.ts": 'export default { testDir: "./src" };\n'}
+BARREL = {
+    "src/index.ts": 'export * from "./price";\nexport * from "./cart";\n',
+    "src/price.ts": "export const price = 1;\n",
+    "src/cart.ts": 'import { price } from "./price";\n',
+}
+
+
+@pytest.mark.parametrize(
+    "package",
+    [
         {
-            "playwright.config.ts": 'export default { testDir: "./src" };\n',
             "src/main.ts": "export const main = 1;\n",
             "src/price.ts": "export const price = 1;\n",
             "src/price.spec.ts": 'import { price } from "./price";\n',
         },
-    )
+        {**BARREL, "src/index.spec.ts": 'import "./index";\n'},
+        {**BARREL, "src/__tests__/index.spec.ts": 'import "../index";\n'},
+    ],
+)
+def test_application_code_beside_playwright_tests_stays_a_source(
+    tmp_path: Path, package: dict[str, str]
+) -> None:
+    files = write_files(tmp_path, {**BESIDE_CONFIG, **package})
     assert source_roots(tmp_path, "javascript", files) == {"src"}
     message = refusal(tmp_path, files, [])
     assert message is not None
