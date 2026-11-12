@@ -594,7 +594,7 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
     )
 
 
-def proven_elsewhere(base: str | None) -> bool:
+def proven_elsewhere(base: str | None, quick: bool = False) -> bool:
     """A merged PR or verified upstream release already proved this change."""
     from update import check_scaffold_update
 
@@ -610,7 +610,7 @@ def proven_elsewhere(base: str | None) -> bool:
                 flush=True,
             )
             return True
-    return check_scaffold_update(ROOT, base)
+    return check_scaffold_update(ROOT, base, sources=not quick)
 
 
 def plan_base(base: str | None, plan_stage: str | None) -> str | None:
@@ -671,7 +671,7 @@ def check(
 
         if proven_shard(ROOT):
             return 0
-    elif proven_elsewhere(base):
+    elif proven_elsewhere(base, quick):
         if shard:
             from shards import mark_shard
 
