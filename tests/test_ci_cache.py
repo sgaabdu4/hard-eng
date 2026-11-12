@@ -67,11 +67,27 @@ def test_several_tool_directories_get_one_message_with_one_grouped_step(
     assert errors.count("CI tool directories") == 1
     assert "ci.yml:6,7 set MISE_DATA_DIR, MISE_CACHE_DIR from" in errors
     assert (
-        "Set them in a step with { "
+        "Replace those lines with a step that runs { "
         'echo "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/...}"; '
         'echo "MISE_CACHE_DIR=${MISE_CACHE_DIR:-$RUNNER_TEMP/hard-eng-tools/...}"; '
         '} >> "$GITHUB_ENV"'
     ) in errors
+
+
+def test_the_tool_directory_step_done_as_printed_leaves_no_note_and_no_pending_change(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    line = "      MISE_DATA_DIR: ${{ runner.temp }}/hard-eng-tools/mise/data\n"
+    before = workflow("ubuntu-latest", "      - run: true\n", "    env:\n" + line)
+    errors, _ = setup_messages(tmp_path / "before", capsys, before)
+    assert "ci.yml:6 sets MISE_DATA_DIR from" in errors
+    step = 'echo "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/...}"'
+    assert f'Replace that line with a step that runs {step} >> "$GITHUB_ENV"' in errors
+    done = step.replace("...", "mise/data") + ' >> "$GITHUB_ENV"'
+    after = workflow("ubuntu-latest", f"      - run: {done}\n      - run: true\n")
+    errors, changes = setup_messages(tmp_path / "after", capsys, after)
+    assert "CI tool directories" not in errors
+    assert changes == {}
 
 
 def test_a_moved_tool_directory_is_not_reported(
