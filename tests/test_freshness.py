@@ -498,6 +498,10 @@ def test_a_poetry_dev_dependencies_entry_fails_with_the_move_step(
         failure.value
     )
     assert "[tool.poetry.group.dev.dependencies]" in str(failure.value)
+    assert (
+        "then run `POETRY_SOLVER_MIN_RELEASE_AGE=2 uvx poetry lock` and the check again."
+        in str(failure.value)
+    )
     assert not log.exists()
     moved = old.replace("dev-dependencies", "group.dev.dependencies")
     (tmp_path / "pyproject.toml").write_text(moved)
