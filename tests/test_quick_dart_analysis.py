@@ -2,13 +2,15 @@
 
 import json
 import os
+import sys
+import threading
 from pathlib import Path
 from types import ModuleType
 
 import agent_hooks
 import pytest
 from conftest import commit, configure, git
-from gate_config import Group
+from gate_config import Gate, Group
 from gate_schedule import changed_dart
 from test_push_check import git_starts
 
@@ -195,6 +197,20 @@ def test_a_finding_in_a_changed_file_leaves_the_verdict_to_the_package_run(
     assert shown.count("error - lib/a.dart:1:1 - seeded") == 1
     assert "lib/made.g.dart:1:1" not in shown
     assert sorted(runner.FAILED_GATES) == ["./lint", "./types-lint"]
+
+
+def test_a_gate_of_another_tool_with_the_name_of_the_dart_gate_runs_its_own_command(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    other: Gate = {
+        "name": "types-lint",
+        "role": "lint",
+        "command": [sys.executable, "-c", "open('ran', 'w').close()"],
+    }
+    group: Group = {"path": ".", "checks": [other]}
+    runner.CHANGED_DART["./types-lint"] = []
+    assert runner.run_gate(group, other, 30, threading.Lock()) is False
+    assert (tmp_path / "ran").is_file()
 
 
 def test_a_pass_on_the_changed_files_leaves_the_gate_time_and_the_old_findings_alone(
