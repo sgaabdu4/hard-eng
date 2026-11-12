@@ -47,12 +47,12 @@ JS_CONFIG = re.compile(r"(jest\.retryTimes\()|\b(retry:|retries:)" + NONZERO)
 PYTHON = re.compile(r"\b(mark\.flaky)\b|(@flaky)\b")
 DART_TEST = re.compile(r"(@Retry\()|" + DART_LEAD + r"\b(retry:)" + COUNT)
 PYTEST_SETTINGS = re.compile(
-    r"(--force-reruns|--reruns)(?![ =]+0\b)|^\s*(reruns)\s*="
+    r"(--force-reruns|--reruns)(?![ =]+0\b)|^\s*(reruns)\s*[=:]"
     + NONZERO
     + r"|addopts[^\n]*(--retries)\b"
 )
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
-PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*=" + NONZERO)
+PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*[=:]" + NONZERO)
 TABLE_HEAD = re.compile(r"^\s*(\[[^\[\]=,\"']+\])\s*(?:[#;].*)?$")
 PYTEST_FILES = ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg")
 PYTEST_TABLES = frozenset(
@@ -110,5 +110,5 @@ def table_retry(path: Path, number: int, text: str) -> str | None:
     except (OSError, UnicodeDecodeError):
         return None
     heads = (TABLE_HEAD.match(line) for line in reversed(above))
-    table = next((head[1] for head in heads if head), "")
+    table = next(("".join(head[1].split()) for head in heads if head), "")
     return hit[1] if table in PYTEST_TABLES else None
