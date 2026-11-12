@@ -399,6 +399,9 @@ def test_a_draft_plan_with_code_edits_names_the_ready_step(
         in str(error.value)
     )
     assert "another task" not in str(error.value)
+    with pytest.raises(ValueError, match="requires Ready") as explicit:
+        validate_plans(repository, stage="Ready")
+    assert "set its Status to Ready" not in str(explicit.value)
 
 
 def test_an_open_plan_outside_the_change_also_names_the_own_plan_step(
@@ -415,11 +418,8 @@ def test_an_open_plan_outside_the_change_also_names_the_own_plan_step(
     ) as error:
         validate_plans(repository)
     assert str(error.value).endswith(
-        " If that plan is for another task, add a plan for this change."
+        "--plan-stage Ready. If that plan is for another task, add a plan for this change."
     )
-    with pytest.raises(ValueError, match="requires Ready") as explicit:
-        validate_plans(repository, stage="Ready")
-    assert "set its Status to Ready" not in str(explicit.value)
 
 
 def test_update_branch_needs_no_plan_for_files_the_update_wrote(
