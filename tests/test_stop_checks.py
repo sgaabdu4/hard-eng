@@ -44,10 +44,10 @@ def test_a_stop_lists_the_untracked_files_while_it_finds_the_session_base(
         assert scoped.wait(timeout=5), "the listing ended before the base search"
         return untracked(root)
 
-    def scope(root: Path, base: str) -> tuple[str, str]:
+    def scope(root: Path, base: str, recorded: bool) -> tuple[str, str]:
         assert listing.wait(timeout=5), "the base search waited for the listing"
         scoped.set()
-        return session_scope(root, base)
+        return session_scope(root, base, recorded)
 
     monkeypatch.setattr(agent_hooks, "untracked", listed)
     monkeypatch.setattr(agent_hooks, "session_scope", scope)
@@ -170,6 +170,44 @@ def test_a_branch_on_a_shared_branch_checks_only_its_own_commits(
     commit(repository, "This task")
     agent_hooks.completion(repository, payload)
     assert f"--base {shared}" in seen.read_text()
+
+
+def unpushed_task(repository: Path) -> tuple[Path, Path, JsonObject, str, str]:
+    """A task branch with one unpushed commit and a session id that has no record."""
+    seen = repository.parent / "argv.txt"
+    runs = install_check(
+        repository,
+        f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv))\n",
+    )
+    add_origin(repository)
+    git(repository, "push", "-q", "origin", "main")
+    parent = git(repository, "rev-parse", "HEAD")
+    git(repository, "checkout", "-qb", "task")
+    (repository / "work.py").write_text("value = 1\n")
+    commit(repository, "This task")
+    return runs, seen, {"session_id": "unknown"}, parent, "task"
+
+
+def test_a_stop_with_no_session_record_checks_the_commits_that_are_not_pushed(
+    repository: Path,
+) -> None:
+    runs, seen, payload, parent, _ = unpushed_task(repository)
+    answer = agent_hooks.completion(repository, payload)
+    assert "no code checks run" not in str(answer)
+    assert runs.read_text().count("run") == 1
+    assert f"--base {parent}" in seen.read_text()
+
+
+def test_the_first_pass_of_a_stop_with_no_record_keeps_the_base_of_the_commits_that_are_not_pushed(
+    repository: Path,
+) -> None:
+    runs, _, payload, parent, _ = unpushed_task(repository)
+    agent_hooks.completion(repository, payload)
+    state = repository / ".hard-eng/sessions/unknown.json"
+    assert json.loads(state.read_text())["base"] == parent
+    again = agent_hooks.completion(repository, payload)
+    assert "unchanged since last passing check" in str(again)
+    assert runs.read_text().count("run") == 1
 
 
 def searched(repository: Path, base: str) -> tuple[tuple[str, str], int]:

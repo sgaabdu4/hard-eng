@@ -755,7 +755,7 @@ def saved_session(state: Path | None) -> tuple[str, JsonObject]:
     return base, before
 
 
-def session_scope(root: Path, base: str) -> tuple[str, str]:
+def session_scope(root: Path, base: str, recorded: bool = True) -> tuple[str, str]:
     """Commits already on a remote passed pre-push and are not this session's change; the commit of HEAD comes with the base."""
     listing = ["rev-list", "--first-parent", "--parents", "HEAD", "--not", "--remotes"]
     unpushed = subprocess.check_output(
@@ -773,6 +773,8 @@ def session_scope(root: Path, base: str) -> tuple[str, str]:
         ).stdout.strip()
     if not point or point == base:
         return base, head
+    if not recorded:
+        return point, head
     older = subprocess.run(
         ["git", "merge-base", "--is-ancestor", point, base],
         cwd=root,
@@ -839,7 +841,7 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
             base = subprocess.check_output(
                 ["git", *verify], cwd=root, text=True
             ).strip()
-        base, head = session_scope(root, base)
+        base, head = session_scope(root, base, recorded)
         current = dirty_files(root, base, others)
         changed = "".join(
             f"{name}\n"
