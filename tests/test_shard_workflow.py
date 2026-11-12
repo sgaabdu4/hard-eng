@@ -163,6 +163,38 @@ def test_a_split_workflow_gets_a_note_and_no_shards(
     )
 
 
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("name: Hard Eng", "name: Hard Eng"),
+        ("      - develop\n", "      - develop\n      - release\n"),
+    ],
+)
+def test_removing_shards_gives_the_one_job_workflow_back(
+    tmp_path: Path, old: str, new: str
+) -> None:
+    one_job = generated(tmp_path, SOURCE, suite_config(None)).replace(old, new, 1)
+    split = split_test_shards(suite_config(3), one_job)
+    assert list(yaml.safe_load(split)["jobs"]) == ["checks", "tests", "hard-eng"]
+    assert split_test_shards(suite_config(None), split) == one_job
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("\njobs:\n", "\njobs:\n  extra:\n    runs-on: x\n"),
+        ("hard-eng-tests", "tests-by-hand"),
+        ("retention-days: 1", "retention-days: 5"),
+    ],
+)
+def test_removing_shards_leaves_a_workflow_that_is_not_the_generated_form(
+    tmp_path: Path, old: str, new: str
+) -> None:
+    one_job = generated(tmp_path, SOURCE, suite_config(None))
+    custom = split_test_shards(suite_config(3), one_job).replace(old, new, 1)
+    assert split_test_shards(suite_config(None), custom) == custom
+
+
 def test_setup_refuses_shards_on_a_gate_that_does_not_run_pytest(
     tmp_path: Path,
 ) -> None:
