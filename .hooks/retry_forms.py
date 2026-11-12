@@ -66,7 +66,6 @@ PYTEST_FILES = (
     "tox.ini",
     "setup.cfg",
 )
-HEADLESS_FILES = ("pytest.toml", ".pytest.toml")
 PYTEST_TABLES = frozenset(
     {"[tool.pytest.ini_options]", "[tool.pytest]", "[pytest]", "[tool:pytest]"}
 )
@@ -119,8 +118,6 @@ def table_retry(path: Path, number: int, text: str) -> str | None:
     hit = PLUGIN_COUNT.search(text) or PLUGIN_OPTION.search(text)
     if hit is None:
         return None
-    if path.name in HEADLESS_FILES:
-        return hit[1]
     try:
         above = path.read_text(encoding="utf-8").splitlines()[: number - 1]
     except (OSError, UnicodeDecodeError):
