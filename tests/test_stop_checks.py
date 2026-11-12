@@ -272,6 +272,33 @@ def test_a_stop_blocks_when_git_cannot_read_the_session_base(
     assert "Verification could not run" in str(blocked["reason"])
 
 
+def test_a_session_record_asks_git_only_for_what_it_needs(repository: Path) -> None:
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    (repository / "kept.py").write_text("value = 1\n")
+    head = commit(repository, "A tracked file")
+
+    def recorded(session: str) -> tuple[JsonObject, int]:
+        payload: JsonObject = {"session_id": session}
+
+        def record() -> int:
+            return int(not agent_hooks.record_session(repository, payload))
+
+        started = len(git_starts(record))
+        state = repository / f".hard-eng/sessions/{session}.json"
+        return json.loads(state.read_text()), started
+
+    assert recorded("clean") == ({"base": head, "dirty": {}}, 1)
+    assert recorded("clean") == ({"base": head, "dirty": {}}, 0)
+    (repository / "kept.py").write_text("value = 2\n")
+    (repository / "new.py").write_text("value = 1\n")
+    saved, started = recorded("dirty")
+    dirty = saved["dirty"]
+    assert saved["base"] == head
+    assert isinstance(dirty, dict)
+    assert sorted(dirty) == ["kept.py", "new.py"]
+    assert started == 3
+
+
 def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
     runs = install_check(repository, "raise SystemExit(1)\n")
     payload: JsonObject = {"session_id": "known"}
