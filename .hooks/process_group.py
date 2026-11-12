@@ -221,13 +221,14 @@ def clean_start(
     """Remove the old pass record; give the start of a full check that may write a new one; a partial check or one in CI does no record work."""
     import time
 
-    if (
-        base is None
-        or partial
-        or os.environ.get("CI")
-        or plan_stage not in (None, "Complete")
-    ):
+    if partial or os.environ.get("CI") or plan_stage not in (None, "Complete"):
         return None
+    if base is None:
+        from change_size import judged_point
+
+        base = judged_point(root)
+        if base is None:
+            return None
     with suppress(OSError):
         Path(lock.name).with_name(PASSED_FILE).unlink()
     commit = subprocess.run(
