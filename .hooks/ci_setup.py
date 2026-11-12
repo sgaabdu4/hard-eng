@@ -649,6 +649,26 @@ def setup_written(
     root: Path, base: str, names: set[str], sources: tuple[Path, Path]
 ) -> set[str]:
     """The changed paths the release's setup writes exactly when it updates the base tree."""
+    from project_files import keep
+
+    key = ("base_plan", str(root), base, *map(str, sources))
+    planned = keep("references", key, lambda: base_plan(root, base, sources))
+    return {
+        name
+        for name in names
+        if name in planned
+        and (
+            not (root / name).exists()
+            if planned[name] is None
+            else (root / name).is_file() and planned[name] == (root / name).read_text()
+        )
+    }
+
+
+def base_plan(
+    root: Path, base: str, sources: tuple[Path, Path]
+) -> dict[str, str | None]:
+    """What the release's setup writes when it updates the tree of the base commit."""
     from hook_chain import own_hooks_env
     from update import update_plan
 
@@ -663,7 +683,7 @@ def setup_written(
             timeout=120,
         )
         try:
-            planned = update_plan(tree, *sources, own_hooks_env(tree), replace=True)[0]
+            return update_plan(tree, *sources, own_hooks_env(tree), replace=True)[0]
         finally:
             subprocess.run(
                 [*git, "remove", "--force", str(tree)],
@@ -671,16 +691,6 @@ def setup_written(
                 check=False,
                 timeout=60,
             )
-    return {
-        name
-        for name in names
-        if name in planned
-        and (
-            not (root / name).exists()
-            if planned[name] is None
-            else (root / name).is_file() and planned[name] == (root / name).read_text()
-        )
-    }
 
 
 def migrate_project_workflows(

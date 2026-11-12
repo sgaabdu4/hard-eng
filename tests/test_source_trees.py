@@ -7,12 +7,17 @@ import change_size
 import pytest
 import source_trees
 import update
-from conftest import git
+from conftest import commit, git
+from project_files import keeping
 from test_updates import select_release
 
+NOTED = (
+    "on: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n"
+    "          MISE_DATA_DIR: ${{ runner.temp }}/hard-eng-tools/mise/data\n"
+)
 
-@pytest.fixture
-def update_branch(
+
+def updated(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, str, Mock]:
     source, target, _ = release
@@ -25,6 +30,13 @@ def update_branch(
     fetch = Mock(side_effect=update.fetch_sources)
     monkeypatch.setattr(update, "fetch_sources", fetch)
     return target, base, fetch
+
+
+@pytest.fixture
+def update_branch(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str, Mock]:
+    return updated(release, monkeypatch)
 
 
 def revisions(target: Path, base: str) -> tuple[str, str]:
@@ -51,6 +63,33 @@ def test_every_round_of_one_run_takes_the_trees_from_the_first_fetch(
     assert git(old, "rev-parse", "HEAD") == previous
     assert git(source, "status", "--porcelain") == ""
     assert git(old, "status", "--porcelain") == ""
+
+
+def test_one_check_plans_each_tree_and_tells_each_note_one_time(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    """While a check keeps its listings, each proof reuses the setup plan of the checkout and of the base tree."""
+    workflow = release[1] / ".github/workflows/deploy.yml"
+    workflow.parent.mkdir(parents=True, exist_ok=True)
+    workflow.write_text(NOTED)
+    commit(release[1], "add a workflow")
+    target, base, _ = updated(release, monkeypatch)
+    plans = Mock(side_effect=update.update_plan)
+    monkeypatch.setattr(update, "update_plan", plans)
+    found = update.update_in_diff(target, base)
+    assert found is not None
+    capfd.readouterr()
+    with keeping("references", "listings"):
+        assert update.check_scaffold_update(target, base)
+        installed = update.installed_update_paths(target, base)
+        assert change_size.update_written(target, base, found[2]) >= installed
+    replaced = [call.kwargs.get("replace", False) for call in plans.call_args_list]
+    assert replaced == [False, True]
+    assert capfd.readouterr().err.count("CI tool directories") == 1
+    assert update.check_scaffold_update(target, base)
+    assert len(plans.call_args_list) == 3
 
 
 def test_a_tree_a_round_changed_is_fetched_again(

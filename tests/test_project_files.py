@@ -204,3 +204,13 @@ def test_background_work_gives_its_answer_or_raises_its_error() -> None:
     waiting = project_files.background(broken, (OSError,))
     with pytest.raises(OSError, match="no answer"):
         waiting()
+
+
+def test_a_line_is_told_one_time_while_a_check_keeps_its_listings(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with project_files.keeping("listings"):
+        project_files.tell_once("note\nmore\n")
+        project_files.tell_once("note\nother\n")
+    project_files.tell_once("note\nnote\n")
+    assert capsys.readouterr().err == "note\nmore\nother\nnote\nnote\n"

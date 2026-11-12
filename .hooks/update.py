@@ -16,6 +16,7 @@ import source_trees
 from gate_config import SOURCE_FILE, parse_config, repository_files
 from local_edits import refusal_reason
 from mcp_setup import retired_settings
+from project_files import keep, tell_once
 from release_history import StaleRelease, ordered
 from submodules import update_submodules
 from update_runner import (
@@ -332,7 +333,7 @@ def update_plan(
         check=False,
     )
     before, _, pending = planned.stderr.partition("CI setup pending:")
-    sys.stderr.write(before + pending.partition("\n")[2])
+    tell_once(before + pending.partition("\n")[2])
     if planned.returncode != 0:
         reason = refusal_reason(planned.stderr)
         raise ValueError(f"setup refused the update: {reason or 'no reason printed'}")
@@ -923,7 +924,9 @@ def release_installed(
         if path.is_dir()
     }
     env = hook_chain.own_hooks_env(root)
-    changes, links, _, _ = update_plan(root, source, source, env)
+    key = ("tree_plan", str(root), str(source))
+    made = keep("listings", key, lambda: update_plan(root, source, source, env))
+    changes, links = made[:2]
     if (
         not names <= allowed
         or (env is not None and ".husky/pre-push" in names)
@@ -981,8 +984,6 @@ def proven_installed(
     root: Path, base: str, names: set[str], revision: str, previous: str
 ) -> set[str]:
     """The installed paths among these names, when the verified release installs them exactly."""
-    from project_files import keep
-
     installed = {name for name in names if maybe_installed(name)}
     try:
         proven = keep(
