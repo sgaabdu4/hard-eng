@@ -293,13 +293,13 @@ def run_gate(
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     if part := gate.get("part"):
         key += "@shard" if part.isdecimal() else "@merge"
-    started = time.monotonic()
     limit = gate_limit(ROOT, key, timeout)
     name = f"{group['path']}/{gate['name']}"
     OUTPUTS.pop(name, None)
     files = CHANGED_DART.get(name)
     if files is not None and changed_dart_pass(group, gate, files, limit, groups):
         return False
+    started = time.monotonic()
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
     if not RECORDING.is_set():
         from debt import judge
