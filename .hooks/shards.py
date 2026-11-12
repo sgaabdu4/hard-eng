@@ -7,6 +7,7 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -21,6 +22,8 @@ COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
 PROVEN = "proven.txt"
 RAN = "ran.txt"
+RELEASE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+MINIMUM_DECIMALS_FROM = (7, 17, 1)
 PYTEST_FILE = "Move those settings to a file that pytest reads with no option."
 COVERAGE_FILE = "a file that coverage.py reads with no option."
 MOVED_OPTIONS = {
@@ -493,11 +496,31 @@ def merged_total(report: dict[str, object]) -> float:
     return 100.0 * covered / count if count else 100.0
 
 
-def below_minimum(total: float, minimum: float, precision: int) -> bool:
-    """The rule of coverage.py's should_fail_under: a minimum of 100 needs exactly 100."""
+def reports_release(report: dict[str, object]) -> str | None:
+    """The coverage.py release that wrote a report, when it says."""
+    meta = report.get("meta")
+    version = meta.get("version") if isinstance(meta, dict) else None
+    return version if isinstance(version, str) else None
+
+
+def effective_precision(minimum: float, precision: int, release: str | None) -> int:
+    """The decimal places that coverage.py judges with: from 7.17.1 at least those of the minimum."""
+    found = RELEASE.match(release or "")
+    if not found or tuple(map(int, found.groups())) < MINIMUM_DECIMALS_FROM:
+        return precision
+    if minimum == int(minimum):
+        return precision
+    exponent = Decimal(str(minimum)).as_tuple().exponent
+    return max(precision, -int(exponent))
+
+
+def below_minimum(
+    total: float, minimum: float, precision: int, release: str | None
+) -> bool:
+    """The rule of coverage.py's should_fail_under for the release: a minimum of 100 needs exactly 100."""
     if minimum == 100.0 and total != 100.0:
         return True
-    return round(total, precision) < minimum
+    return round(total, effective_precision(minimum, precision, release)) < minimum
 
 
 def shown(total: float, precision: int) -> str:
@@ -535,10 +558,12 @@ def merge_reports(root: Path, group: Group, gate: Gate, command: list[str]) -> N
     (directory / report["coverage"]).write_text(json.dumps(merged))
     minimum, origin, precision = coverage_minimum(directory, command)
     total = merged_total(merged)
-    if below_minimum(total, minimum, precision):
+    release = reports_release(merged)
+    if below_minimum(total, minimum, precision, release):
+        digits = effective_precision(minimum, precision, release)
         raise ValueError(
             f"{group['path']}/{gate['name']}: the merged coverage total is "
-            f"{shown(total, precision)}%, below the minimum of {minimum:g}% that "
+            f"{shown(total, digits)}%, below the minimum of {minimum:g}% that "
             f"{origin} sets. Add tests, or lower that minimum."
         )
 
