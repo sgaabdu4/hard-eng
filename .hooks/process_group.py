@@ -12,6 +12,8 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
+from project_files import clean_tree
+
 BROKER = re.compile(
     r"^\S+ \S*/app-server-broker\.mjs serve --endpoint \S+ --cwd (.+) --pid-file \S+$"
 )
@@ -207,31 +209,6 @@ def save_installed(lock: IO[str], before: frozenset[str], root: Path) -> None:
             Path(lock.name).with_name(INSTALLED_FILE).write_text(
                 json.dumps({key: lock_stamp(root, key) for key in sorted(after)})
             )
-
-
-def clean_tree(root: Path) -> tuple[str, bool] | None:
-    """The commit that HEAD names and whether Git sees no change, submodules included."""
-    status = subprocess.run(
-        [
-            "git",
-            "--no-optional-locks",
-            "status",
-            "--porcelain=v2",
-            "--branch",
-            "--no-ahead-behind",
-            "--ignore-submodules=none",
-            "--untracked-files=normal",
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    lines = status.stdout.splitlines()
-    heads = [line.split()[2] for line in lines if line.startswith("# branch.oid ")]
-    if status.returncode or len(heads) != 1 or not heads[0].isalnum():
-        return None
-    return heads[0], all(line.startswith("# ") for line in lines)
 
 
 def clean_start(
