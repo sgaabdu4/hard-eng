@@ -10,14 +10,13 @@ from pathlib import Path, PurePosixPath
 from typing import cast
 
 from ci_jobs import CHECKOUT, IMPACT_BASE, LINUX_HEADER
-from coverage_sources import COVERAGE_FILES
+from coverage_sources import coverage_file
 from gate_config import Gate, GateConfig, Group
 from process_group import run_in_group
 from reports import junit_root
 
 COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 COV_FAIL_UNDER = re.compile(r"--cov-fail-under(?:=|\s+)([0-9.]+)")
-COV_SECTIONS = ("run", "report", "html", "xml", "json", "lcov", "paths")
 PYTEST_SETTINGS = (
     "pytest.ini",
     ".pytest.ini",
@@ -344,54 +343,17 @@ def merge_junit(paths: list[Path], target: Path) -> None:
     ET.ElementTree(merged).write(target, encoding="utf-8", xml_declaration=True)
 
 
-def settings_reader(path: Path, own: bool) -> Callable[[str], dict[str, object] | None]:
-    """The sections of a coverage settings file; a file that is not coverage's own reads fewer."""
-    import configparser
-    import tomllib
-
-    if path.suffix == ".toml":
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-        prefixes = ("tool.coverage.", "") if own else ("tool.coverage.",)
-
-        def toml_section(section: str) -> dict[str, object] | None:
-            for prefix in prefixes:
-                found: object = data
-                for part in (prefix + section).split("."):
-                    found = found.get(part) if isinstance(found, dict) else None
-                if isinstance(found, dict):
-                    return cast(dict[str, object], found)
-            return None
-
-        return toml_section
-    parser = configparser.ConfigParser(interpolation=None)
-    parser.read(path, encoding="utf-8")
-    names = ("coverage:", "") if own else ("coverage:",)
-
-    def ini_section(section: str) -> dict[str, object] | None:
-        for prefix in names:
-            if parser.has_section(prefix + section):
-                return dict(parser[prefix + section])
-        return None
-
-    return ini_section
-
-
 def coverage_settings(directory: Path) -> tuple[str, float, int] | None:
-    """The file coverage.py reads, in its order, with its fail_under and precision."""
-    for name in COVERAGE_FILES:
-        path = directory / name
-        if not path.is_file():
-            continue
-        own = name.startswith(".coveragerc")
-        section = settings_reader(path, own)
-        if own or any(section(known) for known in COV_SECTIONS):
-            report = section("report") or {}
-            return (
-                name,
-                float(str(report.get("fail_under", 0))),
-                int(str(report.get("precision", 0))),
-            )
-    return None
+    """The file coverage.py reads, with its fail_under and precision."""
+    found = coverage_file(directory)
+    if found is None:
+        return None
+    report = found[1]("report") or {}
+    return (
+        found[0],
+        float(str(report.get("fail_under", 0))),
+        int(str(report.get("precision", 0))),
+    )
 
 
 def coverage_minimum(directory: Path, command: list[str]) -> tuple[float, str, int]:
