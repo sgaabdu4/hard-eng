@@ -347,6 +347,42 @@ def test_native_tools_install_before_reading_environment(
         assert len(calls) == 2
 
 
+ONE_TOOL_NOTE = (
+    "mise WARN  uv installed but not activated \u2014 it is not in any config file.\n"
+    "To install and activate, run:\n  mise use uv\n"
+)
+TWO_TOOL_NOTE = (
+    "mise WARN  aqua:gitleaks/gitleaks, npm:dart-decimate installed but not activated"
+    " \u2014 they are not in any config file.\nTo install and activate, run:\n"
+    "  mise use aqua:gitleaks/gitleaks\n  mise use npm:dart-decimate\n"
+)
+
+
+@pytest.mark.parametrize("note", [ONE_TOOL_NOTE, TWO_TOOL_NOTE])
+def test_the_install_step_does_not_pass_on_the_activation_note_of_mise(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    note: str,
+) -> None:
+    use_installed_mise(tmp_path, monkeypatch)
+    progress = "mise uv@0.13.7 already installed\n"
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if "install" in command:
+            text = progress + note + "mise WARN  another warning\n"
+            return subprocess.CompletedProcess(command, 0, "", text)
+        return subprocess.CompletedProcess(command, 0, '{"PATH":""}', "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    group: Group = {
+        "path": ".",
+        "checks": [{"name": "secrets", "command": ["gitleaks"]}],
+    }
+    tool_setup.provision_tools(tmp_path, [group], 30)
+    assert capsys.readouterr().err == progress + "mise WARN  another warning\n"
+
+
 @pytest.mark.parametrize(
     ("scanner", "script", "package", "arguments"),
     [
