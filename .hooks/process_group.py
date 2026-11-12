@@ -243,9 +243,10 @@ def clean_start(
         return None
     if base is None:
         from change_size import judged_point
+        from update import update_in_diff
 
         base = judged_point(root)
-        if base is None:
+        if base is None or update_in_diff(root, base) is not None:
             return None
     with suppress(OSError):
         Path(lock.name).with_name(PASSED_FILE).unlink()
