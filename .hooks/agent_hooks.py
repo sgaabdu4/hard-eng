@@ -251,7 +251,7 @@ PREVIEW_HOOK: JsonObject = {
     "hooks": [{"type": "command", "command": PREVIEW_COMMAND, "timeout": 5}],
 }
 CLAUDE_TOOL_HOOKS = [POLL_HOOK, PREVIEW_HOOK]
-# Its own script: the hard-eng.py entry point loads every gate module first.
+# Its own script: hard-eng.py loads gate_runner, which loads every gate module.
 FAILURE_COMMAND = TOOL_COMMAND.format("failures")
 FAILURE_HOOK: JsonObject = {
     "hooks": [{"type": "command", "command": FAILURE_COMMAND, "timeout": 5}]

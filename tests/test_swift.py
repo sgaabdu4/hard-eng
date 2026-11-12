@@ -547,7 +547,7 @@ def impact_module(installer: ModuleType, tmp_path: Path, changed: str) -> Module
     (root / "hard-eng.gates.json").write_text(json.dumps(config))
     commit(root, "configure")
     write(root, {changed: CODE + "\n"})
-    module = load_module("swift_impact", SOURCE / ".hooks/hard-eng.py")
+    module = load_module("swift_impact", SOURCE / ".hooks/gate_runner.py")
     module.__dict__["ROOT"] = root
     return module
 
