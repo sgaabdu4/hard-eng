@@ -56,3 +56,17 @@ async function doWhile(a: Promise<void>[]): Promise<void> {
     await Promise.all(a);
   } while (a.length > 0);
 }
+
+async function oneFromQueue(queue: number[]): Promise<void> {
+  while (queue.length > 0) {
+    // ruleid: await-in-loop-javascript
+    await Promise.all([run(queue.shift())]);
+  }
+}
+
+async function onePart(queue: number[]): Promise<void> {
+  while (queue.length > 0) {
+    // ruleid: await-in-loop-javascript
+    await Promise.all(queue.splice(0, 1).map(run));
+  }
+}

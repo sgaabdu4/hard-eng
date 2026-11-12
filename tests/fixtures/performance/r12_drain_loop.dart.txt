@@ -62,3 +62,17 @@ Future<void> doWhile(List<Future<void>> a) async {
     await Future.wait(a.toList());
   } while (a.isNotEmpty);
 }
+
+Future<void> oneFromQueue(List<int> queue) async {
+  while (queue.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait([process(queue.removeLast())]);
+  }
+}
+
+Future<void> onePart(List<int> queue) async {
+  while (queue.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait(queue.take(1).map(process).toList());
+  }
+}
