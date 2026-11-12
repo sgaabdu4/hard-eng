@@ -23,6 +23,7 @@ OPERATION = re.compile(
     re.MULTILINE,
 )
 LEGACY = ("dev-dependencies",)
+LOCK_STEP = "POETRY_SOLVER_MIN_RELEASE_AGE=2 uvx poetry lock"
 STEP = "POETRY_SOLVER_MIN_RELEASE_AGE=2 uvx poetry add"
 TABLE_FLAGS = {
     "markers": "--markers",
@@ -168,7 +169,8 @@ def poetry_steps(directory: Path, stale: list[Stale]) -> str:
     if legacy:
         parts.append(
             "Move the entries of [tool.poetry.dev-dependencies] to [tool.poetry.group.dev.dependencies] "
-            "(Poetry reads the old section as the dev group), then run the check again."
+            "(Poetry reads the old section as the dev group), "
+            f"then run `{LOCK_STEP}` and the check again."
         )
     if by_hand:
         parts.append(f"Raise {' and '.join(by_hand)} by hand in pyproject.toml.")
