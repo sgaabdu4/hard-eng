@@ -52,6 +52,18 @@ def keep[T](scope: str, key: tuple[str, ...], make: Callable[[], T]) -> T:
     return cast(T, store[key])
 
 
+def tell_once(text: str) -> None:
+    """Write the text to the error stream; while a check keeps its listings, each line only one time."""
+    if "listings" not in KEPT:
+        sys.stderr.write(text)
+        return
+    told: set[str] = keep("listings", ("told",), set)
+    for line in text.splitlines(keepends=True):
+        if line not in told:
+            told.add(line)
+            sys.stderr.write(line)
+
+
 def background[T](
     work: Callable[[], T], errors: tuple[type[Exception], ...]
 ) -> Callable[[], T]:
