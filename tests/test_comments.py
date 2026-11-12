@@ -11,7 +11,14 @@ import pytest
 from comments import RETRY_WORDS, validate_comments, validate_suppressions
 from conftest import SOURCE, commit, git, init
 from shipping import ShippingPolicy
-from switch_off_forms import RETRY_FORMS, RETRY_PASSES, RUFF_FORMS, SWITCHES, TEST_FLAGS
+from switch_off_forms import (
+    RETRY_FORMS,
+    RETRY_LINES,
+    RETRY_PASSES,
+    RUFF_FORMS,
+    SWITCHES,
+    TEST_FLAGS,
+)
 
 BLOCK = "Code comments are none by default"
 
@@ -386,6 +393,20 @@ def test_a_retry_count_in_a_pytest_table_fails_at_its_line(
     text = table + "\nminversion = '8'\nre" + "tries" + sign + "2\n"
     message = refusal(tmp_path, name, text)[1]
     assert f"{name}:4 adds " + repr("re" + "tries") in message
+
+
+@pytest.mark.parametrize(("name", "text", "line"), RETRY_LINES)
+def test_a_retry_option_on_its_own_line_counts_only_in_a_pytest_table(
+    tmp_path: Path, name: str, text: str, line: int | None
+) -> None:
+    """HE-NO-SWITCH-OFF: a multi-line addopts holds the option on a line without the word addopts."""
+    if line is None:
+        root = switch_root(tmp_path, name, "")
+        (root / name).write_text("ok = 1\n" + text)
+        validate_suppressions(root, "HEAD")
+        return
+    message = refusal(tmp_path, name, text)[1]
+    assert f"{name}:{line} adds " + repr("--re" + "tries") in message
 
 
 @pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)

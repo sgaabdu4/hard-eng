@@ -53,6 +53,7 @@ PYTEST_SETTINGS = re.compile(
 )
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
 PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*[=:]" + NONZERO)
+PLUGIN_OPTION = re.compile(r"^(?!\s*[#;]).*?(--retries)\b")
 TABLE_HEAD = re.compile(r"^\s*(\[[^\[\]=,\"']+\])\s*(?:[#;].*)?$")
 PYTEST_FILES = (
     "pytest.toml",
@@ -63,6 +64,7 @@ PYTEST_FILES = (
     "tox.ini",
     "setup.cfg",
 )
+HEADLESS_FILES = ("pytest.toml", ".pytest.toml")
 PYTEST_TABLES = frozenset(
     {"[tool.pytest.ini_options]", "[tool.pytest]", "[pytest]", "[tool:pytest]"}
 )
@@ -109,10 +111,14 @@ def retry_form(name: str, text: str) -> str | None:
 
 
 def table_retry(path: Path, number: int, text: str) -> str | None:
-    """The retry count of the pytest-retry plugin, when the added line sits in a pytest table."""
-    hit = PLUGIN_COUNT.search(text) if path.name in PYTEST_FILES else None
+    """The retry count or option of the pytest-retry plugin, when the added line sits in a pytest table."""
+    if path.name not in PYTEST_FILES:
+        return None
+    hit = PLUGIN_COUNT.search(text) or PLUGIN_OPTION.search(text)
     if hit is None:
         return None
+    if path.name in HEADLESS_FILES:
+        return hit[1]
     try:
         above = path.read_text(encoding="utf-8").splitlines()[: number - 1]
     except (OSError, UnicodeDecodeError):
