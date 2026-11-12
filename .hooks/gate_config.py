@@ -197,10 +197,15 @@ def repository_files(root: Path, names: list[str] | None = None) -> list[Path]:
     return [path for path in paths if regular_file(path)]
 
 
+TEST_FOLDERS = frozenset(
+    {"test", "tests", "integration_test", "test_driver", "__tests__"}
+)
+SKIPPED_FOLDERS = TEST_FOLDERS | {"node_modules", "vendor"}
+
+
 def nonproduction_source(relative: Path) -> bool:
     return bool(
-        {"test", "tests", "integration_test", "__tests__", "node_modules", "vendor"}
-        & set(relative.parts)
+        SKIPPED_FOLDERS & set(relative.parts)
         or relative.name.startswith("test_")
         or relative.name.endswith("Tests.swift")
         or relative.stem.endswith(("_test", ".test", ".spec"))

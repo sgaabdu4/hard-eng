@@ -391,6 +391,20 @@ def test_runtime_files_beside_tool_configs_still_need_listing(
         validate_required_checks(tmp_path, config)
 
 
+@pytest.mark.parametrize("folder", ["integration_test", "test_driver"])
+def test_a_flutter_test_folder_is_test_code(
+    installer: ModuleType, tmp_path: Path, folder: str
+) -> None:
+    """An integration test and a driver file of `flutter drive` need no listing as sources."""
+    repository(tmp_path)
+    dart_project(tmp_path)
+    config = installer.gate_config(tmp_path)
+    (tmp_path / folder).mkdir()
+    (tmp_path / folder / "app.dart").write_text("void main() {}\n")
+    validate_required_checks(tmp_path, config)
+    assert installer.gate_config(tmp_path)["packages"][0]["sources"] == ["lib"]
+
+
 @pytest.mark.parametrize("default", ["master", "trunk"])
 def test_small_change_without_a_remote_compares_with_the_local_default_branch(
     repository: Path,
