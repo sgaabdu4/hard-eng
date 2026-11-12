@@ -188,7 +188,7 @@ def changed_project(repository: Path) -> ModuleType:
     )
     commit(repository, "configure")
     (repository / "app.py").write_text("change\n")
-    module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
+    module = load_module("impact_runner", SOURCE / ".hooks/gate_runner.py")
     module.__dict__["ROOT"] = repository
     return module
 
@@ -867,7 +867,7 @@ import sys
 from pathlib import Path
 hooks = Path(sys.argv[1])
 sys.path.insert(0, str(hooks))
-spec = importlib.util.spec_from_file_location("runner", hooks / "hard-eng.py")
+spec = importlib.util.spec_from_file_location("runner", hooks / "gate_runner.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 runner.ROOT = Path(sys.argv[2])
@@ -897,7 +897,7 @@ import importlib.util, sys
 from pathlib import Path
 hooks, root, base = sys.argv[1:4]
 sys.path.insert(0, hooks)
-spec = importlib.util.spec_from_file_location("runner", hooks + "/hard-eng.py")
+spec = importlib.util.spec_from_file_location("runner", hooks + "/gate_runner.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 runner.ROOT = Path(root)

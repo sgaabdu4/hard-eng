@@ -4,7 +4,6 @@ import json
 import re
 import subprocess
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -28,6 +27,8 @@ Stale = tuple[str, str, str]
 
 
 def fetch_json(url: str) -> object:
+    import urllib.request
+
     request = urllib.request.Request(url, headers={"User-Agent": "hard-eng-freshness"})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)
@@ -172,10 +173,11 @@ def poetry_rows(text: str) -> list[Stale]:
     ]
 
 
+PUB_UPGRADE = ("pub", "upgrade", "--major-versions", "--unlock-transitive")
 UPGRADES = {
     "bun": "bun update {recursive}--latest --minimum-release-age={age} {names}",
-    "dart": "dart pub upgrade --major-versions {names}",
-    "flutter": "flutter pub upgrade --major-versions {names}",
+    "dart": f"dart {' '.join(PUB_UPGRADE)} {{names}}",
+    "flutter": f"flutter {' '.join(PUB_UPGRADE)} {{names}}",
 }
 
 
@@ -239,7 +241,7 @@ def pub_waiting(
 
     def waiting(name: str) -> bool:
         done = subprocess.run(
-            [tool, "pub", "upgrade", "--major-versions", name, "--dry-run"],
+            [tool, *PUB_UPGRADE, name, "--dry-run"],
             cwd=directory,
             capture_output=True,
             text=True,

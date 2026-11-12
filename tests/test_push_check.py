@@ -109,6 +109,52 @@ def test_the_mutation_budget_comes_from_the_pushed_commit(
     assert [call.args[1][0] for call in hard_eng.call_args_list] == ["check"]
 
 
+def narrow_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    script: str,
+    module: str | None,
+) -> list[str]:
+    root = project(tmp_path)
+    parent = git(root, "rev-parse", "HEAD").strip()
+    (root / "change.txt").write_text("change")
+    revision = commit(root, "change")
+    hard_eng = stub_snapshot(monkeypatch, tmp_path)
+    hooks = tmp_path / "snapshot/.hooks"
+    (hooks / "hard-eng.py").write_text(script)
+    if module is not None:
+        (hooks / "gate_runner.py").write_text(module)
+    push_input(monkeypatch, update_line("task", revision, parent))
+    assert ship_actions.pre_push(root) == 0
+    return hard_eng.call_args_list[0].args[1][3:]
+
+
+def test_a_pushed_revision_with_the_runner_module_gets_the_narrow_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    options = narrow_options(
+        tmp_path, monkeypatch, "", "--without-dependents --related-tests"
+    )
+    assert options == ["--without-dependents", "--related-tests"]
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        (
+            "--without-dependents --related-tests",
+            ["--without-dependents", "--related-tests"],
+        ),
+        ("--without-dependents", ["--without-dependents"]),
+        ("", []),
+    ],
+)
+def test_an_older_pushed_revision_keeps_its_own_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str, expected: list[str]
+) -> None:
+    assert narrow_options(tmp_path, monkeypatch, script, None) == expected
+
+
 @pytest.mark.parametrize("row", ["no-block", "no-file", "invalid-json"])
 def test_a_pushed_commit_without_a_shipping_policy_is_refused_with_the_step(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, row: str

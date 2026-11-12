@@ -103,7 +103,7 @@ def test_basic_mode_check_impact_and_mutation_run_without_packages(
     (repository / "hard-eng.gates.json").write_text(json.dumps(config))
     base = commit(repository, "stub gates")
     (repository / "main.go").write_text("package main\n\nfunc main() { _ = 1 }\n")
-    runner = load_module("basic_runner", SOURCE / ".hooks/hard-eng.py")
+    runner = load_module("basic_runner", SOURCE / ".hooks/gate_runner.py")
     runner.__dict__["ROOT"] = repository
     monkeypatch.setattr(runner, "provision_tools", no_provisioning)
     capsys.readouterr()

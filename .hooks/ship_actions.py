@@ -286,6 +286,15 @@ def spared(root: Path, revision: str, base: str | None) -> bool:
     return minutes is not None
 
 
+def runner_text(checkout: Path) -> str:
+    """The script text of a pushed revision; an older revision has no runner module."""
+    hooks = checkout / ".hooks"
+    module = hooks / "gate_runner.py"
+    return (hooks / "hard-eng.py").read_text() + (
+        module.read_text() if module.is_file() else ""
+    )
+
+
 def push_check(runner: str, base: str | None, quick: bool) -> list[str]:
     """The check for a push; a pass that stands in for the full check leaves a quick one."""
     if quick:
@@ -331,8 +340,7 @@ def pre_push(root: Path) -> int:
                 )
         environment = snapshot_environment(root)
         with snapshot(root, revision, environment) as checkout:
-            runner = (checkout / ".hooks/hard-eng.py").read_text()
-            check = push_check(runner, base, passed)
+            check = push_check(runner_text(checkout), base, passed)
             if returncode := run_hard_eng(checkout, check, environment):
                 return returncode
             changed = subprocess.run(

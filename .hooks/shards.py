@@ -7,6 +7,7 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -21,6 +22,23 @@ COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
 PROVEN = "proven.txt"
 RAN = "ran.txt"
+RELEASE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+MINIMUM_DECIMALS_FROM = (7, 17, 1)
+PYTEST_FILE = "Move those settings to a file that pytest reads with no option."
+COVERAGE_FILE = "a file that coverage.py reads with no option."
+MOVED_OPTIONS = {
+    "-c": PYTEST_FILE,
+    "--config-file": PYTEST_FILE,
+    "--cov-config": f"Move those settings to {COVERAGE_FILE}",
+    "--cov-precision": "Set precision in the settings file of coverage.py.",
+}
+OVERRIDE_OPTIONS = ("-o", "--override-ini")
+OVERRIDE_STEP = "Put those options in the tests command."
+MOVED_VARIABLES = {
+    "PYTEST_ADDOPTS": "Remove the variable and put its options in the tests command.",
+    "COVERAGE_RCFILE": f"Remove the variable and move its settings to {COVERAGE_FILE}",
+}
+SHORT_CONFIG = re.compile(r"-c(?!-)")
 CHECK_LINE = re.compile(r'(\.hooks/hard-eng\.py check --base "\$BASE_SHA")')
 JOB_NAME = re.compile(r"(?m)^  ([\w-]+):\n")
 SHARD_LIST = re.compile(r"(?m)^(        shard: \[)[^\]]*\]$")
@@ -174,19 +192,82 @@ def runner_arguments(command: list[str]) -> list[str]:
     return command[len(command) - command[::-1].index("pytest") :]
 
 
-def require_no_path(root: Path, group: Group, gate: Gate, command: list[str]) -> None:
-    for argument in runner_arguments(command):
-        named = root / group["path"] / argument.split("::")[0]
+def named_path(directory: Path, arguments: list[str]) -> str | None:
+    """The first argument that names a test folder or a Python file."""
+    for argument in arguments:
+        named = directory / argument.split("::")[0]
         if not argument.startswith("-") and (
             named.is_dir() or (named.is_file() and named.suffix == ".py")
         ):
+            return argument
+    return None
+
+
+def require_no_path(root: Path, group: Group, gate: Gate, command: list[str]) -> None:
+    name, addopts = pytest_addopts(root / group["path"])
+    for arguments, subject, place in (
+        (runner_arguments(command), "the command", "the command"),
+        (addopts, f"addopts in {name}", "addopts"),
+    ):
+        if argument := named_path(root / group["path"], arguments):
             raise ValueError(
-                f"{group['path']}/{gate['name']}: the command names the path "
+                f"{group['path']}/{gate['name']}: {subject} names the path "
                 f'"{argument}", so every shard would run it whole. Remove the path '
-                "from the command and list it in testpaths in the pytest settings. "
+                f"from {place} and list it in testpaths in the pytest settings. "
                 "If it is the value of an option, write it as --option=value "
                 "(for example --cov=src)."
             )
+
+
+def override_given(arguments: list[str], index: int) -> tuple[str, str] | None:
+    """The option and the setting that a -o or --override-ini item gives, in each written form."""
+    argument = arguments[index]
+    if argument.startswith("--override-ini="):
+        return "--override-ini", argument.partition("=")[2]
+    if argument.startswith("-o") and not argument.startswith("--") and argument != "-o":
+        return "-o", argument[2:]
+    if argument in OVERRIDE_OPTIONS:
+        return argument, "".join(arguments[index + 1 : index + 2])
+    return None
+
+
+def moved_option(arguments: list[str]) -> tuple[str, str] | None:
+    """The first option that moves the pytest or coverage.py settings, as the refusal names it, with its step."""
+    for index, argument in enumerate(arguments):
+        name = "-c" if SHORT_CONFIG.match(argument) else argument.partition("=")[0]
+        if name in MOVED_OPTIONS:
+            return name, MOVED_OPTIONS[name]
+        override = override_given(arguments, index)
+        if override and override[1].partition("=")[0] == "addopts":
+            return f"{override[0]} addopts", OVERRIDE_STEP
+    return None
+
+
+def require_default_settings(
+    root: Path, group: Group, gate: Gate, command: list[str]
+) -> None:
+    """Refuse each option and variable that moves a settings file the shard merge reads."""
+    prefix = f"{group['path']}/{gate['name']}: "
+    name, addopts = pytest_addopts(root / group["path"])
+    gives = [
+        (f"the environment sets {variable}", step)
+        for variable, step in MOVED_VARIABLES.items()
+        if os.environ.get(variable)
+    ]
+    for arguments, place in (
+        (runner_arguments(command), "the tests command"),
+        (addopts, f"addopts in {name}"),
+    ):
+        if option := moved_option(arguments):
+            gives.append((f"{place} gives {option[0]}", option[1]))
+    if gives:
+        what, step = gives[0]
+        raise ValueError(
+            f"{prefix}{what}, which moves the pytest or coverage.py settings. "
+            "The shard merge reads the settings only from the tests command and "
+            "from the files that pytest and coverage.py read with no option. "
+            f'{step} Or remove "shards" from this gate in hard-eng.gates.json.'
+        )
 
 
 def collected(
@@ -284,6 +365,7 @@ def part_command(
     timeout: float,
 ) -> tuple[list[str], Path | None]:
     """The command of one shard: the gate command and the files of that shard."""
+    require_default_settings(root, group, gate, command)
     if gate["part"] == "merge":
         merge_reports(root, group, gate, command)
         return [], coverage
@@ -414,11 +496,31 @@ def merged_total(report: dict[str, object]) -> float:
     return 100.0 * covered / count if count else 100.0
 
 
-def below_minimum(total: float, minimum: float, precision: int) -> bool:
-    """The rule of coverage.py's should_fail_under: a minimum of 100 needs exactly 100."""
+def reports_release(report: dict[str, object]) -> str | None:
+    """The coverage.py release that wrote a report, when it says."""
+    meta = report.get("meta")
+    version = meta.get("version") if isinstance(meta, dict) else None
+    return version if isinstance(version, str) else None
+
+
+def effective_precision(minimum: float, precision: int, release: str | None) -> int:
+    """The decimal places that coverage.py judges with: from 7.17.1 at least those of the minimum."""
+    found = RELEASE.match(release or "")
+    if not found or tuple(map(int, found.groups())) < MINIMUM_DECIMALS_FROM:
+        return precision
+    if minimum == int(minimum):
+        return precision
+    exponent = Decimal(str(minimum)).as_tuple().exponent
+    return max(precision, -int(exponent))
+
+
+def below_minimum(
+    total: float, minimum: float, precision: int, release: str | None
+) -> bool:
+    """The rule of coverage.py's should_fail_under for the release: a minimum of 100 needs exactly 100."""
     if minimum == 100.0 and total != 100.0:
         return True
-    return round(total, precision) < minimum
+    return round(total, effective_precision(minimum, precision, release)) < minimum
 
 
 def shown(total: float, precision: int) -> str:
@@ -456,10 +558,12 @@ def merge_reports(root: Path, group: Group, gate: Gate, command: list[str]) -> N
     (directory / report["coverage"]).write_text(json.dumps(merged))
     minimum, origin, precision = coverage_minimum(directory, command)
     total = merged_total(merged)
-    if below_minimum(total, minimum, precision):
+    release = reports_release(merged)
+    if below_minimum(total, minimum, precision, release):
+        digits = effective_precision(minimum, precision, release)
         raise ValueError(
             f"{group['path']}/{gate['name']}: the merged coverage total is "
-            f"{shown(total, precision)}%, below the minimum of {minimum:g}% that "
+            f"{shown(total, digits)}%, below the minimum of {minimum:g}% that "
             f"{origin} sets. Add tests, or lower that minimum."
         )
 

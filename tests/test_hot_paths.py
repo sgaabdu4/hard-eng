@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-from gate_config import Gate, Group
+from gate_config import TEST_FOLDERS, Gate, Group
 from hot_paths import RULES, findings, require_parsed, scan_all, unowned_paths
 from reports import validate_semgrep
 
@@ -59,6 +59,29 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
     assert sorted(actual) == sorted(expected)
     rules = yaml.safe_load(RULES.read_text())["rules"]
     assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
+
+
+def test_every_rule_skips_each_test_folder() -> None:
+    """HE-HOT-PATH: no rule scans a test folder that gate_config names."""
+    for rule in yaml.safe_load(RULES.read_text())["rules"]:
+        excluded = rule["paths"]["exclude"]
+        assert {f"{name}/" for name in TEST_FOLDERS} <= set(excluded), rule["id"]
+
+
+def test_a_loop_in_a_flutter_test_folder_gets_no_finding(tmp_path: Path) -> None:
+    """HE-HOT-PATH: a serial loop in integration_test or test_driver is test code."""
+    source = (
+        "Future<void> run(List<int> ids) async {\n"
+        "  for (final id in ids) {\n    await client.put(id);\n  }\n}\n"
+    )
+    for folder in ("lib", "integration_test", "test_driver"):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / "a.dart").write_text(source)
+    with patch("hot_paths.require_parsed"):
+        found = findings(tmp_path, ["."], 900)
+    assert [Path(str(result["path"])).parts[-2:] for result in found] == [
+        ("lib", "a.dart")
+    ]
 
 
 def test_exact_reported_inputs_keep_all_expected_findings(tmp_path: Path) -> None:

@@ -53,6 +53,27 @@ def test_a_tool_directory_the_move_cannot_rewrite_is_reported(
     assert "${MISE_DATA_DIR:-$RUNNER_TEMP/" in errors
 
 
+def test_several_tool_directories_get_one_message_with_one_grouped_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    job_env = (
+        "    env:\n"
+        "      MISE_DATA_DIR: ${{ runner.temp }}/hard-eng-tools/mise/data\n"
+        "      MISE_CACHE_DIR: ${{ runner.temp }}/hard-eng-tools/mise/cache\n"
+    )
+    errors, _ = setup_messages(
+        tmp_path, capsys, workflow("ubuntu-latest", "      - run: true\n", job_env)
+    )
+    assert errors.count("CI tool directories") == 1
+    assert "ci.yml:6,7 set MISE_DATA_DIR, MISE_CACHE_DIR from" in errors
+    assert (
+        "Set them in a step with { "
+        'echo "MISE_DATA_DIR=${MISE_DATA_DIR:-$RUNNER_TEMP/hard-eng-tools/...}"; '
+        'echo "MISE_CACHE_DIR=${MISE_CACHE_DIR:-$RUNNER_TEMP/hard-eng-tools/...}"; '
+        '} >> "$GITHUB_ENV"'
+    ) in errors
+
+
 def test_a_moved_tool_directory_is_not_reported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

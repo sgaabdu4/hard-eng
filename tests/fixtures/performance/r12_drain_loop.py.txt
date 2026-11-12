@@ -1,0 +1,57 @@
+import asyncio
+
+
+class Queue:
+    def __init__(self):
+        self.pending = set()
+
+    async def drain(self):
+        while self.pending:
+            await asyncio.gather(*self.pending)
+
+
+async def drain_local(pending):
+    while pending:
+        await asyncio.gather(*pending)
+
+
+async def drain_list(pending):
+    while pending:
+        await asyncio.gather(*list(pending))
+
+
+async def other_collection(a, b):
+    while a:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*b)
+
+
+async def second_statement(a):
+    count = 0
+    while a:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*a)
+        count += 1
+
+
+async def one_item(a):
+    while a:
+        # ruleid: await-in-loop-python
+        await a[0]
+
+
+async def one_from_queue(queue):
+    while queue:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(process(queue.pop()))
+
+
+async def one_part(queue):
+    while queue:
+        # ruleid: await-in-loop-python
+        await asyncio.gather(*[process(item) for item in queue[:1]])
+
+
+async def drain_keeping_errors(pending):
+    while pending:
+        await asyncio.gather(*pending, return_exceptions=True)

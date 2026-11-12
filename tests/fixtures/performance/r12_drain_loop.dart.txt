@@ -1,0 +1,78 @@
+class Queue {
+  final Set<Future<void>> _pending = {};
+
+  Future<void> drain() async {
+    while (_pending.isNotEmpty) {
+      await Future.wait(_pending.toList());
+    }
+  }
+
+  Future<void> drainThis() async {
+    while (this._pending.isNotEmpty) {
+      await Future.wait(this._pending.toList());
+    }
+  }
+
+  Future<void> drainWhole() async {
+    while (_pending.isNotEmpty) {
+      await Future.wait(_pending);
+    }
+  }
+
+  Future<void> drainSpread() async {
+    while (_pending.isNotEmpty) {
+      await Future.wait([..._pending]);
+    }
+  }
+}
+
+Future<void> drainLocal(Set<Future<void>> jobs) async {
+  final pending = jobs;
+  while (pending.isNotEmpty) {
+    await Future.wait(pending.toList());
+  }
+}
+
+Future<void> otherCollection(List<Future<void>> a, List<Future<void>> b) async {
+  while (a.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait(b.toList());
+  }
+}
+
+Future<void> secondStatement(List<Future<void>> a) async {
+  var count = 0;
+  while (a.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait(a.toList());
+    count += 1;
+  }
+}
+
+Future<void> oneItem(List<Future<void>> a) async {
+  while (a.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await a.first;
+  }
+}
+
+Future<void> doWhile(List<Future<void>> a) async {
+  do {
+    // ruleid: await-in-loop-dart
+    await Future.wait(a.toList());
+  } while (a.isNotEmpty);
+}
+
+Future<void> oneFromQueue(List<int> queue) async {
+  while (queue.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait([process(queue.removeLast())]);
+  }
+}
+
+Future<void> onePart(List<int> queue) async {
+  while (queue.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait(queue.take(1).map(process).toList());
+  }
+}

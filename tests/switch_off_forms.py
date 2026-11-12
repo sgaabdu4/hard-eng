@@ -212,6 +212,8 @@ RETRY_FORMS = [
     ("pytest.toml", "re" + "runs = 2\n", "re" + "runs"),
     (".pytest.toml", 'addopts = ["--re' + 'runs", "3"]\n', "--re" + "runs"),
     (".pytest.ini", "re" + "runs = 2\n", "re" + "runs"),
+    ("pytest.ini", "addopts = -q --re" + "tries 2\n", "--re" + "tries"),
+    ("pyproject.toml", 'addopts = ["--re' + 'tries", "10"]\n', "--re" + "tries"),
     ("packages/web/vitest.config.ts", "  re" + "try: 2,\n", "re" + "try:"),
     ("pkgs/a/dart_test.yaml", "re" + "try: 3\n", "re" + "try"),
     (
@@ -265,6 +267,14 @@ RETRY_PASSES = [
     ("vite.config.ts", "  plugins: [],\n  re" + "tries: 0,\n"),
     ("hard-eng.gates.json", '"--re' + 'tries=0",\n'),
     ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
+    ("pytest.ini", "[pytest]\naddopts = --re" + "tries 0\n"),
+    ("pytest.ini", "[pytest]\naddopts = -q --re" + "tries=0\n"),
+    ("pyproject.toml", 'addopts = ["--re' + 'tries", "0"]\n'),
+    (
+        "pyproject.toml",
+        "[tool.pytest.ini_options]\naddopts = [\n    '--re" + "tries', '0',\n]\n",
+    ),
+    ("pytest.toml", "    --re" + "tries 0\n"),
     (
         "pyproject.toml",
         "[tool.pytest.ini_options]\nminversion = '8'\n[tool.other]\nre" + "tries = 3\n",
@@ -272,6 +282,25 @@ RETRY_PASSES = [
     ("package.json", '"fetch": "curl --re' + 'try 3"\n'),
     ("docs/guide.md", "Set the re" + "try count and mark the fl" + "aky tests.\n"),
     ("tests/test_api.py", "name = 'fl" + "aky'\n"),
+]
+
+INI_LINES = "addopts =\n    -q\n    --re" + "tries 2\n"
+LIST_LINES = 'addopts = [\n    "-q",\n    "--re' + 'tries",\n    "2",\n]\n'
+OTHER_TABLE = "[tool.pytest.ini_options]\nminversion = '8'\n[tool.other]\n"
+
+RETRY_LINES = [
+    ("pytest.ini", "[pytest]\n" + INI_LINES, 5),
+    (".pytest.ini", "[pytest]\n" + INI_LINES, 5),
+    ("tox.ini", "[pytest]\n" + INI_LINES, 5),
+    ("setup.cfg", "[tool:pytest]\n" + INI_LINES, 5),
+    ("pyproject.toml", "[tool.pytest.ini_options]\n" + LIST_LINES, 5),
+    ("pyproject.toml", "[tool.pytest]\n" + LIST_LINES, 5),
+    ("pytest.toml", "[pytest]\n" + LIST_LINES, 5),
+    (".pytest.toml", "[pytest]\n" + LIST_LINES, 5),
+    ("pytest.toml", LIST_LINES, None),
+    ("pyproject.toml", "[tool.other]\n" + LIST_LINES, None),
+    ("pyproject.toml", OTHER_TABLE + LIST_LINES, None),
+    ("tox.ini", "[testenv]\n" + INI_LINES, None),
 ]
 
 TEST_FLAGS = [

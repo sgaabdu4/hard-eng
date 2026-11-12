@@ -37,7 +37,7 @@ SURFACE_VALUE = re.compile(r"(Existing|New|Mock) — \S.+")
 TEST_REFERENCE = re.compile(r"`([^`\s]+?)::(?:[^`\n]*::)?([^`\n]+)`")
 DECISION_SECTION = re.compile(r"(?ms)^## Decision\n(.*?)(?=^## |\Z)")
 E2E_STATUS_LINE = re.compile(r"(Required|Passed|Delivery|N/A) — (\S.*)")
-NONE_VALUE = re.compile(r"None(?:[.;:](?:\s.*)?|\s+[—–-]\s.*)?")
+NONE_VALUE = re.compile(r"(?i:none)(?:[.;:](?:\s.*)?|\s+[—–-]\s.*)?")
 DELIVERY_TARGET_FIELD = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:")
 DEPLOY_DELIVERY_TARGET = re.compile(
     r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$"
@@ -62,6 +62,7 @@ SECTIONS = (
 STAGES = ("Draft", "Ready", "Complete")
 BUILD_STEP = "During the build, run this check with --plan-stage Ready"
 DRAFT_STEP = f"; files other than plans changed, so get approval for the plan and set its Status to Ready before you build. {BUILD_STEP}"
+OTHER_PLAN = ". If that plan is for another task, add a plan for this change."
 HANDOFFS = ("Clarification", "Approval")
 PLACEHOLDERS = re.compile(
     r"(?im)\[TODO:|^\s*(?:#\s+|[\w +]+:\s*)?(?:TODO(?::[^\n]*)?|TBD|<(?!https?://)[^>\n]+>)\s*$"
@@ -843,7 +844,7 @@ def validate_plans(
             steps = {"Draft": DRAFT_STEP, "Ready": f". {BUILD_STEP}" * typed}
             step = steps[status] if stage == "Complete" and not explicit_stage else ""
             raise ValueError(
-                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}{step}"
+                f"{path.relative_to(root)}: plan is {status}; this check requires {stage}{step}{OTHER_PLAN * asks_size}"
             )
         effective_stage = min(effective_stage, status, key=STAGES.index)
     return stage if explicit_stage or not applicable else effective_stage

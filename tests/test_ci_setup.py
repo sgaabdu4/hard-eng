@@ -690,7 +690,7 @@ def test_impact_reports_docs_only_before_tools(
     )
     commit(repository, "configure")
     (repository / changed).write_text("change\n")
-    module = load_module("impact_runner", SOURCE / ".hooks/hard-eng.py")
+    module = load_module("impact_runner", SOURCE / ".hooks/gate_runner.py")
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
     assert capsys.readouterr().out == (
@@ -724,7 +724,7 @@ def test_impact_provisions_selected_sdks_without_yaml_and_falls_back_to_all(
     )
     commit(repository, "packages")
     (repository / "web/app.ts").write_text("export const value = 1;\n")
-    module = load_module("selected_impact_runner", SOURCE / ".hooks/hard-eng.py")
+    module = load_module("selected_impact_runner", SOURCE / ".hooks/gate_runner.py")
     module.__dict__["ROOT"] = repository
     assert module.impact("HEAD") == 0
     assert "tools=uv@latest python@3.12 bun@1.3.0\n" in capsys.readouterr().out

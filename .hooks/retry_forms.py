@@ -46,13 +46,16 @@ JS_TEST = re.compile(
 JS_CONFIG = re.compile(r"(jest\.retryTimes\()|\b(retry:|retries:)" + NONZERO)
 PYTHON = re.compile(r"\b(mark\.flaky)\b|(@flaky)\b")
 DART_TEST = re.compile(r"(@Retry\()|" + DART_LEAD + r"\b(retry:)" + COUNT)
+RETRIES_ON = r"(--retries)\b(?![\"']?(?:[ =]+|\s*,\s*)[\"']?0\b)"
 PYTEST_SETTINGS = re.compile(
     r"(--force-reruns|--reruns)(?![ =]+0\b)|^\s*(reruns)\s*[=:]"
     + NONZERO
-    + r"|addopts[^\n]*(--retries)\b"
+    + r"|addopts[^\n]*"
+    + RETRIES_ON
 )
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
 PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*[=:]" + NONZERO)
+PLUGIN_OPTION = re.compile(r"^(?!\s*[#;]).*?" + RETRIES_ON)
 TABLE_HEAD = re.compile(r"^\s*(\[[^\[\]=,\"']+\])\s*(?:[#;].*)?$")
 PYTEST_FILES = (
     "pytest.toml",
@@ -109,8 +112,10 @@ def retry_form(name: str, text: str) -> str | None:
 
 
 def table_retry(path: Path, number: int, text: str) -> str | None:
-    """The retry count of the pytest-retry plugin, when the added line sits in a pytest table."""
-    hit = PLUGIN_COUNT.search(text) if path.name in PYTEST_FILES else None
+    """The retry count or option of the pytest-retry plugin, when the added line sits in a pytest table."""
+    if path.name not in PYTEST_FILES:
+        return None
+    hit = PLUGIN_COUNT.search(text) or PLUGIN_OPTION.search(text)
     if hit is None:
         return None
     try:

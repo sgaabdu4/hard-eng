@@ -15,6 +15,7 @@ from test_update_runner import (
     refused_release,
     shared_names,
 )
+from test_updates import select_release
 
 FIX_FIRST = (
     "Fix that cause first. A fix in tracked files goes on the base branch as its own "
@@ -229,3 +230,31 @@ def test_a_refused_checkout_plan_with_no_shipping_block_names_the_ci_step_once(
     assert "This checkout is unchanged: setup refused the update: " in outcome
     assert shown.count("CI setup pending") == 1
     assert outcome.endswith(f"{CI_STEP}.")
+
+
+def test_a_refused_push_of_the_update_branch_names_the_next_step(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source, target, _ = release
+    remote = add_origin(target)
+    git(target, "switch", "-qc", "feature/work")
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    reference = source / ".agents/skills/he/references/workflow.md"
+    reference.write_text(reference.read_text() + "\nnew release\n")
+    select_release(source, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    hook = remote / "hooks/pre-receive"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    assert update_pr.publish(target) == 1
+    printed = capsys.readouterr().out
+    assert (
+        f"The push of {update_runner.UPDATE_BRANCH} failed; the lines above give the "
+        "reason. When the pre-push check refused it, the new release found a fault in "
+        f"this project: fix it on the branch {update_runner.UPDATE_BRANCH} in its own "
+        "worktree, as its own commit, then run "
+        f"`{update_runner.UPDATE_COMMAND}` again."
+    ) in printed
+    assert "returned non-zero exit status" not in printed

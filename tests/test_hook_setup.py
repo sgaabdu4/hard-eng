@@ -13,9 +13,18 @@ from types import ModuleType
 import agent_hooks
 import pytest
 import update
-from conftest import CODEBASE_MEMORY, SOURCE
+from conftest import (
+    CODEBASE_MEMORY,
+    SOURCE,
+    commit,
+    git,
+    init,
+    isolate_temporary,
+    load_module,
+)
 from gate_config import JsonObject
 from test_setup import repository, snapshot
+from test_updates import fixed_revision
 
 
 def installer_project(repository: Path) -> Path:
@@ -467,8 +476,170 @@ def test_old_python_gets_a_plain_refusal_before_any_import() -> None:
     assert stop["reason"] in check.stderr
 
 
-def test_python_floor_has_one_value(runner: ModuleType) -> None:
-    major, minor = runner.PYTHON_FLOOR
+LAUNCHER = SOURCE / ".hooks/hard-eng.py"
+LAUNCHER_DRIVER = (
+    "import json, os, runpy, sys\n"
+    "hooks = sys.argv[1]\n"
+    "sys.path.insert(0, hooks)\n"
+    "import agent_hooks\n"
+    "calls = []\n"
+    "agent_hooks.handle_event = lambda root, *event: calls.append(event) or 0\n"
+    "before = set(sys.modules)\n"
+    "sys.argv = [hooks + '/hard-eng.py', *sys.argv[2:]]\n"
+    "try:\n"
+    "    runpy.run_path(sys.argv[0], run_name='__main__')\n"
+    "except SystemExit as stop:\n"
+    "    code = stop.code\n"
+    "gate = [n for n in set(sys.modules) - before if os.path.isfile(f'{hooks}/{n}.py')]\n"
+    "print(json.dumps([code, calls, sorted(gate)]))\n"
+)
+ERROR_DRIVER = (
+    "import runpy, sys\n"
+    "hooks = sys.argv[1]\n"
+    "sys.path.insert(0, hooks)\n"
+    "import gate_runner\n"
+    "def main():\n"
+    "    raise ValueError('boom')\n"
+    "gate_runner.main = main\n"
+    "sys.argv = [hooks + '/hard-eng.py', 'check']\n"
+    "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+)
+
+
+def drive(driver: str, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-c", driver, str(LAUNCHER.parent), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_the_hook_script_is_a_small_launcher() -> None:
+    text = LAUNCHER.read_text()
+    assert len(text.splitlines()) <= 45
+    assert not [
+        node
+        for node in ast.walk(ast.parse(text))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+    ]
+
+
+@pytest.mark.parametrize("event", ["session", "stop"])
+def test_a_hook_event_loads_no_gate_module(event: str) -> None:
+    run = drive(LAUNCHER_DRIVER, event, "claude")
+    assert run.returncode == 0, run.stderr
+    code, calls, loaded = json.loads(run.stdout)
+    assert (code, calls, loaded) == (0, [[event, "claude"]], [])
+
+
+EVENT_DRIVER = (
+    "import io, json, sys\n"
+    "from pathlib import Path\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "import agent_hooks\n"
+    "sys.stdin = io.StringIO(json.dumps({'session_id': 'loads'}))\n"
+    "agent_hooks.handle_event(Path(sys.argv[2]), sys.argv[3], 'claude')\n"
+    "print(json.dumps(sorted(set(sys.modules) & set(sys.argv[4:]))))\n"
+)
+UNUSED_MODULES = ["hashlib", "urllib.request", "ssl", "update", "mcp_setup"]
+# A session start gives Git a temporary file of names; a clean Stop does not.
+UNUSED_AT_STOP = [*UNUSED_MODULES, "tempfile", "shutil"]
+
+
+@pytest.mark.parametrize("event", ["session", "stop"])
+def test_a_clean_hook_event_loads_no_module_that_it_does_not_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event: str
+) -> None:
+    isolate_temporary(tmp_path, monkeypatch)
+    root = tmp_path / "project"
+    init(root)
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        (root / name).write_bytes((SOURCE / name).read_bytes())
+    (root / ".hooks").mkdir()
+    (root / update.SOURCE_FILE).write_text("{}\n")
+    gate = {"name": "check", "command": ["python3", "-c", "pass"]}
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "shared": [gate]})
+    )
+    (root / ".git/info/exclude").write_text(".hard-eng/\n")
+    commit(root, "installed files")
+    started = drive(EVENT_DRIVER, str(root), "session", *UNUSED_MODULES)
+    run = (
+        started
+        if event == "session"
+        else drive(EVENT_DRIVER, str(root), "stop", *UNUSED_AT_STOP)
+    )
+    assert run.returncode == 0, run.stderr
+    output, loaded = run.stdout.splitlines()
+    expected = "Gates: ok." if event == "session" else "no code checks run"
+    assert expected in output
+    assert json.loads(loaded) == []
+
+
+def test_a_command_runs_through_the_launcher() -> None:
+    help_text = drive(
+        "import runpy, sys\n"
+        "sys.path.insert(0, sys.argv[1])\n"
+        "sys.argv = [sys.argv[1] + '/hard-eng.py', '--help']\n"
+        "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+    )
+    assert help_text.returncode == 0, help_text.stderr
+    assert "check" in help_text.stdout
+    failed = drive(ERROR_DRIVER)
+    assert failed.returncode == 1
+    assert failed.stderr.splitlines() == ["Hard Eng: boom"]
+
+
+def test_a_load_of_the_launcher_runs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(*_arguments: object) -> int:
+        raise AssertionError("a load must run nothing")
+
+    monkeypatch.setattr(agent_hooks, "handle_event", refuse)
+    monkeypatch.setitem(sys.modules, "gate_runner", None)
+    for arguments in (["check"], ["session", "claude"], ["stop", "codex"]):
+        monkeypatch.setattr(sys, "argv", [str(LAUNCHER), *arguments])
+        load_module("launcher", LAUNCHER)
+
+
+def test_an_update_from_a_release_with_the_long_script_installs_the_launcher_and_the_module(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    launcher = (source / ".hooks/hard-eng.py").read_bytes()
+    module = (source / ".hooks/gate_runner.py").read_bytes()
+    long_script = module + b"\n\nif __name__ == '__main__':\n    run()\n"
+    for root in (source, target):
+        (root / ".hooks/hard-eng.py").write_bytes(long_script)
+        (root / ".hooks/gate_runner.py").unlink()
+    git(source, "add", ".hooks")
+    git(source, "commit", "-qm", "release with the long script")
+    (target / update.SOURCE_FILE).write_text(
+        json.dumps({"revision": git(source, "rev-parse", "HEAD")}) + "\n"
+    )
+    commit(target, "release with the long script")
+    (source / ".hooks/hard-eng.py").write_bytes(launcher)
+    (source / ".hooks/gate_runner.py").write_bytes(module)
+    revision = commit(source, "verified update")
+    monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+
+    assert "Updated Hard Eng" in update.update(target)
+    for name, content in (("hard-eng.py", launcher), ("gate_runner.py", module)):
+        assert (target / ".hooks" / name).read_bytes() == content
+    first = subprocess.run(
+        [sys.executable, ".hooks/hard-eng.py", "impact", "--base", "HEAD"],
+        cwd=target,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=600,
+    )
+    assert first.returncode == 0, first.stderr
+    assert "docs_only" in first.stdout
+
+
+def test_python_floor_has_one_value() -> None:
+    major, minor = load_module("launcher", LAUNCHER).PYTHON_FLOOR
     project = tomllib.loads((SOURCE / "pyproject.toml").read_text())["project"]
     assert project["requires-python"] == f">={major}.{minor}"
     assert f"Python {major}.{minor} or later" in (SOURCE / "README.md").read_text()

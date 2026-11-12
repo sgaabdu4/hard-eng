@@ -398,9 +398,28 @@ def test_a_draft_plan_with_code_edits_names_the_ready_step(
         "get approval for the plan and set its Status to Ready before you build"
         in str(error.value)
     )
+    assert "another task" not in str(error.value)
     with pytest.raises(ValueError, match="requires Ready") as explicit:
         validate_plans(repository, stage="Ready")
     assert "set its Status to Ready" not in str(explicit.value)
+
+
+def test_an_open_plan_outside_the_change_also_names_the_own_plan_step(
+    repository: Path, completed_plan: str
+) -> None:
+    """A change with no plan is judged by each open plan; that plan can be the plan of another task."""
+    draft = completed_plan.replace("Status: Complete", "Status: Draft")
+    (repository / "features/other").mkdir(parents=True)
+    (repository / "features/other/PLAN.md").write_text(draft)
+    sized_branch(repository)
+    new_file(repository)
+    with pytest.raises(
+        ValueError, match="features/other/PLAN.md: plan is Draft; this check requires"
+    ) as error:
+        validate_plans(repository)
+    assert str(error.value).endswith(
+        "--plan-stage Ready. If that plan is for another task, add a plan for this change."
+    )
 
 
 def test_update_branch_needs_no_plan_for_files_the_update_wrote(

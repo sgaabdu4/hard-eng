@@ -6,7 +6,6 @@ import re
 import stat
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
@@ -198,10 +197,15 @@ def repository_files(root: Path, names: list[str] | None = None) -> list[Path]:
     return [path for path in paths if regular_file(path)]
 
 
+TEST_FOLDERS = frozenset(
+    {"test", "tests", "integration_test", "test_driver", "__tests__"}
+)
+SKIPPED_FOLDERS = TEST_FOLDERS | {"node_modules", "vendor"}
+
+
 def nonproduction_source(relative: Path) -> bool:
     return bool(
-        {"test", "tests", "integration_test", "__tests__", "node_modules", "vendor"}
-        & set(relative.parts)
+        SKIPPED_FOLDERS & set(relative.parts)
         or relative.name.startswith("test_")
         or relative.name.endswith("Tests.swift")
         or relative.stem.endswith(("_test", ".test", ".spec"))
@@ -249,6 +253,8 @@ def generated_sources(root: Path, names: list[str]) -> set[str]:
     listed, generated = LISTED.get(root, (frozenset(), set()))
     if listed.issuperset(names):
         return generated.intersection(names)
+    import tempfile
+
     # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
     with tempfile.TemporaryFile() as paths:
         paths.write(("\0".join(names) + "\0").encode())
@@ -596,13 +602,13 @@ def without_freshness_for_update(
     root: Path, base: str | None, groups: list[Group]
 ) -> list[Group]:
     """The Hard Eng update branch, judged from the default branch as CI does, skips freshness."""
-    from plans import default_branch_point
-    from update import installed_update_paths
-
     if base is None or not any(
         g.get("role") == "freshness" for x in groups for g in x["checks"]
     ):
         return groups
+    from plans import default_branch_point
+    from update import installed_update_paths
+
     point = default_branch_point(root)
     judged = base
     installed = installed_update_paths(root, base)
