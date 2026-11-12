@@ -24,6 +24,8 @@ code=0
 if [ "$#" -eq 0 ] || [ "$1" = . ]; then
   if [ -e old.txt ]; then cat old.txt; code=3; fi
   set -- $(grep -rl SEEDED lib --include='*.dart' --exclude='*.g.dart')
+elif [ -e slow ]; then
+  sleep 2
 fi
 for file in "$@"; do
   if [ -f "$file" ] && grep -q SEEDED "$file"; then
@@ -111,7 +113,7 @@ def project(
     (root / "tools/dart").write_text(TOOL)
     (root / "tools/dart").chmod(0o755)
     monkeypatch.setenv("PATH", str(root / "tools") + os.pathsep + os.environ["PATH"])
-    (root / ".gitignore").write_text("__pycache__/\ntools/\ntrace\nold.txt\n")
+    (root / ".gitignore").write_text("__pycache__/\ntools/\ntrace\nold.txt\nslow\n")
     touch(root, ["lib/a.dart", "lib/b.dart", "lib/made.g.dart"])
     configure(
         root,
@@ -197,6 +199,18 @@ def test_a_finding_in_a_changed_file_leaves_the_verdict_to_the_package_run(
     assert shown.count("error - lib/a.dart:1:1 - seeded") == 1
     assert "lib/made.g.dart:1:1" not in shown
     assert sorted(runner.FAILED_GATES) == ["./lint", "./types-lint"]
+
+
+def test_the_time_of_the_package_run_leaves_out_the_first_run(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = project(runner, monkeypatch)
+    (tmp_path / "lib/made.g.dart").write_text("// SEEDED\n")
+    (tmp_path / "slow").touch()
+    assert runner.check(base=base, verify_plan=False, quick=True) == 0
+    assert len(trace(tmp_path)) == 2
+    times = json.loads((tmp_path / ".git/hard-eng-gate-times.json").read_text())
+    assert times["./types-lint"] < 2
 
 
 def test_a_gate_of_another_tool_with_the_name_of_the_dart_gate_runs_its_own_command(
