@@ -38,6 +38,27 @@ def record_pass(repository: Path, head: str, base: str, age: float = 200.0) -> N
     )
 
 
+@pytest.mark.parametrize("update_found", [True, False])
+def test_a_plain_check_of_a_hard_eng_update_writes_no_pass_record(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    update_found: bool,
+) -> None:
+    pushed = prepared(runner, tmp_path, shipping_policy, monkeypatch)
+    source = tmp_path / ".hooks/hard-eng-source.json"
+    source.write_text(json.dumps({"revision": "a" * 40}))
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "install")
+    git(tmp_path, "push", "-q", "origin", "HEAD:main")
+    if update_found:
+        source.write_text(json.dumps({"revision": "b" * 40}))
+    pushed.task()
+    assert pushed.check(base="") == 0
+    assert pushed.record().is_file() is not update_found
+
+
 def test_a_stop_reuses_a_full_pass_of_this_commit_base_and_tree(
     repository: Path,
 ) -> None:
