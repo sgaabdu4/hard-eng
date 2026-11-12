@@ -78,7 +78,10 @@ def test_shards_split_the_ci_job_into_checks_tests_and_the_gate_job(
     text = generated(tmp_path, SOURCE, suite_config(3))
     jobs = yaml.safe_load(text)["jobs"]
     assert list(jobs) == ["checks", "tests", "hard-eng"]
-    assert jobs["tests"]["strategy"]["matrix"] == {"shard": [1, 2, 3]}
+    assert jobs["tests"]["strategy"] == {
+        "fail-fast": False,
+        "matrix": {"shard": [1, 2, 3]},
+    }
     assert jobs["hard-eng"]["needs"] == ["checks", "tests"]
     commands = {
         name: [step.get("run", "") for step in job["steps"]]

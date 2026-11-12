@@ -80,6 +80,7 @@ jobs:
   tests:
     name: hard-eng-tests ${{ matrix.shard }}
     strategy:
+      fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     runs-on: ${{ vars.CI_RUNS_ON && fromJSON(vars.CI_RUNS_ON) || 'ubuntu-latest' }}
