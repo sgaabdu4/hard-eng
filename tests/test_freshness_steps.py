@@ -204,3 +204,47 @@ def test_the_uv_step_keeps_the_marker_and_the_extras_of_the_declared_entry(
         ["--group", "dev", "pytest>=9.2.0; os_name == 'posix'"],
         ["--optional", "cli", "click>=8.1.0; sys_platform != 'win32'"],
     ]
+
+
+NUMPY_LOCK = (
+    '[[package]]\nname = "numpy"\nversion = "1.26.4"\n'
+    "markers = 'python_version < \"3.10\"'\n\n"
+    '[[package]]\nname = "numpy"\nversion = "2.1.0"\n'
+    "markers = 'python_version >= \"3.10\"'\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("declaration", "entry"),
+    [
+        (
+            "[project]\ndependencies = [\"numpy>=2.1; python_version >= '3.10'\"]\n",
+            "numpy>=2.1; python_version >= '3.10'",
+        ),
+        (
+            '[dependency-groups]\ndev = ["numpy~=2.1.0"]\n',
+            "numpy>=2.1.0",
+        ),
+        (
+            '[tool.poetry.dependencies]\nnumpy = "^2.1"\n',
+            "numpy>=2.1",
+        ),
+        (
+            '[project]\ndependencies = ["numpy<3"]\n',
+            "numpy>=1.26.4",
+        ),
+        (
+            '[project]\ndependencies = ["numpy"]\n',
+            "numpy>=1.26.4",
+        ),
+    ],
+)
+def test_the_poetry_floor_is_never_below_the_declared_lower_bound(
+    tmp_path: Path, declaration: str, entry: str
+) -> None:
+    from poetry_freshness import poetry_steps
+
+    (tmp_path / "pyproject.toml").write_text(declaration)
+    (tmp_path / "poetry.lock").write_text(NUMPY_LOCK)
+    step = poetry_steps(tmp_path, [("numpy", "2.1.0", "2.3.0")])
+    assert entry in added_entries(step)

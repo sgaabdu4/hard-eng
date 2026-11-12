@@ -16,6 +16,7 @@ REQUIREMENT = re.compile(
     r"\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?P<extras>\[[^\]]*\])?"
     r"\s*(?P<spec>[^;]*?)\s*(?:;\s*(?P<marker>.*?))?\s*"
 )
+LOWER_BOUND = re.compile(r"(?:>=|~=|\^|~)\s*(\d+(?:\.\d+)*)")
 SEPARATORS = re.compile(r"[-_.]+")
 OPERATION = re.compile(
     r"^\s*- (?:Installing|Updating|Downgrading) (?P<name>\S+) \((?P<versions>[^)]*)\)",
@@ -36,10 +37,16 @@ class Declared(NamedTuple):
     head: str
     tail: str
     unsupported: str = ""
+    lower: str = ""
 
 
 def canonical(name: str) -> str:
     return SEPARATORS.sub("-", name).lower()
+
+
+def lower_bound(spec: object) -> str:
+    found = LOWER_BOUND.search(spec) if isinstance(spec, str) else None
+    return found[1] if found else ""
 
 
 def table(value: object) -> dict[str, object]:
@@ -68,12 +75,13 @@ def requirement(options: tuple[str, ...], text: str) -> tuple[str, Declared] | N
     marker = f"; {found['marker']}" if found["marker"] else ""
     if spec.startswith("@"):
         return name, Declared(options, name, marker, "url")
-    return name, Declared(options, name + (found["extras"] or ""), marker)
+    head = name + (found["extras"] or "")
+    return name, Declared(options, head, marker, lower=lower_bound(spec))
 
 
 def poetry_entry(options: tuple[str, ...], name: str, value: object) -> Declared:
     if isinstance(value, str):
-        return Declared(options, name, "")
+        return Declared(options, name, "", lower=lower_bound(value))
     body = table(value)
     allowed = {"version", "extras", "allow-prereleases", *TABLE_FLAGS}
     other = sorted(set(body) - allowed) or ([] if "version" in body else ["version"])
@@ -89,7 +97,8 @@ def poetry_entry(options: tuple[str, ...], name: str, value: object) -> Declared
         flags.append("--allow-prereleases")
     listed = body.get("extras")
     extras = ",".join(map(str, listed)) if isinstance(listed, list) else ""
-    return Declared((*options, *flags), f"{name}[{extras}]" if extras else name, "")
+    head = f"{name}[{extras}]" if extras else name
+    return Declared((*options, *flags), head, "", lower=lower_bound(body["version"]))
 
 
 def declarations(directory: Path) -> dict[str, list[Declared]]:
@@ -128,6 +137,12 @@ def lock_floors(directory: Path) -> dict[str, str]:
     return floors
 
 
+def floor(item: Declared, floors: dict[str, str], name: str, current: str) -> str:
+    """The lowest locked version, raised to the declared lower bound when that is higher."""
+    locked = floors.get(canonical(name), current)
+    return item.lower if newer(item.lower, locked) else locked
+
+
 def poetry_steps(directory: Path, stale: list[Stale]) -> str:
     declared = declarations(directory)
     floors = lock_floors(directory)
@@ -141,7 +156,7 @@ def poetry_steps(directory: Path, stale: list[Stale]) -> str:
         for item in items:
             if not item.unsupported and item.options != LEGACY:
                 lines.setdefault(item.options, []).append(
-                    f"{item.head}>={floors.get(canonical(name), current)}{item.tail}"
+                    f"{item.head}>={floor(item, floors, name, current)}{item.tail}"
                 )
     commands = [
         " ".join([STEP, *map(shlex.quote, options), *map(shlex.quote, entries)])
@@ -222,7 +237,7 @@ def poetry_targets(directory: Path, stale: list[Stale]) -> list[Stale]:
     floors = lock_floors(directory) if plans else {}
     for options, plan in plans.items():
         entries = [
-            f"{item.head}>={floors.get(canonical(row[0]), row[1])}{item.tail}"
+            f"{item.head}>={floor(item, floors, row[0], row[1])}{item.tail}"
             for row, item in plan
         ]
         versions = solver_versions(
