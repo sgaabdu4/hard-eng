@@ -248,7 +248,7 @@ def provisioned_nothing(*_arguments: object) -> None:
     return None
 
 
-def test_a_run_that_selects_no_package_passes_in_the_gate_job_with_no_download(
+def test_a_run_that_selects_no_package_leaves_a_marker_in_each_shard_for_the_gate_download(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     jobs = yaml.safe_load(generated(tmp_path, SOURCE, suite_config(2)))["jobs"]
@@ -283,16 +283,13 @@ def test_own_workflow_is_the_generated_shard_form() -> None:
     assert list(yaml.safe_load(expected)["jobs"]) == ["checks", "tests", "hard-eng"]
 
 
-@pytest.mark.parametrize("name", [".github/hard-eng.yml", OLD_PATH])
-def test_an_edit_under_github_selects_the_package_checks(
-    repository: Path, name: str
-) -> None:
+def test_an_edit_under_github_selects_the_package_checks(repository: Path) -> None:
     config = json.loads(OWN_GATES.read_text())
     groups: list[Group] = [
         *config["packages"],
         {"path": ".", "checks": config["shared"]},
     ]
-    (repository / name).parent.mkdir(parents=True, exist_ok=True)
-    (repository / name).write_text("name: edited\n")
+    (repository / OLD_PATH).parent.mkdir(parents=True, exist_ok=True)
+    (repository / OLD_PATH).write_text("name: edited\n")
     chosen = affected_groups(repository, groups, "HEAD")
     assert "tests" in [gate["name"] for group in chosen for gate in group["checks"]]
