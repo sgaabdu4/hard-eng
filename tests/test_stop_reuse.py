@@ -15,6 +15,7 @@ from shipping import ShippingPolicy
 from test_push_check import Pushed, git_starts
 from test_stop_checks import install_check
 
+EARLIER = "Hard Eng: the full check passed on this exact commit from an earlier base 3 min ago; not repeating it."
 SENTENCE = "Hard Eng: the full check passed on this exact commit and base 3 min ago; not repeating it."
 
 
@@ -103,6 +104,22 @@ def test_a_held_check_lock_blocks_a_stop_with_a_full_pass(repository: Path) -> N
     assert blocked["decision"] == "block"
     assert "holds this checkout's lock" in str(blocked["reason"])
     assert not runs.exists()
+
+
+@pytest.mark.parametrize("ancestor", [True, False])
+def test_a_stop_reuses_a_full_pass_from_an_earlier_base(
+    repository: Path, ancestor: bool
+) -> None:
+    git(repository, "commit", "--allow-empty", "-qm", "second")
+    runs, payload, base, head = committed_task(repository)
+    root = git(repository, "rev-list", "--max-parents=0", "HEAD")
+    if not ancestor:
+        tree = git(repository, "rev-parse", f"{root}^{{tree}}")
+        root = git(repository, "commit-tree", tree, "-p", root, "-m", "elsewhere")
+    record_pass(repository, head, root)
+    shown = agent_hooks.completion(repository, payload, "claude")
+    assert (shown == {"systemMessage": EARLIER}) is ancestor
+    assert runs.exists() is not ancestor
 
 
 @pytest.fixture
