@@ -374,6 +374,9 @@ def test_a_class_mark_is_refused_only_when_the_class_holds_a_test(
         ("pytest.ini", "[pytest]", " = "),
         ("pytest.ini", "[pytest]", ": "),
         ("setup.cfg", "[tool:pytest]", " = "),
+        ("pytest.toml", "[pytest]", " = "),
+        (".pytest.toml", "[pytest]", " = "),
+        (".pytest.ini", "[pytest]", " = "),
     ],
 )
 def test_a_retry_count_in_a_pytest_table_fails_at_its_line(

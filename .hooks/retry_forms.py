@@ -54,7 +54,15 @@ PYTEST_SETTINGS = re.compile(
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
 PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*[=:]" + NONZERO)
 TABLE_HEAD = re.compile(r"^\s*(\[[^\[\]=,\"']+\])\s*(?:[#;].*)?$")
-PYTEST_FILES = ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg")
+PYTEST_FILES = (
+    "pytest.toml",
+    ".pytest.toml",
+    "pytest.ini",
+    ".pytest.ini",
+    "pyproject.toml",
+    "tox.ini",
+    "setup.cfg",
+)
 PYTEST_TABLES = frozenset(
     {"[tool.pytest.ini_options]", "[tool.pytest]", "[pytest]", "[tool:pytest]"}
 )
