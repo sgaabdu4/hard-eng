@@ -158,6 +158,9 @@ def test_dart_stops_at_the_version_pub_can_resolve(tmp_path: Path) -> None:
     assert PUB + "build_runner" not in registry.requests
 
 
+PUB_UPGRADE = "pub upgrade --major-versions --unlock-transitive"
+
+
 @pytest.mark.parametrize(
     ("dry_run", "now", "message"),
     [
@@ -180,7 +183,7 @@ def test_flutter_waits_while_only_a_young_release_unblocks_the_upgrade(
     blocked = FIXTURES / "flutter-upgrade-blocked.txt"
     body = f"cat '{blocked}'; exit 1" if dry_run == "blocked" else "exit 0"
     tool.write_text(
-        '#!/bin/sh\n[ "$*" = "pub upgrade --major-versions build_runner --dry-run" ]'
+        f'#!/bin/sh\n[ "$*" = "{PUB_UPGRADE} build_runner --dry-run" ]'
         f" || exit 2\n{body}\n"
     )
     tool.chmod(0o755)
@@ -204,8 +207,9 @@ def test_flutter_waits_while_only_a_young_release_unblocks_the_upgrade(
             "build_runner 2.17.1 needs a dependency that is not 2 days old yet" in out
         )
     else:
-        with pytest.raises(ValueError, match=r"build_runner 2\.16\.2 → 2\.17\.1"):
+        with pytest.raises(ValueError, match="build_runner 2.16.2 → 2.17.1") as failure:
             validate_freshness(path, gate, registry, moment(now), waiting)
+        assert f"Run `flutter {PUB_UPGRADE} build_runner` in" in str(failure.value)
 
 
 def test_uv_uses_pypi_upload_dates(tmp_path: Path) -> None:

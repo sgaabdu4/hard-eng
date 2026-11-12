@@ -173,10 +173,11 @@ def poetry_rows(text: str) -> list[Stale]:
     ]
 
 
+PUB_UPGRADE = ("pub", "upgrade", "--major-versions", "--unlock-transitive")
 UPGRADES = {
     "bun": "bun update {recursive}--latest --minimum-release-age={age} {names}",
-    "dart": "dart pub upgrade --major-versions {names}",
-    "flutter": "flutter pub upgrade --major-versions {names}",
+    "dart": f"dart {' '.join(PUB_UPGRADE)} {{names}}",
+    "flutter": f"flutter {' '.join(PUB_UPGRADE)} {{names}}",
 }
 
 
@@ -240,7 +241,7 @@ def pub_waiting(
 
     def waiting(name: str) -> bool:
         done = subprocess.run(
-            [tool, "pub", "upgrade", "--major-versions", name, "--dry-run"],
+            [tool, *PUB_UPGRADE, name, "--dry-run"],
             cwd=directory,
             capture_output=True,
             text=True,
