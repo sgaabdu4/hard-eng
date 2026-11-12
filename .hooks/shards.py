@@ -452,7 +452,7 @@ def merge_reports(root: Path, group: Group, gate: Gate, command: list[str]) -> N
             raise ValueError(
                 f"Shard {number} of {count} for {group['path']}/{gate['name']} sent no "
                 f"reports. List shards 1 to {count} in the tests job of "
-                ".github/workflows/hard-eng.yml (setup writes it), then rerun the workflow."
+                ".github/workflows/hard-eng.yml (setup writes it), then rerun all jobs of the workflow."
             )
         if not empty:
             tests.append(kept[0])
