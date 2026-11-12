@@ -345,6 +345,8 @@ def test_setup_and_check_leave_root_tool_configs_out_of_the_sources(
         "playwright.config.ts",
         "playwright.prod.config.ts",
         "vite.config.mobile.ts",
+        ".dependency-cruiser.cjs",
+        ".eslintrc.js",
     ):
         (tmp_path / name).write_text("export default {};\n")
     config = installer.gate_config(tmp_path)
@@ -364,6 +366,9 @@ def test_setup_and_check_leave_root_tool_configs_out_of_the_sources(
         "payload.config.ts",
         "middleware.ts",
         "tools/vite.config.ts",
+        "tools/.eslintrc.cjs",
+        "dependency-cruiser.cjs",
+        ".preview.tsx",
         "noxfile.py",
         "tool/build.dart",
     ],
