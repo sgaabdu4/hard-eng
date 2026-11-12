@@ -91,15 +91,27 @@ PLAYWRIGHT_PROJECT = {
     "playwright.config.ts": (
         'export default { testDir: "./e2e", globalSetup: "./e2e/global-setup.ts" };\n'
     ),
-    "playwright.prod.config.ts": "export default { testDir: './e2e-prod' };\n",
+    "playwright.prod.config.ts": (
+        "export default {\n"
+        "  testDir: './e2e-prod',\n"
+        "  globalTeardown: './e2e-prod/global-teardown.ts',\n"
+        "};\n"
+    ),
     "e2e/login.spec.ts": 'import { auth } from "./fixtures/auth";\nimport "./login.page";\n',
-    "e2e/login.page.ts": 'import "./pages/login";\n',
-    "e2e/pages/login.ts": "export const login = 1;\n",
-    "e2e/fixtures/auth.ts": 'import { base } from "./base";\nexport const auth = base;\n',
-    "e2e/fixtures/base.ts": "export const base = 1;\n",
+    "e2e/login.page.ts": (
+        'import type { Page } from "@playwright/test";\nimport "./pages/login";\n'
+    ),
+    "e2e/pages/login.ts": 'const { expect } = require("@playwright/test");\n',
+    "e2e/fixtures/auth.ts": (
+        'import {\n  test as base,\n  expect,\n} from "@playwright/test";\n'
+        "export const auth = base;\n"
+    ),
     "e2e/global-setup.ts": "export default async () => {};\n",
-    "e2e-prod/smoke.spec.ts": "import { shared } from '../e2e-prod/support/shared';\n",
-    "e2e-prod/support/shared.ts": "export const shared = 1;\n",
+    "e2e-prod/smoke.spec.ts": "import { shared } from './support/shared';\n",
+    "e2e-prod/support/shared.ts": (
+        "import { test } from '@playwright/test';\nexport const shared = test;\n"
+    ),
+    "e2e-prod/global-teardown.ts": "export default async () => {};\n",
 }
 
 
@@ -130,6 +142,14 @@ def test_the_test_folder_of_a_playwright_settings_file_is_test_code(
                 "playwright.config.ts": 'export default { testDir: "./e2e" };\n',
                 "e2e/login.spec.ts": "test();\n",
                 "e2e/unused.ts": "export const unused = 1;\n",
+            },
+            "e2e",
+        ),
+        (
+            {
+                "playwright.config.ts": 'export default { testDir: "./e2e" };\n',
+                "e2e/login.spec.ts": 'import { users } from "./data/users";\n',
+                "e2e/data/users.ts": "export const users = [];\n",
             },
             "e2e",
         ),
@@ -172,6 +192,7 @@ BARREL = {
         },
         {**BARREL, "src/index.spec.ts": 'import "./index";\n'},
         {**BARREL, "src/__tests__/index.spec.ts": 'import "../index";\n'},
+        {**BARREL, "src/checkout.spec.ts": 'import "./index";\n'},
     ],
 )
 def test_application_code_beside_playwright_tests_stays_a_source(

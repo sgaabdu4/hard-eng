@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
-from gate_config import TEST_FOLDERS, Group, nonproduction_source
+from gate_config import Group, nonproduction_source
 
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
 COVERAGE_FILES = (
@@ -218,10 +218,9 @@ CODE_EXTENSIONS = {
     "dart": {".dart"},
 }
 PLAYWRIGHT_TEST_DIR = re.compile(r"""\btestDir\s*:\s*(["'])(?:\./)?([^/"'\\]+)\1""")
-TEST_ENDINGS = (".spec", ".test", "_test")
 PLAYWRIGHT_GLOBAL = re.compile(r"""\bglobal(?:Setup|Teardown)\s*:\s*(["'])([^"']+)\1""")
-RELATIVE_IMPORT = re.compile(
-    r"""\b(?:from|import|require)\s*\(?\s*(["'])(\.\.?/[^"']*)\1"""
+PLAYWRIGHT_IMPORT = re.compile(
+    r"""\b(?:from|import|require)\s*\(?\s*(["'])@playwright/test\1"""
 )
 
 
@@ -236,84 +235,42 @@ def root_tool_config(name: str) -> bool:
     )
 
 
-def test_beside_its_code(relatives: set[Path]) -> bool:
-    """A test file and a production file with the same stem in one folder, or in the parent of a test folder."""
-    code = {
-        (path.parent, path.stem) for path in relatives if not nonproduction_source(path)
-    }
-    for path in relatives:
-        stem = path.stem.removesuffix(
-            next((ending for ending in TEST_ENDINGS if path.stem.endswith(ending)), "")
-        )
-        if stem == path.stem:
-            continue
-        folders = [path.parent]
-        if path.parent.name in TEST_FOLDERS:
-            folders.append(path.parent.parent)
-        if any((folder, stem) in code for folder in folders):
-            return True
-    return False
-
-
 def playwright_test_folders(
     directory: Path, files: list[Path], candidates: set[str]
 ) -> set[str]:
-    """Candidate folders that a Playwright settings file names and whose files are all test files or reached from one."""
+    """Candidate folders that a Playwright settings file names and whose code files are each a test by name, an importer of the Playwright test package or a named hook."""
     code = {
         Path(os.path.normpath(path)): path.relative_to(directory)
         for path in files
         if path.is_relative_to(directory)
         and path.suffix in CODE_EXTENSIONS["javascript"]
     }
-    texts = {
-        path: path.read_text(errors="replace")
+    texts = [
+        path.read_text(errors="replace")
         for path, relative in code.items()
         if len(relative.parts) == 1
         and root_tool_config(relative.name)
         and relative.name.startswith("playwright.")
-    }
-    named = {
-        match[2]
-        for text in texts.values()
-        for match in PLAYWRIGHT_TEST_DIR.finditer(text)
-    }
-    hooks = [
-        Path(os.path.normpath(directory / match[2]))
-        for text in texts.values()
-        for match in PLAYWRIGHT_GLOBAL.finditer(text)
     ]
+    named = {match[2] for text in texts for match in PLAYWRIGHT_TEST_DIR.finditer(text)}
+    hooks = {
+        Path(os.path.normpath(directory / match[2]))
+        for text in texts
+        for match in PLAYWRIGHT_GLOBAL.finditer(text)
+    }
     folders = set()
     for folder in named & candidates:
-        inside = {
+        inside = [
             path
             for path, relative in code.items()
             if relative.parts[0] == folder and len(relative.parts) > 1
-        }
-        if not inside or test_beside_its_code({code[path] for path in inside}):
-            continue
-        seen = {path for path in inside if nonproduction_source(code[path])}
-        pending = [*seen, *(hook for hook in hooks if hook in inside)]
-        seen.update(pending)
-        while pending:
-            current = pending.pop()
-            for match in RELATIVE_IMPORT.finditer(current.read_text(errors="replace")):
-                base = Path(os.path.normpath(current.parent / match[2]))
-                options = [
-                    base,
-                    *(
-                        base.with_name(base.name + suffix)
-                        for suffix in CODE_EXTENSIONS["javascript"]
-                    ),
-                    *(
-                        base / f"index{suffix}"
-                        for suffix in CODE_EXTENSIONS["javascript"]
-                    ),
-                ]
-                found = next((option for option in options if option in code), None)
-                if found is not None and found not in seen:
-                    seen.add(found)
-                    pending.append(found)
-        if inside <= seen:
+        ]
+        if inside and all(
+            nonproduction_source(code[path])
+            or path in hooks
+            or PLAYWRIGHT_IMPORT.search(path.read_text(errors="replace"))
+            for path in inside
+        ):
             folders.add(folder)
     return folders
 
