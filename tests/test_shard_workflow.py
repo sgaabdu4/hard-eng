@@ -175,12 +175,14 @@ def test_a_split_workflow_gets_a_note_and_no_shards(
     ],
 )
 def test_removing_shards_gives_the_one_job_workflow_back(
-    tmp_path: Path, old: str, new: str
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], old: str, new: str
 ) -> None:
     one_job = generated(tmp_path, SOURCE, suite_config(None)).replace(old, new, 1)
     split = split_test_shards(suite_config(3), one_job)
     assert list(yaml.safe_load(split)["jobs"]) == ["checks", "tests", "hard-eng"]
     assert split_test_shards(suite_config(None), split) == one_job
+    assert split_test_shards(suite_config(None), one_job) == one_job
+    assert "CI shards" not in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -192,11 +194,17 @@ def test_removing_shards_gives_the_one_job_workflow_back(
     ],
 )
 def test_removing_shards_leaves_a_workflow_that_is_not_the_generated_form(
-    tmp_path: Path, old: str, new: str
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], old: str, new: str
 ) -> None:
     one_job = generated(tmp_path, SOURCE, suite_config(None))
     custom = split_test_shards(suite_config(3), one_job).replace(old, new, 1)
+    capsys.readouterr()
     assert split_test_shards(suite_config(None), custom) == custom
+    assert capsys.readouterr().err == (
+        "CI shards not removed: .github/workflows/hard-eng.yml is customised. "
+        "Join its checks, tests and hard-eng jobs into the one hard-eng job of "
+        "Hard Eng's own workflow.\n"
+    )
 
 
 RESULTS = ("success", "failure", "cancelled", "skipped", "")
