@@ -274,6 +274,25 @@ RETRY_PASSES = [
     ("tests/test_api.py", "name = 'fl" + "aky'\n"),
 ]
 
+INI_LINES = "addopts =\n    -q\n    --re" + "tries 2\n"
+LIST_LINES = 'addopts = [\n    "-q",\n    "--re' + 'tries",\n    "2",\n]\n'
+OTHER_TABLE = "[tool.pytest.ini_options]\nminversion = '8'\n[tool.other]\n"
+
+RETRY_LINES = [
+    ("pytest.ini", "[pytest]\n" + INI_LINES, 5),
+    (".pytest.ini", "[pytest]\n" + INI_LINES, 5),
+    ("tox.ini", "[pytest]\n" + INI_LINES, 5),
+    ("setup.cfg", "[tool:pytest]\n" + INI_LINES, 5),
+    ("pyproject.toml", "[tool.pytest.ini_options]\n" + LIST_LINES, 5),
+    ("pyproject.toml", "[tool.pytest]\n" + LIST_LINES, 5),
+    ("pytest.toml", "[pytest]\n" + LIST_LINES, 5),
+    ("pytest.toml", LIST_LINES, 4),
+    (".pytest.toml", LIST_LINES, 4),
+    ("pyproject.toml", "[tool.other]\n" + LIST_LINES, None),
+    ("pyproject.toml", OTHER_TABLE + LIST_LINES, None),
+    ("tox.ini", "[testenv]\n" + INI_LINES, None),
+]
+
 TEST_FLAGS = [
     ("class TestDouble:\n    __test__ " + "= False\n", None),
     ("class TestA:\n    __test__ " + "= False\n\n    def test_a(self): ...\n", 2),
