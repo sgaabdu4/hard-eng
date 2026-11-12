@@ -244,15 +244,15 @@ def moved_option(arguments: list[str]) -> tuple[str, str] | None:
 
 
 def require_default_settings(
-    root: Path, group: Group, gate: Gate, command: list[str]
+    root: Path, group: Group, gate: Gate, command: list[str], variables: bool = True
 ) -> None:
-    """Refuse each option and variable that moves a settings file the shard merge reads."""
+    """Refuse each option, and each variable when asked, that moves a settings file the shard merge reads."""
     prefix = f"{group['path']}/{gate['name']}: "
     name, addopts = pytest_addopts(root / group["path"])
     gives = [
         (f"the environment sets {variable}", step)
         for variable, step in MOVED_VARIABLES.items()
-        if os.environ.get(variable)
+        if variables and os.environ.get(variable)
     ]
     for arguments, place in (
         (runner_arguments(command), "the tests command"),
