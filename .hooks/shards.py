@@ -1,6 +1,7 @@
 """Split a pytest tests gate over CI shards; only a shard run or a full check loads this."""
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -10,20 +11,13 @@ from pathlib import Path, PurePosixPath
 from typing import cast
 
 from ci_jobs import CHECKOUT, IMPACT_BASE, LINUX_HEADER
-from coverage_sources import coverage_file
+from coverage_sources import coverage_file, file_sections
 from gate_config import Gate, GateConfig, Group
 from process_group import run_in_group
 from reports import junit_root
+from retry_forms import PYTEST_FILES
 
 COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
-COV_FAIL_UNDER = re.compile(r"--cov-fail-under(?:=|\s+)([0-9.]+)")
-PYTEST_SETTINGS = (
-    "pytest.ini",
-    ".pytest.ini",
-    "pyproject.toml",
-    "tox.ini",
-    "setup.cfg",
-)
 KEPT = "coverage/shards"
 PROVEN = "proven.txt"
 RAN = "ran.txt"
@@ -230,19 +224,50 @@ def collected(
     return bases[0], {name: (bases[0] / name).stat().st_size for name in names}
 
 
-def pytest_settings(directory: Path) -> list[tuple[str, str]]:
-    return [
-        (name, (directory / name).read_text(errors="replace"))
-        for name in PYTEST_SETTINGS
-        if (directory / name).is_file()
-    ]
+def pytest_addopts(directory: Path) -> tuple[str, list[str]]:
+    """The settings file that pytest reads for a run in this folder, by pytest's own search, with its addopts arguments."""
+    import shlex
+
+    folder = directory.resolve()
+    for base in (folder, *folder.parents):
+        for name in PYTEST_FILES:
+            if not (base / name).is_file():
+                continue
+            section = file_sections(base / name)
+            if name == "pyproject.toml":
+                table = section("tool.pytest") or {}
+                legacy = table.get("ini_options")
+                native = {key: table[key] for key in table if key != "ini_options"}
+                found = native or (legacy if isinstance(legacy, dict) else None)
+            else:
+                found = section("tool:pytest" if name == "setup.cfg" else "pytest")
+            if found is None and not name.endswith(("pytest.toml", "pytest.ini")):
+                continue
+            value = (found or {}).get("addopts", [])
+            return (
+                os.path.relpath(base / name, folder),
+                [str(item) for item in value]
+                if isinstance(value, list)
+                else shlex.split(str(value)),
+            )
+    return "", []
+
+
+def option_value(arguments: list[str], option: str) -> str | None:
+    """The last value of an option that the arguments give as --option=value or as two items."""
+    found = None
+    for index, argument in enumerate(arguments):
+        if argument.startswith(option + "="):
+            found = argument.partition("=")[2]
+        elif argument == option and index + 1 < len(arguments):
+            found = arguments[index + 1]
+    return found
 
 
 def uses_coverage(directory: Path, command: list[str]) -> bool:
-    """pytest-cov takes every --cov option, so one in the command or the settings shows it runs."""
-    return any(
-        argument.startswith("--cov") for argument in runner_arguments(command)
-    ) or any("--cov" in text for _, text in pytest_settings(directory))
+    """pytest-cov takes every --cov option, so one in the command or in pytest's addopts shows it runs."""
+    arguments = [*pytest_addopts(directory)[1], *runner_arguments(command)]
+    return any(argument.startswith("--cov") for argument in arguments)
 
 
 def part_command(
@@ -357,16 +382,17 @@ def coverage_settings(directory: Path) -> tuple[str, float, int] | None:
 
 
 def coverage_minimum(directory: Path, command: list[str]) -> tuple[float, str, int]:
-    """The minimum, the place that sets it and the precision; the command beats the pytest settings, then coverage's file."""
+    """The minimum, the place that sets it and the precision; the command beats pytest's addopts, then coverage's file."""
     settings = coverage_settings(directory)
     precision = settings[2] if settings else 0
-    given = COV_FAIL_UNDER.findall(" ".join(runner_arguments(command)))
-    if given:
-        return float(given[-1]), "--cov-fail-under in the tests command", precision
-    for name, text in pytest_settings(directory):
-        found = COV_FAIL_UNDER.findall(text)
-        if found:
-            return float(found[-1]), f"--cov-fail-under in {name}", precision
+    name, addopts = pytest_addopts(directory)
+    for arguments, place in (
+        (runner_arguments(command), "the tests command"),
+        (addopts, name),
+    ):
+        given = option_value(arguments, "--cov-fail-under")
+        if given is not None:
+            return float(given), f"--cov-fail-under in {place}", precision
     if settings and settings[1]:
         return settings[1], f"fail_under in {settings[0]}", precision
     return 0.0, "", precision

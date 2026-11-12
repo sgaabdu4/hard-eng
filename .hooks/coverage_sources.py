@@ -28,10 +28,13 @@ def file_sections(path: Path) -> Callable[[str], dict[str, object] | None]:
 
     parser = configparser.ConfigParser(interpolation=None)
     data: dict[str, object] = {}
-    if path.suffix == ".toml":
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    else:
-        parser.read(path, encoding="utf-8")
+    try:
+        if path.suffix == ".toml":
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        else:
+            parser.read(path, encoding="utf-8")
+    except (ValueError, configparser.Error) as error:
+        raise ValueError(f"{path.name} cannot be read: {error}") from error
 
     def section(name: str) -> dict[str, object] | None:
         if path.suffix != ".toml":
@@ -73,12 +76,11 @@ def coverage_file(
 
 def omit_step(directory: Path, missing: list[Path]) -> str:
     """The sentence for a package whose own coverage settings leave one of these files out of the report."""
-    import configparser
     from fnmatch import fnmatchcase
 
     try:
         found = coverage_file(directory)
-    except (ValueError, configparser.Error):
+    except ValueError:
         return ""
     if found is None:
         return ""
