@@ -9,6 +9,8 @@ rules:
           ".agents/",
           "test/",
           "tests/",
+          "integration_test/",
+          "test_driver/",
           "__tests__/",
           "*Tests/",
           "test_*.py",
