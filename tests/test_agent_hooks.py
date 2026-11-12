@@ -575,6 +575,29 @@ def test_session_start_reports_a_failed_process_scan(
     assert "Idle Codex broker cleanup failed: ps unavailable" in context
 
 
+def test_session_start_checks_the_gates_while_it_records_the_session(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    monkeypatch.setattr(process_group, "process_table", list)
+    checking, recorded = threading.Event(), threading.Event()
+
+    def gates(_root: Path) -> str:
+        checking.set()
+        assert recorded.wait(timeout=5), "gate validation ended before the record"
+        return "Gates: stubbed"
+
+    def record(_root: Path, _payload: JsonObject) -> bool:
+        assert checking.wait(timeout=5), "the record waited for gate validation"
+        recorded.set()
+        return True
+
+    monkeypatch.setattr(agent_hooks, "gate_status", gates)
+    monkeypatch.setattr(agent_hooks, "record_session", record)
+    context = agent_hooks.session_context(repository, {"session_id": "both"})
+    assert "Gates: stubbed" in context
+
+
 def test_session_start_shows_the_first_line_of_a_gate_error_and_points_to_check(
     repository: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
