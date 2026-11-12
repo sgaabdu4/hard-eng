@@ -182,17 +182,16 @@ def after_the_gate_check(spy: Mock) -> list[str]:
     return [command[1] for command in words[last + 1 :]]
 
 
+@pytest.mark.parametrize("hosted", [True, False])
 def test_scaffold_update_check_refuses_code_outside_the_sources(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, hosted: bool
 ) -> None:
     target, base = update_beside_code_outside_the_sources(release, monkeypatch)
     spy = Mock(side_effect=subprocess.Popen)
     monkeypatch.setattr(subprocess, "Popen", spy)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    assert update.check_scaffold_update(target, base)
-    assert after_the_gate_check(spy) == []
-    spy.reset_mock()
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    if hosted:
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
     with pytest.raises(ValueError, match="outside its sources: scripts"):
         update.check_scaffold_update(target, base)
     assert after_the_gate_check(spy) == ["ls-files"]
