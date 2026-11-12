@@ -3926,8 +3926,9 @@ rules:
       - dart
     severity: ERROR
     message:
-      Each loop pass waits for the last one. Start independent calls together with Future.wait. A loop passes when it stops early (break or return),
-      reads a value it updates in its condition, or sleeps on purpose.
+      "This loop awaits work inside each pass. Independent work: use the bounded-concurrency helper mapWithConcurrency. Ordered work: use inOrder or
+      inOrderSteps with a reason. A join in a raw loop still needs a named helper. A loop passes when it stops early (break or return), reads a value
+      it updates in its condition, or sleeps on purpose."
     paths: *paths
     patterns:
       - pattern-either:
