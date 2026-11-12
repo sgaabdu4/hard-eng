@@ -3,7 +3,7 @@
 import os
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from dependency_graph import reachable
 from gate_config import Gate, Group
@@ -36,6 +36,11 @@ QUICK_ROLES = frozenset(
         "secrets-files",
     }
 )
+DART_ANALYSIS = (
+    ["dart", "analyze", "--fatal-infos"],
+    ["dart", "analyze", "--fatal-infos", "."],
+)
+ANALYSIS_SETTINGS = (".yaml", ".lock", ".arb")
 READ_ONLY_ROLES = (
     QUICK_ROLES
     | SCAN_ROLES
@@ -52,6 +57,26 @@ READ_ONLY_ROLES = (
         "shipped-format",
     }
 )
+
+
+def changed_dart(
+    root: Path, groups: list[Group], changed: set[str] | None
+) -> dict[str, list[str]]:
+    """The changed Dart files that a quick check analyses first, for each Dart analysis gate; a gate with no entry analyses its package."""
+    if changed is None or any(name.endswith(ANALYSIS_SETTINGS) for name in changed):
+        return {}
+    files = sorted(PurePosixPath(name) for name in changed if name.endswith(".dart"))
+    if not all((root / file).is_file() for file in files):
+        return {}
+    return {
+        f"{group['path']}/{gate['name']}": [
+            str(file.relative_to(group["path"])) for file in files
+        ]
+        for group in groups
+        for gate in group["checks"]
+        if gate["command"] in DART_ANALYSIS
+        and all(file.is_relative_to(group["path"]) for file in files)
+    }
 
 
 def early_scan(gate: Gate) -> bool:
