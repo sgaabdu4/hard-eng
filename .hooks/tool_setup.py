@@ -35,6 +35,11 @@ UV_LOST_SCANNER = " was not found in the cache and you require "
 TOOL_BRACKETS_OR_LATEST = re.compile(r"\[[^\]]*\]|@latest$")
 MISSING_MODULE_NAME = re.compile(r"Cannot find module '([^']+)'")
 NPM_LATEST_PACKAGE = re.compile(r"^(npm:[^\[]+?)(@latest)$")
+# mise names each tool that no config file lists; Hard Eng runs it with no config on purpose.
+ACTIVATION_NOTE = re.compile(
+    r"(?m)^mise WARN .* installed but not activated .*\n"
+    r"(?:To install and activate, run:\n(?: +mise use .*\n)*)?"
+)
 
 NATIVE_SCANNERS = {
     "dart-decimate": "dart-decimate",
@@ -562,7 +567,7 @@ def run_mise(
     environment: dict[str, str],
     timeout: float,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    result = subprocess.run(
         [*command, *arguments],
         # The project's packageManager pin would otherwise pick the Bun mise drives.
         cwd=storage,
@@ -577,6 +582,8 @@ def run_mise(
             else "1h",
         },
     )
+    result.stderr = ACTIVATION_NOTE.sub("", result.stderr)
+    return result
 
 
 def provision_latest(
