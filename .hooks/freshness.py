@@ -4,7 +4,6 @@ import json
 import re
 import subprocess
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -28,6 +27,8 @@ Stale = tuple[str, str, str]
 
 
 def fetch_json(url: str) -> object:
+    import urllib.request
+
     request = urllib.request.Request(url, headers={"User-Agent": "hard-eng-freshness"})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)

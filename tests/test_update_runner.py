@@ -16,6 +16,7 @@ from unittest.mock import Mock
 
 import agent_hooks
 import pytest
+import stale_updates
 import update
 import update_pr
 import update_runner
@@ -255,7 +256,7 @@ def test_update_cleanup_stops_file_watchers_of_worktrees_idle_for_a_day(
                 worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"
             )
             os.utime(index, (day_ago, day_ago))
-        update_runner.remove_stale_candidates(installed)
+        stale_updates.remove_stale_candidates(installed)
         assert running() == {installed: True, idle: False, active: True}
     finally:
         for worktree in watched:
