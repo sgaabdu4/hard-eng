@@ -285,8 +285,14 @@ def fresh_pass(record: Path) -> tuple[str, str, int] | None:
     try:
         saved = json.loads(record.read_text())
         age = time.time() - saved["time"]
-        if not isinstance(saved["time"], bool) and 0 <= age <= PASSED_SECONDS:
-            return saved["head"], saved["base"], int(age // 60)
+        head, base = saved["head"], saved["base"]
+        if (
+            isinstance(head, str)
+            and isinstance(base, str)
+            and not isinstance(saved["time"], bool)
+            and 0 <= age <= PASSED_SECONDS
+        ):
+            return head, base, int(age // 60)
     except (OSError, ValueError, KeyError, TypeError):
         pass
     return None
@@ -321,7 +327,7 @@ def covering_minutes(
     earlier = passed[1] != base
     if earlier:
         older = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", passed[1], base],
+            ["git", "merge-base", "--is-ancestor", "--end-of-options", passed[1], base],
             cwd=root,
             check=False,
             capture_output=True,
