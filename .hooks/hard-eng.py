@@ -56,7 +56,7 @@ from ci_jobs import (
     language_groups,
 )
 from dart_boundaries import validate_dart_boundaries, validate_dart_typing
-from debt import OUTPUTS, remember
+from debt import OUTPUTS, remember, ruff_check
 from dependency_graph import SOURCE_SUFFIXES, child_groups
 from gate_config import (
     Gate,
@@ -185,10 +185,8 @@ def production_files(
 
 def without_fixes(command: list[str]) -> list[str]:
     """`fix = true` in ruff's settings makes `ruff check` rewrite files and exit 0."""
-    tool = next(
-        (i for i, part in enumerate(command) if part.split("@")[0] == "ruff"), -1
-    )
-    if command[tool + 1 : tool + 2] != ["check"] or tool < 0:
+    tool = ruff_check(command)
+    if tool < 0:
         return command
     return [*command[: tool + 2], "--no-fix", *command[tool + 2 :]]
 

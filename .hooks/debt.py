@@ -155,6 +155,14 @@ def real_forms(lines: list[str]) -> dict[str, list[str]]:
     return forms
 
 
+def ruff_check(command: list[str]) -> int:
+    """The place of the tool word in a `ruff check` command, or -1; only that command prints fix advice."""
+    tool = next(
+        (i for i, part in enumerate(command) if part.split("@")[0] == "ruff"), -1
+    )
+    return tool if tool >= 0 and command[tool + 1 : tool + 2] == ["check"] else -1
+
+
 def by_form(lines: Counter[str], ruff: bool = False) -> Counter[str]:
     forms: Counter[str] = Counter()
     for line, count in lines.items():
@@ -233,7 +241,7 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     if debt is None or gate.get("role") in NEVER or lacks_suite(gate, output):
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
-    ruff = "ruff" in gate["command"]
+    ruff = ruff_check(gate["command"]) >= 0
     old = by_form(debt, ruff)
     if new := by_form(current, ruff) - old:
         print(f"FAIL {gate['name']} @ {group['path']}: findings beyond {DEBT_FILE}:")
@@ -298,7 +306,7 @@ def record(
                 refused.append(key)
                 continue
             if old is not None:
-                ruff = "ruff" in gate["command"]
+                ruff = ruff_check(gate["command"]) >= 0
                 kept = still_found(old.get(key, Counter()), current)
                 if fresh := by_form(current, ruff) - by_form(kept, ruff):
                     left_out[key] = fresh.total()
