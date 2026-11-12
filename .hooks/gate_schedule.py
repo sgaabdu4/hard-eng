@@ -65,17 +65,27 @@ def changed_dart(
     """The changed Dart files that a quick check analyses first, for each Dart analysis gate; a gate with no entry analyses its package."""
     if changed is None or any(name.endswith(ANALYSIS_SETTINGS) for name in changed):
         return {}
-    files = sorted(PurePosixPath(name) for name in changed if name.endswith(".dart"))
-    if not all((root / file).is_file() for file in files):
+    gates = [
+        (group, gate)
+        for group in groups
+        for gate in group["checks"]
+        if gate["command"] in DART_ANALYSIS
+    ]
+    # Git names a changed submodule or nested repository by its folder, not by its files.
+    if not gates or any(
+        not (root / name).is_file()
+        if name.endswith(".dart")
+        else (root / name).is_dir()
+        for name in changed
+    ):
         return {}
+    files = sorted(PurePosixPath(name) for name in changed if name.endswith(".dart"))
     return {
         f"{group['path']}/{gate['name']}": [
             str(file.relative_to(group["path"])) for file in files
         ]
-        for group in groups
-        for gate in group["checks"]
-        if gate["command"] in DART_ANALYSIS
-        and all(file.is_relative_to(group["path"]) for file in files)
+        for group, gate in gates
+        if all(file.is_relative_to(group["path"]) for file in files)
     }
 
 

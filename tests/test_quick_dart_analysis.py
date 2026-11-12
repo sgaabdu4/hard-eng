@@ -213,6 +213,30 @@ def test_the_time_of_the_package_run_leaves_out_the_first_run(
     assert times["./types-lint"] < 2
 
 
+def test_the_first_run_reads_the_changed_files_as_git_lists_them(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = project(runner, monkeypatch)
+    touch(tmp_path, ["lib/d.dart"])
+    (tmp_path / "lib/new").mkdir()
+    (tmp_path / "lib/new/c.dart").write_text("// SEEDED\n")
+    assert runner.check(base=base, verify_plan=False, quick=True) == 1
+    assert trace(tmp_path) == [
+        "analyze --fatal-infos lib/d.dart lib/new/c.dart",
+        "analyze --fatal-infos .",
+    ]
+    (tmp_path / "lib/new/c.dart").write_text("// fixture\n")
+    git(tmp_path, "mv", "lib/a.dart", "lib/moved.dart")
+    assert runner.check(base=base, verify_plan=False, quick=True) == 0
+    assert trace(tmp_path) == ["analyze --fatal-infos ."]
+    git(tmp_path, "mv", "lib/moved.dart", "lib/a.dart")
+    git(tmp_path, "init", "-q", "lib/other")
+    (tmp_path / "lib/other/e.dart").write_text("// SEEDED\n")
+    assert runner.check(base=base, verify_plan=False, quick=True) == 1
+    assert trace(tmp_path) == ["analyze --fatal-infos ."]
+    assert changed_dart(tmp_path, [analysis(".", DART)], {"lib/other"}) == {}
+
+
 def test_a_gate_of_another_tool_with_the_name_of_the_dart_gate_runs_its_own_command(
     runner: ModuleType, tmp_path: Path
 ) -> None:
