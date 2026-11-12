@@ -13,13 +13,13 @@ from conftest import SOURCE
 from pr_text import body_problem, event_problem
 from test_shipping import (
     _DIAGRAM,
+    _UI_BODY,
     FakeGitHub,
     _check,
     _fixture,
     _patch_gh,
     _pull,
     _ready_outcome,
-    _UI_BODY,
 )
 
 _GOOD = "Undo: revert the commits.\n" + _DIAGRAM * 2
