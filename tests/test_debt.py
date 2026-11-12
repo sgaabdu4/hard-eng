@@ -619,6 +619,59 @@ def test_a_list_line_of_another_tool_is_still_a_finding(
     assert "- unused file b.ts" in capsys.readouterr().out
 
 
+RUFF_FORMAT: Gate = {
+    "name": "format",
+    "role": "format",
+    "command": ["ruff", "format", "--check", "."],
+}
+ONE_LINE = """unformatted: File would be reformatted
+ --> b.py:1:6
+  |
+  - x = {  'a':1 }
+1 + x = {"a": 1}
+  |
+
+1 file would be reformatted
+"""
+THREE_LINES = """unformatted: File would be reformatted
+ --> b.py:1:6
+  |
+  - x = {  'a':1 }
+  - y = [ 1,2,3 ]
+  - z=f( a , b )
+1 + x = {"a": 1}
+2 + y = [1, 2, 3]
+3 + z = f(a, b)
+  |
+
+1 file would be reformatted
+"""
+
+
+def test_a_new_format_fault_beside_an_old_one_is_a_finding(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The diff lines of the Ruff format check are its findings, not fix advice."""
+    group: Group = {"path": ".", "checks": [RUFF_FORMAT]}
+    recorded = {"./format": ONE_LINE}
+    assert debt.record(repository, [group], {"./format"}, recorded) == 0
+    capsys.readouterr()
+    assert debt.judge(repository, group, RUFF_FORMAT, True, THREE_LINES) is True
+    assert "- y = [ 1,2,3 ]" in capsys.readouterr().out
+
+
+def test_a_ruff_check_through_uvx_leaves_out_the_fix_advice_too(
+    repository: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gate: Gate = {**RUFF, "command": ["uvx", "ruff@latest", "check", "."]}
+    group: Group = {"path": ".", "checks": [gate]}
+    recorded = {"./annotations": NO_FIX}
+    assert debt.record(repository, [group], {"./annotations"}, recorded) == 0
+    capsys.readouterr()
+    assert debt.judge(repository, group, gate, True, WITH_FIX) is False
+    assert "no new finding" in capsys.readouterr().out
+
+
 def test_a_debt_file_recorded_with_link_codes_still_matches(repository: Path) -> None:
     (repository / debt.DEBT_FILE).write_text(
         (SAMPLES / "biome-recorded-by-base.json").read_text()
