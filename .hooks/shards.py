@@ -34,6 +34,7 @@ SHARD_LIST = re.compile(r"(?m)^(        shard: \[)[^\]]*\]$")
 UPLOAD = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
 DOWNLOAD = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
 HEADER = "  hard-eng:\n    name: hard-eng\n"
+CHECKS_HEADER = "  checks:\n    name: hard-eng-checks\n"
 UPLOAD_STEP = f"""      - name: Keep the shard reports
         uses: {UPLOAD}
         with:
@@ -470,6 +471,49 @@ def merge_reports(root: Path, group: Group, gate: Gate, command: list[str]) -> N
         )
 
 
+def split_job(content: str, numbers: str) -> str | None:
+    """The one-job workflow as checks, one tests job per shard and the gate job; None when it is not the generated one-job form."""
+    names = JOB_NAME.findall(content.partition("\njobs:\n")[2])
+    start, checkout = content.find(HEADER), CHECKOUT.search(content)
+    if (
+        names != ["hard-eng"]
+        or start < 0
+        or checkout is None
+        or len(CHECK_LINE.findall(content)) != 2
+        or "\n    env:\n" not in content
+    ):
+        return None
+    rest = content[start + len(HEADER) :].rstrip("\n") + "\n"
+    checks = CHECK_LINE.sub(lambda match: match[1] + " --shard rest", rest)
+    tests = CHECK_LINE.sub(lambda match: match[1] + ' --shard "$SHARD"', rest)
+    tests = tests.replace(
+        "    env:\n", "    env:\n      SHARD: ${{ matrix.shard }}\n", 1
+    )
+    return (
+        content[:start]
+        + CHECKS_HEADER
+        + checks
+        + "\n  tests:\n    name: hard-eng-tests ${{ matrix.shard }}\n"
+        + f"    strategy:\n      matrix:\n        shard: [{numbers}]\n"
+        + tests
+        + UPLOAD_STEP
+        + "\n"
+        + GATE_JOB % checkout[0]
+    )
+
+
+def one_job(content: str) -> str:
+    """The one-job workflow back from the generated split form; any other workflow is unchanged."""
+    shards = SHARD_LIST.search(content)
+    head, found, rest = content.partition(CHECKS_HEADER)
+    if shards is None or not found:
+        return content
+    body = rest.partition("\n  tests:\n")[0].replace(" --shard rest", "")
+    restored = head + HEADER + body
+    numbers = content[shards.end(1) : shards.end() - 1]
+    return restored if split_job(restored, numbers) == content else content
+
+
 def split_test_shards(config: GateConfig, content: str) -> str:
     """The one-job workflow as checks, one tests job per shard and the required hard-eng job."""
     count = max(
@@ -481,36 +525,14 @@ def split_test_shards(config: GateConfig, content: str) -> str:
         default=0,
     )
     if not count:
-        return content
+        return one_job(content)
     require_pytest(config["packages"])
     numbers = ", ".join(str(number) for number in range(1, count + 1))
     names = JOB_NAME.findall(content.partition("\njobs:\n")[2])
     if names == ["checks", "tests", "hard-eng"]:
         return SHARD_LIST.sub(lambda match: match[1] + numbers + "]", content)
-    start, checkout = content.find(HEADER), CHECKOUT.search(content)
-    if (
-        names != ["hard-eng"]
-        or start < 0
-        or checkout is None
-        or len(CHECK_LINE.findall(content)) != 2
-        or "\n    env:\n" not in content
-    ):
+    split = split_job(content, numbers)
+    if split is None:
         print(SHARD_NOTE, file=sys.stderr)
         return content
-    rest = content[start + len(HEADER) :].rstrip("\n") + "\n"
-    checks = CHECK_LINE.sub(lambda match: match[1] + " --shard rest", rest)
-    tests = CHECK_LINE.sub(lambda match: match[1] + ' --shard "$SHARD"', rest)
-    tests = tests.replace(
-        "    env:\n", "    env:\n      SHARD: ${{ matrix.shard }}\n", 1
-    )
-    return (
-        content[:start]
-        + "  checks:\n    name: hard-eng-checks\n"
-        + checks
-        + "\n  tests:\n    name: hard-eng-tests ${{ matrix.shard }}\n"
-        + f"    strategy:\n      matrix:\n        shard: [{numbers}]\n"
-        + tests
-        + UPLOAD_STEP
-        + "\n"
-        + GATE_JOB % checkout[0]
-    )
+    return split
