@@ -1025,6 +1025,7 @@ rules:
                     pattern-not-inside: "async for $X in $Y:\n  ...\n"
                   - &await_in_loop_python_id004
                     pattern-not-inside: "while True:\n  ...\n"
+                  - pattern-not-inside: "while $X:\n  await asyncio.gather(<... $X ...>)\n"
                   - &await_in_loop_python_id005
                     pattern-not-inside:
                       patterns:
