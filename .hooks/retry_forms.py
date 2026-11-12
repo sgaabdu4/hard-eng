@@ -46,14 +46,16 @@ JS_TEST = re.compile(
 JS_CONFIG = re.compile(r"(jest\.retryTimes\()|\b(retry:|retries:)" + NONZERO)
 PYTHON = re.compile(r"\b(mark\.flaky)\b|(@flaky)\b")
 DART_TEST = re.compile(r"(@Retry\()|" + DART_LEAD + r"\b(retry:)" + COUNT)
+RETRIES_ON = r"(--retries)\b(?![\"']?(?:[ =]+|\s*,\s*)[\"']?0\b)"
 PYTEST_SETTINGS = re.compile(
     r"(--force-reruns|--reruns)(?![ =]+0\b)|^\s*(reruns)\s*[=:]"
     + NONZERO
-    + r"|addopts[^\n]*(--retries)\b"
+    + r"|addopts[^\n]*"
+    + RETRIES_ON
 )
 KEYS = re.compile(r"^\s*(retry)\s*[=:]" + NONZERO)
 PLUGIN_COUNT = re.compile(r"^\s*(retries)\s*[=:]" + NONZERO)
-PLUGIN_OPTION = re.compile(r"^(?!\s*[#;]).*?(--retries)\b")
+PLUGIN_OPTION = re.compile(r"^(?!\s*[#;]).*?" + RETRIES_ON)
 TABLE_HEAD = re.compile(r"^\s*(\[[^\[\]=,\"']+\])\s*(?:[#;].*)?$")
 PYTEST_FILES = (
     "pytest.toml",
