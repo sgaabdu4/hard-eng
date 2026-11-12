@@ -783,12 +783,20 @@ def test_a_listing_that_names_no_file_is_refused(
 
 
 @pytest.mark.parametrize(
-    ("extra", "held"),
-    [(["--cov"], True), (["--cov=lib", "--cov-branch"], True), ([], False)],
+    ("extra", "setting", "held"),
+    [
+        (["--cov"], "", True),
+        (["--cov=lib", "--cov-branch"], "", True),
+        ([], "", False),
+        ([], 'addopts = "--cov=lib"\n', True),
+        ([], '# addopts = "--cov=lib"\n', False),
+    ],
 )
 def test_a_shard_does_not_apply_the_coverage_minimum_of_the_project(
-    runner: ModuleType, shard_project: Path, extra: list[str], held: bool
+    runner: ModuleType, shard_project: Path, extra: list[str], setting: str, held: bool
 ) -> None:
+    with (shard_project / "pyproject.toml").open("a") as settings:
+        settings.write(setting)
     command = [sys.executable, "-m", "pytest", "--junitxml=j.xml", *extra]
     check = {**shard_gate(2), "command": command}
     group = pytest_group(".", [cast(Gate, check)])
