@@ -4,13 +4,15 @@ import fcntl
 import json
 import time
 from pathlib import Path
+from types import ModuleType
 
 import agent_hooks
 import plans
 import pytest
 from conftest import add_origin, commit, git
 from gate_config import JsonObject
-from test_push_check import git_starts
+from shipping import ShippingPolicy
+from test_push_check import Pushed, git_starts
 from test_stop_checks import install_check
 
 SENTENCE = "Hard Eng: the full check passed on this exact commit and base 3 min ago; not repeating it."
@@ -101,3 +103,30 @@ def test_a_held_check_lock_blocks_a_stop_with_a_full_pass(repository: Path) -> N
     assert blocked["decision"] == "block"
     assert "holds this checkout's lock" in str(blocked["reason"])
     assert not runs.exists()
+
+
+@pytest.fixture
+def pushed(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Pushed:
+    monkeypatch.delenv("CI", raising=False)
+    shipping_policy["pre_push_mutation_seconds"] = 0.0
+    return Pushed(runner, tmp_path, shipping_policy)
+
+
+@pytest.mark.parametrize("row", ["plain", "ci", "quick", "ready"])
+def test_a_full_check_with_no_base_writes_the_pass_record(
+    pushed: Pushed, monkeypatch: pytest.MonkeyPatch, row: str
+) -> None:
+    head = pushed.task()
+    if row == "ci":
+        monkeypatch.setenv("CI", "1")
+    arguments = {"quick": ["--quick"], "ready": ["--plan-stage", "Ready"]}.get(row, [])
+    assert pushed.check(*arguments, base="") == 0
+    assert pushed.record().is_file() is (row == "plain")
+    if row == "plain":
+        saved = json.loads(pushed.record().read_text())
+        assert (saved["head"], saved["base"]) == (head, pushed.base)

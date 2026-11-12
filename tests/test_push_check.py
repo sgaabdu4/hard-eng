@@ -354,7 +354,6 @@ MISSES = [
     "submodule-edited",
     "amended",
     "later-push",
-    "no-base",
     "quick",
     "only-language",
     "stage-ready",
@@ -408,8 +407,7 @@ def test_the_push_check_runs_when_the_pass_does_not_cover_the_pushed_commit(
         "only-language": ["--only-language", "python"],
         "stage-ready": ["--plan-stage", "Ready"],
     }.get(row, [])
-    base = "" if row == "no-base" else pushed.base
-    assert pushed.check(*arguments, base=base, env=env) == 0
+    assert pushed.check(*arguments, base=pushed.base, env=env) == 0
     before = pushed.runs()
     covers = row in {"amended", "later-push"} or row.endswith("-record")
     assert pushed.record().is_file() is covers
