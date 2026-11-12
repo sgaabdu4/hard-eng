@@ -74,9 +74,11 @@ def test_husky_update_preserves_shim_and_runs_shell_launcher(
     assert installer.prepare_hook(tmp_path) == (shim, hook_chain.CHAINED_LAUNCHER)
 
 
-@pytest.mark.parametrize("installed", [False, True])
+@pytest.mark.parametrize(
+    ("installed", "own_workflow"), [(False, False), (True, False), (False, True)]
+)
 def test_shell_bootstrap_installs_verified_main(
-    release: tuple[Path, Path, str], installed: bool
+    release: tuple[Path, Path, str], installed: bool, own_workflow: bool
 ) -> None:
     source, target, _ = release
     git(source, "branch", "-M", "main")
@@ -99,6 +101,11 @@ def test_shell_bootstrap_installs_verified_main(
         init(target)
         (target / "package.json").write_text('{"private":true}')
         (target / "bun.lock").write_text('{"lockfileVersion": 1}\n')
+    if own_workflow:
+        (target / ".github/workflows").mkdir(parents=True)
+        (target / ".github/workflows/quality.yml").write_text(
+            "on: pull_request\njobs:\n  quality:\n    runs-on: ubuntu-latest\n"
+        )
     result = subprocess.run(
         ["sh", str(source / "setup.sh")],
         cwd=target,
@@ -122,8 +129,15 @@ def test_shell_bootstrap_installs_verified_main(
         assert "Installed Hard Eng" in result.stdout
         metadata = json.loads((target / update.SOURCE_FILE).read_text())
         assert not (target / ".github/workflows/hard-eng.yml").exists()
-        assert not (target / ".github/workflows/pr-text.yml").exists()
-        assert "CI setup pending" in result.stderr
+        pr_text = target / ".github/workflows/pr-text.yml"
+        assert pr_text.is_file() is own_workflow
+        if own_workflow:
+            assert (
+                pr_text.read_text()
+                == (source / ".github/workflows/pr-text.yml").read_text()
+            )
+        else:
+            assert "CI setup pending" in result.stderr
     assert metadata["revision"] == revision
     assert (target / ".git/hooks/pre-push").stat().st_mode & 0o111
 
