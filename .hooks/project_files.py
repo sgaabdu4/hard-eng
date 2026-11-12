@@ -89,6 +89,31 @@ def background[T](
     return answer
 
 
+def clean_tree(root: Path) -> tuple[str, bool] | None:
+    """The commit that HEAD names and whether Git sees no change, submodules included."""
+    status = subprocess.run(
+        [
+            "git",
+            "--no-optional-locks",
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--no-ahead-behind",
+            "--ignore-submodules=none",
+            "--untracked-files=normal",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    lines = status.stdout.splitlines()
+    heads = [line.split()[2] for line in lines if line.startswith("# branch.oid ")]
+    if status.returncode or len(heads) != 1 or not heads[0].isalnum():
+        return None
+    return heads[0], all(line.startswith("# ") for line in lines)
+
+
 def syntax_errors() -> tuple[type[Exception], ...]:
     """PyYAML's error is no ValueError, and PyYAML is loaded only when a caller parses YAML."""
     yaml = sys.modules.get("yaml")
