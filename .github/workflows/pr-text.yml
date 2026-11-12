@@ -43,10 +43,13 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read # Read the PR text rules from .hooks.
+      pull-requests: read # List the files that the PR changes.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: .hooks
       - name: Check the PR text against the Hard Eng rules
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 -I -c 'import sys; sys.path.insert(0, ".hooks"); from pr_text import event_problem; sys.exit(event_problem(sys.argv[1]))' "$GITHUB_EVENT_PATH"
