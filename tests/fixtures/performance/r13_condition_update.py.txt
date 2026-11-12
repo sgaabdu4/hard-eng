@@ -1,0 +1,52 @@
+import asyncio
+
+
+async def one_name_inline(pending):
+    while pending:
+        pending = (await asyncio.wait(pending))[1]
+
+
+async def one_name_after(pending):
+    while pending:
+        result = await asyncio.wait(pending)
+        pending = result[1]
+
+
+async def done_then_pending(pending):
+    while pending:
+        _done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+
+
+async def done_then_pending_plain(pending):
+    while pending:
+        _done, pending = await asyncio.wait(pending)
+
+
+async def pending_then_done(pending):
+    while pending:
+        pending, _done = await split(pending)
+
+
+async def target_without_condition_name(pending):
+    while pending:
+        # ruleid: await-in-loop-python
+        _done, rest = await asyncio.wait(pending)
+
+
+async def other_condition(running, pending):
+    while running:
+        # ruleid: await-in-loop-python
+        _done, pending = await asyncio.wait(pending)
+
+
+async def no_assignment(pending):
+    while pending:
+        # ruleid: await-in-loop-python
+        await asyncio.wait(pending)
+
+
+class Holder:
+    async def attribute_target(self, pending):
+        while pending:
+            # ruleid: await-in-loop-python
+            _done, self.other = await asyncio.wait(pending)

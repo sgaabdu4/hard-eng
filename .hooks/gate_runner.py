@@ -55,6 +55,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
+CHANGED_DART: dict[str, list[str]] = {}
 RECORDING = threading.Event()
 TEST_REPORTS = {"python-tests", "lcov-tests", "dart-tests", "xcode-tests"}
 SUITE_FILTERS = {
@@ -292,10 +293,13 @@ def run_gate(
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
     if part := gate.get("part"):
         key += "@shard" if part.isdecimal() else "@merge"
-    started = time.monotonic()
     limit = gate_limit(ROOT, key, timeout)
     name = f"{group['path']}/{gate['name']}"
     OUTPUTS.pop(name, None)
+    files = CHANGED_DART.get(name)
+    if files is not None and changed_dart_pass(group, gate, files, limit, groups):
+        return False
+    started = time.monotonic()
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
     if not RECORDING.is_set():
         from debt import judge
@@ -310,6 +314,47 @@ def run_gate(
     else:
         record_gate_time(ROOT, key, time.monotonic() - started)
     return failed
+
+
+def changed_dart_pass(
+    group: Group,
+    gate: Gate,
+    files: list[str],
+    timeout: float,
+    groups: list[Group] | None,
+) -> bool:
+    """A quick check passes the Dart analysis on its changed files alone; a finding there leaves the verdict, and each record, to the package run."""
+    from gate_schedule import DART_ANALYSIS
+
+    if gate["command"] not in DART_ANALYSIS:
+        return False
+    started = time.monotonic()
+    first: Gate = {**gate, "command": [*DART_ANALYSIS[0], *files]}
+    try:
+        command = prepare_command(group, first, timeout, groups)
+        with tempfile.TemporaryFile(mode="w+") as log:
+            passed = (
+                not files
+                or not run_projects(
+                    group, first, command, ROOT / group["path"], timeout, log, log
+                ).returncode
+            )
+    except (ImportError, OSError, TypeError, ValueError, subprocess.SubprocessError):
+        passed = False
+    if not passed:
+        print(
+            f"Dart analysis of the changed files @ {group['path']} did not pass; "
+            "the package analysis decides.",
+            flush=True,
+        )
+        return False
+    print(
+        f"PASS {gate['name']} (changed Dart files only: {len(files)}; elapsed "
+        f"{time.monotonic() - started:.3f}s) @ {group['path']}; "
+        "the full check analyses the package.",
+        flush=True,
+    )
+    return True
 
 
 def run_projects(
@@ -373,6 +418,11 @@ def shard_command(
 ) -> tuple[list[str], Path | None]:
     """A shard gate runs its own files and skips the coverage minimum; others pass through."""
     if not gate.get("part"):
+        if gate.get("shards"):
+            from shards import require_default_settings, require_no_path
+
+            require_default_settings(ROOT, group, gate, command, variables=False)
+            require_no_path(ROOT, group, gate, command)
         return command, coverage
     from shards import part_command
 
@@ -544,7 +594,7 @@ def biome_children(group: Group, gate: Gate, groups: list[Group]) -> tuple[Path,
     )
 
 
-def proven_elsewhere(base: str | None) -> bool:
+def proven_elsewhere(base: str | None, quick: bool = False) -> bool:
     """A merged PR or verified upstream release already proved this change."""
     from update import check_scaffold_update
 
@@ -560,7 +610,7 @@ def proven_elsewhere(base: str | None) -> bool:
                 flush=True,
             )
             return True
-    return check_scaffold_update(ROOT, base)
+    return check_scaffold_update(ROOT, base, sources=not quick)
 
 
 def plan_base(base: str | None, plan_stage: str | None) -> str | None:
@@ -621,7 +671,7 @@ def check(
 
         if proven_shard(ROOT):
             return 0
-    elif proven_elsewhere(base):
+    elif proven_elsewhere(base, quick):
         if shard:
             from shards import mark_shard
 
@@ -657,8 +707,7 @@ def check(
         validate_comments(ROOT, base)
         validate_suppressions(ROOT, base)
         plans.validate_records(ROOT, base)
-        if not quick:
-            change_size.commit_note(ROOT)
+        before_gates(groups, quick, base)
         stop_keeping("listings")
         if shard != "merge":
             provision_tools(ROOT, groups, timeout)
@@ -675,6 +724,20 @@ def check(
 
             mark_shard(ROOT, shard, False)
         return int(failed)
+
+
+def before_gates(groups: list[Group], quick: bool, base: str | None) -> None:
+    """A full check prints the commit note; a quick check with a base names the changed Dart files of its first runs."""
+    CHANGED_DART.clear()
+    if not quick:
+        import change_size
+
+        change_size.commit_note(ROOT)
+    elif base:
+        from gate_config import changed_files
+        from gate_schedule import changed_dart
+
+        CHANGED_DART.update(changed_dart(ROOT, groups, changed_files(ROOT, base)))
 
 
 def impact(base: str, languages: LanguageFilter = NO_LANGUAGES) -> int:

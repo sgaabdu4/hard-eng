@@ -97,6 +97,35 @@ def test_the_first_quick_check_in_a_checkout_runs_the_install_one_time(
     assert installs(quick=True) == (1, 7)
 
 
+def test_a_quick_check_generates_code_before_the_types_until_the_install_and_it_pass(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    made = "import os, sys; open('trace', 'a').write('x'); open('made', 'w').close(); sys.exit(os.path.exists('broken'))"
+    reads = "import os, sys; sys.exit(not os.path.exists('made'))"
+    configure(
+        tmp_path,
+        [
+            gate("install", "pass", role="lockfiles"),
+            gate("codegen", made, role="generated"),
+            gate("types", reads, role="types", parallel=True),
+        ],
+    )
+
+    def generates() -> tuple[int, int]:
+        code = runner.check(quick=True)
+        return code, len((tmp_path / "trace").read_text())
+
+    assert generates() == (0, 1)
+    assert generates() == (0, 1)
+    (tmp_path / ".git/hard-eng-installed").unlink()
+    (tmp_path / "broken").touch()
+    assert generates() == (1, 2)
+    assert generates() == (1, 3)
+    (tmp_path / "broken").unlink()
+    assert generates() == (0, 4)
+    assert generates() == (0, 4)
+
+
 def test_an_install_marks_only_its_own_group_in_a_shared_folder(
     runner: ModuleType, tmp_path: Path
 ) -> None:

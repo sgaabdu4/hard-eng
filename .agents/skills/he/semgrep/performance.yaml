@@ -1118,7 +1118,10 @@ rules:
                         - metavariable-pattern:
                             metavariable: $...CONDITION_BODY
                             patterns:
-                              - pattern: $V = $X
+                              - pattern-either:
+                                  - pattern: $V = $X
+                                  - pattern: $A, $V = $X
+                                  - pattern: $V, $A = $X
                               - pattern-not-inside: "for $SCOPE_I in $SCOPE_C:\n  ..."
                               - pattern-not-inside: "while $SCOPE_C:\n  ..."
                               - pattern-not-inside: "def $N(...):\n  ..."
@@ -3923,8 +3926,9 @@ rules:
       - dart
     severity: ERROR
     message:
-      Each loop pass waits for the last one. Start independent calls together with Future.wait. A loop passes when it stops early (break or return),
-      reads a value it updates in its condition, or sleeps on purpose.
+      "This loop awaits work inside each pass. Independent work: use the bounded-concurrency helper mapWithConcurrency. Ordered work: use inOrder or
+      inOrderSteps with a reason. A join in a raw loop still needs a named helper. A loop passes when it stops early (break or return), reads a value
+      it updates in its condition, or sleeps on purpose."
     paths: *paths
     patterns:
       - pattern-either:
@@ -3967,9 +3971,9 @@ rules:
       - pattern-not-inside: while ($C) { ... <... (...) async { ... <... await $E ...>; ... } ...>; ... }
       - pattern-not-regex: (?ms)^([ \t]*)await\s+for\s*\((?:[^;{]*?\{[ \t]*\n.*?^\1\}[ \t]*$|[^\n]*$)
       - pattern-not-inside: while (true) { ... }
-      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait($X); }
-      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait($X.toList()); }
-      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait([...$X]); }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait($X, ...); }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait($X.toList(), ...); }
+      - pattern-not-inside: while ($X.isNotEmpty) { await Future.wait([...$X], ...); }
       - pattern-not-inside: for ($I in $C) { ... break; }
       - pattern-not-inside: for ($I in $C) { ... return; }
       - pattern-not-inside: for ($I in $C) { ... return $R; }

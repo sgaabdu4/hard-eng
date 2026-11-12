@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import change_size
 import pytest
 import update
-from conftest import commit, git
+from conftest import SOURCE, commit, git, load_module
 from coverage_sources import require_listed_sources
 from gate_config import parse_config, repository_files
 from test_updates import fixed_revision
@@ -182,20 +182,35 @@ def after_the_gate_check(spy: Mock) -> list[str]:
     return [command[1] for command in words[last + 1 :]]
 
 
+@pytest.mark.parametrize("hosted", [True, False])
 def test_scaffold_update_check_refuses_code_outside_the_sources(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, hosted: bool
 ) -> None:
     target, base = update_beside_code_outside_the_sources(release, monkeypatch)
     spy = Mock(side_effect=subprocess.Popen)
     monkeypatch.setattr(subprocess, "Popen", spy)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
-    assert update.check_scaffold_update(target, base)
-    assert after_the_gate_check(spy) == []
-    spy.reset_mock()
-    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    if hosted:
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
     with pytest.raises(ValueError, match="outside its sources: scripts"):
         update.check_scaffold_update(target, base)
     assert after_the_gate_check(spy) == ["ls-files"]
+
+
+def test_a_quick_check_of_a_verified_update_leaves_the_sources_rule_to_the_full_check(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, base = update_beside_code_outside_the_sources(release, monkeypatch)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    runner = load_module("runner", SOURCE / ".hooks/gate_runner.py")
+    runner.__dict__["ROOT"] = target
+    spy = Mock(side_effect=subprocess.Popen)
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    assert runner.check(base=base, quick=True) == 0
+    assert after_the_gate_check(spy) == []
+    with pytest.raises(ValueError, match="outside its sources: scripts"):
+        runner.check(base=base)
 
 
 def test_the_step_of_the_update_refusal_works_on_the_update_branch(

@@ -12,6 +12,8 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import IO, NamedTuple
 
+from project_files import clean_tree
+
 BROKER = re.compile(
     r"^\S+ \S*/app-server-broker\.mjs serve --endpoint \S+ --cwd (.+) --pid-file \S+$"
 )
@@ -189,13 +191,17 @@ def read_installed(lock: IO[str], root: Path) -> frozenset[str]:
     )
 
 
+# A new checkout needs its dependencies and its generated code before the quick gates can judge it.
+INSTALL_ROLES = ("lockfiles", "generated")
+
+
 def install_key(group: Mapping[str, object]) -> str:
     """One mark for each package group: two languages can share a folder, and each has its own install."""
     return f"{group.get('language', '')}:{group['path']}"
 
 
 def note_install(key: str, role: object, failed: bool) -> None:
-    if role == "lockfiles":
+    if role in INSTALL_ROLES:
         INSTALLS[key] = INSTALLS.get(key, True) and not failed
 
 
@@ -207,31 +213,6 @@ def save_installed(lock: IO[str], before: frozenset[str], root: Path) -> None:
             Path(lock.name).with_name(INSTALLED_FILE).write_text(
                 json.dumps({key: lock_stamp(root, key) for key in sorted(after)})
             )
-
-
-def clean_tree(root: Path) -> tuple[str, bool] | None:
-    """The commit that HEAD names and whether Git sees no change, submodules included."""
-    status = subprocess.run(
-        [
-            "git",
-            "--no-optional-locks",
-            "status",
-            "--porcelain=v2",
-            "--branch",
-            "--no-ahead-behind",
-            "--ignore-submodules=none",
-            "--untracked-files=normal",
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    lines = status.stdout.splitlines()
-    heads = [line.split()[2] for line in lines if line.startswith("# branch.oid ")]
-    if status.returncode or len(heads) != 1 or not heads[0].isalnum():
-        return None
-    return heads[0], all(line.startswith("# ") for line in lines)
 
 
 def clean_start(
@@ -277,23 +258,46 @@ def record_pass(
         temporary.replace(record)
 
 
-def passed_minutes(root: Path, revision: str, base: str) -> int | None:
-    """Minutes since a full check passed on this commit and base; any doubt is None."""
+def fresh_pass(record: Path) -> tuple[str, str, int] | None:
+    """Commit, base and age in minutes of the full pass that this record holds while it is fresh; any doubt is None."""
     import time
 
     try:
-        saved = json.loads(state_path(root, PASSED_FILE).read_text())
+        saved = json.loads(record.read_text())
         age = time.time() - saved["time"]
-        if (
-            saved["head"] == revision
-            and saved["base"] == base
-            and not isinstance(saved["time"], bool)
-            and 0 <= age <= PASSED_SECONDS
-        ):
-            return int(age // 60)
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        if not isinstance(saved["time"], bool) and 0 <= age <= PASSED_SECONDS:
+            return saved["head"], saved["base"], int(age // 60)
+    except (OSError, ValueError, KeyError, TypeError):
         pass
     return None
+
+
+def passed_note(minutes: int) -> str:
+    return f"Hard Eng: the full check passed on this exact commit and base {minutes} min ago; not repeating it."
+
+
+def passed_minutes(root: Path, revision: str, base: str) -> int | None:
+    """Minutes since a full check passed on this commit and base; any doubt is None."""
+    try:
+        found = fresh_pass(state_path(root, PASSED_FILE))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return found[2] if found and found[:2] == (revision, base) else None
+
+
+def lock_and_pass(root: Path) -> tuple[bool, tuple[str, str, int] | None]:
+    """Whether another check holds this checkout's lock, and the fresh full pass of the record beside it."""
+    with check_lock_file(root) as (lock, held):
+        return held, fresh_pass(Path(lock.name).with_name(PASSED_FILE))
+
+
+def covering_minutes(
+    root: Path, passed: tuple[str, str, int] | None, tip: str | None, base: str
+) -> int | None:
+    """Minutes since a full check passed on this commit and base with a clean tree; the Git start comes last."""
+    if passed is None or passed[:2] != (tip, base):
+        return None
+    return passed[2] if clean_tree(root) == (tip, True) else None
 
 
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:

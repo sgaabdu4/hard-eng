@@ -36,14 +36,14 @@ def tool_directory_messages(relative: str, text: str) -> list[str]:
         f'echo "{name}=${{{name}:-$RUNNER_TEMP/hard-eng-tools/...}}"' for name in names
     )
     # shellcheck, which actionlint runs, refuses one redirect for each line (SC2129).
-    sets, it, step = (
-        ("sets", "it", step) if len(names) == 1 else ("set", "them", f"{{ {step}; }}")
-    )
+    step = step if len(names) == 1 else f"{{ {step}; }}"
+    sets, lines = ("sets", "that line") if len(found) == 1 else ("set", "those lines")
     message = (
         f"CI tool directories: {relative}:{','.join(number for number, _ in found)} "
         f"{sets} {', '.join(names)} from the runner temp folder, so a runner that "
         "exports its own value is ignored and every run downloads the tools again. "
-        f'Set {it} in a step with {step} >> "$GITHUB_ENV"; '
+        f'Replace {lines} with a step whose `run: |` block holds {step} >> "$GITHUB_ENV"; '
+        "then remove an `env:` key that has no lines left; "
         "a job env mapping cannot read the runner's value."
     )
     return [message]

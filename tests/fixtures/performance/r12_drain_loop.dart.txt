@@ -76,3 +76,35 @@ Future<void> onePart(List<int> queue) async {
     await Future.wait(queue.take(1).map(process).toList());
   }
 }
+
+Future<void> drainNamedArgument(List<Future<void>> pending) async {
+  while (pending.isNotEmpty) {
+    await Future.wait(pending, eagerError: true);
+  }
+}
+
+Future<void> drainListNamedArgument(List<Future<void>> pending) async {
+  while (pending.isNotEmpty) {
+    await Future.wait(pending.toList(), eagerError: true);
+  }
+}
+
+Future<void> drainSpreadNamedArgument(List<Future<void>> pending) async {
+  while (pending.isNotEmpty) {
+    await Future.wait([...pending], eagerError: true);
+  }
+}
+
+Future<void> otherCollectionNamedArgument(List<Future<void>> pending, List<Future<void>> other) async {
+  while (pending.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait(other, eagerError: true);
+  }
+}
+
+Future<void> oneFromQueueNamedArgument(List<int> queue) async {
+  while (queue.isNotEmpty) {
+    // ruleid: await-in-loop-dart
+    await Future.wait([process(queue.removeLast())], eagerError: true);
+  }
+}
