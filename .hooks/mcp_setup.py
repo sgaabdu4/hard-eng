@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
-from gate_config import JsonObject, json_file, repository_files
+from gate_config import JsonObject, JsonValue, json_file, repository_files
 from project_files import parse_project_text, read_project_file
 
 PATH_SEPARATOR = r"""(?:[/\\]+|['"]\s*/\s*['"])"""
@@ -33,6 +33,10 @@ APPWRITE_CLOUD_MCP_URL = "https://mcp.appwrite.io/"
 RETIRED_INTEGRATIONS = re.compile(
     r"(?<![a-z0-9-])(?:context-mode|codebase-memory(?:-mcp)?)(?![a-z0-9-])",
     re.IGNORECASE,
+)
+COPILOT_HOOK_COMMAND = re.compile(
+    r'(?:bash|sh) (?:"\$\((?:env -u GIT_DIR )?git rev-parse --show-toplevel\)/)?'
+    r'\.hard-eng/(?:bootstrap|hook)\.sh"? copilot(?: [a-z]+)?'
 )
 APPWRITE_CLI_FILES = (
     ".agents/skills/appwrite-backend/references/appwrite-cli.md",
@@ -500,6 +504,55 @@ def approve_claude_servers(
     if missing:
         approved.extend(missing)
         changes[name] = json_file(root, settings)
+
+
+def retired_copilot_entry(native: str, entry: JsonValue, command: str) -> bool:
+    events = {
+        "sessionStart": ("session", 3600),
+        "postToolUseFailure": ("failure", 10),
+        "agentStop": ("stop", 3600),
+        "postToolUse": ("tool", 10),
+    }
+    event, timeout = events.get(native, ("", 0))
+    if entry == {
+        "type": "command",
+        "bash": f"{command} {event} copilot",
+        "timeoutSec": timeout,
+    }:
+        return True
+    return (
+        isinstance(entry, dict)
+        and entry.keys() <= {"type", "bash", "timeoutSec"}
+        and entry.get("type") == "command"
+        and isinstance(call := entry.get("bash"), str)
+        and COPILOT_HOOK_COMMAND.fullmatch(call) is not None
+    )
+
+
+def retire_copilot_hooks(root: Path, command: str) -> list[str]:
+    from update import contained
+
+    retired: list[str] = []
+    for target in root.glob(".github/hooks/*.json"):
+        name = str(target.relative_to(root))
+        current: JsonObject = json.loads(target.read_text())
+        wiring = current.get("hooks")
+        if not isinstance(wiring, dict):
+            raise TypeError(f"Conflicting hooks in {name}; expected an object")
+        if current.keys() - {"version", "hooks"} or any(
+            not isinstance(entries, list)
+            or any(
+                not retired_copilot_entry(native, entry, command) for entry in entries
+            )
+            for native, entries in wiring.items()
+        ):
+            raise ValueError(
+                f"Harness migration required: {name} contains project hooks; preserve their checks in Claude or Codex and remove the retired registration before setup."
+            )
+        if target.is_symlink() or not contained(root, target):
+            raise ValueError(f"Preserve linked retired harness config: {name}")
+        retired.append(name)
+    return retired
 
 
 def retired_integration_files(root: Path) -> list[str]:

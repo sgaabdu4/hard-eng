@@ -159,7 +159,9 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
-    return agent_hooks.retire_copilot_hooks(root, command)
+    from mcp_setup import retire_copilot_hooks
+
+    return retire_copilot_hooks(root, command)
 
 
 def configure_mcp(root: Path, changes: dict[str, str]) -> list[str]:
