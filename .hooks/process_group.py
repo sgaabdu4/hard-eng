@@ -304,6 +304,21 @@ def passed_minutes(root: Path, revision: str, base: str) -> int | None:
     return found[2] if found and found[:2] == (revision, base) else None
 
 
+def lock_and_pass(root: Path) -> tuple[bool, tuple[str, str, int] | None]:
+    """Whether another check holds this checkout's lock, and the fresh full pass of the record beside it."""
+    with check_lock_file(root) as (lock, held):
+        return held, fresh_pass(Path(lock.name).with_name(PASSED_FILE))
+
+
+def covering_minutes(
+    root: Path, passed: tuple[str, str, int] | None, tip: str | None, base: str
+) -> int | None:
+    """Minutes since a full check passed on this commit and base with a clean tree; the Git start comes last."""
+    if passed is None or passed[:2] != (tip, base):
+        return None
+    return passed[2] if clean_tree(root) == (tip, True) else None
+
+
 def stop_idle_codex_brokers(table: list[Process] | None = None) -> tuple[int, int]:
     """SessionEnd alone misses killed sessions; a job's folder is not readable, so any job keeps live folders."""
     rows = process_table() if table is None else table
