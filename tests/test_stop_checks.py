@@ -228,6 +228,50 @@ def test_the_base_search_gives_the_base_and_the_commit_of_each_history(
     assert moved != merged
 
 
+def recorded_session(repository: Path) -> JsonObject:
+    install_check(repository, "raise SystemExit(0)\n")
+    add_origin(repository)
+    git(repository, "push", "-q", "origin", "main")
+    payload: JsonObject = {"session_id": "known"}
+    assert agent_hooks.record_session(repository, payload)
+    return payload
+
+
+def test_a_stop_asks_git_for_no_answer_that_it_holds(repository: Path) -> None:
+    payload = recorded_session(repository)
+    shown: list[JsonObject] = []
+
+    def stop() -> int:
+        shown.append(agent_hooks.completion(repository, payload))
+        return 0
+
+    clean = git_starts(stop)
+    assert "no code checks run" in str(shown[-1])
+    assert len(clean) == 5
+    assert not [command for command in clean if "--end-of-options" in command]
+    (repository / "work.py").write_text("value = 1\n")
+    changed = git_starts(stop)
+    assert "decision" not in shown[-1]
+    assert len(changed) == 7
+    assert len([command for command in changed if ":(icase)plan.md" in command]) == 1
+
+
+@pytest.mark.parametrize("remote", [True, False])
+def test_a_stop_blocks_when_git_cannot_read_the_session_base(
+    repository: Path, remote: bool
+) -> None:
+    payload: JsonObject = {"session_id": "known"}
+    if remote:
+        payload = recorded_session(repository)
+    else:
+        assert agent_hooks.record_session(repository, payload)
+    state = repository / ".hard-eng/sessions/known.json"
+    state.write_text(json.dumps({"base": "0" * 39 + "1", "dirty": {}}))
+    blocked = agent_hooks.completion(repository, payload)
+    assert blocked["decision"] == "block"
+    assert "Verification could not run" in str(blocked["reason"])
+
+
 def test_failed_check_is_rerun_on_the_next_turn(repository: Path) -> None:
     runs = install_check(repository, "raise SystemExit(1)\n")
     payload: JsonObject = {"session_id": "known"}

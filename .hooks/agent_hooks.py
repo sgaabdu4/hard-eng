@@ -11,6 +11,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from gate_config import JsonObject, JsonValue, nonproduction_source, repository_files
+from project_files import keeping
 
 HOOK_IDENTIFIER = re.compile(r"[A-Za-z0-9_-]{1,200}")
 FAILED_COMMAND_LINE = re.compile(
@@ -794,6 +795,8 @@ def session_scope(root: Path, base: str) -> tuple[str, str]:
         check=False,
         capture_output=True,
     )
+    if older.returncode > 1:
+        raise subprocess.SubprocessError(f"Git cannot read the session base {base}")
     return (base if older.returncode == 0 else point), head
 
 
@@ -833,6 +836,7 @@ def paused_turn(payload: JsonObject) -> JsonObject | None:
     return None
 
 
+@keeping("listings")
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     from plans import planning_feedback, planning_only
     from project_files import background
@@ -845,11 +849,12 @@ def completion(root: Path, payload: JsonObject, agent: str | None = None) -> Jso
     failures = (OSError, ValueError, TypeError, subprocess.SubprocessError)
     try:
         others = background(lambda: untracked(root), failures)
-        base = subprocess.check_output(
-            ["git", "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"],
-            cwd=root,
-            text=True,
-        ).strip()
+        # A recorded session holds the full commit ID that Git gave at its start.
+        if len(base) not in (40, 64) or not base.isalnum():
+            verify = ["rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}"]
+            base = subprocess.check_output(
+                ["git", *verify], cwd=root, text=True
+            ).strip()
         base, head = session_scope(root, base)
         current = dirty_files(root, base, others)
         changed = "".join(
