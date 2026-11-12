@@ -25,6 +25,7 @@ from shards import (
     merge_coverage,
     merge_junit,
     part_command,
+    require_default_settings,
     require_no_path,
     shard_groups,
     split,
@@ -264,6 +265,7 @@ def shard_project(runner: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Path:
     for name in [*os.environ]:
         if name.startswith(("COV_CORE_", "COVERAGE_")):
             monkeypatch.delenv(name)
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
     root = runner.ROOT
     log = root / "log.txt"
     (root / "pyproject.toml").write_text(
@@ -748,6 +750,113 @@ def test_an_option_value_that_names_a_folder_gets_the_equals_form_in_the_refusal
         require_no_path(
             shard_project, group, group["checks"][0], [*command, "--cov", "src"]
         )
+
+
+def add_to_settings(project: Path, line: str) -> None:
+    settings = project / "pyproject.toml"
+    settings.write_text(settings.read_text() + line)
+
+
+def test_a_test_path_in_the_pytest_settings_is_refused(
+    runner: ModuleType, shard_project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    add_to_settings(shard_project, 'addopts = "-q tests"\n')
+    assert run_command(runner, [sys.executable, "-m", "pytest"]) is True
+    assert (
+        './tests: addopts in pyproject.toml names the path "tests", so every shard '
+        "would run it whole. Remove the path from addopts and list it in testpaths "
+        "in the pytest settings." in capsys.readouterr().out
+    )
+    assert log_lines(shard_project) == []
+
+
+@pytest.mark.parametrize("addopts", ["-q --cov=src", "-q -p no:cacheprovider"])
+def test_addopts_with_options_only_pass_the_path_check(
+    shard_project: Path, addopts: str
+) -> None:
+    (shard_project / "src").mkdir()
+    add_to_settings(shard_project, f'addopts = "{addopts}"\n')
+    group = pytest_group(".", [shard_gate(2)])
+    command = [sys.executable, "-m", "pytest"]
+    require_no_path(shard_project, group, group["checks"][0], command)
+    require_default_settings(shard_project, group, group["checks"][0], command)
+
+
+MOVED = [
+    (["-c", "x.ini"], "-c"),
+    (["-cx.ini"], "-c"),
+    (["--config-file", "x.ini"], "--config-file"),
+    (["--config-file=x.ini"], "--config-file"),
+    (["-o", "addopts=-q"], "-o addopts"),
+    (["-oaddopts=-q"], "-o addopts"),
+    (["--override-ini", "addopts=-q"], "--override-ini addopts"),
+    (["--override-ini=addopts=-q"], "--override-ini addopts"),
+    (["--cov-config", "c.cfg"], "--cov-config"),
+    (["--cov-config=c.cfg"], "--cov-config"),
+    (["--cov-precision", "2"], "--cov-precision"),
+    (["--cov-precision=2"], "--cov-precision"),
+]
+
+
+@pytest.mark.parametrize(("arguments", "named"), MOVED)
+@pytest.mark.parametrize("place", ["command", "addopts"])
+def test_an_option_that_moves_the_settings_is_refused(
+    runner: ModuleType,
+    shard_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    arguments: list[str],
+    named: str,
+    place: str,
+) -> None:
+    command = [sys.executable, "-m", "pytest"]
+    if place == "command":
+        command += arguments
+    else:
+        add_to_settings(shard_project, f"addopts = {json.dumps(' '.join(arguments))}\n")
+    assert run_command(runner, command) is True
+    printed = capsys.readouterr().out
+    assert (
+        f"{'the tests command' if place == 'command' else 'addopts in pyproject.toml'} gives {named},"
+        in printed
+    )
+    assert "Put the value in the tests command or in a default settings file" in printed
+    assert 'remove "shards" from this gate' in printed
+    assert log_lines(shard_project) == []
+
+
+@pytest.mark.parametrize("name", ["PYTEST_ADDOPTS", "COVERAGE_RCFILE"])
+def test_a_variable_that_moves_the_settings_is_refused(
+    runner: ModuleType,
+    shard_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+) -> None:
+    monkeypatch.setenv(name, "-q")
+    assert run_command(runner, [sys.executable, "-m", "pytest"]) is True
+    printed = capsys.readouterr().out
+    assert f"the environment sets {name}," in printed
+    assert "Put the value in the tests command or in a default settings file" in printed
+    assert log_lines(shard_project) == []
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["-o", "cache_dir=c"],
+        ["-ocache_dir=c"],
+        ["--override-ini=cache_dir=c"],
+        ["--cov-fail-under=80", "--cov-report=json:c.json", "-q", "-k", "name"],
+        [],
+    ],
+)
+def test_other_options_pass_the_settings_check(
+    shard_project: Path, monkeypatch: pytest.MonkeyPatch, arguments: list[str]
+) -> None:
+    monkeypatch.setenv("PYTEST_ADDOPTS", "")
+    group = pytest_group(".", [shard_gate(2)])
+    command = [sys.executable, "-m", "pytest", *arguments]
+    require_default_settings(shard_project, group, group["checks"][0], command)
 
 
 def test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact(

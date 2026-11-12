@@ -1,10 +1,12 @@
 """A project's own coverage minimum: where the shard merge reads it and how it judges the total."""
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 from coverage.results import display_covered, should_fail_under
-from shards import below_minimum, coverage_minimum, merged_total, shown
+from gate_config import Gate, Group
+from shards import below_minimum, coverage_minimum, merged_total, part_command, shown
 
 PYTEST = ["uv", "run", "pytest", "--cov"]
 COVERAGERC = "[report]\nfail_under = 71\nprecision = 1\n"
@@ -245,3 +247,40 @@ def test_the_verdict_is_the_one_of_the_coverage_tool(
     assert below_minimum(total, minimum, precision) is should_fail_under(
         total, minimum, precision
     )
+
+
+@pytest.mark.parametrize(
+    ("place", "named"),
+    [
+        ("command", "--cov-config"),
+        ("addopts", "--cov-precision"),
+        ("variable", "COVERAGE_RCFILE"),
+    ],
+)
+def test_the_merge_refuses_a_moved_setting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, place: str, named: str
+) -> None:
+    command = ["uv", "run", "pytest", "--cov"]
+    if place == "command":
+        command.append("--cov-config=c.cfg")
+    if place == "addopts":
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.pytest.ini_options]\naddopts = "--cov-precision=2"\n'
+        )
+    if place == "variable":
+        monkeypatch.setenv("COVERAGE_RCFILE", "c.cfg")
+    gate = cast(
+        Gate,
+        {
+            "name": "tests",
+            "command": command,
+            "shards": 2,
+            "part": "merge",
+            "report": {"tests": "j.xml", "coverage": "c.json"},
+        },
+    )
+    group = cast(Group, {"path": ".", "checks": [gate]})
+    with pytest.raises(
+        ValueError, match=rf"{named}.*Put the value in the tests command"
+    ):
+        part_command(tmp_path, group, gate, command, None, 60)

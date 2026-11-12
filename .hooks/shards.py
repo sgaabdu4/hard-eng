@@ -21,6 +21,10 @@ COLLECTED_FILE = re.compile(r"^(\S.*): [0-9]+$", re.MULTILINE)
 KEPT = "coverage/shards"
 PROVEN = "proven.txt"
 RAN = "ran.txt"
+MOVED_OPTIONS = ("-c", "--config-file", "--cov-config", "--cov-precision")
+OVERRIDE_OPTIONS = ("-o", "--override-ini")
+MOVED_VARIABLES = ("PYTEST_ADDOPTS", "COVERAGE_RCFILE")
+SHORT_CONFIG = re.compile(r"-c(?!-)")
 CHECK_LINE = re.compile(r'(\.hooks/hard-eng\.py check --base "\$BASE_SHA")')
 JOB_NAME = re.compile(r"(?m)^  ([\w-]+):\n")
 SHARD_LIST = re.compile(r"(?m)^(        shard: \[)[^\]]*\]$")
@@ -174,19 +178,85 @@ def runner_arguments(command: list[str]) -> list[str]:
     return command[len(command) - command[::-1].index("pytest") :]
 
 
-def require_no_path(root: Path, group: Group, gate: Gate, command: list[str]) -> None:
-    for argument in runner_arguments(command):
-        named = root / group["path"] / argument.split("::")[0]
+def named_path(directory: Path, arguments: list[str]) -> str | None:
+    """The first argument that names a test folder or a Python file."""
+    for argument in arguments:
+        named = directory / argument.split("::")[0]
         if not argument.startswith("-") and (
             named.is_dir() or (named.is_file() and named.suffix == ".py")
         ):
+            return argument
+    return None
+
+
+def require_no_path(root: Path, group: Group, gate: Gate, command: list[str]) -> None:
+    name, addopts = pytest_addopts(root / group["path"])
+    for arguments, subject, place in (
+        (runner_arguments(command), "the command", "the command"),
+        (addopts, f"addopts in {name}", "addopts"),
+    ):
+        if argument := named_path(root / group["path"], arguments):
             raise ValueError(
-                f"{group['path']}/{gate['name']}: the command names the path "
+                f"{group['path']}/{gate['name']}: {subject} names the path "
                 f'"{argument}", so every shard would run it whole. Remove the path '
-                "from the command and list it in testpaths in the pytest settings. "
+                f"from {place} and list it in testpaths in the pytest settings. "
                 "If it is the value of an option, write it as --option=value "
                 "(for example --cov=src)."
             )
+
+
+def override_given(arguments: list[str], index: int) -> tuple[str, str] | None:
+    """The option and the setting that a -o or --override-ini item gives, in each written form."""
+    argument = arguments[index]
+    if argument.startswith("--override-ini="):
+        return "--override-ini", argument.partition("=")[2]
+    if argument.startswith("-o") and not argument.startswith("--") and argument != "-o":
+        return "-o", argument[2:]
+    if argument in OVERRIDE_OPTIONS:
+        return argument, "".join(arguments[index + 1 : index + 2])
+    return None
+
+
+def moved_option(arguments: list[str]) -> str | None:
+    """The first option, as the refusal names it, that moves the pytest or coverage.py settings."""
+    for index, argument in enumerate(arguments):
+        name = argument.partition("=")[0]
+        if name in MOVED_OPTIONS:
+            return name
+        if SHORT_CONFIG.match(argument):
+            return "-c"
+        override = override_given(arguments, index)
+        if override and override[1].partition("=")[0] == "addopts":
+            return f"{override[0]} addopts"
+    return None
+
+
+def require_default_settings(
+    root: Path, group: Group, gate: Gate, command: list[str]
+) -> None:
+    """Refuse each option and variable that moves a settings file the shard merge reads."""
+    prefix = f"{group['path']}/{gate['name']}: "
+    name, addopts = pytest_addopts(root / group["path"])
+    gives = [
+        f"the environment sets {variable}"
+        for variable in MOVED_VARIABLES
+        if os.environ.get(variable)
+    ]
+    for arguments, place in (
+        (runner_arguments(command), "the tests command"),
+        (addopts, f"addopts in {name}"),
+    ):
+        if option := moved_option(arguments):
+            gives.append(f"{place} gives {option}")
+    if gives:
+        raise ValueError(
+            f"{prefix}{gives[0]}, which moves the pytest or coverage.py settings. "
+            "The shard merge reads the settings from the tests command and from the "
+            "files that pytest and coverage.py read with no option, so it would "
+            "follow settings that it does not read. Put the value in the tests "
+            'command or in a default settings file, or remove "shards" from this '
+            "gate in hard-eng.gates.json."
+        )
 
 
 def collected(
@@ -284,6 +354,7 @@ def part_command(
     timeout: float,
 ) -> tuple[list[str], Path | None]:
     """The command of one shard: the gate command and the files of that shard."""
+    require_default_settings(root, group, gate, command)
     if gate["part"] == "merge":
         merge_reports(root, group, gate, command)
         return [], coverage
