@@ -37,7 +37,7 @@ SURFACE_VALUE = re.compile(r"(Existing|New|Mock) — \S.+")
 TEST_REFERENCE = re.compile(r"`([^`\s]+?)::(?:[^`\n]*::)?([^`\n]+)`")
 DECISION_SECTION = re.compile(r"(?ms)^## Decision\n(.*?)(?=^## |\Z)")
 E2E_STATUS_LINE = re.compile(r"(Required|Passed|Delivery|N/A) — (\S.*)")
-NONE_VALUE = re.compile(r"None(?:[.;:](?:\s.*)?|\s+[—–-]\s.*)?")
+NONE_VALUE = re.compile(r"(?i:none)(?:[.;:](?:\s.*)?|\s+[—–-]\s.*)?")
 DELIVERY_TARGET_FIELD = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:")
 DEPLOY_DELIVERY_TARGET = re.compile(
     r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$"
