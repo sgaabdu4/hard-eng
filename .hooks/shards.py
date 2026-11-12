@@ -68,6 +68,11 @@ SHARD_NOTE = (
     "Split its hard-eng job into the checks, tests and hard-eng jobs of Hard "
     "Eng's own workflow, or remove shards."
 )
+UNSPLIT_NOTE = (
+    "CI shards not removed: .github/workflows/hard-eng.yml is customised. Join its "
+    "checks, tests and hard-eng jobs into the one hard-eng job of Hard Eng's own "
+    "workflow."
+)
 
 
 def split(sizes: dict[str, int], count: int) -> list[list[str]]:
@@ -513,7 +518,10 @@ def split_test_shards(config: GateConfig, content: str) -> str:
         default=0,
     )
     if not count:
-        return one_job(content)
+        restored = one_job(content)
+        if restored == content and CHECKS_HEADER in content:
+            print(UNSPLIT_NOTE, file=sys.stderr)
+        return restored
     require_pytest(config["packages"])
     numbers = ", ".join(str(number) for number in range(1, count + 1))
     names = JOB_NAME.findall(content.partition("\njobs:\n")[2])
