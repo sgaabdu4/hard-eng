@@ -703,13 +703,8 @@ def repair_installation(root: Path, previous: str) -> str:
         and (
             not (root / name).exists()
             or retired_parent(root, name)
-            or name
-            in {
-                "AGENTS.md",
-                "CLAUDE.md",
-                "AGENTS.override.md",
-                "hard-eng.gates.json",
-            }
+            or name in RULE_FILES
+            or name in {"hard-eng.gates.json", ".github/workflows/hard-eng.yml"}
             or name == SOURCE_FILE
             and '"skills"' in (root / name).read_text(errors="replace")
             or any(old in (root / name).read_text(errors="replace") for old in retired)
@@ -820,11 +815,10 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     return f"Updated Hard Eng to {revision}; created an isolated local commit without pushing."
 
 
+RULE_FILES = {"AGENTS.md", "CLAUDE.md", "AGENTS.override.md"}
 INSTALLED_FILES = {
     SOURCE_FILE,
-    "AGENTS.md",
-    "CLAUDE.md",
-    "AGENTS.override.md",
+    *RULE_FILES,
     ".husky/pre-push",
     ".github/workflows/hard-eng.yml",
     ".github/workflows/pr-text.yml",
