@@ -127,6 +127,21 @@ def test_a_held_check_lock_blocks_a_stop_with_a_full_pass(repository: Path) -> N
     assert not runs.exists()
 
 
+@pytest.mark.parametrize("bad", ["--help", "-h", 5, None, ["x"]])
+def test_a_pass_record_whose_base_is_no_commit_is_not_reused(
+    repository: Path, bad: object
+) -> None:
+    runs, payload, _base, head = committed_task(repository)
+    (repository / ".git/hard-eng-passed").write_text(
+        json.dumps({"head": head, "base": bad, "time": time.time() - 200.0})
+    )
+    shown = agent_hooks.completion(repository, payload, "claude")
+    assert runs.read_text().count("run") == 1
+    assert "could not run" not in str(shown)
+    assert SENTENCE[:40] not in str(shown)
+    assert EARLIER[:40] not in str(shown)
+
+
 @pytest.mark.parametrize("ancestor", [True, False])
 def test_a_stop_reuses_a_full_pass_from_an_earlier_base(
     repository: Path, ancestor: bool
