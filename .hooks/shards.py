@@ -188,7 +188,12 @@ def collected(
         argument.startswith(("-n", "--numprocesses"))
         for argument in runner_arguments(command)
     )
-    listing = [*command, "--collect-only", "-qq", *(["-n", "0"] if parallel else [])]
+    listing = [
+        *command,
+        "--collect-only",
+        "--verbosity=-2",
+        *(["-n", "0"] if parallel else []),
+    ]
     result = run_in_group(
         listing,
         cwd=root / group["path"],
@@ -202,11 +207,15 @@ def collected(
         for base in (root / group["path"], *(root / group["path"]).parents)
         if all((base / name).is_file() for name in names)
     ]
-    if result.returncode not in (0, 5) or not bases:
+    if (
+        result.returncode not in (0, 5)
+        or not bases
+        or (not names and not result.returncode)
+    ):
         raise ValueError(
             f"{group['path']}/{gate['name']}: pytest could not list the tests of this "
             "shard, so the shard did not start. Run the tests command with "
-            "--collect-only -qq to see the cause.\n" + result.stdout
+            "--collect-only --verbosity=-2 to see the cause.\n" + result.stdout
         )
     return bases[0], {name: (bases[0] / name).stat().st_size for name in names}
 

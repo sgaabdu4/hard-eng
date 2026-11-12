@@ -713,16 +713,17 @@ def test_two_sharded_gates_in_one_package_are_refused(
         shard_groups([group], "rest")
 
 
+def run_command(runner: ModuleType, command: list[str]) -> bool:
+    check = {**shard_gate(2), "command": command}
+    group = pytest_group(".", [cast(Gate, check)])
+    chosen = shard_groups([group], "1")[0]
+    return runner.run_gate(chosen, chosen["checks"][0], 300, threading.Lock(), [group])
+
+
 def test_a_path_in_the_gate_command_is_refused_because_every_shard_would_run_it_whole(
     runner: ModuleType, shard_project: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    check = {**shard_gate(2), "command": [sys.executable, "-m", "pytest", "tests"]}
-    group = pytest_group(".", [cast(Gate, check)])
-    chosen = shard_groups([group], "1")[0]
-    failed = runner.run_gate(
-        chosen, chosen["checks"][0], 300, threading.Lock(), [group]
-    )
-    assert failed is True
+    assert run_command(runner, [sys.executable, "-m", "pytest", "tests"]) is True
     assert (
         './tests: the command names the path "tests", so every shard would run it '
         "whole. Remove the path from the command and list it in testpaths in the "
@@ -759,3 +760,22 @@ def test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact(
     }
     kept = shard_project / "coverage/shards/1/shard-files.txt"
     assert kept.read_text() == "tests/test_a.py\n"
+
+
+@pytest.mark.parametrize("verbose", ["-v", "-vv"])
+def test_a_verbose_setting_in_the_pytest_settings_leaves_the_shard_files_exact(
+    runner: ModuleType, shard_project: Path, verbose: str
+) -> None:
+    settings = shard_project / "pyproject.toml"
+    settings.write_text(settings.read_text() + f'addopts = "{verbose}"\n')
+    assert run_part(runner, "1") is False
+    assert {line for line in log_lines(shard_project) if line.startswith("ran ")} == {
+        "ran tests/test_a.py"
+    }
+
+
+def test_a_listing_that_names_no_file_is_refused(
+    runner: ModuleType, shard_project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run_command(runner, [sys.executable, "-c", "pass", "pytest"]) is True
+    assert "pytest could not list the tests of this shard" in capsys.readouterr().out
