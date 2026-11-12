@@ -297,7 +297,13 @@ NEW_VERDICTS = (
 
 
 @pytest.mark.parametrize(
-    ("release", "verdicts"), [("7.16.2", OLD_VERDICTS), ("7.17.2", NEW_VERDICTS)]
+    ("release", "verdicts"),
+    [
+        ("7.16.2", OLD_VERDICTS),
+        ("7.17.0", OLD_VERDICTS),
+        ("7.17.1", NEW_VERDICTS),
+        ("7.17.2", NEW_VERDICTS),
+    ],
 )
 def test_the_verdict_is_the_one_of_each_release_of_the_coverage_tool(
     release: str, verdicts: str
