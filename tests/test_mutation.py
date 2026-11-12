@@ -581,7 +581,6 @@ def test_a_capped_tool_raises_capped_and_leaves_no_process_behind(
     assert gone(pid_file)
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="mutmut runs through uv")
 def test_the_python_mutation_report_runs_when_a_performance_test_fails_under_mutmut(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
