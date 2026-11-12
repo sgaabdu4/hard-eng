@@ -250,15 +250,19 @@ def test_the_verdict_is_the_one_of_the_coverage_tool(
 
 
 @pytest.mark.parametrize(
-    ("place", "named"),
+    ("place", "named", "step"),
     [
-        ("command", "--cov-config"),
-        ("addopts", "--cov-precision"),
-        ("variable", "COVERAGE_RCFILE"),
+        ("command", "--cov-config", "Move those settings to a file"),
+        ("addopts", "--cov-precision", "Set precision in the settings file"),
+        ("variable", "COVERAGE_RCFILE", "Remove the variable and move"),
     ],
 )
 def test_the_merge_refuses_a_moved_setting(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, place: str, named: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    place: str,
+    named: str,
+    step: str,
 ) -> None:
     command = ["uv", "run", "pytest", "--cov"]
     if place == "command":
@@ -280,7 +284,5 @@ def test_the_merge_refuses_a_moved_setting(
         },
     )
     group = cast(Group, {"path": ".", "checks": [gate]})
-    with pytest.raises(
-        ValueError, match=rf"{named}.*Put the value in the tests command"
-    ):
+    with pytest.raises(ValueError, match=rf"{named}.*{step}"):
         part_command(tmp_path, group, gate, command, None, 60)

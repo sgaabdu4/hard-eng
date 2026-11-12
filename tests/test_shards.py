@@ -782,23 +782,27 @@ def test_addopts_with_options_only_pass_the_path_check(
     require_default_settings(shard_project, group, group["checks"][0], command)
 
 
+PYTEST_FILE = "Move those settings to a file that pytest reads with no option."
+COVERAGE_FILE = "Move those settings to a file that coverage.py reads with no option."
+IN_COMMAND = "Put those options in the tests command."
+PRECISION = "Set precision in the settings file of coverage.py."
 MOVED = [
-    (["-c", "x.ini"], "-c"),
-    (["-cx.ini"], "-c"),
-    (["--config-file", "x.ini"], "--config-file"),
-    (["--config-file=x.ini"], "--config-file"),
-    (["-o", "addopts=-q"], "-o addopts"),
-    (["-oaddopts=-q"], "-o addopts"),
-    (["--override-ini", "addopts=-q"], "--override-ini addopts"),
-    (["--override-ini=addopts=-q"], "--override-ini addopts"),
-    (["--cov-config", "c.cfg"], "--cov-config"),
-    (["--cov-config=c.cfg"], "--cov-config"),
-    (["--cov-precision", "2"], "--cov-precision"),
-    (["--cov-precision=2"], "--cov-precision"),
+    (["-c", "x.ini"], "-c", PYTEST_FILE),
+    (["-cx.ini"], "-c", PYTEST_FILE),
+    (["--config-file", "x.ini"], "--config-file", PYTEST_FILE),
+    (["--config-file=x.ini"], "--config-file", PYTEST_FILE),
+    (["-o", "addopts=-q"], "-o addopts", IN_COMMAND),
+    (["-oaddopts=-q"], "-o addopts", IN_COMMAND),
+    (["--override-ini", "addopts=-q"], "--override-ini addopts", IN_COMMAND),
+    (["--override-ini=addopts=-q"], "--override-ini addopts", IN_COMMAND),
+    (["--cov-config", "c.cfg"], "--cov-config", COVERAGE_FILE),
+    (["--cov-config=c.cfg"], "--cov-config", COVERAGE_FILE),
+    (["--cov-precision", "2"], "--cov-precision", PRECISION),
+    (["--cov-precision=2"], "--cov-precision", PRECISION),
 ]
 
 
-@pytest.mark.parametrize(("arguments", "named"), MOVED)
+@pytest.mark.parametrize(("arguments", "named", "step"), MOVED)
 @pytest.mark.parametrize("place", ["command", "addopts"])
 def test_an_option_that_moves_the_settings_is_refused(
     runner: ModuleType,
@@ -806,6 +810,7 @@ def test_an_option_that_moves_the_settings_is_refused(
     capsys: pytest.CaptureFixture[str],
     arguments: list[str],
     named: str,
+    step: str,
     place: str,
 ) -> None:
     command = [sys.executable, "-m", "pytest"]
@@ -819,24 +824,36 @@ def test_an_option_that_moves_the_settings_is_refused(
         f"{'the tests command' if place == 'command' else 'addopts in pyproject.toml'} gives {named},"
         in printed
     )
-    assert "Put the value in the tests command or in a default settings file" in printed
-    assert 'remove "shards" from this gate' in printed
+    assert f'{step} Or remove "shards" from this gate' in printed
     assert log_lines(shard_project) == []
 
 
-@pytest.mark.parametrize("name", ["PYTEST_ADDOPTS", "COVERAGE_RCFILE"])
+@pytest.mark.parametrize(
+    ("name", "step"),
+    [
+        (
+            "PYTEST_ADDOPTS",
+            "Remove the variable and put its options in the tests command.",
+        ),
+        (
+            "COVERAGE_RCFILE",
+            COVERAGE_FILE.replace("Move those", "Remove the variable and move its"),
+        ),
+    ],
+)
 def test_a_variable_that_moves_the_settings_is_refused(
     runner: ModuleType,
     shard_project: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     name: str,
+    step: str,
 ) -> None:
     monkeypatch.setenv(name, "-q")
     assert run_command(runner, [sys.executable, "-m", "pytest"]) is True
     printed = capsys.readouterr().out
     assert f"the environment sets {name}," in printed
-    assert "Put the value in the tests command or in a default settings file" in printed
+    assert f'{step} Or remove "shards" from this gate' in printed
     assert log_lines(shard_project) == []
 
 
