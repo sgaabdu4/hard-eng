@@ -436,6 +436,22 @@ def shard_reports(group: Group, gate: Gate) -> None:
         keep_reports(ROOT, group, gate)
 
 
+def remembered_output(
+    group: Group,
+    gate: Gate,
+    command: list[str],
+    result: subprocess.CompletedProcess[bytes] | None,
+    log: IO[str],
+) -> str:
+    """The text of a gate log, with the step to take first when a Dart analysis lacks generated files."""
+    from process_group import generated_files_note
+
+    log.seek(0)
+    text = log.read()
+    note = generated_files_note(command, result.returncode, text) if result else ""
+    return note + remember(group, gate, text)
+
+
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -509,15 +525,9 @@ def run_limited_gate(
             finally:
                 with output_lock:
                     print(f"OUTPUT {group['path']}/{gate['name']}", flush=True)
-                    log.seek(0)
-                    text = log.read()
-                    if result is not None:
-                        from process_group import generated_files_note
-
-                        sys.stdout.write(
-                            generated_files_note(command, result.returncode, text)
-                        )
-                    sys.stdout.write(remember(group, gate, text))
+                    sys.stdout.write(
+                        remembered_output(group, gate, command, result, log)
+                    )
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         shard_reports(group, gate)
