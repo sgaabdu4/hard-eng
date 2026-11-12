@@ -255,7 +255,7 @@ def visual_plan(completed_plan: str) -> str:
 @pytest.fixture
 def runner(tmp_path: Path, completed_plan: str) -> ModuleType:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    module = load_module("runner", SOURCE / ".hooks/hard-eng.py")
+    module = load_module("runner", SOURCE / ".hooks/gate_runner.py")
     module.__dict__["ROOT"] = tmp_path
     (tmp_path / "PLAN.md").write_text(completed_plan)
     for name in ("PRODUCT.md", "DESIGN.md"):

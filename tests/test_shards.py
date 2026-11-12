@@ -627,7 +627,7 @@ sys.modules["yaml"] = None
 sys.path.insert(0, hooks)
 import gate_config
 gate_config.load_groups = lambda *_, **__: json.loads(Path(groups).read_text())
-spec = importlib.util.spec_from_file_location("runner", hooks + "/hard-eng.py")
+spec = importlib.util.spec_from_file_location("runner", hooks + "/gate_runner.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 runner.ROOT = Path(root)

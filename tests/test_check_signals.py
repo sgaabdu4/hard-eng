@@ -20,7 +20,7 @@ DEFAULT_SIGHUP = (
 TESTS_DRIVER = """
 import importlib.util, sys, threading
 sys.path.insert(0, ".hooks")
-spec = importlib.util.spec_from_file_location("runner", ".hooks/hard-eng.py")
+spec = importlib.util.spec_from_file_location("runner", ".hooks/gate_runner.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
 from gate_schedule import run_checks
