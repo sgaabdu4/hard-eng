@@ -463,7 +463,7 @@ def test_the_gate_job_refuses_missing_shard_reports(
     assert (
         f"Shard 2 of {count} for {path}/tests sent no reports. List shards 1 to "
         f"{count} in the tests job of .github/workflows/hard-eng.yml (setup writes it), "
-        "then rerun the workflow." in capsys.readouterr().out
+        "then rerun all jobs of the workflow." in capsys.readouterr().out
     )
 
 
