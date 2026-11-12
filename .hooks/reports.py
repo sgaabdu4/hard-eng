@@ -83,7 +83,7 @@ def quick_groups(
 ) -> list[Group]:
     if not quick:
         return groups
-    from process_group import install_key
+    from process_group import INSTALL_ROLES, install_key
 
     return [
         {
@@ -93,7 +93,7 @@ def quick_groups(
                 for gate in group["checks"]
                 if gate.get("role") in QUICK_ROLES
                 or (
-                    gate.get("role") == "lockfiles"
+                    gate.get("role") in INSTALL_ROLES
                     and install_key(group) not in installed
                 )
             ],

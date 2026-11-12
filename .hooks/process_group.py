@@ -191,13 +191,17 @@ def read_installed(lock: IO[str], root: Path) -> frozenset[str]:
     )
 
 
+# A new checkout needs its dependencies and its generated code before the quick gates can judge it.
+INSTALL_ROLES = ("lockfiles", "generated")
+
+
 def install_key(group: Mapping[str, object]) -> str:
     """One mark for each package group: two languages can share a folder, and each has its own install."""
     return f"{group.get('language', '')}:{group['path']}"
 
 
 def note_install(key: str, role: object, failed: bool) -> None:
-    if role == "lockfiles":
+    if role in INSTALL_ROLES:
         INSTALLS[key] = INSTALLS.get(key, True) and not failed
 
 
