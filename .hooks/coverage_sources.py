@@ -21,36 +21,39 @@ COVERAGE_FILES = (
 COV_SECTIONS = ("run", "report", "html", "xml", "json", "lcov", "paths")
 
 
-def settings_reader(path: Path, own: bool) -> Callable[[str], dict[str, object] | None]:
-    """The sections of a coverage settings file; a file that is not coverage's own reads fewer."""
+def file_sections(path: Path) -> Callable[[str], dict[str, object] | None]:
+    """The reader of one section of a TOML or INI settings file; a TOML section is named by its dotted path."""
     import configparser
     import tomllib
 
+    parser = configparser.ConfigParser(interpolation=None)
+    data: dict[str, object] = {}
     if path.suffix == ".toml":
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-        prefixes = ("tool.coverage.", "") if own else ("tool.coverage.",)
+    else:
+        parser.read(path, encoding="utf-8")
 
-        def toml_section(section: str) -> dict[str, object] | None:
-            for prefix in prefixes:
-                found: object = data
-                for part in (prefix + section).split("."):
-                    found = found.get(part) if isinstance(found, dict) else None
-                if isinstance(found, dict):
-                    return cast(dict[str, object], found)
-            return None
+    def section(name: str) -> dict[str, object] | None:
+        if path.suffix != ".toml":
+            return dict(parser[name]) if parser.has_section(name) else None
+        found: object = data
+        for part in name.split("."):
+            found = found.get(part) if isinstance(found, dict) else None
+        return cast(dict[str, object], found) if isinstance(found, dict) else None
 
-        return toml_section
-    parser = configparser.ConfigParser(interpolation=None)
-    parser.read(path, encoding="utf-8")
-    names = ("coverage:", "") if own else ("coverage:",)
+    return section
 
-    def ini_section(section: str) -> dict[str, object] | None:
-        for prefix in names:
-            if parser.has_section(prefix + section):
-                return dict(parser[prefix + section])
-        return None
 
-    return ini_section
+def settings_reader(path: Path, own: bool) -> Callable[[str], dict[str, object] | None]:
+    """The sections of a coverage settings file; a file that is not coverage's own reads fewer."""
+    section = file_sections(path)
+    marked = "tool.coverage." if path.suffix == ".toml" else "coverage:"
+
+    def coverage_section(name: str) -> dict[str, object] | None:
+        found = section(marked + name)
+        return section(name) if found is None and own else found
+
+    return coverage_section
 
 
 def coverage_file(
