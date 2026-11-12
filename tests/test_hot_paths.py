@@ -61,6 +61,24 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
     assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
 
 
+@pytest.mark.parametrize(
+    ("language", "helper"),
+    [
+        ("python", "map_with_concurrency"),
+        ("javascript", "mapLimit"),
+        ("dart", "mapWithConcurrency"),
+        ("swift", "mapWithConcurrency"),
+    ],
+)
+def test_each_loop_message_names_the_bounded_helper_of_its_language(
+    language: str, helper: str
+) -> None:
+    rules = yaml.safe_load(RULES.read_text())["rules"]
+    (message,) = [r["message"] for r in rules if r["id"] == f"await-in-loop-{language}"]
+    assert f"use the bounded-concurrency helper {helper}." in " ".join(message.split())
+    assert "Ordered work: use" in message
+
+
 def test_every_rule_skips_each_test_folder() -> None:
     """HE-HOT-PATH: no rule scans a test folder that gate_config names."""
     for rule in yaml.safe_load(RULES.read_text())["rules"]:
