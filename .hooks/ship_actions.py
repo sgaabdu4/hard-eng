@@ -16,7 +16,7 @@ from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
-from process_group import exit_when_stopped, passed_minutes
+from process_group import exit_when_stopped, passed_minutes, passed_note
 from shipping import (
     PendingCheck,
     Shipment,
@@ -278,11 +278,7 @@ def spared(root: Path, revision: str, base: str | None) -> bool:
     """Say so when a full check passed on this exact commit and base."""
     minutes = None if base is None else passed_minutes(root, revision, base)
     if minutes is not None:
-        print(
-            f"Hard Eng: the full check passed on this exact commit and base {minutes} min "
-            "ago; not repeating it.",
-            flush=True,
-        )
+        print(passed_note(minutes), flush=True)
     return minutes is not None
 
 
