@@ -11,7 +11,6 @@ import pytest
 from conftest import gate
 from gate_config import Gate, Group
 
-
 MISSING_REPORT = (
     "The command passed but wrote no JUnit report ({report}). Make the command of this "
     "gate write its JUnit report to the `report` path that hard-eng.gates.json gives "
