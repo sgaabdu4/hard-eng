@@ -15,10 +15,11 @@ from typing import cast
 import gate_config
 import pytest
 from ci_jobs import add_shard_option
-from conftest import SOURCE, configure, gate
+from conftest import SOURCE, commit, configure, gate, git
 from coverage_sources import python_coverage
 from gate_config import Gate, Group, affected_groups, validate_group
 from gate_times import gate_limit
+from process_group import passed_minutes
 from reports import completed_tests, junit_root, reported_skips
 from shards import (
     merge_coverage,
@@ -154,6 +155,26 @@ def test_without_shards_rest_runs_every_gate_and_a_shard_runs_none(
     assert not ran.exists()
     assert runner.check(shard="rest") == 0
     assert ran.exists()
+
+
+def provisioned_nothing(*_arguments: object) -> None:
+    return None
+
+
+def test_a_local_shard_run_records_no_full_pass(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setattr(runner, "provision_tools", provisioned_nothing)
+    (tmp_path / ".gitignore").write_text(".hard-eng/\ncoverage/\n")
+    configure(tmp_path, [gate("lint", "pass")])
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git(tmp_path, "config", "user.name", "Fixture")
+    base = commit(tmp_path, "base")
+    (tmp_path / "app.py").write_text("value = 1\n")
+    head = commit(tmp_path, "change")
+    assert runner.check(base=base, shard="rest") == 0
+    assert passed_minutes(tmp_path, head, base) is None
 
 
 @pytest.mark.parametrize(

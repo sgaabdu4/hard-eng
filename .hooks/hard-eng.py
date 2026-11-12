@@ -664,7 +664,13 @@ def check(
 
     with check_lock(ROOT) as lock:
         installed = read_installed(lock, ROOT)
-        partial = quick or languages != NO_LANGUAGES or not dependents or related_tests
+        partial = (
+            quick
+            or languages != NO_LANGUAGES
+            or not dependents
+            or related_tests
+            or shard is not None
+        )
         start = clean_start(lock, ROOT, base, plan_stage, partial)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
