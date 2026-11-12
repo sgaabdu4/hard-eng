@@ -212,6 +212,8 @@ RETRY_FORMS = [
     ("pytest.toml", "re" + "runs = 2\n", "re" + "runs"),
     (".pytest.toml", 'addopts = ["--re' + 'runs", "3"]\n', "--re" + "runs"),
     (".pytest.ini", "re" + "runs = 2\n", "re" + "runs"),
+    ("pytest.ini", "addopts = -q --re" + "tries 2\n", "--re" + "tries"),
+    ("pyproject.toml", 'addopts = ["--re' + 'tries", "10"]\n', "--re" + "tries"),
     ("packages/web/vitest.config.ts", "  re" + "try: 2,\n", "re" + "try:"),
     ("pkgs/a/dart_test.yaml", "re" + "try: 3\n", "re" + "try"),
     (
@@ -265,6 +267,14 @@ RETRY_PASSES = [
     ("vite.config.ts", "  plugins: [],\n  re" + "tries: 0,\n"),
     ("hard-eng.gates.json", '"--re' + 'tries=0",\n'),
     ("pyproject.toml", "[tool.other]\nre" + "tries = 3\n"),
+    ("pytest.ini", "[pytest]\naddopts = --re" + "tries 0\n"),
+    ("pytest.ini", "[pytest]\naddopts = -q --re" + "tries=0\n"),
+    ("pyproject.toml", 'addopts = ["--re' + 'tries", "0"]\n'),
+    (
+        "pyproject.toml",
+        "[tool.pytest.ini_options]\naddopts = [\n    '--re" + "tries', '0',\n]\n",
+    ),
+    ("pytest.toml", "    --re" + "tries 0\n"),
     (
         "pyproject.toml",
         "[tool.pytest.ini_options]\nminversion = '8'\n[tool.other]\nre" + "tries = 3\n",
