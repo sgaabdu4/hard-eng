@@ -1,5 +1,6 @@
 """Biome settings: the Hard Eng entries that setup adds to the project's files.includes."""
 
+import json
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -7,7 +8,7 @@ from types import ModuleType
 import pytest
 from untrusted_input import biome_ignores_hooks, jsonc_config
 
-HARD = ["!.hooks", "!.hard-eng", "!**/coverage"]
+HARD = ["!.hooks", "!.hard-eng", "!coverage"]
 
 
 @pytest.mark.parametrize(
@@ -85,7 +86,7 @@ def test_setup_adds_the_biome_entry_when_no_typescript_package_is_at_the_root(
     installer: ModuleType, tmp_path: Path, language: str
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    (tmp_path / "biome.json").write_text('{"files": {"includes": ["**"]}}')
+    (tmp_path / "biome.json").write_text(SPREAD)
     if language == "python":
         (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
         (tmp_path / "uv.lock").write_text("version = 1\n")
@@ -101,11 +102,12 @@ def test_setup_adds_the_biome_entry_when_no_typescript_package_is_at_the_root(
     changes = installer.plan_install(tmp_path.resolve())[0]
     includes = jsonc_config("biome.json", changes["biome.json"])["files"]
     assert isinstance(includes, dict)
-    assert includes["includes"] == ["**", *HARD]
+    folders = ["!web/coverage"] if language == "workspace" else []
+    assert includes["includes"] == ["**", *HARD, *folders]
 
 
 LONG = "a" * 50
-LISTED = '"includes": ["**", "!.hooks", "!.hard-eng", "!**/coverage"]'
+LISTED = '"includes": ["**", "!.hooks", "!.hard-eng", "!coverage"]'
 
 
 @pytest.mark.parametrize(
@@ -131,23 +133,23 @@ LISTED = '"includes": ["**", "!.hooks", "!.hard-eng", "!**/coverage"]'
         ('{\n  "files": {}\n}\n', f'{{\n  "files": {{ {LISTED} }}\n}}\n'),
         (
             '{\n  "files": {\n    "includes": [\n      "**",\n      "!dist" // keep\n    ]\n  }\n}\n',
-            '{\n  "files": {\n    "includes": [\n      "**",\n      "!dist", // keep\n      "!.hooks",\n      "!.hard-eng",\n      "!**/coverage"\n    ]\n  }\n}\n',
+            '{\n  "files": {\n    "includes": [\n      "**",\n      "!dist", // keep\n      "!.hooks",\n      "!.hard-eng",\n      "!coverage"\n    ]\n  }\n}\n',
         ),
         (
             f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!dist"\n\t\t]\n\t}}\n}}\n',
-            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!dist",\n\t\t\t"!.hooks",\n\t\t\t"!.hard-eng",\n\t\t\t"!**/coverage"\n\t\t]\n\t}}\n}}\n',
+            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!dist",\n\t\t\t"!.hooks",\n\t\t\t"!.hard-eng",\n\t\t\t"!coverage"\n\t\t]\n\t}}\n}}\n',
         ),
         (
             f'{{\n  "files": {{\n    "includes": ["**", "!{LONG}"]\n  }}\n}}\n',
-            f'{{\n  "files": {{\n    "includes": [\n      "**",\n      "!{LONG}",\n      "!.hooks",\n      "!.hard-eng",\n      "!**/coverage"\n    ]\n  }}\n}}\n',
+            f'{{\n  "files": {{\n    "includes": [\n      "**",\n      "!{LONG}",\n      "!.hooks",\n      "!.hard-eng",\n      "!coverage"\n    ]\n  }}\n}}\n',
         ),
         (
             f'{{\n\t"files": {{\n\t\t"includes": ["**", "!{LONG}"]\n\t}}\n}}\n',
-            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!.hooks",\n\t\t\t"!.hard-eng",\n\t\t\t"!**/coverage"\n\t\t]\n\t}}\n}}\n',
+            f'{{\n\t"files": {{\n\t\t"includes": [\n\t\t\t"**",\n\t\t\t"!{LONG}",\n\t\t\t"!.hooks",\n\t\t\t"!.hard-eng",\n\t\t\t"!coverage"\n\t\t]\n\t}}\n}}\n',
         ),
         (
             f'{{\n  "formatter": {{ "lineWidth": 120 }},\n  "files": {{\n    "includes": ["**", "!{LONG}"]\n  }}\n}}\n',
-            f'{{\n  "formatter": {{ "lineWidth": 120 }},\n  "files": {{\n    "includes": ["**", "!{LONG}", "!.hooks", "!.hard-eng", "!**/coverage"]\n  }}\n}}\n',
+            f'{{\n  "formatter": {{ "lineWidth": 120 }},\n  "files": {{\n    "includes": ["**", "!{LONG}", "!.hooks", "!.hard-eng", "!coverage"]\n  }}\n}}\n',
         ),
     ],
 )
@@ -171,15 +173,15 @@ def test_setup_leaves_a_project_without_biome_settings_alone(tmp_path: Path) -> 
     [
         (
             '{\n  "files": {\n    "includes": ["**", "!dist", "!.hooks"]\n  }\n}\n',
-            ["**", "!dist", "!.hooks", "!.hard-eng", "!**/coverage"],
+            ["**", "!dist", "!.hooks", "!.hard-eng", "!coverage"],
         ),
         (
             '{\n  "files": {\n    "includes": [\n      "**",\n      "!.hooks"\n    ]\n  }\n}\n',
-            ["**", "!.hooks", "!.hard-eng", "!**/coverage"],
+            ["**", "!.hooks", "!.hard-eng", "!coverage"],
         ),
         (
             '{"files": {"includes": ["**", "!.hard-eng", "!.hooks"]}}',
-            ["**", "!.hard-eng", "!.hooks", "!**/coverage"],
+            ["**", "!.hard-eng", "!.hooks", "!coverage"],
         ),
     ],
 )
@@ -201,7 +203,7 @@ def test_setup_adds_only_the_entries_that_an_older_install_lacks(
 def test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    entries = '"!.hooks", "!.hard-eng" and "!**/coverage"'
+    entries = '"!.hooks", "!.hard-eng" and "!coverage"'
     (tmp_path / "biome.json").write_text('{"extends": ["./base.json"]}')
     changes: dict[str, str] = {}
     biome_ignores_hooks(tmp_path, changes)
@@ -219,3 +221,66 @@ def test_setup_prints_a_step_when_it_cannot_edit_the_biome_settings(
         f'biome.json: files.includes is empty: put "**" first, then add {entries} '
         "as the last entries, so that your own Biome runs leave the Hard Eng files\n"
     )
+
+
+SPREAD = '{\n  "files": {\n    "includes": ["**"]\n  }\n}\n'
+
+
+def gates_file(*paths: str) -> str:
+    return json.dumps({"packages": [{"path": path, "checks": []} for path in paths]})
+
+
+def edited_includes(root: Path, changes: dict[str, str]) -> list[str]:
+    biome_ignores_hooks(root, changes)
+    files = jsonc_config("biome.json", changes["biome.json"])["files"]
+    assert isinstance(files, dict)
+    return files["includes"]
+
+
+@pytest.mark.parametrize(
+    ("paths", "expected"),
+    [
+        ((), ["!coverage"]),
+        ((".",), ["!coverage"]),
+        (
+            (".", "./web", "packages/a/"),
+            ["!coverage", "!web/coverage", "!packages/a/coverage"],
+        ),
+    ],
+)
+def test_the_biome_list_names_the_report_folder_of_each_package(
+    tmp_path: Path, paths: tuple[str, ...], expected: list[str]
+) -> None:
+    (tmp_path / "biome.json").write_text(SPREAD)
+    if paths:
+        (tmp_path / "hard-eng.gates.json").write_text(gates_file(*paths))
+    changes: dict[str, str] = {}
+    includes = edited_includes(tmp_path, changes)
+    assert includes == ["**", "!.hooks", "!.hard-eng", *expected]
+    (tmp_path / "biome.json").write_text(changes["biome.json"])
+    rerun: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, rerun)
+    assert rerun == {}
+
+
+def test_the_planned_gates_file_wins_over_the_one_on_disk(tmp_path: Path) -> None:
+    (tmp_path / "biome.json").write_text(SPREAD)
+    (tmp_path / "hard-eng.gates.json").write_text(gates_file(".", "old"))
+    changes = {"hard-eng.gates.json": gates_file(".", "new")}
+    assert edited_includes(tmp_path, changes)[-2:] == ["!coverage", "!new/coverage"]
+
+
+def test_an_older_install_gets_only_the_package_folders_it_lacks(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "biome.json").write_text(
+        '{\n  "files": {\n    "includes": ["**", "!.hooks", "!.hard-eng", "!coverage"]\n  }\n}\n'
+    )
+    (tmp_path / "hard-eng.gates.json").write_text(gates_file(".", "web"))
+    assert edited_includes(tmp_path, {}) == [
+        "**",
+        "!.hooks",
+        "!.hard-eng",
+        "!coverage",
+        "!web/coverage",
+    ]

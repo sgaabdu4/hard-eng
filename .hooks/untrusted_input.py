@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 from itertools import takewhile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from gate_config import JSONC, Group, JsonObject, JsonValue, json_file
 
@@ -91,7 +91,22 @@ def fallow_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
         changes[name] = updated
 
 
-BIOME_IGNORES = ("!.hooks", "!.hard-eng", "!**/coverage")
+BIOME_IGNORES = ("!.hooks", "!.hard-eng", "!coverage")
+
+
+def biome_entries(root: Path, changes: dict[str, str]) -> tuple[str, ...]:
+    """The Hard Eng entries of files.includes: the hook folders and the report folder of each package."""
+    try:
+        gates = json.loads(
+            changes.get("hard-eng.gates.json")
+            or (root / "hard-eng.gates.json").read_text()
+        )
+        paths = [group["path"] for group in gates["packages"]]
+    except (OSError, ValueError, TypeError, KeyError):
+        return BIOME_IGNORES
+    folders = (PurePosixPath(path).as_posix() for path in paths)
+    reports = (f"!{folder}/coverage" for folder in folders if folder != ".")
+    return tuple(dict.fromkeys((*BIOME_IGNORES, *reports)))
 
 
 def closing(text: str, start: int) -> int:
@@ -211,10 +226,10 @@ def add_inline_entry(
     return f"{text[:start]}[\n{body}\n{indent}]{text[close + 1 :]}"
 
 
-def biome_list(includes: list[str] | None) -> list[str]:
+def biome_list(includes: list[str] | None, entries: tuple[str, ...]) -> list[str]:
     """The files.includes list with the Hard Eng entries that it lacks at the end."""
     current = includes or ["**"]
-    return [*current, *(name for name in BIOME_IGNORES if name not in current)]
+    return [*current, *(name for name in entries if name not in current)]
 
 
 def biome_includes(config: dict[str, object]) -> list[str] | None:
@@ -224,13 +239,15 @@ def biome_includes(config: dict[str, object]) -> list[str] | None:
     return includes if isinstance(includes, list) else None
 
 
-def biome_edit(text: str, config: dict[str, object]) -> str | None:
+def biome_edit(
+    text: str, config: dict[str, object], entries: tuple[str, ...]
+) -> str | None:
     """The text with the Hard Eng entries in files.includes; None when they are there."""
     masked = JSONC.sub(lambda match: match[1] or " " * len(match[0]), text)
     top = value_starts(masked, masked.index("{"))
     files = config.get("files")
     includes = biome_includes(config)
-    wanted = biome_list(includes)
+    wanted = biome_list(includes, entries)
     if includes is not None:
         added = wanted[len(includes) :]
         if not added:
@@ -255,7 +272,9 @@ def biome_edit(text: str, config: dict[str, object]) -> str | None:
     return add_member(text, masked, masked.index("{"), f'"files": {{ {listed} }}')
 
 
-def biome_proof(before: dict[str, object], after: dict[str, object]) -> bool:
+def biome_proof(
+    before: dict[str, object], after: dict[str, object], entries: tuple[str, ...]
+) -> bool:
     """True when only the files.includes list differs and it now ends with the Hard Eng entries."""
 
     def rest(config: dict[str, object]) -> dict[str, object]:
@@ -266,9 +285,9 @@ def biome_proof(before: dict[str, object], after: dict[str, object]) -> bool:
             return {**others, "files": kept} if kept else others
         return others
 
-    return biome_includes(after) == biome_list(biome_includes(before)) and rest(
-        before
-    ) == rest(after)
+    return biome_includes(after) == biome_list(
+        biome_includes(before), entries
+    ) and rest(before) == rest(after)
 
 
 def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
@@ -280,15 +299,16 @@ def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
     if name is None:
         return
     text = changes.get(name) or (root / name).read_text()
+    entries = biome_entries(root, changes)
     try:
         config = jsonc_config(name, text)
-        updated = biome_edit(text, config)
+        updated = biome_edit(text, config, entries)
         if updated is not None:
             after = jsonc_config(name, updated)
-            if not biome_proof(config, after):
+            if not biome_proof(config, after, entries):
                 raise ValueError("the edit changed other settings")
     except (ValueError, TypeError, KeyError) as error:
-        quoted = [f'"{entry}"' for entry in BIOME_IGNORES]
+        quoted = [f'"{entry}"' for entry in entries]
         entries = f"{', '.join(quoted[:-1])} and {quoted[-1]}"
         step = f"add {entries} as the last entries of files.includes"
         if "empty" in str(error):
