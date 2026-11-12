@@ -69,6 +69,61 @@ def test_package_include_root_is_a_directory(
         validate_dart_includes(options, tmp_path)
 
 
+def test_a_fault_in_an_included_package_names_the_include_to_remove(
+    tmp_path: Path,
+) -> None:
+    """A project cannot change a file of a package, only its own include of it."""
+    registry = tmp_path / ".dart_tool/package_config.json"
+    registry.parent.mkdir()
+    library = tmp_path / "cache/team_lints/lib"
+    library.mkdir(parents=True)
+    packages = [
+        {"name": "team_lints", "rootUri": library.parent.as_uri(), "packageUri": "lib/"}
+    ]
+    registry.write_text(json.dumps({"packages": packages}))
+    (library / "all.yaml").write_text("include: package:team_lints/core.yaml\n")
+    core = library / "core.yaml"
+    core.write_text("analyzer:\n  language:\n    strict-casts: true\n")
+    shared = tmp_path / "shared.yaml"
+    shared.write_text("include: package:team_lints/all.yaml\n")
+    options = tmp_path / "analysis_options.yaml"
+    options.write_text("include: shared.yaml\n")
+    with pytest.raises(ValueError, match="obsolete Dart language") as error:
+        validate_dart_includes(options, tmp_path)
+    message = str(error.value)
+    assert f": {core.resolve()}. A package file cannot be changed" in message
+    assert (
+        f"remove `include: package:team_lints/all.yaml` from {shared.resolve()}"
+        in message
+    )
+    assert message.count("cannot be changed") == 1
+    shared.write_text("analyzer:\n  language:\n    strict-casts: true\n")
+    with pytest.raises(ValueError, match="obsolete Dart language") as error:
+        validate_dart_includes(options, tmp_path)
+    assert str(error.value).endswith(f": {shared.resolve()}")
+
+
+@pytest.mark.parametrize("content", ["include: ../lib/shared.yaml\n", "analyzer: {}\n"])
+def test_a_nested_settings_file_that_lacks_the_settings_is_named_with_its_step(
+    runner: ModuleType, tmp_path: Path, content: str
+) -> None:
+    """A settings file in a source folder replaces the package's settings for that folder."""
+    (tmp_path / "analysis_options.yaml").write_text(yaml.safe_dump(DART_TYPING))
+    runner.validate_typing(tmp_path, "dart", ["tool"])
+    nested = tmp_path / "tool/analysis_options.yaml"
+    nested.parent.mkdir()
+    nested.write_text(content)
+    with pytest.raises((TypeError, ValueError), match="Dart requires") as error:
+        runner.validate_typing(tmp_path, "dart", ["tool"])
+    assert f": {nested}. This file replaces the package's settings" in str(error.value)
+    assert "or remove it" in str(error.value)
+    nested.unlink()
+    (tmp_path / "analysis_options.yaml").write_text("linter: {}\n")
+    with pytest.raises(TypeError, match="Dart requires analyzer settings") as error:
+        runner.validate_typing(tmp_path, "dart", ["tool"])
+    assert str(error.value).endswith(f": {tmp_path / 'analysis_options.yaml'}")
+
+
 @pytest.mark.parametrize(
     "section,group,rule",
     [

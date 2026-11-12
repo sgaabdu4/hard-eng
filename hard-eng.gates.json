@@ -11,7 +11,7 @@
   },
   "packages": [{
     "name": "hard-eng", "path": ".", "language": "python", "sources": ["setup.py", "new_project.py", "release_canary.py", ".hooks"],
-    "impact_inputs": [".agents/", "AGENTS.md", "README.md"],
+    "impact_inputs": [".agents/", ".github/", "AGENTS.md", "README.md"],
     "checks": [
       {"name": "performance", "role": "performance", "command": ["uv", "run", "--no-sync", "--with", "pytest", "--upgrade-package", "pytest", "pytest", "tests/performance", "--junitxml=coverage/performance.xml"], "report": {"type": "performance-junit", "path": "coverage/performance.xml"}},
       {"name": "dependencies-locked", "role": "lockfiles", "command": ["uv", "sync", "--locked"]},
@@ -21,7 +21,7 @@
       {"name": "complexity", "role": "complexity", "parallel": true, "command": ["uvx", "ruff@latest", "check", "setup.py", "new_project.py", "release_canary.py", ".hooks", "tests", "--select", "C901,PLR0912,PLR0915", "--config", "lint.mccabe.max-complexity = 10", "--config", "lint.pylint.max-branches = 12", "--config", "lint.pylint.max-statements = 50"]},
       {"name": "annotations", "role": "annotations", "parallel": true, "command": ["uvx", "ruff@latest", "check", "setup.py", "new_project.py", "release_canary.py", ".hooks", "tests", "--select", "ANN,TID251,RUF017,ASYNC210", "--config", "lint.flake8-tidy-imports.banned-api.\"typing.Any\".msg = \"Use precise types\"", "--config", "lint.flake8-tidy-imports.banned-api.\"typing_extensions.Any\".msg = \"Use precise types\""]},
       {"name": "types", "role": "types", "parallel": true, "command": ["uvx", "pyrefly@latest", "check", "setup.py", "new_project.py", "release_canary.py", ".hooks", "tests", "--check-unannotated-defs=true", "--min-severity", "info"]},
-      {"name": "tests", "role": "tests", "command": ["uv", "run", "--no-sync", "--with", "pytest", "--upgrade-package", "pytest", "--with", "pytest-cov", "--upgrade-package", "pytest-cov", "--with", "pytest-xdist", "--upgrade-package", "pytest-xdist", "pytest", "-n", "auto", "--cov", "--cov-report=json:coverage/coverage.json", "--junitxml=coverage/junit.xml"], "report": {"type": "python-tests", "tests": "coverage/junit.xml", "coverage": "coverage/coverage.json"}},
+      {"name": "tests", "role": "tests", "shards": 6, "command": ["uv", "run", "--no-sync", "--with", "pytest", "--upgrade-package", "pytest", "--with", "pytest-cov", "--upgrade-package", "pytest-cov", "--with", "pytest-xdist", "--upgrade-package", "pytest-xdist", "pytest", "-n", "auto", "--cov", "--cov-report=json:coverage/coverage.json", "--junitxml=coverage/junit.xml"], "report": {"type": "python-tests", "tests": "coverage/junit.xml", "coverage": "coverage/coverage.json"}},
       {"name": "dead-code", "role": "dead-code", "parallel": true, "command": ["uvx", "vulture@latest", "setup.py", "new_project.py", "release_canary.py", ".hooks", "tests", "--min-confidence", "60"]},
       {"name": "duplicates", "role": "duplicates", "command": ["jscpd", "setup.py", "new_project.py", "release_canary.py", ".hooks", "tests", "--format", "python", "--threshold", "0", "--max-size", "100mb", "--max-lines", "1000000", "--reporters", "json", "--output", "coverage/jscpd"], "report": {"type": "jscpd", "path": "coverage/jscpd/jscpd-report.json"}},
       {"name": "declarations", "role": "dependencies", "parallel": true, "command": ["uv", "run", "--no-sync", "--with", "deptry", "--refresh-package", "deptry", "deptry", ".", "--no-ansi", "--json-output", "coverage/deptry.json"], "report": {"type": "deptry", "path": "coverage/deptry.json"}}
@@ -31,7 +31,7 @@
     {"name": "actionlint", "role": "workflows", "parallel": true, "command": ["actionlint", "-no-color"]},
     {"name": "zizmor", "role": "ci-security", "parallel": true, "command": ["zizmor", "--strict-collection", "--persona=auditor", "--format=plain", ".github"]},
     {"name": "shellcheck", "role": "shell", "parallel": true, "command": ["shellcheck", "--", "setup.sh"]},
-    {"name": "shipped-format", "role": "shipped-format", "parallel": true, "command": ["biome", "ci", "--config-path", ".agents/biome.json", ".agents/biome.json", ".agents/skills", ".github/workflows/hard-eng.yml", ".github/workflows/pr-text.yml"]},
+    {"name": "shipped-format", "role": "shipped-format", "parallel": true, "command": ["biome", "ci", "--config-path", ".agents/biome.json", ".agents/biome.json", ".agents/skills", ".github/hard-eng.yml", ".github/workflows/hard-eng.yml", ".github/workflows/pr-text.yml"]},
     {"name": "shipped-focused-tests", "role": "focused-tests", "parallel": true, "command": ["biome", "lint", "--only=suspicious/noFocusedTests", "--error-on-warnings", ".agents/skills"]},
     {"name": "secrets-files", "role": "secrets-files", "parallel": true, "command": ["gitleaks", "dir", ".", "--redact=100", "--no-banner", "--report-format", "sarif", "--report-path", "coverage/gitleaks-files.sarif"], "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"}},
     {"name": "vulnerabilities", "role": "vulnerabilities", "parallel": true, "command": ["osv-scanner", "scan", "source", "--lockfile=uv.lock", "--lockfile=pubspec.lock:.hooks/dart_declarations.pubspec.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},

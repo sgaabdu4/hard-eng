@@ -24,6 +24,7 @@ import pytest
 from ci_setup import migrate_impact_token
 from conftest import (
     SOURCE,
+    WORKFLOW_TEMPLATE,
     add_origin,
     commit,
     configure,
@@ -209,7 +210,7 @@ def test_impact_takes_the_fast_path_when_the_change_is_already_proven(
 
 
 def test_old_impact_step_gains_the_token_its_reuse_lookup_needs() -> None:
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     token = "          GH_TOKEN: ${{ github.token }}\n"
     start = template.index("id: impact")
     old = template[:start] + template[start:].replace(token, "", 1)
@@ -889,3 +890,45 @@ def test_only_a_check_in_ci_loads_the_reuse_rule(
         env={**os.environ, "GITHUB_ACTIONS": actions},
     )
     assert result.stdout.strip() == loaded
+
+
+QUICK_CHECK_IMPORTS = """
+import importlib.util, sys
+from pathlib import Path
+hooks, root, base = sys.argv[1:4]
+sys.path.insert(0, hooks)
+spec = importlib.util.spec_from_file_location("runner", hooks + "/hard-eng.py")
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+runner.ROOT = Path(root)
+runner.provision_tools = lambda *_: None
+runner.run_gates = lambda *_: False
+assert runner.check(base=base, quick=True) == 0
+print("shards" in sys.modules)
+"""
+
+
+def test_stop_with_shards_set_loads_no_shard_module(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "app.py").write_text("value = 1\n")
+    configure(tmp_path, [gate("suite", "pass", role="tests", shards=6)])
+    git(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git(tmp_path, "config", "user.name", "Fixture")
+    base = commit(tmp_path, "Add the project")
+    (tmp_path / "app.py").write_text("value = 3\n")
+    loaded = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            QUICK_CHECK_IMPORTS,
+            str(SOURCE / ".hooks"),
+            str(tmp_path),
+            base,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert loaded.stdout.splitlines()[-1] == "False", loaded.stdout

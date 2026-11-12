@@ -40,22 +40,42 @@ ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
 SOURCE_FILE = ".hooks/hard-eng-source.json"
 
 
+def biome_formatters(
+    path: Path, seen: set[Path]
+) -> tuple[dict[str, int | str], dict[str, int | str]]:
+    """The formatter and json.formatter options of a Biome file after the local files it extends."""
+    path = path.resolve()
+    if path in seen or not path.is_file():
+        return {}, {}
+    seen.add(path)
+    try:
+        text = JSONC.sub(lambda match: match[1] or "", path.read_text())
+        config = json.loads(TRAILING_COMMA.sub(r"\1", text))
+    except (OSError, ValueError):
+        return {}, {}
+    extends = config.get("extends", [])
+    formatter: dict[str, int | str] = {}
+    own: dict[str, int | str] = {}
+    for name in [extends] if isinstance(extends, str) else extends:
+        if not isinstance(name, str):
+            continue
+        inherited = biome_formatters(path.parent / name, seen)
+        formatter, own = {**formatter, **inherited[0]}, {**own, **inherited[1]}
+    return (
+        {**formatter, **config.get("formatter", {})},
+        {**own, **config.get("json", {}).get("formatter", {})},
+    )
+
+
 def json_layout(root: Path) -> tuple[str, int, int]:
     """Read the root Biome config's JSON formatting, else use Prettier's defaults."""
     for name in ("biome.json", "biome.jsonc"):
         if (root / name).is_file():
-            text = JSONC.sub(lambda match: match[1] or "", (root / name).read_text())
-            try:
-                config = json.loads(TRAILING_COMMA.sub(r"\1", text))
-            except ValueError:
-                return "\t", 2, 80
-            options = {
-                **config.get("formatter", {}),
-                **config.get("json", {}).get("formatter", {}),
-            }
-            tab = options.get("indentWidth", 2)
+            formatter, own = biome_formatters(root / name, set())
+            options = {**formatter, **own}
+            tab = int(options.get("indentWidth", 2))
             unit = "\t" if options.get("indentStyle", "tab") == "tab" else " " * tab
-            return unit, tab, options.get("lineWidth", 80)
+            return unit, tab, int(options.get("lineWidth", 80))
     return "  ", 2, 80
 
 
@@ -77,6 +97,8 @@ Gate = TypedDict(
         "parallel": NotRequired[bool],
         "report": NotRequired[Report],
         "holds": NotRequired[list[JsonObject]],
+        "shards": NotRequired[int],
+        "part": NotRequired[str],
     },
 )
 Group = TypedDict(
@@ -259,45 +281,6 @@ def generated_sources(root: Path, names: list[str]) -> set[str]:
     }
 
 
-def dart_rule_settings(value: object) -> object:
-    if isinstance(value, list):
-        if not all(isinstance(rule, str) for rule in value):
-            raise ValueError("Dart lint rule names must be strings")
-        return {rule: True for rule in value}
-    if isinstance(value, dict):
-        for rule, enabled in value.items():
-            if enabled is False:
-                raise ValueError(
-                    f"analysis_options.yaml: {rule} is set to false, which turns off "
-                    "a lint rule of the included set; remove that entry"
-                )
-    return value
-
-
-def validate_dart_plugins(options: JsonObject) -> None:
-    from project_setup import migrate_dart_plugins
-
-    plugins = options.get("plugins")
-    if not isinstance(plugins, dict):
-        return
-    migrated = dict(plugins)
-    updated: JsonObject = {"plugins": migrated}
-    migrate_dart_plugins(updated, Path(__file__).resolve().parents[1])
-    if updated["plugins"] != plugins:
-        versions = {
-            name: value.get("version") if isinstance(value, dict) else value
-            for name, value in plugins.items()
-        }
-        changes = ", ".join(
-            f"{name}: {versions[name]} -> {value.get('version') if isinstance(value, dict) else value}"
-            for name, value in migrated.items()
-            if value != plugins.get(name)
-        )
-        raise ValueError(
-            f"Analyzer plugin version is older than the installed canonical profile ({changes}); run the supported Hard Eng updater and verify application compatibility"
-        )
-
-
 def validate_file_sizes(
     root: Path, exceptions: dict[str, dict[str, str]], listed: list[Path] | None = None
 ) -> None:
@@ -349,6 +332,14 @@ def validate_file_sizes(
         )
 
 
+def validate_shards(gate: Gate) -> None:
+    count = gate.get("shards", 2)
+    if "shards" in gate and not (
+        gate.get("role") == "tests" and type(count) is int and 2 <= count <= 16
+    ):
+        raise ValueError(f"{gate['name']}: shards must be 2 to 16 on a tests gate")
+
+
 def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     if (
         not isinstance(gate, dict)
@@ -358,6 +349,7 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
         raise ValueError("Each check must have a nonempty name")
     if type(gate.get("parallel", False)) is not bool:
         raise ValueError("parallel must be true or false")
+    validate_shards(gate)
     report = gate.get("report", {})
     if not isinstance(report, dict):
         raise TypeError("report must be an object")

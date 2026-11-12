@@ -115,8 +115,10 @@ jobs:
           COVERED: ${{ needs.targets.outputs.covered }}
           TARGETS: ${{ needs.targets.result }}
           PROJECTS: ${{ needs.new-project.result }}
+          RELEASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'develop' }}
         run: |
           [ "$TARGETS" = success ] || { echo "Listing the new projects failed: $TARGETS"; exit 1; }
+          if [ "$RELEASE" = true ]; then echo "A release PR starts no new project; the next step checks the push run of develop."; exit 0; fi
           if [ "$LISTED" = '[]' ] && [ -n "$COVERED" ]; then echo "PR head $COVERED passed every new project on these exact files; not repeating them."; exit 0; fi
           if [ "$LISTED" = '[]' ]; then echo "No installed file changed; no new project to check."; exit 0; fi
           [ "$PROJECTS" = success ] || { echo "A new project failed its checks: $PROJECTS"; exit 1; }

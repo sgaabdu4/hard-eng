@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 import update_pr
 import update_runner
-from conftest import SOURCE, add_origin, commit, git
+from conftest import WORKFLOW_TEMPLATE, add_origin, commit, git
 from test_update_runner import (
     GATES_FILE,
     add_shipping_policy,
@@ -142,7 +142,7 @@ def test_a_rerun_writes_the_workflow_gates_when_the_checkout_has_a_workflow(
     add_shipping_policy(project)
     workflows = project / ".github/workflows"
     workflows.mkdir(parents=True)
-    source = SOURCE / ".github/workflows/hard-eng.yml"
+    source = WORKFLOW_TEMPLATE
     (workflows / "hard-eng.yml").write_text(source.read_text())
     commit(project, "a workflow")
     outcome = update_runner.locked_update(project, repair=True)

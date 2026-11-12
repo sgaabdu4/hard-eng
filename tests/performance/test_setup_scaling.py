@@ -7,6 +7,7 @@ from typing import override
 import gate_config
 import project_setup
 import pytest
+import swift_setup
 from gate_config import GateConfig, Group
 
 
@@ -60,6 +61,8 @@ def test_baseline_validation_does_not_rescan_siblings(
         return []
 
     monkeypatch.setattr(gate_config, "repository_files", inventory)
+    # A late first load under the patch above would keep the fake for later tests.
+    monkeypatch.setattr(swift_setup, "repository_files", inventory)
     visits = []
     for count in (8, 32):
         packages = PackageVisits()

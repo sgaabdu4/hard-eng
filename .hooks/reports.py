@@ -15,6 +15,7 @@ from coverage_sources import (
     erased_swift,
     erased_typescript,
     lcov_coverage,
+    omit_step,
     python_coverage,
     xccov_coverage,
 )
@@ -75,15 +76,6 @@ def emit_dart_test_failure(
 ) -> None:
     if summary := dart_test_failure(result, tests, kind, path):
         print(summary)
-
-
-def parallel_hint(code: int, tests: bool, command: list[str]) -> str:
-    if code in {0, 5} or not tests or "-n auto" not in " ".join(command):
-        return ""
-    return (
-        "\nThese tests ran in parallel (-n auto). If they pass serially, isolate "
-        "the state they share, or set -n 0 in this gate's command."
-    )
 
 
 def quick_groups(
@@ -163,6 +155,12 @@ def validate_scanner_log(scanner: str | None, log: TextIO) -> None:
         SCANNER_LOGS[scanner](log)
 
 
+def junit_root(path: Path) -> ET.Element:
+    # Local JUnit only; ElementTree rejects external entities (test_junit_rejects_entities).
+    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
+    return ET.parse(path).getroot()
+
+
 def completed_tests(path: Path, kind: str) -> int:
     if kind == "dart-tests":
         if (
@@ -188,10 +186,8 @@ def completed_tests(path: Path, kind: str) -> int:
         ):
             raise ValueError("Test report does not contain a successful completed run")
         return passed
-    # Local JUnit only; ElementTree rejects external entities (test_junit_rejects_entities).
-    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
-    tree = ET.parse(path)
-    if tree.getroot().tag not in {"testsuites", "testsuite"}:
+    tree = junit_root(path)
+    if tree.tag not in {"testsuites", "testsuite"}:
         raise ValueError("Expected a JUnit test report")
     if tree.findall(".//failure") or tree.findall(".//error"):
         raise ValueError("Test report contains failures or errors")
@@ -214,8 +210,7 @@ def reported_skips(path: Path, kind: str) -> set[str]:
         }
     if kind == "xcode-tests":
         return set()
-    # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse
-    tree = ET.parse(path)
+    tree = junit_root(path)
     return {
         test.get("name", "").split("[", 1)[0]
         for test in tree.iter("testcase")
@@ -272,6 +267,7 @@ def expected_coverage(
             f"Coverage report omits production files: {', '.join(map(str, relative))}. "
             "Cover them, or mark generator output with "
             "`<pattern> linguist-generated=true` in .gitattributes"
+            + (omit_step(directory, relative) if kind == "python-tests" else "")
             + (
                 ". For Dart code outside lib/: move it under lib/ and test it there"
                 if outside_lib

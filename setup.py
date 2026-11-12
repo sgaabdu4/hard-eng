@@ -251,7 +251,7 @@ def apply_dart_typing(
     required: dict[str, JsonObject],
     directory: Path,
 ) -> None:
-    from gate_config import dart_rule_settings
+    from dart_boundaries import dart_rule_settings
     from project_setup import validate_dart_exclusions
     from settings_merge import merge
 

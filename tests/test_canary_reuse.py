@@ -1,7 +1,9 @@
 """`release_canary.py`: a push or a release PR follows the passed new-project jobs of a merged PR."""
 
 import json
+import os
 import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
@@ -64,6 +66,7 @@ def test_a_develop_push_reuses_the_new_project_jobs_of_the_merged_pr(
         "pull-requests": "read",
     }
     assert "covered" in job["outputs"]
+    assert release_canary.PUSH_LOOKUP_SECONDS * 2 <= job["timeout-minutes"] * 60
     matrix = workflow["jobs"]["new-project"]["strategy"]["matrix"]
     assert tuple(matrix["os"]) == release_canary.CI_SYSTEMS
     assert matrix["exclude"] == [{"os": "macos-latest", "target": "update-python"}]
@@ -121,6 +124,88 @@ def test_a_push_runs_the_new_projects_when_the_pr_did_not_prove_them(
     assert (seen.out, "merged PR failed" in seen.err) == ("", case in breaks)
     if case not in breaks or case == "a failed lookup":
         assert release_canary.ci_failures(PUSHED)
+
+
+def stalled_lookups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str
+) -> None:
+    """A `gh` that waits past the named time limit; Git answers at once."""
+    (tmp_path / "gh").write_text("#!/bin/sh\nexec sleep 2\n")
+    (tmp_path / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    run = release_canary.output
+
+    def output(command: list[str]) -> str:
+        if command[0] != "git":
+            return run(command)
+        return "setup.py" if command[1] == "diff" else "t1"
+
+    monkeypatch.setattr(release_canary, "output", output)
+    monkeypatch.setattr(release_canary, limit, 0.2)
+
+
+def test_a_push_runs_the_new_projects_when_a_lookup_stalls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stalled_lookups(tmp_path, monkeypatch, "PUSH_LOOKUP_SECONDS")
+    listed = [release_canary.folder(" ".join(t)) for t in release_canary.CI_TARGETS]
+    got = release_canary.push_outputs(["setup.py"], PUSHED)
+    assert got == "targets=" + json.dumps(listed)
+    assert "merged PR failed" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("release", "covered", "line"),
+    [
+        ("true", "", "the next step checks the push run of develop"),
+        ("false", "", "No installed file changed; no new project to check."),
+        ("false", MERGED_HEAD, "not repeating them."),
+    ],
+)
+def test_the_canary_summary_says_no_installed_file_changed_only_when_none_changed(
+    release: str, covered: str, line: str
+) -> None:
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    step = workflow["jobs"]["canary"]["steps"][0]
+    assert "github.event.pull_request.head.ref == 'develop'" in step["env"]["RELEASE"]
+    done = subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        env={
+            "PATH": os.environ["PATH"],
+            "RELEASE": release,
+            "LISTED": "[]",
+            "COVERED": covered,
+            "TARGETS": "success",
+            "PROJECTS": "skipped",
+        },
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    printed = done.stdout.splitlines()
+    assert len(printed) == 1
+    assert line in printed[0]
+
+
+def test_the_release_gate_ends_before_the_canary_job_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    limit = workflow["jobs"]["canary"]["timeout-minutes"] * 60
+    assert release_canary.RELEASE_GATE_SECONDS + 120 <= limit
+    stalled_lookups(tmp_path, monkeypatch, "RELEASE_GATE_SECONDS")
+    assert release_canary.release_pr_gate("b" * 40, PUSHED) == 1
+    printed = capsys.readouterr().out
+    assert "time limit" in printed
+    assert "Rerun this job once the Canary run" in printed
 
 
 def test_the_release_gate_follows_a_reused_push_to_the_pr_head(

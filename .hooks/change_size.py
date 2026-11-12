@@ -434,6 +434,7 @@ def judged_stage(root: Path, base: str | None, stage: str | None) -> str:
         except ValueError:
             point = base or judged_point(root)
             changed = changed_files(root, point or "HEAD") or set()
+            changed |= released_plans(root, base)
             found = reformatted_plans(root, point, changed)
             if not found:
                 raise
@@ -472,6 +473,11 @@ def plan_skips(root: Path, base: str | None, groups: list[Group], since: float) 
 
 MAX_PR_COMMITS = 100
 WARN_PR_COMMITS = 80
+JOIN_COMMITS = (
+    "Or join neighbour commits on the same base commit: `git diff <old head> <new head>` "
+    "must then print nothing; push with `--force-with-lease` and never pull the old "
+    "commits back in."
+)
 
 
 def commits_problem(count: int) -> str | None:
@@ -481,7 +487,7 @@ def commits_problem(count: int) -> str | None:
     return (
         f"PR has {count} commits; HE-PR-COMMITS allows at most {MAX_PR_COMMITS}. "
         "Move the oldest finished commits to a PR of their own, merge it, then rebase "
-        "the rest. Or join neighbour commits on the same base commit."
+        f"the rest. {JOIN_COMMITS}"
     )
 
 
@@ -497,8 +503,8 @@ def commit_note(root: Path) -> None:
     if count < WARN_PR_COMMITS:
         return
     way = (
-        "Move the oldest finished commits to a PR of their own and merge it first, "
-        "or join neighbour commits."
+        "Move the oldest finished commits to a PR of their own and merge it first. "
+        + JOIN_COMMITS
         if count > MAX_PR_COMMITS
         else "Ship this work soon, then continue on a new branch."
     )

@@ -13,7 +13,9 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -43,6 +45,7 @@ SOURCE_ONLY_FILES = {
     "AGENTS.override.md",
     "release_canary.py",
     ".github/workflows/canary.yml",
+    ".github/workflows/hard-eng.yml",
 }
 # Runs the project's own installed updater, told that this release is the newest verified one.
 UPDATE = """
@@ -108,6 +111,9 @@ CI_KINDS = (*AGENT_KINDS, "update")
 NOT_FOLDER_NAME = re.compile(r"[^a-z0-9]+")
 CI_JOB = re.compile(r"new project \(([a-z0-9-]+), [\w.-]+\)")
 CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
+PUSH_LOOKUP_SECONDS = 120
+RELEASE_GATE_SECONDS = 3720
+RERUN = "Rerun this job once the Canary run for develop's push has finished."
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -284,6 +290,10 @@ def on_update_branch(work: Path, revision: str, log: IO[str]) -> None:
     marker = json.loads((work / SOURCE_FILE).read_text())
     if marker.get("revision") != revision:
         raise Failed("update did not apply")
+    workflow = work / ".github/workflows/hard-eng.yml"
+    split = workflow.is_file() and "--shard" in workflow.read_text()
+    if split and '"shards"' not in (work / "hard-eng.gates.json").read_text():
+        raise Failed("update wrote a shard workflow into a project with no shards")
 
 
 def local_source(source: Path) -> list[str]:
@@ -530,11 +540,13 @@ class Trial:
         start = time.monotonic()
         log_path = self.log()
         with log_path.open("w") as log:
+            ran: list[str] = []
             try:
                 for name, command in prepare(
                     self.target, revision, source, self.work, log, self.check_new
                 ):
                     must(self.work, log, f"{name} failed", command)
+                    ran.append(name)
             except Failed as failure:
                 self.results[self.label] = (False, f"{failure}; log {log_path}")
                 for agent in self.agents:
@@ -542,7 +554,8 @@ class Trial:
                 return []
             finally:
                 self.times.append(("prepare", self.label, time.monotonic() - start))
-        self.results[self.label] = (True, "install and its checks passed")
+        units = f": {', '.join(ran)}" if ran else ""
+        self.results[self.label] = (True, f"install and its checks passed{units}")
         if not self.agents:
             shutil.rmtree(self.work)
         return [partial(self.try_agent, agent) for agent in self.agents]
@@ -676,15 +689,31 @@ def ci_failures(revision: str) -> list[str]:
     return unproven(proven_revision(revision))
 
 
+def lookups_too_long(_signal: int, _frame: object) -> None:
+    raise TimeoutError("the lookups passed their time limit")
+
+
+@contextmanager
+def time_limit(seconds: float) -> Generator[None]:
+    """One total time limit for the lookups inside, below the limit of their CI job."""
+    signal.signal(signal.SIGALRM, lookups_too_long)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+
+
 def push_outputs(names: list[str], revision: str) -> str:
     """The `targets` job outputs for a push: no jobs when the merged PR proved these files."""
     listed = [folder(" ".join(target)) for target in CI_TARGETS]
     if not needs_canary(names):
         return "targets=[]"
     try:
-        proven = proven_revision(revision)
-        if proven != revision and not unproven(proven):
-            return f"targets=[]\ncovered={proven}"
+        with time_limit(PUSH_LOOKUP_SECONDS):
+            proven = proven_revision(revision)
+            if proven != revision and not unproven(proven):
+                return f"targets=[]\ncovered={proven}"
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
         print(
             "The lookup of the merged PR failed; the new projects run.", file=sys.stderr
@@ -693,6 +722,15 @@ def push_outputs(names: list[str], revision: str) -> str:
 
 
 def release_pr_gate(base: str, revision: str) -> int:
+    try:
+        with time_limit(RELEASE_GATE_SECONDS):
+            return release_gate(base, revision)
+    except TimeoutError:
+        print(f"The release gate passed its time limit. {RERUN}")
+        return 1
+
+
+def release_gate(base: str, revision: str) -> int:
     names = output(["git", "diff", "--name-only", f"{base}...{revision}"]).split()
     if not needs_canary(names):
         print("No installed file changed; no new project to check.")
@@ -708,7 +746,7 @@ def release_pr_gate(base: str, revision: str) -> int:
         print(
             f"New projects without a passing run for this commit: {', '.join(missing)}"
         )
-        print("Rerun this job once the Canary run for develop's push has finished.")
+        print(RERUN)
         return 1
     if proven != revision:
         print(

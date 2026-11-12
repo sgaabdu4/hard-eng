@@ -74,6 +74,8 @@ OLD_TRIGGERS = (
 )
 OLD_BASE = "${{ github.event.pull_request.base.sha || github.event.before }}"
 NEW_BASE = "${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}"
+TEMPLATE = ".github/hard-eng.yml"
+TEMPLATE_BEFORE_MOVE = ".github/workflows/hard-eng.yml"
 BOOTSTRAP_TOOLS = ["uv@latest", "python@3.12"]
 
 
@@ -134,9 +136,15 @@ def impact_tools(root: Path, groups: list[Group]) -> list[str]:
     return list(dict.fromkeys(tools))
 
 
+def template_text(source: Path) -> str:
+    """The template of a release tree; a tree from before the move holds it as the workflow."""
+    path = source / TEMPLATE
+    return (path if path.is_file() else source / TEMPLATE_BEFORE_MOVE).read_text()
+
+
 def workflow_triggers(source: Path, base: str) -> tuple[str, str]:
     """The template trigger block and its copy for the project's base branch."""
-    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    template = template_text(source)
     block = template[template.index("on:\n") : template.index("\n\npermissions:") + 1]
     # Only this source repository releases from develop.
     project = block.replace("      - develop\n", "", 1)
@@ -192,7 +200,7 @@ def migrate_workflow_pins(content: str) -> str:
 
 def migrate_bun(source: Path, content: str) -> str:
     """Replace the generated pnpm bootstrap with the template's Bun steps."""
-    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    template = template_text(source)
     start = template.index("      - uses: oven-sh/setup-bun@")
     setup = template[start : template.index("      - name: ", start)]
     launcher = BUN_X_MISE_LAUNCHER.search(template)
@@ -223,7 +231,7 @@ def migrate_launcher(source: Path, content: str) -> str:
     """Bash 3.2 on macOS runners cannot lowercase with ${var,,}; compute the package once per job."""
     if LEGACY_PACKAGE not in content and MISE_PACKAGE not in content:
         return content
-    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    template = template_text(source)
     echo = next(line for line in template.splitlines() if "MISE_PACKAGE=" in line)
     # Each job runs on its own runner, so every job that launches mise sets the package.
     jobs = JOB_BOUNDARY.split(content)
@@ -286,7 +294,7 @@ def migrate_workflow_tools(content: str) -> str:
 
 def migrate_docs_path(source: Path, content: str) -> str:
     """Add the template's docs-only steps to a generated workflow without them."""
-    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    template = template_text(source)
     setup = "      - uses: oven-sh/setup-bun@"
     checks = "      - name: Run required checks\n"
     if "id: impact" in content:
@@ -431,7 +439,7 @@ def migrate_affected_tools(
         return content
     if "        env:\n" not in content.split(marker, 1)[1].split("\n      - ", 1)[0]:
         return content
-    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    template = template_text(source)
     required = workflow_tools(root, config)
     known = {tool.split("@", 1)[0] for tool in required}
     redundant_latest = "bun@latest" not in required and any(
@@ -474,7 +482,7 @@ def migrate_affected_tools(
 
 def migrate_tool_cache(source: Path, content: str) -> str:
     """Keep installed tools and store data in the template's runner storage."""
-    template = (source / ".github/workflows/hard-eng.yml").read_text()
+    template = template_text(source)
     old = '        run: python3 .hooks/hard-eng.py impact --base "$BASE_SHA" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"\n'
     start = template.index("        run: |\n", template.index("id: impact"))
     end = template.index("      - uses: oven-sh/setup-bun@", start)
@@ -698,6 +706,8 @@ def configure_ci(
 def adapt_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
+    from shards import split_test_shards
+
     name = ".github/workflows/hard-eng.yml"
     workflows = [
         path
@@ -721,6 +731,7 @@ def adapt_ci(
             config, migrate_runner_variable(migrate_launcher(source, migrated))
         )
         migrated = migrate_tool_environment(migrate_bun_version(migrated))
+        migrated = split_test_shards(config, migrated)
         if "\n  pull-requests:" not in migrated:
             migrated = migrated.replace(
                 OLD_PERMISSIONS, OLD_PERMISSIONS + PERMISSIONS, 1
@@ -763,8 +774,7 @@ def adapt_ci(
     tools = workflow_tools(root, config)
     block, triggers = workflow_triggers(source, policy["base"])
     changes[name] = (
-        (source / name)
-        .read_text()
+        template_text(source)
         .replace(
             "      EXTRA_SDK_TOOLS: dart@latest\n",
             "      EXTRA_SDK_TOOLS: "
@@ -779,7 +789,9 @@ def adapt_ci(
         )
         .replace(block, triggers, 1)
     )
-    changes[name] = workflow_budget(root, migrate_swift_runner(config, changes[name]))
+    changes[name] = split_test_shards(
+        config, workflow_budget(root, migrate_swift_runner(config, changes[name]))
+    )
 
 
 def without_workflow_gates(root: Path, changes: dict[str, str | None]) -> str | None:

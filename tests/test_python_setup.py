@@ -8,13 +8,13 @@ from types import ModuleType
 
 import pytest
 from gate_config import Gate, GateConfig, Group, parse_config
+from process_group import parallel_hint
 from python_setup import (
     import_configuration,
     import_contract_gap,
     leave_out_children,
     pyrefly_gap,
 )
-from reports import parallel_hint
 from test_setup import repository
 
 ONE_ROOT_INI = (

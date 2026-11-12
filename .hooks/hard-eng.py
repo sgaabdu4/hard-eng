@@ -51,11 +51,12 @@ from ci_jobs import (
     NO_LANGUAGES,
     LanguageFilter,
     add_language_filters,
+    add_shard_option,
     language_filter,
     language_groups,
 )
 from dart_boundaries import validate_dart_boundaries, validate_dart_typing
-from debt import OUTPUTS, remember
+from debt import OUTPUTS, remember, ruff_check
 from dependency_graph import SOURCE_SUFFIXES, child_groups
 from gate_config import (
     Gate,
@@ -184,10 +185,8 @@ def production_files(
 
 def without_fixes(command: list[str]) -> list[str]:
     """`fix = true` in ruff's settings makes `ruff check` rewrite files and exit 0."""
-    tool = next(
-        (i for i, part in enumerate(command) if part.split("@")[0] == "ruff"), -1
-    )
-    if command[tool + 1 : tool + 2] != ["check"] or tool < 0:
+    tool = ruff_check(command)
+    if tool < 0:
         return command
     return [*command[: tool + 2], "--no-fix", *command[tool + 2 :]]
 
@@ -323,6 +322,8 @@ def run_gate(
     from process_group import install_key, note_install
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
+    if part := gate.get("part"):
+        key += "@shard" if part.isdecimal() else "@merge"
     started = time.monotonic()
     limit = gate_limit(ROOT, key, timeout)
     name = f"{group['path']}/{gate['name']}"
@@ -353,6 +354,8 @@ def run_projects(
     stderr: IO[str],
 ) -> subprocess.CompletedProcess[bytes]:
     """Run the gate once, or a TypeScript types gate once per referenced config."""
+    if not command:
+        return subprocess.CompletedProcess(command, 0)
     from gitleaks_scan import run_gate_command
 
     projects: list[list[str]] = [[]]
@@ -391,6 +394,28 @@ def gate_scanner(group: Group, gate: Gate, scanner: str | None) -> str | None:
         ("dart", "dead-code-duplicates"): "dart-decimate",
         ("javascript", "dead-code-duplicates"): "fallow",
     }.get((group.get("language", ""), gate.get("role", "")), scanner)
+
+
+def shard_command(
+    group: Group,
+    gate: Gate,
+    command: list[str],
+    coverage: Path | None,
+    timeout: float,
+) -> tuple[list[str], Path | None]:
+    """A shard gate runs its own files and skips the coverage minimum; others pass through."""
+    if not gate.get("part"):
+        return command, coverage
+    from shards import part_command
+
+    return part_command(ROOT, group, gate, command, coverage, timeout)
+
+
+def shard_reports(group: Group, gate: Gate) -> None:
+    if gate.get("part"):
+        from shards import keep_reports
+
+        keep_reports(ROOT, group, gate)
 
 
 def run_limited_gate(
@@ -438,6 +463,9 @@ def run_limited_gate(
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
+        command, coverage_path = shard_command(
+            group, gate, command, coverage_path, timeout
+        )
         capture = (tests and kind == "dart-tests" and report.get("stdout", True)) or (
             scanner and report.get("stdout") is True
         )
@@ -467,11 +495,12 @@ def run_limited_gate(
                     sys.stdout.write(remember(group, gate, log.read()))
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
+        shard_reports(group, gate)
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             scanner_result(result.returncode == 0, scanner, *report_args)
-        from process_group import stopped_note
-        from reports import check_coverage, completed_tests, parallel_hint
+        from process_group import parallel_hint, stopped_note
+        from reports import check_coverage, completed_tests
 
         if (
             result.returncode == 0
@@ -488,7 +517,7 @@ def run_limited_gate(
             f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
             f"(exit {result.returncode}; elapsed {time.monotonic() - started:.3f}s)"
             f" @ {group['path']}"
-            + (stop or parallel_hint(result.returncode, tests, command)),
+            + (stop or parallel_hint(result.returncode, tests, command, report_path)),
             flush=True,
         )
         return result.returncode != 0
@@ -608,6 +637,7 @@ def check(
     related_tests: bool = False,
     quick: bool = False,
     languages: LanguageFilter = NO_LANGUAGES,
+    shard: str | None = None,
 ) -> int:
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
@@ -618,15 +648,34 @@ def check(
     require_ci_base(base)
     base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
-    if proven_elsewhere(base):
+    if shard == "merge":
+        from shards import proven_shard
+
+        if proven_shard(ROOT):
+            return 0
+    elif proven_elsewhere(base):
+        if shard:
+            from shards import mark_shard
+
+            mark_shard(ROOT, shard, True)
         return 0
 
     with check_lock(ROOT) as lock:
         installed = read_installed(lock, ROOT)
-        partial = quick or languages != NO_LANGUAGES or not dependents or related_tests
+        partial = (
+            quick
+            or languages != NO_LANGUAGES
+            or not dependents
+            or related_tests
+            or shard is not None
+        )
         start = clean_start(lock, ROOT, base, plan_stage, partial)
         groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
         groups = quick_groups(language_groups(groups, languages), quick, installed)
+        if shard:
+            from shards import shard_groups
+
+            groups = shard_groups(groups, shard)
         from debt import require_shrink
 
         require_shrink(ROOT, base)
@@ -643,7 +692,8 @@ def check(
         if not quick:
             change_size.commit_note(ROOT)
         stop_keeping("listings")
-        provision_tools(ROOT, groups, timeout)
+        if shard != "merge":
+            provision_tools(ROOT, groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         save_installed(lock, installed, ROOT)
@@ -652,6 +702,10 @@ def check(
         )
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         record_pass(lock, ROOT, start, failed)
+        if shard:
+            from shards import mark_shard
+
+            mark_shard(ROOT, shard, False)
         return int(failed)
 
 
@@ -716,7 +770,8 @@ def check_command(args: "Namespace") -> int:
     from process_group import exit_when_stopped
     from tool_setup import ensure_python_runtime
 
-    ensure_python_runtime()
+    if args.shard != "merge":
+        ensure_python_runtime()
     exit_when_stopped()
     return check(
         base=args.base,
@@ -725,6 +780,7 @@ def check_command(args: "Namespace") -> int:
         related_tests=args.related_tests,
         quick=args.quick,
         languages=language_filter(args),
+        shard=args.shard,
     )
 
 
@@ -739,8 +795,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults(apply=False, merge=True)
     commands = parser.add_subparsers(dest="command", required=True)
-    checks = add_language_filters(
-        commands.add_parser("check", help="Run applicable native checks")
+    checks = add_shard_option(
+        add_language_filters(
+            commands.add_parser("check", help="Run applicable native checks")
+        )
     )
     checks.add_argument("--base", help="Git base; unknown impact runs all checks")
     checks.add_argument("--plan-stage", choices=("Draft", "Ready", "Complete"))

@@ -186,10 +186,11 @@ def test_the_shipped_format_gate_covers_each_installed_workflow() -> None:
     named = {check["name"]: check["command"] for check in gates["shared"]}
     installed = set(
         re.findall(
-            r"\.github/workflows/[\w-]+\.yml",
+            r"\.github/(?:workflows/)?[\w-]+\.yml",
             (SOURCE / ".hooks/ci_setup.py").read_text(),
         )
     )
     assert ".github/workflows/hard-eng.yml" in installed
+    assert ".github/hard-eng.yml" in installed
     for path in installed:
         assert path in named["shipped-format"], path

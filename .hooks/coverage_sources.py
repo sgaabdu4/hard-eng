@@ -4,11 +4,109 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 from gate_config import Group, nonproduction_source
 
 IF_DIRECTIVE = re.compile(r"(?m)^\s*#if\b")
+COVERAGE_FILES = (
+    ".coveragerc",
+    ".coveragerc.toml",
+    "setup.cfg",
+    "tox.ini",
+    "pyproject.toml",
+)
+COV_SECTIONS = ("run", "report", "html", "xml", "json", "lcov", "paths")
+
+
+def file_sections(path: Path) -> Callable[[str], dict[str, object] | None]:
+    """The reader of one section of a TOML or INI settings file; a TOML section is named by its dotted path."""
+    import configparser
+    import tomllib
+
+    parser = configparser.ConfigParser(interpolation=None)
+    data: dict[str, object] = {}
+    try:
+        if path.suffix == ".toml":
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        else:
+            parser.read(path, encoding="utf-8")
+    except (ValueError, configparser.Error) as error:
+        raise ValueError(f"{path.name} cannot be read: {error}") from error
+
+    def section(name: str) -> dict[str, object] | None:
+        if path.suffix != ".toml":
+            return dict(parser[name]) if parser.has_section(name) else None
+        found: object = data
+        for part in name.split("."):
+            found = found.get(part) if isinstance(found, dict) else None
+        return cast(dict[str, object], found) if isinstance(found, dict) else None
+
+    return section
+
+
+def settings_reader(path: Path, own: bool) -> Callable[[str], dict[str, object] | None]:
+    """The sections of a coverage settings file; a file that is not coverage's own reads fewer."""
+    section = file_sections(path)
+    marked = "tool.coverage." if path.suffix == ".toml" else "coverage:"
+
+    def coverage_section(name: str) -> dict[str, object] | None:
+        found = section(marked + name)
+        return section(name) if found is None and own else found
+
+    return coverage_section
+
+
+def coverage_file(
+    directory: Path,
+) -> tuple[str, Callable[[str], dict[str, object] | None]] | None:
+    """The settings file that coverage.py reads, in its order, with the reader of its sections."""
+    for name in COVERAGE_FILES:
+        path = directory / name
+        if not path.is_file():
+            continue
+        own = name.startswith(".coveragerc")
+        section = settings_reader(path, own)
+        if own or any(section(known) for known in COV_SECTIONS):
+            return name, section
+    return None
+
+
+def omit_step(directory: Path, missing: list[Path]) -> str:
+    """The sentence for a package whose own coverage settings leave one of these files out of the report."""
+    from fnmatch import fnmatchcase
+
+    try:
+        found = coverage_file(directory)
+    except ValueError:
+        return ""
+    if found is None:
+        return ""
+    name, section = found
+    values = [(section(part) or {}).get("omit", "") for part in ("run", "report")]
+    patterns = [
+        str(entry).strip()
+        for value in values
+        for entry in (
+            value
+            if isinstance(value, list)
+            else str(value).replace(",", "\n").split("\n")
+        )
+    ]
+    forms = [
+        form
+        for file in missing
+        for form in (
+            file.name,
+            file.as_posix(),
+            (directory / file).absolute().as_posix(),
+        )
+    ]
+    if any(fnmatchcase(form, pattern) for pattern in patterns for form in forms):
+        return f". {name} has a coverage `omit` setting: remove its entries for these files"
+    return ""
 
 
 def erased_typescript(files: set[Path]) -> set[Path]:

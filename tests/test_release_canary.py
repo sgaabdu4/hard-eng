@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -27,6 +28,7 @@ def test_only_changes_to_installed_files_need_a_canary_run() -> None:
             "features/x/PLAN.md",
             "docs/a.md",
             ".github/workflows/canary.yml",
+            ".github/workflows/hard-eng.yml",
         ]
     )
     for installed in (
@@ -34,7 +36,8 @@ def test_only_changes_to_installed_files_need_a_canary_run() -> None:
         "setup.py",
         "AGENTS.md",
         ".agents/skill-sources/building-flutter-apps",
-        ".github/workflows/hard-eng.yml",
+        ".github/hard-eng.yml",
+        ".github/workflows/pr-text.yml",
     ):
         assert release_canary.needs_canary(["README.md", installed])
 
@@ -124,6 +127,47 @@ def test_projects_with_dotted_names_keep_their_own_log_and_clone(
     logs = [message.rsplit("log ", 1)[1] for message in messages]
     assert len(set(logs)) == 3
     assert not set(logs) & set(cloned)
+
+
+def test_a_passed_new_project_names_each_unit_that_ran(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    units = [("full check", ["true"]), ("project lint", ["true"])]
+    none: list[tuple[str, list[str]]] = []
+    for ran in (units, none):
+        monkeypatch.setattr(release_canary, "prepare", Mock(return_value=ran))
+        trial = release_canary.Trial(("scaffold", "nextjs"), tmp_path, ())
+        trial.work.mkdir()
+        assert trial.prepare("a" * 40, tmp_path) == []
+        names = ": full check, project lint" if ran else ""
+        assert trial.results["scaffold nextjs"] == (
+            True,
+            f"install and its checks passed{names}",
+        )
+
+
+def test_the_update_target_refuses_a_shard_workflow_in_a_project_without_shards(
+    tmp_path: Path,
+) -> None:
+    from gate_config import SOURCE_FILE
+
+    work = tmp_path / "project"
+    (work / ".github/workflows").mkdir(parents=True)
+    (work / Path(SOURCE_FILE).parent).mkdir(parents=True, exist_ok=True)
+    (work / SOURCE_FILE).write_text('{"revision": "' + "a" * 40 + '"}')
+    (work / "hard-eng.gates.json").write_text('{"packages": []}')
+    workflow = work / ".github/workflows/hard-eng.yml"
+    workflow.write_text("run: python3 .hooks/hard-eng.py check\n")
+    subprocess.run(["git", "init", "-q", str(work)], check=True)
+    with (tmp_path / "log").open("w") as log:
+        release_canary.on_update_branch(work, "a" * 40, log)
+        workflow.write_text("run: python3 .hooks/hard-eng.py check --shard 1\n")
+        with pytest.raises(release_canary.Failed, match="shard workflow"):
+            release_canary.on_update_branch(work, "a" * 40, log)
+        (work / "hard-eng.gates.json").write_text(
+            '{"packages": [{"checks": [{"shards": 2}]}]}'
+        )
+        release_canary.on_update_branch(work, "a" * 40, log)
 
 
 def test_an_install_without_the_update_runner_uses_its_older_entry_point(

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from shipping import ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
+WORKFLOW_TEMPLATE = SOURCE / ".github/hard-eng.yml"
 # Local fixture commands must not inherit the hosting workflow's event.
 os.environ.pop("GITHUB_ACTIONS", None)
 os.environ.pop("GITHUB_EVENT_NAME", None)
@@ -410,7 +411,7 @@ def migrates_to_template(root: Path, old: str) -> None:
     """An old generated workflow becomes today's template, which then needs no change."""
     from ci_setup import configure_ci
 
-    template = (SOURCE / ".github/workflows/hard-eng.yml").read_text()
+    template = WORKFLOW_TEMPLATE.read_text()
     path = root / ".github/workflows/hard-eng.yml"
     path.parent.mkdir(parents=True)
     path.write_text(old)

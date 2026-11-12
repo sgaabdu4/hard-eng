@@ -811,8 +811,12 @@ def test_release_age_has_one_value() -> None:
         if argument.startswith("--minimum-release-age=")
     ]
     assert ages == [f"--minimum-release-age={seconds}"]
-    for workflow in ("hard-eng.yml", "canary.yml"):
-        text = (SOURCE / ".github/workflows" / workflow).read_text()
+    for workflow in (
+        ".github/hard-eng.yml",
+        ".github/workflows/hard-eng.yml",
+        ".github/workflows/canary.yml",
+    ):
+        text = (SOURCE / workflow).read_text()
         assert f"MISE_MINIMUM_RELEASE_AGE: {seconds // 86400}d\n" in text
 
 
@@ -909,10 +913,8 @@ def test_a_ruff_gate_never_fixes_files(runner: ModuleType, tmp_path: Path) -> No
     (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nfix = true\n")
     source = tmp_path / "a.py"
     source.write_text("import os\n")
-    tool = next(i for i, part in enumerate(prepared["lint"]) if "ruff@" in part)
-    offline = ["uvx", "--offline", "ruff@latest", *prepared["lint"][tool + 1 :]]
     result = subprocess.run(
-        offline, cwd=tmp_path, capture_output=True, text=True, check=False
+        prepared["lint"], cwd=tmp_path, capture_output=True, text=True, check=False
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "F401" in result.stdout, result.stdout + result.stderr

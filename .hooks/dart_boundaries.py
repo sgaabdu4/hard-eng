@@ -3,8 +3,11 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
+
+if TYPE_CHECKING:
+    from gate_config import JsonObject
 
 SETTINGS_FILES = (
     ".dart-decimaterc",
@@ -47,6 +50,50 @@ DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     },
 }
 
+NESTED_STEP = (
+    ". This file replaces the package's settings for its folder: give it the `analyzer`"
+    " and `linter` settings of the package's analysis_options.yaml, or remove it"
+)
+
+
+def dart_rule_settings(value: object) -> object:
+    if isinstance(value, list):
+        if not all(isinstance(rule, str) for rule in value):
+            raise ValueError("Dart lint rule names must be strings")
+        return {rule: True for rule in value}
+    if isinstance(value, dict):
+        for rule, enabled in value.items():
+            if enabled is False:
+                raise ValueError(
+                    f"analysis_options.yaml: {rule} is set to false, which turns off "
+                    "a lint rule of the included set; remove that entry"
+                )
+    return value
+
+
+def validate_dart_plugins(options: "JsonObject") -> None:
+    from project_setup import migrate_dart_plugins
+
+    plugins = options.get("plugins")
+    if not isinstance(plugins, dict):
+        return
+    migrated = dict(plugins)
+    updated: JsonObject = {"plugins": migrated}
+    migrate_dart_plugins(updated, Path(__file__).resolve().parents[1])
+    if updated["plugins"] != plugins:
+        versions = {
+            name: value.get("version") if isinstance(value, dict) else value
+            for name, value in plugins.items()
+        }
+        changes = ", ".join(
+            f"{name}: {versions[name]} -> {value.get('version') if isinstance(value, dict) else value}"
+            for name, value in migrated.items()
+            if value != plugins.get(name)
+        )
+        raise ValueError(
+            f"Analyzer plugin version is older than the installed canonical profile ({changes}); run the supported Hard Eng updater and verify application compatibility"
+        )
+
 
 def dart_options(path: Path) -> DartOptions:
     try:
@@ -65,14 +112,14 @@ def dart_options(path: Path) -> DartOptions:
 
 
 def validate_dart_includes(
-    path: Path, directory: Path, seen: set[Path] | None = None
+    path: Path, directory: Path, seen: set[Path] | None = None, packaged: bool = False
 ) -> None:
     seen = set() if seen is None else seen
     path = path.resolve()
     if path in seen:
         raise ValueError(f"Recursive Dart analysis include: {path}")
     seen.add(path)
-    from gate_config import JsonObject, validate_dart_plugins
+    from gate_config import JsonObject
     from project_setup import validate_dart_exclusions
 
     options = dart_options(path)
@@ -107,7 +154,18 @@ def validate_dart_includes(
             included = Path(unquote(uri.path))
         else:
             included = path.parent / include
-        validate_dart_includes(included, directory, seen.copy())
+        package = include.startswith("package:")
+        try:
+            validate_dart_includes(
+                included, directory, seen.copy(), packaged or package
+            )
+        except ValueError as error:
+            if packaged or not package:
+                raise
+            raise ValueError(
+                f"{error}. A package file cannot be changed: remove `include: {include}` "
+                f"from {path} and list the lint rules that you need there"
+            ) from error
 
 
 def flutter_without_test(directory: Path) -> bool:
@@ -191,15 +249,17 @@ def validate_dart_boundaries(
 def validate_dart_typing(
     directory: Path, sources: list[str] | tuple[str, ...], package_root: Path | None
 ) -> None:
-    from gate_config import JsonObject, dart_rule_settings
+    from gate_config import JsonObject
     from project_setup import validate_dart_exclusions
 
-    options = dart_options(directory / "analysis_options.yaml")
+    path = directory / "analysis_options.yaml"
+    options = dart_options(path)
+    where = f": {path}" + ("" if package_root in (None, directory) else NESTED_STEP)
     for section, groups in DART_TYPING.items():
         for group, settings in groups.items():
             section_options = cast(JsonObject, options).get(section)
             if not isinstance(section_options, dict):
-                raise TypeError(f"Dart requires {section} settings")
+                raise TypeError(f"Dart requires {section} settings{where}")
             actual = section_options.get(group)
             if group == "rules":
                 actual = dart_rule_settings(actual)
@@ -209,10 +269,10 @@ def validate_dart_typing(
             if not isinstance(actual, dict) or any(
                 actual.get(key) != value for key, value in settings.items()
             ):
-                raise ValueError(f"Dart requires strict {section}.{group} settings")
-    validate_dart_includes(
-        directory / "analysis_options.yaml", package_root or directory
-    )
+                raise ValueError(
+                    f"Dart requires strict {section}.{group} settings{where}"
+                )
+    validate_dart_includes(path, package_root or directory)
     for source in {*sources, "test", "tests"}:
         for nested in (directory / source).rglob("analysis_options.yaml"):
             if nested.parent != directory:

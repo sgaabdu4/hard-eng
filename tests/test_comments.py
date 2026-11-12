@@ -365,6 +365,29 @@ def test_a_class_mark_is_refused_only_when_the_class_holds_a_test(
     assert f"tests/doubles.py:{line} adds '__test__ " + "= False'" in str(error.value)
 
 
+@pytest.mark.parametrize(
+    ("name", "table", "sign"),
+    [
+        ("pyproject.toml", "[tool.pytest.ini_options]", " = "),
+        ("pyproject.toml", "[tool.pytest]", " = "),
+        ("pyproject.toml", "[ tool.pytest.ini_options ]", " = "),
+        ("pytest.ini", "[pytest]", " = "),
+        ("pytest.ini", "[pytest]", ": "),
+        ("setup.cfg", "[tool:pytest]", " = "),
+        ("pytest.toml", "[pytest]", " = "),
+        (".pytest.toml", "[pytest]", " = "),
+        (".pytest.ini", "[pytest]", " = "),
+    ],
+)
+def test_a_retry_count_in_a_pytest_table_fails_at_its_line(
+    tmp_path: Path, name: str, table: str, sign: str
+) -> None:
+    """HE-NO-SWITCH-OFF: the count of the pytest-retry plugin counts only in a pytest table."""
+    text = table + "\nminversion = '8'\nre" + "tries" + sign + "2\n"
+    message = refusal(tmp_path, name, text)[1]
+    assert f"{name}:4 adds " + repr("re" + "tries") in message
+
+
 @pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)
 def test_every_refused_retry_form_holds_a_word_that_loads_the_rules(
     name: str, text: str, form: str

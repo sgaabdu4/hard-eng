@@ -443,6 +443,14 @@ ship_actions.mutate(Path({str(root)!r}), "HEAD~1", None, True, production)
     assert gone(marker)
 
 
+def test_the_mutation_run_starts_poetry_the_way_the_gates_do() -> None:
+    """A machine with no Poetry on its path still runs the gates, through uvx."""
+    command = mutation.mutmut("poetry", "run")
+    assert command[0] == "uvx" and "poetry@latest" in command
+    assert command[-2:] == ["mutmut", "run"]
+    assert mutation.mutmut("uv", "run")[:3] == ["uv", "run", "--no-sync"]
+
+
 def test_mutmut_settings_keep_the_rest_of_setup_cfg(tmp_path: Path) -> None:
     original = "[tool:pytest]\nDJANGO_SETTINGS_MODULE = app.settings\n"
     (tmp_path / "setup.cfg").write_text(original)
