@@ -1,3 +1,4 @@
+import configparser
 import fnmatch
 import json
 import shutil
@@ -495,6 +496,13 @@ def test_mutmut_settings_leave_out_each_performance_suite_of_the_package(
         "pytest_add_cli_args =\n"
         "\t--ignore=tests/api/performance\n\t--ignore=tests/performance\n"
     ) in written
+    (tmp_path / "setup.cfg").unlink()
+    mutation.configure_mutmut(tmp_path, ["main.py"], ["tests/100%/performance"])
+    plain = configparser.ConfigParser()
+    plain.read(tmp_path / "setup.cfg")
+    assert plain["mutmut"]["pytest_add_cli_args"].split() == [
+        "--ignore=tests/100%/performance"
+    ]
     (tmp_path / "setup.cfg").unlink()
     mutation.configure_mutmut(tmp_path, ["main.py"], [])
     assert "pytest_add_cli_args" not in (tmp_path / "setup.cfg").read_text()

@@ -295,7 +295,7 @@ def configure_mutmut(
     ).stdout.split("\0")
     # Tests may read any tracked file, and mutmut copies only tests/ and lockfiles.
     copies = {Path(name).parts[0] for name in tracked if name} - sources
-    ignored = {f"--ignore={suite}" for suite in suites}
+    ignored = {f"--ignore={suite}".replace("%", "%%") for suite in suites}
     settings = {
         "source_paths": sources,
         "also_copy": copies,
