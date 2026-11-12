@@ -8,7 +8,14 @@ import sys
 from itertools import takewhile
 from pathlib import Path, PurePosixPath
 
-from gate_config import JSONC, Group, JsonObject, JsonValue, json_file
+from gate_config import (
+    JSONC,
+    Group,
+    JsonObject,
+    JsonValue,
+    biome_formatters,
+    json_file,
+)
 
 OPENING_BRACE = re.compile(r"\{(\s*)")
 TRAILING_COMMA = re.compile(r",(\s*[}\]])")
@@ -154,14 +161,10 @@ def value_starts(text: str, start: int) -> dict[str, int]:
     return found
 
 
-def biome_setting(config: dict[str, object], key: str, default: int) -> int:
-    """json.formatter.<key>, else formatter.<key>, else the Biome default."""
-    for section in (config.get("json"), config):
-        formatter = section.get("formatter") if isinstance(section, dict) else None
-        value = formatter.get(key) if isinstance(formatter, dict) else None
-        if isinstance(value, int):
-            return value
-    return default
+def biome_setting(layout: dict[str, int | str], key: str, default: int) -> int:
+    """The formatter option as an integer, else the Biome default."""
+    value = layout.get(key)
+    return value if isinstance(value, int) else default
 
 
 def add_member(text: str, masked: str, brace: int, member: str) -> str:
@@ -195,7 +198,7 @@ def add_line_entry(
 def add_inline_entry(
     text: str,
     masked: str,
-    config: dict[str, object],
+    layout: dict[str, int | str],
     span: tuple[int, int],
     added: list[str],
 ) -> str:
@@ -210,8 +213,8 @@ def add_inline_entry(
     first = edited.rfind("\n", 0, start) + 1
     last = edited.find("\n", start)
     line = edited[first : None if last < 0 else last]
-    tab = " " * biome_setting(config, "indentWidth", 2)
-    if len(line.replace("\t", tab)) <= biome_setting(config, "lineWidth", 80):
+    tab = " " * biome_setting(layout, "indentWidth", 2)
+    if len(line.replace("\t", tab)) <= biome_setting(layout, "lineWidth", 80):
         return edited
     key = line[: line.index("[")]
     after = line[line.index("]") + 1 :]
@@ -240,7 +243,10 @@ def biome_includes(config: dict[str, object]) -> list[str] | None:
 
 
 def biome_edit(
-    text: str, config: dict[str, object], entries: tuple[str, ...]
+    text: str,
+    config: dict[str, object],
+    layout: dict[str, int | str],
+    entries: tuple[str, ...],
 ) -> str | None:
     """The text with the Hard Eng entries in files.includes; None when they are there."""
     masked = JSONC.sub(lambda match: match[1] or " " * len(match[0]), text)
@@ -258,10 +264,10 @@ def biome_edit(
         if not includes:
             if text[start + 1 : close].strip():
                 raise ValueError("a comment stands in the empty list")
-            return add_inline_entry(text, masked, config, (start, close), added)
+            return add_inline_entry(text, masked, layout, (start, close), added)
         if "\n" in text[start:close]:
             return add_line_entry(text, masked, end, close, added)
-        return add_inline_entry(text, masked, config, (start, close), added)
+        return add_inline_entry(text, masked, layout, (start, close), added)
     if "extends" in config:
         raise ValueError("a local list replaces the inherited one")
     listed = f'"includes": {json.dumps(wanted)}'
@@ -302,7 +308,8 @@ def biome_ignores_hooks(root: Path, changes: dict[str, str]) -> None:
     entries = biome_entries(root, changes)
     try:
         config = jsonc_config(name, text)
-        updated = biome_edit(text, config, entries)
+        formatter, own = biome_formatters(root / name, set())
+        updated = biome_edit(text, config, {**formatter, **own}, entries)
         if updated is not None:
             after = jsonc_config(name, updated)
             if not biome_proof(config, after, entries):

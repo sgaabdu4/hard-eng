@@ -284,3 +284,34 @@ def test_an_older_install_gets_only_the_package_folders_it_lacks(
         "!coverage",
         "!web/coverage",
     ]
+
+
+EXTENDED = (
+    '{\n    "extends": ["./base.json"],\n    "files": {\n'
+    '        "includes": [%s]\n    }\n}\n'
+)
+
+
+@pytest.mark.parametrize(
+    ("base", "listed", "after"),
+    [
+        (
+            '{"formatter": {"indentStyle": "space", "indentWidth": 4, "lineWidth": 100}}',
+            '"src/**", "!src/generated", "!dist", "!build"',
+            '{\n    "extends": ["./base.json"],\n    "files": {\n        "includes": [\n            "src/**",\n            "!src/generated",\n            "!dist",\n            "!build",\n            "!.hooks",\n            "!.hard-eng",\n            "!coverage"\n        ]\n    }\n}\n',
+        ),
+        (
+            '{"formatter": {"indentStyle": "space", "indentWidth": 4, "lineWidth": 60}}',
+            '"src/**", "!dist"',
+            '{\n    "extends": ["./base.json"],\n    "files": {\n        "includes": [\n            "src/**",\n            "!dist",\n            "!.hooks",\n            "!.hard-eng",\n            "!coverage"\n        ]\n    }\n}\n',
+        ),
+    ],
+)
+def test_the_biome_edit_takes_its_layout_from_the_extended_file(
+    tmp_path: Path, base: str, listed: str, after: str
+) -> None:
+    (tmp_path / "base.json").write_text(base)
+    (tmp_path / "biome.json").write_text(EXTENDED % listed)
+    changes: dict[str, str] = {}
+    biome_ignores_hooks(tmp_path, changes)
+    assert changes["biome.json"] == after
