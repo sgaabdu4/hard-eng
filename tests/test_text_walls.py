@@ -398,6 +398,7 @@ def test_flutter_text_follows_the_same_rules(tmp_path: Path) -> None:
         (True, "UserContent(child: Text('Literal text')),"),
         (True, f"TextField(decoration: InputDecoration(labelText: '{thirty}')),"),
         (False, "Text(l10n.counter(count)),"),
+        (False, "Text(n.details.map((d) => d.label).join(', ')),"),
     ]
     lines = [
         "import 'package:flutter/material.dart';",
@@ -451,3 +452,33 @@ def test_the_template_arb_file_is_judged_by_message(
     assert "oldWall" not in message
     assert "app_fr" not in message
     assert "lib/l10n/app_en.arb:10:" not in message
+
+
+def test_a_guard_or_map_on_a_stored_field_reads_the_elements_inside(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-TEXT-WALLS: a guard or a list call on a stored field is not stored text, and the elements inside are read."""
+    wall = sentence(30)
+    rows = [
+        (False, "{n.content && <UserContent>{n.content}</UserContent>}"),
+        (
+            False,
+            '<a href="/x">{n.description && <p className="line-clamp-2">{n.description}</p>}</a>',
+        ),
+        (False, "{n.details.map((d) => <li>{d.label}</li>)}"),
+        (False, "{n.details.filter((d) => d.on).map((d) => <li>{d.label}</li>)}"),
+        (True, "{n.details.map((d) => <li>" + wall + "</li>)}"),
+        (True, "{n.flag && <p>" + wall + "</p>}"),
+        (True, "<p>{n.body.trim()}</p>"),
+        (True, '<p>{n.body ?? ""}</p>'),
+        (True, "{n.content && <p>{n.content}</p>}"),
+    ]
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
+    message = refused(root)
+    expected = [number for number, (bad, _) in enumerate(rows, 3) if bad]
+    flagged = [
+        number
+        for number in range(1, len(rows) + 5)
+        if f"src/Card.tsx:{number}:" in message
+    ]
+    assert flagged == expected
