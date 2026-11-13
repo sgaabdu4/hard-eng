@@ -834,6 +834,7 @@ def plan_install(
         browser_test_coverage(root / package["path"], package)
         configure_semgrep_ignore(root, package, changes)
         configure_typing_checks(package)
+    for package in config.get("packages", []):
         configure_language(root, package, config["packages"], changes)
     from untrusted_input import biome_ignores_hooks
 
