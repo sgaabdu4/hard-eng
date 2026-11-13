@@ -69,6 +69,7 @@ class FakeGh:
 def gh(monkeypatch: pytest.MonkeyPatch) -> FakeGh:
     fake = FakeGh()
     monkeypatch.setattr(update_pr, "gh", fake)
+    monkeypatch.setattr("shipping.gh", fake)
     return fake
 
 

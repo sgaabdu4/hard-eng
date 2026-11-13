@@ -13,6 +13,7 @@ from test_shipping import (
     FakeGitHub,
     _check,
     _fixture,
+    _patch_gh,
     _pull,
     _ready_outcome,
 )
@@ -121,3 +122,78 @@ def test_merge_names_a_step_when_github_cannot_rebase(
         assert "origin/main" in message
         assert "push to main" not in message
         assert "push it to main" not in message
+
+
+_SETTING_STEP = (
+    "This repository does not allow rebase merges, and Hard Eng merges by rebase "
+    "only, so nothing was merged. Allow rebase merges in the repository settings, "
+    "then run ship again."
+)
+
+
+def test_a_repository_that_forbids_rebase_merges_is_named_as_the_cause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
+    fake.rebase_merge_allowed = False
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(shipping.ShippingError) as refused:
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    assert str(refused.value).startswith(_SETTING_STEP)
+    assert "Rebase the branch" not in str(refused.value)
+    assert len(fake.setting_reads) == 1
+
+
+def test_a_failed_merge_in_a_repository_that_forbids_rebase_merges_names_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
+    fake.rebase_merge_allowed = False
+
+    def merge_fails(_root: Path, *args: str) -> str:
+        raise shipping.ShippingError("GraphQL: This branch can't be rebased")
+
+    monkeypatch.setattr(ship_actions, "gh", merge_fails)
+    _patch_gh(monkeypatch, fake)
+    with pytest.raises(shipping.ShippingError) as refused:
+        ship_actions.merge(fixture.root, None, _merge_shipment(fixture.root), "rebase")
+    assert str(refused.value) == _SETTING_STEP
+
+
+@pytest.mark.parametrize("setting", [True, None, "yes"])
+def test_a_pr_github_cannot_rebase_keeps_the_rebase_step_unless_the_setting_is_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setting: object
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
+    fake.rebase_merge_allowed = setting
+    _ready_outcome(fixture, fake, monkeypatch, "Rebase the branch on origin/main")
+
+
+def test_an_unreadable_setting_keeps_the_rebase_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
+
+    def unreadable(root: Path, *args: str) -> str:
+        if args[:2] == ("repo", "view"):
+            raise shipping.ShippingError("gh query failed")
+        return fake(root, *args)
+
+    monkeypatch.setattr(shipping, "gh", unreadable)
+    with pytest.raises(
+        shipping.ShippingError, match="Rebase the branch on origin/main"
+    ):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+
+
+def test_a_pr_github_can_rebase_never_reads_the_repository_setting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, rebaseable=True), [_check(fixture.head)])
+    assert _ready_outcome(fixture, fake, monkeypatch, None) is not None
+    assert fake.setting_reads == []
