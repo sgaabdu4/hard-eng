@@ -316,7 +316,7 @@ def test_the_list_command_and_the_stdin_judge_share_the_caps(
 def test_other_screen_stacks_print_a_gap_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """HE-NO-TEXT-WALLS: Vue, Svelte, Astro, SwiftUI, Compose and Flutter screens print a Gap line that a generic issue can carry."""
+    """HE-NO-TEXT-WALLS: Vue, Svelte, Astro, SwiftUI and Compose screens print a Gap line that a generic issue can carry; Flutter screens are read."""
     root = tmp_path / "repo"
     init(root)
     files = {
@@ -335,7 +335,7 @@ def test_other_screen_stacks_print_a_gap_line(
     basic_mode.announce(root, {"version": 1, "packages": [], "shared": []})
     lines = capsys.readouterr().out.splitlines()
     gaps = [line for line in lines if line.startswith("Gap: No text wall check for ")]
-    stacks = ["Vue", "Svelte", "Astro", "SwiftUI", "Compose", "Flutter"]
+    stacks = ["Vue", "Svelte", "Astro", "SwiftUI", "Compose"]
     assert gaps == [f"Gap: No text wall check for {stack}" for stack in stacks]
     for stack in stacks:
         assert gap_issue.generic_problem(f"No text wall check for {stack}") is None
@@ -346,17 +346,30 @@ def test_other_screen_stacks_print_a_gap_line(
 def test_no_starter_screen_holds_a_text_wall(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """HE-NO-TEXT-WALLS: each TSX or JSX starter screen that Hard Eng ships passes its own rule."""
+    """HE-NO-TEXT-WALLS: each TSX, JSX and Flutter starter screen and the Flutter ARB file that Hard Eng ships pass the rule."""
     root = tmp_path / "repo"
     init(root)
-    for starter in ("nextjs", "opennext", "vite"):
+    for starter in ("nextjs", "opennext", "vite", "flutter"):
         shutil.copytree(
             SOURCE / ".agents/starters" / starter,
             root / starter,
             ignore=shutil.ignore_patterns("node_modules"),
         )
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [{"name": "app", "path": "flutter", "language": "dart"}],
+                "shared": [],
+            }
+        )
+    )
     screens = text_walls.listed_screens(root, [], text_walls.settings(root))
     assert len(screens) >= 5
+    assert "flutter/lib/l10n/app_en.arb" in screens
+    assert (
+        "flutter/lib/features/counter/presentation/screens/counter_screen.dart"
+        in screens
+    )
     assert text_walls.walls_command(root, [], False) == 0
     assert capsys.readouterr().out.strip() == ""
 
