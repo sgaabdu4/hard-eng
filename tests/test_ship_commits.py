@@ -145,9 +145,9 @@ def test_a_repository_that_forbids_rebase_merges_is_named_as_the_cause(
     assert len(fake.setting_reads) == 1
 
 
-def test_a_failed_merge_in_a_repository_that_forbids_rebase_merges_names_it(
+def _failed_merge_in_a_repository_without_rebase_merges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> tuple[FakeGitHub, str]:
     fixture = _fixture(tmp_path)
     fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
     fake.rebase_merge_allowed = False
@@ -159,7 +159,16 @@ def test_a_failed_merge_in_a_repository_that_forbids_rebase_merges_names_it(
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError) as refused:
         ship_actions.merge(fixture.root, None, _merge_shipment(fixture.root), "rebase")
-    assert str(refused.value) == _SETTING_STEP
+    return fake, str(refused.value)
+
+
+def test_a_failed_merge_in_a_repository_that_forbids_rebase_merges_names_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, message = _failed_merge_in_a_repository_without_rebase_merges(
+        tmp_path, monkeypatch
+    )
+    assert message == _SETTING_STEP
 
 
 @pytest.mark.parametrize("setting", [True, None, "yes"])
@@ -197,3 +206,23 @@ def test_a_pr_github_can_rebase_never_reads_the_repository_setting(
     fake = FakeGitHub(_pull(fixture, rebaseable=True), [_check(fixture.head)])
     assert _ready_outcome(fixture, fake, monkeypatch, None) is not None
     assert fake.setting_reads == []
+
+
+_READ = ("repo", "view", "acme/widget", "--json", "rebaseMergeAllowed")
+
+
+def test_the_ready_check_reads_the_setting_of_the_repository_of_the_pull_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
+    fake.rebase_merge_allowed = False
+    _ready_outcome(fixture, fake, monkeypatch, "does not allow rebase merges")
+    assert fake.setting_reads == [_READ]
+
+
+def test_a_failed_merge_reads_the_setting_of_the_repository_of_the_pull_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake, _ = _failed_merge_in_a_repository_without_rebase_merges(tmp_path, monkeypatch)
+    assert fake.setting_reads == [_READ]

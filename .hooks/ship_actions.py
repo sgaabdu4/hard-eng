@@ -543,7 +543,9 @@ def merge(target: Path, plan: Path | None, shipment: Shipment, method: str) -> S
         )
     except ShippingError as failure:
         if _pull(target, *_pr_url(shipment.pr_url)).rebaseable is False:
-            raise ShippingError(rebase_problem(target, shipment.base)) from failure
+            raise ShippingError(
+                rebase_problem(target, shipment.repository, shipment.base)
+            ) from failure
         raise
     try:
         return verify(target, plan, shipment.pr_url, "delivered")
