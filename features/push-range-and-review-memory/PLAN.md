@@ -34,7 +34,7 @@ Authority: Autonomous. The maintainer set the three changes and their decisions;
 - [x] Earlier text sits in a nonce fence it cannot close → `tests/test_challenge.py::test_earlier_review_text_is_fenced_and_cannot_close_the_fence`.
 - [x] The command prints the counts and the focus commit → `tests/test_challenge.py::test_the_command_prints_how_many_earlier_reviews_and_decisions_it_passed`.
 - [x] Records of an earlier task on a reused branch name are not passed, and a huge earlier output keeps the prompt under the byte limit → `tests/test_challenge.py::test_records_of_an_earlier_task_on_a_reused_branch_name_are_not_passed` and `::test_the_prompt_stays_under_the_byte_limit_with_a_huge_earlier_output`.
-- [x] Nothing new loads at session start or at Stop → `tests/test_gate_speed.py`.
+- [x] Nothing new loads at session start or at Stop → `tests/test_gate_speed.py::test_the_session_start_modules_compile_no_more_patterns_at_import` and `tests/test_gate_speed.py::test_stop_with_nothing_changed_loads_no_network_module`.
 
 ## Baseline + execution
 
