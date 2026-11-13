@@ -369,13 +369,32 @@ def read_all(
     return results
 
 
+def old_names(root: Path, point: str) -> dict[str, str]:
+    """The base name of each renamed file, from one git call made only when a finding exists."""
+    listing = subprocess.check_output(
+        ["git", "diff", "-M", "--name-status", "-z", point, "--"], cwd=root, text=True
+    ).split("\0")
+    names: dict[str, str] = {}
+    index = 0
+    while index < len(listing) - 1:
+        if listing[index].startswith("R"):
+            names[listing[index + 2]] = listing[index + 1]
+            index += 3
+        else:
+            index += 2
+    return names
+
+
 def old_findings(
     root: Path, point: str, names: list[str], caps: Caps
 ) -> Counter[tuple[str, str]]:
     """How many times each finding stood in the changed files at the base."""
+    moved = old_names(root, point)
     return Counter(
         finding.key()
-        for result in read_all(base_sources(root, point, names))
+        for result in read_all(
+            base_sources(root, point, [moved.get(name, name) for name in names])
+        )
         for finding in judged(result["path"], result["blocks"], caps)
     )
 
