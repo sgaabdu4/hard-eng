@@ -7,8 +7,9 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 from conftest import commit, git, init
-from dart_boundaries import validate_dart_boundaries
+from dart_boundaries import nested_package_patterns, validate_dart_boundaries
 from fallow_report import Report, validate_scanner_command
 from gate_config import (
     GateConfig,
@@ -405,7 +406,7 @@ def test_root_dart_update_consolidates_duplicate_analyzers(
 def test_root_dart_directory_analyzer_returns_to_package_root(
     installer: ModuleType, name: str
 ) -> None:
-    """Explicit paths make `dart analyze` skip analyzer plugins."""
+    """Explicit paths make `dart analyze` skip analyzer plugins in Dart 3.13 and older."""
     explicit = ["dart", "analyze", "--fatal-infos", "lib", "test"]
     package: Group = {
         "path": ".",
@@ -421,6 +422,91 @@ def test_root_dart_directory_analyzer_returns_to_package_root(
     ]
 
 
+def write_fixture_pubspec(directory: Path) -> None:
+    (directory / "pubspec.yaml").write_text(
+        'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n'
+    )
+
+
+def run_setup(installer: ModuleType, root: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, str(installer.SOURCE / "setup.py"), str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_root_dart_install_excludes_nested_packages(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    for name in (".", "packages/inner"):
+        (tmp_path / name / "lib").mkdir(parents=True, exist_ok=True)
+        (tmp_path / name / "lib/a.dart").write_text("void main() {}\n")
+        write_fixture_pubspec(tmp_path / name)
+    run_setup(installer, tmp_path)
+    config = json.loads((tmp_path / "hard-eng.gates.json").read_text())
+    root = next(package for package in config["packages"] if package["path"] == ".")
+    assert [
+        gate["command"]
+        for gate in root["checks"]
+        if gate["command"][:2] == ["dart", "analyze"]
+    ] == [ROOT_ANALYZER]
+    options = yaml.safe_load((tmp_path / "analysis_options.yaml").read_text())
+    assert options["analyzer"]["exclude"] == ["packages/inner/**"]
+    inner = yaml.safe_load(
+        (tmp_path / "packages/inner/analysis_options.yaml").read_text()
+    )
+    assert "exclude" not in inner["analyzer"]
+
+
+def test_root_dart_update_excludes_nested_packages_for_a_project_with_folder_checks(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: outer\n")
+    folders = ["lib", "test", "bin", "tool", "integration_test"]
+    package: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [
+            {
+                "name": f"types-{folder}",
+                "role": "types",
+                "command": ["dart", "analyze", "--fatal-infos", folder],
+            }
+            for folder in folders
+        ],
+    }
+    nested: list[Group] = [
+        {
+            "path": f"packages/{name}",
+            "language": "dart",
+            "checks": [{"name": "types", "role": "types", "command": ROOT_ANALYZER}],
+        }
+        for name in ("inner", "other")
+    ]
+    installer.configure_typing_checks(package)
+    assert [gate["role"] for gate in package["checks"]] == [
+        *["project-types"] * 5,
+        "types",
+    ]
+    assert package["checks"][-1]["command"] == ROOT_ANALYZER
+    children = nested_package_patterns(package, [package, *nested])
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, changes, children)
+    (tmp_path / "analysis_options.yaml").write_text(changes["analysis_options.yaml"])
+    options = yaml.safe_load((tmp_path / "analysis_options.yaml").read_text())
+    assert sorted(options["analyzer"]["exclude"]) == [
+        "packages/inner/**",
+        "packages/other/**",
+    ]
+    runner.validate_typing(tmp_path, "dart", ["lib"], children=children)
+
+
 def test_plain_dart_uses_native_coverage_tool(
     installer: ModuleType, tmp_path: Path
 ) -> None:
@@ -433,16 +519,8 @@ def test_plain_dart_uses_native_coverage_tool(
         path = directory / "fixture.dart"
         path.write_text("void main() {}\n")
         authored.append(path)
-    (tmp_path / "pubspec.yaml").write_text(
-        'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n'
-    )
-    result = subprocess.run(
-        [sys.executable, str(installer.SOURCE / "setup.py"), str(tmp_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
+    write_fixture_pubspec(tmp_path)
+    run_setup(installer, tmp_path)
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
     assert written == json_file(tmp_path, config)

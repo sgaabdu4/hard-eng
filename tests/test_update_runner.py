@@ -376,17 +376,31 @@ def pushed_release(
 
 
 def refused_release(
-    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    wrapped: bool = False,
 ) -> tuple[Path, Mock]:
     source, target, _ = release
-    config_path = target / "hard-eng.gates.json"
-    config = json.loads(config_path.read_text())
-    scanner = ["node", "scan.mjs", "gitleaks", "dir", "--report-path", "files.sarif"]
-    config["shared"].append(
-        {"name": "files", "role": "secrets-files", "command": scanner}
-    )
-    config_path.write_text(json.dumps(config))
-    commit(target, "wrapped files scanner the new hooks reject")
+    if wrapped:
+        config_path = target / "hard-eng.gates.json"
+        config = json.loads(config_path.read_text())
+        scanner = [
+            "node",
+            "scan.mjs",
+            "gitleaks",
+            "dir",
+            "--report-path",
+            "files.sarif",
+        ]
+        config["shared"].append(
+            {"name": "files", "role": "secrets-files", "command": scanner}
+        )
+        config_path.write_text(json.dumps(config))
+        commit(target, "wrapped files scanner the new hooks reject")
+    else:
+        skill = target / ".agents/skills/he/SKILL.md"
+        skill.write_text(skill.read_text() + "\nA local line.\n")
+        commit(target, "a local skill edit the update would replace")
     add_origin(target)
     select_release(source, monkeypatch)
     fetch = Mock(side_effect=update.fetch_sources)
@@ -401,14 +415,14 @@ def test_background_update_does_not_repeat_a_refusal_until_inputs_change(
     target, fetch = refused_release(release, monkeypatch)
     result = target / update_runner.RESULT_FILE
     assert update_runner.apply_update(target) == 0
-    assert "secrets-files requires native" in result.read_text()
+    assert "SKILL.md already differs" in result.read_text()
     assert "A fix in tracked files goes on the base branch" in result.read_text()
     assert update_runner.apply_update(target) == 0
     assert "it is not retried before 24 hours unless a new release" in (
         result.read_text()
     )
     assert fetch.call_count == 1
-    with pytest.raises(ValueError, match="secrets-files requires native"):
+    with pytest.raises(ValueError, match="SKILL.md already differs"):
         update.update(target, repair=True)
     assert fetch.call_count == 2
     (target / "notes.txt").write_text("new base work\n")
@@ -431,7 +445,7 @@ def test_setup_retries_a_remembered_refusal(
     assert update_runner.apply_update(target) == 0
     assert update_runner.apply_update(target) == 0
     assert fetch.call_count == 1
-    with pytest.raises(ValueError, match="secrets-files requires native"):
+    with pytest.raises(ValueError, match="SKILL.md already differs"):
         update_runner.locked_update(target, repair=True)
     assert fetch.call_count == 3
 

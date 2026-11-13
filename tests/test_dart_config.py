@@ -12,6 +12,7 @@ import yaml
 from conftest import git
 from dart_boundaries import (
     DART_TYPING,
+    nested_package_patterns,
     validate_dart_boundaries,
     validate_dart_includes,
 )
@@ -23,6 +24,7 @@ from gate_config import (
     generated_sources,
 )
 from project_setup import adapt_package, dependency_command, validate_dart_exclusions
+from test_setup import repository, run_setup, write_fixture_pubspec
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
@@ -777,3 +779,179 @@ def test_a_linter_rule_set_to_false_is_refused_by_name(
     del options["linter"]["rules"]["avoid_print"]
     path.write_text(yaml.safe_dump(options))
     runner.validate_typing(tmp_path, "dart", ["lib"])
+
+
+NESTED_ROOT: Group = {"path": ".", "language": "dart", "checks": []}
+
+
+def nested_group(path: str, language: str = "dart", role: str = "types") -> Group:
+    check: Gate = {"name": role, "role": role, "command": ["dart", "analyze", "."]}
+    return {"path": path, "language": language, "checks": [check]}
+
+
+def nested_project(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    (root / "pubspec.yaml").write_text("name: outer\n")
+    for name in ("packages/inner", "test/support"):
+        (root / name / "lib").mkdir(parents=True)
+        (root / name / "pubspec.yaml").write_text("name: inner\n")
+        (root / name / "lib/b.dart").write_text("void b() {}\n")
+    git(root, "add", ".")
+
+
+@pytest.mark.parametrize(
+    "pattern,children,accepted",
+    [
+        ("packages/inner/**", {"packages/inner/**"}, True),
+        ("packages/**", {"packages/inner/**"}, False),
+        ("test/support/**", {"packages/inner/**"}, False),
+        ("packages/inner/**", set(), False),
+    ],
+)
+def test_dart_exclusions_accept_only_nested_packages_with_own_types_check(
+    tmp_path: Path, pattern: str, children: set[str], accepted: bool
+) -> None:
+    nested_project(tmp_path)
+    if accepted:
+        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
+        return
+    with pytest.raises(ValueError, match="cannot exclude project files"):
+        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
+
+
+def test_nested_package_exclusions_follow_child_types_checks() -> None:
+    groups: list[Group] = [
+        NESTED_ROOT,
+        nested_group("packages/inner"),
+        nested_group("packages/lint", role="lint"),
+        {"path": "packages/docs", "checks": []},
+        nested_group("packages/web", language="javascript"),
+    ]
+    assert nested_package_patterns(NESTED_ROOT, groups) == {"packages/inner/**"}
+    parent = nested_group("packages/inner")
+    below = nested_group("packages/inner/deep")
+    assert nested_package_patterns(parent, [parent, below]) == {"deep/**"}
+    assert nested_package_patterns(NESTED_ROOT, [NESTED_ROOT]) == frozenset()
+
+
+def test_dart_setup_excludes_nested_packages_from_root_analysis(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: outer\n")
+    children = frozenset({"packages/inner/**"})
+    package: Group = {"path": ".", "checks": []}
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, changes, children)
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(changes["analysis_options.yaml"])
+    assert yaml.safe_load(path.read_text())["analyzer"]["exclude"] == [
+        "packages/inner/**"
+    ]
+    runner.validate_typing(tmp_path, "dart", ["lib"], children=children)
+    repeated: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, repeated, children)
+    assert "analysis_options.yaml" not in repeated
+    path.unlink()
+    alone: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, alone)
+    assert "exclude" not in yaml.safe_load(alone["analysis_options.yaml"])["analyzer"]
+
+
+def test_the_runner_passes_nested_package_patterns_to_the_dart_validation(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: outer\n")
+    inner = nested_group("packages/inner")
+    gate: Gate = {"name": "types", "role": "types", "command": ["dart", "analyze", "."]}
+    group: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [gate],
+    }
+    changes: dict[str, str] = {}
+    installer.configure_dart(
+        tmp_path, tmp_path, group, changes, frozenset({"packages/inner/**"})
+    )
+    (tmp_path / "analysis_options.yaml").write_text(changes["analysis_options.yaml"])
+    assert runner.prepare_command(group, gate, 5, [group, inner])
+
+
+def test_a_parent_only_change_keeps_the_nested_package_exclusion(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gate_config import load_groups
+
+    with (tmp_path / ".git/config").open("a") as settings:
+        settings.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
+    for path in (".", "packages/inner"):
+        (tmp_path / path / "lib").mkdir(parents=True, exist_ok=True)
+        (tmp_path / path / "lib/a.dart").write_text("void a() {}\n")
+        (tmp_path / path / "pubspec.yaml").write_text("name: fixture\n")
+    git(tmp_path, "add", ".")
+    config = installer.gate_config(tmp_path)
+    packages = config["packages"]
+    assert [package["path"] for package in packages] == [".", "packages/inner"]
+    for package in packages:
+        package["depends_on"] = []
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    children = nested_package_patterns(packages[0], packages)
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, packages[0], changes, children)
+    (tmp_path / "analysis_options.yaml").write_text(changes["analysis_options.yaml"])
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "baseline")
+    (tmp_path / "lib/a.dart").write_text("void a() {}\nvoid b() {}\n")
+    selected = load_groups(tmp_path, "HEAD", dependents=False)
+    assert [
+        group["path"]
+        for group in selected
+        if any(check["role"] == "types" for check in group["checks"])
+    ] == ["."]
+    prepared: list[list[str]] = []
+
+    def prepare(group: Group, gate: Gate, _timeout: float, *_rest: object) -> bool:
+        if gate.get("role") == "types" and group.get("language") == "dart":
+            prepared.append(runner.prepare_command(group, gate, 5, selected))
+        return False
+
+    monkeypatch.setattr(runner, "run_gate", prepare)
+    runner.run_gates(selected, 5, None)
+    assert prepared == [["dart", "analyze", "--fatal-infos", "."]]
+
+
+def test_one_install_excludes_a_nested_package_that_gets_its_types_check_later(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    for path in (".", "packages/inner"):
+        (tmp_path / path / "lib").mkdir(parents=True, exist_ok=True)
+        (tmp_path / path / "lib/a.dart").write_text("void main() {}\n")
+        write_fixture_pubspec(tmp_path / path)
+    gates = tmp_path / "hard-eng.gates.json"
+    options = tmp_path / "analysis_options.yaml"
+    run_setup(installer, tmp_path)
+    config = json.loads(gates.read_text())
+    inner = next(p for p in config["packages"] if p["path"] == "packages/inner")
+    for check in inner["checks"]:
+        if check["role"] == "types":
+            check["role"] = "project-types"
+    gates.write_text(json.dumps(config))
+    options.unlink()
+    run_setup(installer, tmp_path)
+    config = json.loads(gates.read_text())
+    root = next(p for p in config["packages"] if p["path"] == ".")
+    analyzers = [
+        check for check in root["checks"] if check["command"][:2] == ["dart", "analyze"]
+    ]
+    assert [check["role"] for check in analyzers] == ["types"]
+    assert yaml.safe_load(options.read_text())["analyzer"]["exclude"] == [
+        "packages/inner/**"
+    ]
+    before = (gates.read_bytes(), options.read_bytes())
+    run_setup(installer, tmp_path)
+    assert (gates.read_bytes(), options.read_bytes()) == before

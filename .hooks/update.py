@@ -26,7 +26,6 @@ from update_runner import (
     known_failure,
     rebase_sessions,
     remember_failure,
-    require_loading_gates,
     stale_error,
     tree_entries,
     undo_hooked_commit,
@@ -239,6 +238,7 @@ def scaffold_files(source: Path) -> set[str]:
                 "*.py",
                 "ruff.toml",
                 "dart_declarations.pubspec.*",
+                "text_walls.*",
                 "untrusted-input.d.ts",
             )
             for path in (source / ".hooks").glob(pattern)
@@ -801,9 +801,7 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
         install_planned_hook(root, hook)
         return "Hard Eng already matches the verified source."
     local_settings(root)
-    validate_gates(root, source, changes)
     commit_update(root, changes, links, revision)
-    require_loading_gates(root, source)
     retire_local_generation(root)
     if hook[0] not in changes:
         install_planned_hook(root, hook)
