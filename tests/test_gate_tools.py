@@ -2,6 +2,7 @@
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import gate_config
@@ -208,3 +209,30 @@ def test_the_shipped_format_gate_covers_each_installed_workflow() -> None:
     assert ".github/hard-eng.yml" in installed
     for path in installed:
         assert path in named["shipped-format"], path
+
+
+@pytest.mark.parametrize("reports_folder", [False, True])
+def test_the_import_order_of_the_coverage_package_does_not_depend_on_the_reports_folder(
+    tmp_path: Path, reports_folder: bool
+) -> None:
+    name = "tests/test_shard_coverage_minimum.py"
+    for source in ("pyproject.toml", name):
+        (tmp_path / source).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / source).write_text((SOURCE / source).read_text())
+    if reports_folder:
+        (tmp_path / "coverage").mkdir()
+    gates = json.loads((SOURCE / "hard-eng.gates.json").read_text())
+    (command,) = (
+        check["command"]
+        for group in gates["packages"]
+        for check in group["checks"]
+        if check["name"] == "lint"
+    )
+    result = subprocess.run(
+        [*command[:3], "--select", "I001", name],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
