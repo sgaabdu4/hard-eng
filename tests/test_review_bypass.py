@@ -330,6 +330,26 @@ def _status(state: str) -> dict[str, object]:
             True,
             id="same-workflow-cancelled-then-passed",
         ),
+        pytest.param(
+            [_run(1, "FAILURE", suite=7), _run(2, suite=7)],
+            "FAILURE",
+            False,
+            id="siblings-older-failed",
+        ),
+        pytest.param(
+            [_run(1, "FAILURE", suite=7), _run(2, suite=8), _run(3, suite=8)],
+            "FAILURE",
+            True,
+            id="siblings-all-passed-after-a-failed-run",
+        ),
+        pytest.param(
+            [_run(1, suite=7), _run(2, suite=7), _run(3, "FAILURE", suite=8)]
+            + [_run(4, suite=8)],
+            "FAILURE",
+            False,
+            id="newest-suite-has-a-failed-sibling",
+        ),
+        pytest.param([_run(1, suite=None)], "SUCCESS", False, id="no-suite-id"),
         pytest.param([_run(None)], "SUCCESS", False, id="no-database-id"),
         pytest.param(
             {"totalCount": 2, "nodes": [_run(1)]}, "SUCCESS", False, id="incomplete"

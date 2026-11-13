@@ -125,8 +125,10 @@ def _run(
     app: object = 15368,
     workflow: object = 1,
     status: str = "COMPLETED",
+    suite: object = ...,
 ) -> dict[str, object]:
-    suite: dict[str, object] = {"app": {"databaseId": app}}
+    suite_id = database_id if suite is ... else suite
+    suite = {"databaseId": suite_id, "app": {"databaseId": app}}
     if workflow is not None:
         suite["workflowRun"] = {"workflow": {"databaseId": workflow}}
     return {
