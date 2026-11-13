@@ -518,11 +518,18 @@ def _timestamp(value: JsonValue, description: str) -> float:
     return parsed.timestamp()
 
 
-def _run_sort_key(run: dict[str, JsonValue]) -> int:
-    run_id = run.get("id")
+def _run_identity(run: dict[str, JsonValue], field: str) -> int:
+    run_id = run.get(field)
     if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
         raise ShippingError("required check has no valid run identity")
     return run_id
+
+
+def newest_run(
+    runs: list[dict[str, JsonValue]], field: str = "id"
+) -> dict[str, JsonValue]:
+    """The run with the largest identity; the newest run of a check decides."""
+    return max(runs, key=lambda run: _run_identity(run, field))
 
 
 def _check_revision(run: dict[str, JsonValue], revision: str) -> None:
@@ -572,7 +579,7 @@ def _checks(
     for name, candidates in by_name.items():
         if not candidates:
             raise PendingCheck(f"required check missing: {name}")
-        run = max(candidates, key=_run_sort_key)
+        run = newest_run(candidates)
         if run.get("truncated") is True or (
             isinstance(run.get("output"), dict)
             and run["output"].get("truncated") is True

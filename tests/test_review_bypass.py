@@ -12,12 +12,14 @@ from test_shipping import (
     _UNDO,
     FakeGitHub,
     _check,
+    _contexts,
     _fixture,
     _patch_gh,
     _pull,
     _ready_fixture,
     _ready_outcome,
     _review,
+    _run,
 )
 
 EMPTY: JsonValue = {"totalCount": 0, "nodes": []}
@@ -262,6 +264,83 @@ def test_author_only_review_block_reads_the_open_pull_request(
         assert problem is None
     else:
         assert problem is not None and message in problem
+
+
+def _status(state: str) -> dict[str, object]:
+    return {"context": "ci/legacy", "state": state}
+
+
+@pytest.mark.parametrize(
+    ("contexts", "rollup", "allowed"),
+    [
+        pytest.param(
+            [_run(1, "CANCELLED"), _run(2)], "FAILURE", True, id="cancelled-then-passed"
+        ),
+        pytest.param(
+            [_run(1, "FAILURE"), _run(2)], "FAILURE", True, id="failed-then-passed"
+        ),
+        pytest.param(
+            [_run(2), _run(1, "FAILURE")], "FAILURE", True, id="newest-listed-first"
+        ),
+        pytest.param(
+            [_run(1), _run(2, "FAILURE")], "FAILURE", False, id="passed-then-failed"
+        ),
+        pytest.param([_run(1, "CANCELLED")], "FAILURE", False, id="one-cancelled-run"),
+        pytest.param(
+            [_run(1), _run(2, None, status="IN_PROGRESS")],
+            "PENDING",
+            False,
+            id="passed-then-not-completed",
+        ),
+        pytest.param(
+            [_run(1), _run(2, "FAILURE", workflow="Docs")],
+            "FAILURE",
+            False,
+            id="same-name-in-two-workflows",
+        ),
+        pytest.param(
+            [_run(1), _run(2, workflow="Docs"), _status("FAILURE")],
+            "FAILURE",
+            False,
+            id="status-context-not-success",
+        ),
+        pytest.param([_run(None)], "SUCCESS", False, id="no-database-id"),
+        pytest.param(
+            {"totalCount": 2, "nodes": [_run(1)]}, "SUCCESS", False, id="incomplete"
+        ),
+        pytest.param([_run(1), _status("SUCCESS")], "SUCCESS", True, id="status-ok"),
+    ],
+)
+def test_the_bypass_judges_each_check_by_its_newest_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    contexts: dict[str, object] | list[dict[str, object]],
+    rollup: str,
+    allowed: bool,
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture), [])
+    listed = contexts if isinstance(contexts, dict) else _contexts(*contexts)
+    fake.review = _review(fixture.head, rollup, listed)
+    _patch_gh(monkeypatch, fake)
+    problem = review_bypass.bypass_problem(
+        fixture.root, "acme", "widget", 1, fixture.head
+    )
+    assert (problem is None) is allowed
+
+
+def test_the_bypass_names_the_first_check_that_did_not_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture), [])
+    failed = _run(3, "FAILURE", name="lint")
+    fake.review = _review(fixture.head, "FAILURE", _contexts(_run(1), failed))
+    _patch_gh(monkeypatch, fake)
+    problem = review_bypass.bypass_problem(
+        fixture.root, "acme", "widget", 1, fixture.head
+    )
+    assert problem == "not every head check succeeded: lint"
 
 
 _RULES_URL = "https://github.com/acme/widget/settings/rules"

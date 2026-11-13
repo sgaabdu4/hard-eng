@@ -19,6 +19,7 @@ from shipping import (
     _json,
     _object,
     _text,
+    newest_run,
 )
 
 _REVIEW_QUERY = (
@@ -31,8 +32,9 @@ _REVIEW_QUERY = (
     "...on RequiredStatusChecksParameters{strictRequiredStatusChecksPolicy "
     "requiredStatusChecks{context}} "
     "...on PullRequestParameters{requireCodeOwnerReview}}}}} "
-    "commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){"
-    "totalCount nodes{...on CheckRun{name conclusion} ...on StatusContext{context state}}"
+    "commits(last:1){nodes{commit{oid statusCheckRollup{contexts(first:100){"
+    "totalCount nodes{...on CheckRun{name databaseId status conclusion "
+    "checkSuite{workflowRun{workflow{name}}}} ...on StatusContext{context state}}"
     "}}}}}}}}"
 )
 _RULE_QUERY = (
@@ -184,6 +186,47 @@ def _other_merge_requirement(
     return None
 
 
+def _workflow_name(node: dict[str, JsonValue]) -> JsonValue:
+    suite = _dict(node.get("checkSuite"))
+    return _dict(_dict(_dict(suite.get("workflowRun")).get("workflow"))).get("name")
+
+
+def _unpassed_check(contexts: list[dict[str, JsonValue]]) -> str | None:
+    """The first check whose newest run did not pass; "" when it has no name."""
+    runs: dict[tuple[JsonValue, JsonValue], list[dict[str, JsonValue]]] = {}
+    for node in contexts:
+        if "context" in node:
+            if node.get("state") != "SUCCESS":
+                return str(node["context"])
+            continue
+        runs.setdefault((_workflow_name(node), node.get("name")), []).append(node)
+    for (_, name), group in runs.items():
+        try:
+            newest = newest_run(group, "databaseId")
+        except ShippingError:
+            return str(name or "")
+        if (
+            newest.get("status") != "COMPLETED"
+            or newest.get("conclusion") not in _PASSED
+        ):
+            return str(name or "")
+    return None
+
+
+def _head_check_problem(
+    commit: dict[str, JsonValue], head_sha: str
+) -> tuple[str | None, dict[str, JsonValue]]:
+    rollup = commit.get("statusCheckRollup")
+    contexts = _complete_nodes(_dict(rollup).get("contexts"))
+    refusal = "not every head check succeeded"
+    if commit.get("oid") != head_sha or not isinstance(rollup, dict) or not contexts:
+        return refusal, {}
+    unpassed = _unpassed_check(contexts)
+    return (
+        None if unpassed is None else f"{refusal}: {unpassed}".removesuffix(": ")
+    ), rollup
+
+
 def bypass_problem(
     root: Path, owner: str, name: str, number: int, head_sha: str
 ) -> str | None:
@@ -196,17 +239,15 @@ def bypass_problem(
         if isinstance(nodes, list) and len(nodes) == 1
         else {}
     )
-    rollup = commit.get("statusCheckRollup")
     if pull.get("viewerDidAuthor") is not True:
         return "the viewer did not author the PR"
     if pull.get("viewerCanMergeAsAdmin") is not True:
         return "the author cannot bypass the review requirement"
     if pull.get("reviewDecision") != "REVIEW_REQUIRED":
         return "the block is not an outstanding required review"
-    if commit.get("oid") != head_sha or not (
-        isinstance(rollup, dict) and rollup.get("state") == "SUCCESS"
-    ):
-        return "not every head check succeeded"
+    refusal, rollup = _head_check_problem(commit, head_sha)
+    if refusal:
+        return refusal
     if problem := _other_merge_requirement(pull, rollup):
         return problem
     collaborators = _api_items(
