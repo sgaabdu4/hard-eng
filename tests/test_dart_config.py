@@ -24,6 +24,7 @@ from gate_config import (
     generated_sources,
 )
 from project_setup import adapt_package, dependency_command, validate_dart_exclusions
+from test_setup import repository, run_setup, write_fixture_pubspec
 
 
 def dart_format_command(installer: ModuleType) -> list[str]:
@@ -920,3 +921,37 @@ def test_a_parent_only_change_keeps_the_nested_package_exclusion(
     monkeypatch.setattr(runner, "run_gate", prepare)
     runner.run_gates(selected, 5, None)
     assert prepared == [["dart", "analyze", "--fatal-infos", "."]]
+
+
+def test_one_install_excludes_a_nested_package_that_gets_its_types_check_later(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "package.json").unlink()
+    for path in (".", "packages/inner"):
+        (tmp_path / path / "lib").mkdir(parents=True, exist_ok=True)
+        (tmp_path / path / "lib/a.dart").write_text("void main() {}\n")
+        write_fixture_pubspec(tmp_path / path)
+    gates = tmp_path / "hard-eng.gates.json"
+    options = tmp_path / "analysis_options.yaml"
+    run_setup(installer, tmp_path)
+    config = json.loads(gates.read_text())
+    inner = next(p for p in config["packages"] if p["path"] == "packages/inner")
+    for check in inner["checks"]:
+        if check["role"] == "types":
+            check["role"] = "project-types"
+    gates.write_text(json.dumps(config))
+    options.unlink()
+    run_setup(installer, tmp_path)
+    config = json.loads(gates.read_text())
+    root = next(p for p in config["packages"] if p["path"] == ".")
+    analyzers = [
+        check for check in root["checks"] if check["command"][:2] == ["dart", "analyze"]
+    ]
+    assert [check["role"] for check in analyzers] == ["types"]
+    assert yaml.safe_load(options.read_text())["analyzer"]["exclude"] == [
+        "packages/inner/**"
+    ]
+    before = (gates.read_bytes(), options.read_bytes())
+    run_setup(installer, tmp_path)
+    assert (gates.read_bytes(), options.read_bytes()) == before
