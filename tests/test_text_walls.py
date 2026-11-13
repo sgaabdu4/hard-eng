@@ -579,3 +579,61 @@ def test_the_list_command_reports_a_file_that_it_cannot_read(
     printed = capsys.readouterr().out
     assert "src/Broken.tsx: the text cannot be read, line 1:" in printed
     assert "Fine" not in printed
+
+
+def stored_block(tag: str, open_tag: str = "button onClick={open}") -> str:
+    return (
+        f"<{open_tag}>\n  <p {tag}>\n    {{n.body}}\n  </p>\n</{open_tag.split()[0]}>\n"
+    )
+
+
+def test_removing_a_clamp_or_a_tap_on_its_own_line_is_refused(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: a change that touches only the clamp line or the tap line of a stored block exposes it; an old finding stays excused."""
+    clamped = 'className="line-clamp-2"'
+    cases = [
+        (stored_block(clamped), stored_block('className="text-sm"')),
+        (stored_block(clamped), stored_block(clamped, "div")),
+    ]
+    for number, (before, after) in enumerate(cases):
+        root = change(
+            tmp_path / f"c{number}", "src/Card.tsx", screen(before), screen(after)
+        )
+        assert "src/Card.tsx:" in refused(root), number
+    old = stored_block('className="text-sm"', "div")
+    root = change(
+        tmp_path / "old",
+        "src/Card.tsx",
+        screen(old),
+        screen(old.replace("<div>", '<div className="box">')),
+    )
+    validate_suppressions(root, "HEAD")
+    kept = change(
+        tmp_path / "kept",
+        "src/Card.tsx",
+        screen(stored_block(clamped)),
+        screen(stored_block(clamped).replace("<button", '<button type="button"')),
+    )
+    validate_suppressions(kept, "HEAD")
+
+
+def test_removing_a_flutter_clamp_or_a_tap_on_its_own_line_is_refused(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-TEXT-WALLS: a Flutter change that touches only the maxLines line or the onTap line is judged."""
+
+    def widget(lines: str, tap: str = "onTap: open,") -> str:
+        return (
+            "Widget a() => Column(children: [\n  InkWell(\n    "
+            f"{tap}\n    child: Text(\n      n.body,\n      {lines}\n    ),\n  ),\n]);\n"
+        )
+
+    before = widget("maxLines: 2,")
+    for number, after in enumerate(
+        [widget("maxLines: 3,"), widget("maxLines: 2,", "splashColor: x,")]
+    ):
+        root = flutter_project(tmp_path / f"f{number}", before, after, True)
+        assert "lib/screen.dart:" in refused(root), number
+    root = flutter_project(
+        tmp_path / "kept", before, widget("maxLines: 2,", "onTap: open2,"), True
+    )
+    validate_suppressions(root, "HEAD")

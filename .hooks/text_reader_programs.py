@@ -215,7 +215,7 @@ function traits(node, name) {
     }
     if (found !== null && (clamp === null || found > clamp)) clamp = found;
   }
-  return { clamp, tap };
+  return { clamp, tap, tags: span(node.openingElement.start, node.openingElement.end) };
 }
 
 function context(stack) {
@@ -230,12 +230,17 @@ function context(stack) {
   return { clamp, tap, user };
 }
 
+function holdsField(parts) {
+  return parts.some((part) => typeof part !== "string" && (part.field || (part.alt && part.alt.some(holdsField))));
+}
+
 function emit(kind, name, parts, rawLines, stack) {
-  const lines = [...new Set(rawLines)];
-  if (!hasText(parts) || lines.length === 0) return;
+  const own = [...new Set(rawLines)];
+  if (!hasText(parts) || own.length === 0) return;
+  const lines = holdsField(parts) ? [...new Set([...own, ...stack.flatMap((entry) => entry.tags)])] : own;
   if (request.touched && !lines.some((line) => request.touched.has(line))) return;
   const { clamp, tap, user } = context(stack);
-  blocks.push({ line: Math.min(...lines), lines, kind, name, parts, clamp, tap, user });
+  blocks.push({ line: Math.min(...own), lines, kind, name, parts, clamp, tap, user });
 }
 
 function visitAttributes(node, stack) {
@@ -564,13 +569,28 @@ class Reader extends RecursiveAstVisitor<void> {
     return {'clamp': clamp, 'tap': tap, 'user': user};
   }
 
+  List<int> tagLines(AstNode? owner) {
+    final out = <int>[];
+    for (AstNode? up = owner; up != null; up = up.parent) {
+      final args = argsOf(up);
+      if (args == null) continue;
+      out.add(lineOf(up.offset));
+      for (final argument in args.arguments.whereType<NamedArgument>()) {
+        out.add(lineOf(argument.offset));
+      }
+    }
+    return out;
+  }
+
   void emit(String kind, String name, List<Object> found, List<int> raw, AstNode? owner) {
-    final lines = raw.toSet().toList();
-    if (!hasText(found) || lines.isEmpty) return;
+    final own = raw.toSet().toList();
+    if (!hasText(found) || own.isEmpty) return;
+    final field = found.any((part) => part is Map && part.containsKey('field'));
+    final lines = field ? {...own, ...tagLines(owner)}.toList() : own;
     final only = touched;
     if (only != null && !lines.any(only.contains)) return;
     blocks.add({
-      'line': lines.reduce((a, b) => a < b ? a : b),
+      'line': own.reduce((a, b) => a < b ? a : b),
       'lines': lines,
       'kind': kind,
       'name': name,
