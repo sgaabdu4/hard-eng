@@ -41,7 +41,7 @@ def test_sandbox_placeholder_does_not_add_a_file(
 
     def sandbox_listing(root: Path, *arguments: str) -> str:
         found = listed(root, *arguments)
-        return found + "\0.bashrc" if arguments[0] == "ls-files" else found
+        return found + "\0.bashrc" if "ls-files" in arguments else found
 
     monkeypatch.setattr(change_size, "_git_output", sandbox_listing)
     assert change_size.size_verdict(repository) == verdict

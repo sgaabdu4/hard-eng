@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 from gate_config import Gate, Group, JsonObject, Report, generated_sources
+from project_files import GIT_LISTING
 
 
 def owns_package_fallow(
@@ -265,7 +266,7 @@ def empty_audit(report: JsonObject) -> bool:
 def sdk_binaries(directory: Path) -> set[str]:
     """Commands from SDKs this repository's own packages already require."""
     listed = subprocess.run(
-        ["git", "ls-files", "--", ":(top,glob)**/pubspec.yaml"],
+        [*GIT_LISTING, "ls-files", "--", ":(top,glob)**/pubspec.yaml"],
         cwd=directory,
         capture_output=True,
         text=True,

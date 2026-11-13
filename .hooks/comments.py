@@ -19,6 +19,7 @@ from gate_config import (
 )
 from plans import _is_test as is_test_path
 from plans import default_branch_point
+from project_files import GIT_LISTING
 
 DISABLED_CALL = re.compile(r"\.disabled\(")
 QUOTE_OR_BACKSLASH = re.compile(r"[\\'\"]")
@@ -513,7 +514,7 @@ def diff_lines(
     )
     added, removed = changed_lines(diff)
     untracked = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        [*GIT_LISTING, "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,
         text=True,
     )
@@ -601,7 +602,7 @@ def retired_names(
     }
     names |= modules
     remaining = subprocess.check_output(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        [*GIT_LISTING, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=root,
         text=True,
     )

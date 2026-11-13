@@ -451,7 +451,7 @@ def count_listings(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     def spy(
         command: list[str], *, cwd: Path, check: bool, capture_output: bool, text: bool
     ) -> subprocess.CompletedProcess[str]:
-        if command[:3] == ["git", "ls-files", "-z"]:
+        if "ls-files" in command and "--stage" not in command:
             listings.append(cwd)
         return real_run(
             command, cwd=cwd, check=check, capture_output=capture_output, text=text

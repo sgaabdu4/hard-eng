@@ -13,7 +13,7 @@ from gate_config import (
     changed_files,
     repository_files,
 )
-from project_files import keep
+from project_files import GIT_LISTING, keep
 
 BACKTICKED_TEXT = re.compile(r"`([^`]+)`")
 SMALL_SIZE = "Size: small ("
@@ -86,7 +86,7 @@ def plan_files(root: Path) -> list[Path]:
 def _plan_files(root: Path) -> list[Path]:
     names = subprocess.check_output(
         [
-            "git",
+            *GIT_LISTING,
             "ls-files",
             "-z",
             "--cached",
