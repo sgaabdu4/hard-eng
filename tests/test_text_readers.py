@@ -1,5 +1,6 @@
 """HE-NO-TEXT-WALLS: the TSX and JSX reader returns the text blocks of every changed file from one process."""
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -109,7 +110,7 @@ def test_a_dart_change_with_no_text_line_starts_no_process(
 def test_a_missing_tool_fails_closed_with_its_step(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """HE-NO-TEXT-WALLS: a missing Bun names its install step, and a file that cannot be parsed is a finding."""
+    """HE-NO-TEXT-WALLS: a missing Bun or Dart names its install step, and a file that cannot be parsed is a finding."""
     root = change(
         tmp_path, "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n"
     )
@@ -123,6 +124,19 @@ def test_a_missing_tool_fails_closed_with_its_step(
         validate_suppressions(root, "HEAD")
     assert "src/a.tsx" in str(broken.value)
     assert "line 1:" in str(broken.value)
+    flutter = flutter_project(
+        tmp_path / "f", "// base\n", f"// base\nText('{WALL}');\n", True
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(text_readers, "tool_folder", lambda: tmp_path / "empty-tools")
+        patch.setattr(
+            text_readers,
+            "shutil",
+            SimpleNamespace(which=no_bun, rmtree=shutil.rmtree),
+        )
+        with pytest.raises(ValueError, match="needs the Dart SDK") as missing:
+            validate_suppressions(flutter, "HEAD")
+    assert "add the Dart SDK before the check" in str(missing.value)
 
 
 def test_the_merge_shard_skips_the_rule(
