@@ -117,9 +117,41 @@ def _check(revision: str, **changes: object) -> dict[str, object]:
 _OWNER = {"login": "owner", "permissions": {"push": True}}
 
 
-def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
+def _run(
+    database_id: object = 1,
+    conclusion: object = "SUCCESS",
+    *,
+    name: str = "build",
+    workflow: str = "CI",
+    status: str = "COMPLETED",
+) -> dict[str, object]:
+    suite = {"workflowRun": {"workflow": {"name": workflow}}}
+    return {
+        "name": name,
+        "databaseId": database_id,
+        "status": status,
+        "conclusion": conclusion,
+        "checkSuite": suite,
+    }
+
+
+def _contexts(*nodes: object) -> dict[str, object]:
+    return {"totalCount": len(nodes), "nodes": list(nodes)}
+
+
+_ROLLUP_RUNS = {
+    "SUCCESS": _run(),
+    "FAILURE": _run(conclusion="FAILURE"),
+    "PENDING": _run(conclusion=None, status="IN_PROGRESS"),
+}
+
+
+def _review(
+    head: str, rollup: object = "SUCCESS", contexts: object = None, **changes: object
+) -> object:
     empty = {"totalCount": 0, "nodes": []}
-    checks = {"state": rollup, "contexts": empty}
+    run = _ROLLUP_RUNS.get(str(rollup), _run())
+    checks = {"state": rollup, "contexts": contexts or _contexts(run)}
     pull: dict[str, object] = {
         "viewerDidAuthor": True,
         "viewerCanMergeAsAdmin": True,
