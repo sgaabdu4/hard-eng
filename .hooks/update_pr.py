@@ -4,7 +4,6 @@ import fcntl
 import json
 import shlex
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -192,8 +191,10 @@ except (OSError, ValueError, TypeError, KeyError) as error:
 
 
 def load_refusal(tree: Path) -> str | None:
+    from tool_setup import yaml_python
+
     result = subprocess.run(
-        [sys.executable, "-I", "-c", LOAD_CHECK, str(tree / ".hooks"), str(tree)],
+        yaml_python("-I", "-c", LOAD_CHECK, str(tree / ".hooks"), str(tree)),
         cwd=tree,
         capture_output=True,
         text=True,
@@ -201,7 +202,10 @@ def load_refusal(tree: Path) -> str | None:
         timeout=120,
     )
     if result.returncode:
-        return result.stderr.strip() or f"exit {result.returncode}"
+        shown = result.stderr.strip()
+        if shown.startswith("Traceback"):
+            shown = shown.splitlines()[-1]
+        return shown or f"exit {result.returncode}"
     return None
 
 

@@ -430,6 +430,40 @@ def test_a_fix_on_the_update_branch_is_pushed_and_merged_by_update_pr(
     assert merges[0][-1] == tip
 
 
+def dart_tree(target: Path) -> Path:
+    remove_application(target)
+    template = target / ".agents/skills/he/templates/hard-eng.dart.json"
+    config = json.loads((target / GATES_FILE).read_text())
+    package = json.loads(template.read_text())["packages"][0]
+    package["checks"] += [
+        {"name": name, "role": name, "command": ["dart", "pub", name]}
+        for name in ("freshness", "lockfiles", "vulnerabilities", "security")
+    ]
+    config["packages"] = [package]
+    (target / GATES_FILE).write_text(json.dumps(config))
+    (target / "pubspec.yaml").write_text(
+        "name: acme_widget\nenvironment:\n  sdk: ^3.0.0\n"
+    )
+    (target / "pubspec.lock").write_text("packages: {}\n")
+    return target
+
+
+def test_the_tip_load_works_when_the_host_python_has_no_yaml(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tree = dart_tree(release[1])
+    assert update_pr.load_refusal(tree) is None
+    subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", str(tmp_path / "bare")],
+        check=True,
+    )
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "bare/bin/python"))
+
+    assert update_pr.load_refusal(tree) is None
+
+
 def test_a_refusal_for_a_missing_product_file_does_not_send_the_reader_to_the_gates_file(
     release: tuple[Path, Path, str],
 ) -> None:
