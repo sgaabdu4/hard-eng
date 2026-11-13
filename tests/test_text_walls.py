@@ -155,6 +155,18 @@ def test_each_text_form_is_one_block(tmp_path: Path) -> None:
     assert "30 words" in message
 
 
+def rows_are_flagged(tmp_path: Path, rows: list[tuple[bool, str]]) -> None:
+    """Each row is one line of a screen: its flag says whether the change must refuse that line."""
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
+    message = refused(root)
+    flagged = [
+        number
+        for number in range(1, len(rows) + 5)
+        if f"src/Card.tsx:{number}:" in message
+    ]
+    assert flagged == [number for number, (bad, _) in enumerate(rows, 3) if bad]
+
+
 def old_wall() -> str:
     return screen("<p>", f"  {sentence(30)}", "</p>", "<p>Short.</p>")
 
@@ -510,15 +522,7 @@ def test_a_guard_or_map_on_a_stored_field_reads_the_elements_inside(
         (True, '<p>{n.body ?? ""}</p>'),
         (True, "{n.content && <p>{n.content}</p>}"),
     ]
-    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
-    message = refused(root)
-    expected = [number for number, (bad, _) in enumerate(rows, 3) if bad]
-    flagged = [
-        number
-        for number in range(1, len(rows) + 5)
-        if f"src/Card.tsx:{number}:" in message
-    ]
-    assert flagged == expected
+    rows_are_flagged(tmp_path, rows)
 
 
 def test_an_edited_old_flutter_block_is_judged_again(tmp_path: Path) -> None:
@@ -540,19 +544,13 @@ def test_an_edited_old_flutter_block_is_judged_again(tmp_path: Path) -> None:
 
 def test_html_phrasing_tags_stay_in_one_block(tmp_path: Path) -> None:
     """HE-NO-TEXT-WALLS: phrasing elements join the text around them into one block, and a label does not."""
-    tags = "sup sub u small mark abbr time q cite s del ins kbd var".split()
+    tags = ("sup", "sub", "u", "small", "mark", "abbr", "time", "q", "cite", "s")
+    tags += ("del", "ins", "kbd", "var")
     rows = [
         (True, f"<p>{sentence(13)} <{tag}>1</{tag}> {sentence(12)}</p>") for tag in tags
     ]
     rows.append((False, f"<p>{sentence(13)} <label>{sentence(13)}</label></p>"))
-    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
-    message = refused(root)
-    flagged = [
-        number
-        for number in range(1, len(rows) + 5)
-        if f"src/Card.tsx:{number}:" in message
-    ]
-    assert flagged == [number for number, (bad, _) in enumerate(rows, 3) if bad]
+    rows_are_flagged(tmp_path, rows)
 
 
 def test_a_stored_field_passed_into_a_prop_is_not_stored_text_rendering(
@@ -564,14 +562,7 @@ def test_a_stored_field_passed_into_a_prop_is_not_stored_text_rendering(
         (False, "<Card body={n.body} title={n.title} />"),
         (True, "<div dangerouslySetInnerHTML={{ __html: n.body }} />"),
     ]
-    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
-    message = refused(root)
-    flagged = [
-        number
-        for number in range(1, len(rows) + 5)
-        if f"src/Card.tsx:{number}:" in message
-    ]
-    assert flagged == [number for number, (bad, _) in enumerate(rows, 3) if bad]
+    rows_are_flagged(tmp_path, rows)
 
 
 def test_the_list_command_reports_a_file_that_it_cannot_read(
