@@ -63,6 +63,9 @@ TAP_NAMES = (
 )
 TAP_ATTRS = ("onClick", "onPress", "href")
 USER_CONTENT = "UserContent"
+DART_PROPS = ("labelText", "hintText", "errorText", "tooltip")
+DART_TAP_NAMES = ("ExpansionTile",)
+DART_TAP_ATTRS = ("onTap", "onPressed", "onLongPress")
 
 
 class SettingsError(ValueError):
@@ -186,17 +189,18 @@ def settings(root: Path) -> Caps:
 
 
 def request(
-    files: Sequence[tuple[str, str, Sequence[int] | None]],
+    files: Sequence[tuple[str, str, Sequence[int] | None]], kind: str = "js"
 ) -> dict[str, object]:
     """The request that every reader takes: the word lists and each file with its touched lines."""
+    dart = kind == "dart"
     return {
         "inline": INLINE,
-        "text_props": TEXT_PROPS,
+        "text_props": (*TEXT_PROPS, *DART_PROPS) if dart else TEXT_PROPS,
         "skip": SKIP,
         "user": USER_CONTENT,
         "stored": STORED,
-        "tap_names": TAP_NAMES,
-        "tap_attrs": TAP_ATTRS,
+        "tap_names": DART_TAP_NAMES if dart else TAP_NAMES,
+        "tap_attrs": DART_TAP_ATTRS if dart else TAP_ATTRS,
         "files": [
             {"path": path, "source": source, "touched": touched}
             for path, source, touched in files

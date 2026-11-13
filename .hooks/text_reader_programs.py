@@ -388,3 +388,321 @@ for (const file of request.files) {
 }
 process.stdout.write(JSON.stringify({ files }));
 """
+
+DART_READER = r"""import 'dart:convert';
+import 'dart:io';
+import 'package:analyzer/dart/analysis/utilities.dart';
+import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/source/line_info.dart';
+
+const slot = {'x': 1};
+const noClamp = 1000;
+final letter = RegExp(r'[\p{L}\p{N}]', unicode: true);
+late Set<String> textProps, stored, tapNames, tapArgs;
+late String userName;
+Set<int>? touched;
+
+class Builder {
+  Builder(this.owner);
+  final AstNode owner;
+  final List<Object> parts = [];
+  final List<int> lines = [];
+}
+
+ArgumentList? argsOf(AstNode node) {
+  if (node is MethodInvocation) return node.argumentList;
+  if (node is InstanceCreationExpression) return node.argumentList;
+  return null;
+}
+
+String callName(AstNode node) {
+  if (node is InstanceCreationExpression) {
+    final type = node.constructorName.type.name.lexeme;
+    final named = node.constructorName.name?.name;
+    return named == null ? type : '$type.$named';
+  }
+  if (node is MethodInvocation) {
+    final target = node.target;
+    if (target == null) return node.methodName.name;
+    if (target is SimpleIdentifier) return '${target.name}.${node.methodName.name}';
+  }
+  return '';
+}
+
+Expression? positional(ArgumentList args) {
+  final first = args.arguments.firstOrNull;
+  if (first == null || first is NamedArgument) return null;
+  return first.argumentExpression;
+}
+
+NamedArgument? namedArgument(ArgumentList args, String name) {
+  for (final argument in args.arguments.whereType<NamedArgument>()) {
+    if (argument.name.lexeme == name) return argument;
+  }
+  return null;
+}
+
+Expression? unwrap(Expression? node) {
+  while (node is ParenthesizedExpression) {
+    node = node.expression;
+  }
+  return node;
+}
+
+List<Object>? parts(Expression? raw) {
+  final node = unwrap(raw);
+  if (node is SimpleStringLiteral) return [node.value];
+  if (node is AdjacentStrings) {
+    return [for (final part in node.strings) ...(parts(part) ?? [slot])];
+  }
+  if (node is StringInterpolation) {
+    return [
+      for (final element in node.elements)
+        if (element is InterpolationString) element.value else slot
+    ];
+  }
+  if (node is ConditionalExpression) {
+    final a = parts(node.thenExpression);
+    final b = parts(node.elseExpression);
+    if (a == null && b == null) return null;
+    return [
+      {'alt': [a ?? [slot], b ?? [slot]]}
+    ];
+  }
+  if (node is BinaryExpression) {
+    final operator = node.operator.lexeme;
+    if (operator == '??') {
+      final right = parts(node.rightOperand);
+      return right == null ? null : [{'alt': [[slot], right]}];
+    }
+    if (operator == '+') {
+      final left = parts(node.leftOperand);
+      final right = parts(node.rightOperand);
+      if (left == null && right == null) return null;
+      return [...(left ?? [slot]), ...(right ?? [slot])];
+    }
+  }
+  return null;
+}
+
+String storedField(Expression? raw) {
+  final node = unwrap(raw);
+  if (node is PrefixedIdentifier) {
+    return stored.contains(node.identifier.name) ? node.identifier.name : '';
+  }
+  if (node is PropertyAccess) {
+    return stored.contains(node.propertyName.name) ? node.propertyName.name : '';
+  }
+  if (node is PostfixExpression) return storedField(node.operand);
+  if (node is MethodInvocation) return storedField(node.target);
+  if (node is BinaryExpression) {
+    final left = storedField(node.leftOperand);
+    return left.isNotEmpty ? left : storedField(node.rightOperand);
+  }
+  if (node is ConditionalExpression) {
+    final then = storedField(node.thenExpression);
+    return then.isNotEmpty ? then : storedField(node.elseExpression);
+  }
+  return '';
+}
+
+bool hasText(List<Object> list) => list.any((part) {
+      if (part is String) return letter.hasMatch(part);
+      final map = part as Map;
+      if (map.containsKey('alt')) {
+        return (map['alt'] as List).any((branch) => hasText((branch as List).cast<Object>()));
+      }
+      return map.containsKey('field');
+    });
+
+class Reader extends RecursiveAstVisitor<void> {
+  Reader(this.path, this.info, this.blocks);
+  final String path;
+  final LineInfo info;
+  final List<Object> blocks;
+  final Set<AstNode> consumed = {};
+
+  int lineOf(int offset) => info.getLocation(offset).lineNumber;
+
+  List<int> span(AstNode node) => [
+        for (var line = lineOf(node.offset); line <= lineOf(node.end > node.offset ? node.end - 1 : node.offset); line++) line
+      ];
+
+  Map<String, Object?> context(AstNode? owner) {
+    int? clamp;
+    var tap = false;
+    var user = false;
+    final path = <AstNode>{};
+    for (AstNode? up = owner; up != null; up = up.parent) {
+      path.add(up);
+    }
+    final own = owner == null ? null : argsOf(owner);
+    final lines = own == null ? null : namedArgument(own, 'maxLines')?.argumentExpression;
+    if (lines is IntegerLiteral) clamp = lines.value;
+    for (AstNode? up = owner; up != null; up = up.parent) {
+      final args = argsOf(up);
+      if (args == null) continue;
+      final name = callName(up);
+      if (name == userName) user = true;
+      if (tapNames.contains(name)) tap = true;
+      for (final argument in args.arguments.whereType<NamedArgument>()) {
+        if (tapArgs.contains(argument.name.lexeme) && !path.contains(argument)) tap = true;
+      }
+    }
+    return {'clamp': clamp, 'tap': tap, 'user': user};
+  }
+
+  void emit(String kind, String name, List<Object> found, List<int> raw, AstNode? owner) {
+    final lines = raw.toSet().toList();
+    if (!hasText(found) || lines.isEmpty) return;
+    final only = touched;
+    if (only != null && !lines.any(only.contains)) return;
+    blocks.add({
+      'line': lines.reduce((a, b) => a < b ? a : b),
+      'lines': lines,
+      'kind': kind,
+      'name': name,
+      'parts': found,
+      ...context(owner),
+    });
+  }
+
+  void flush(Builder builder, String name) {
+    emit('jsx', name, [...builder.parts], [...builder.lines], builder.owner);
+    builder.parts.clear();
+    builder.lines.clear();
+  }
+
+  void spanInto(AstNode node, Builder builder, String name) {
+    consumed.add(node);
+    final args = argsOf(node)!;
+    final text = namedArgument(args, 'text');
+    if (text != null) {
+      consumed.add(text);
+      final found = parts(text.argumentExpression) ?? [slot];
+      final field = storedField(text.argumentExpression);
+      builder.parts.addAll(field.isNotEmpty ? [{'x': 1, 'field': field}] : found);
+      builder.lines.addAll(span(text));
+    }
+    final children = namedArgument(args, 'children')?.argumentExpression;
+    if (children is! ListLiteral) return;
+    for (final element in children.elements) {
+      if (element is! Expression) continue;
+      final inner = unwrap(element);
+      final kind = inner == null ? '' : callName(inner);
+      if (inner != null && kind == 'TextSpan') {
+        spanInto(inner, builder, name);
+      } else if (kind == 'WidgetSpan') {
+        flush(builder, name);
+      } else {
+        builder.parts.add(slot);
+      }
+    }
+  }
+
+  void widget(AstNode node, ArgumentList args, String name) {
+    if (name == 'Text' || name == 'SelectableText') {
+      final first = positional(args);
+      if (first == null) return;
+      final field = storedField(first);
+      final found = field.isNotEmpty ? [{'x': 1, 'field': field}] : parts(first);
+      if (found != null) emit('jsx', name, found, span(first), node);
+    } else if (name == 'Text.rich' || name == 'SelectableText.rich' || name == 'RichText' || name == 'TextSpan') {
+      final builder = Builder(node);
+      final source = name == 'RichText'
+          ? namedArgument(args, 'text')?.argumentExpression
+          : name == 'TextSpan' ? (node as Expression) : positional(args);
+      final inner = unwrap(source);
+      if (inner == null || callName(inner) != 'TextSpan') return;
+      spanInto(inner, builder, name);
+      flush(builder, name);
+    }
+  }
+
+  void call(AstNode node) {
+    final args = argsOf(node);
+    if (args == null || consumed.contains(node)) return;
+    widget(node, args, callName(node));
+    for (final argument in args.arguments.whereType<NamedArgument>()) {
+      final key = argument.name.lexeme;
+      if (!textProps.contains(key) || consumed.contains(argument)) continue;
+      final field = storedField(argument.argumentExpression);
+      final found = field.isNotEmpty ? [{'x': 1, 'field': field}] : parts(argument.argumentExpression);
+      if (found != null) emit('prop', key, found, span(argument), node);
+    }
+  }
+
+  @override
+  void visitMethodInvocation(MethodInvocation node) {
+    call(node);
+    super.visitMethodInvocation(node);
+  }
+
+  @override
+  void visitInstanceCreationExpression(InstanceCreationExpression node) {
+    call(node);
+    super.visitInstanceCreationExpression(node);
+  }
+
+  @override
+  void visitSetOrMapLiteral(SetOrMapLiteral node) {
+    final entries = node.elements.whereType<MapLiteralEntry>().toList();
+    final structural = entries.any((entry) {
+      final key = unwrap(entry.key);
+      return key is SimpleStringLiteral && (key.value == '@context' || key.value == '@type');
+    });
+    if (structural) return;
+    for (final entry in entries) {
+      final key = unwrap(entry.key);
+      if (key is! SimpleStringLiteral || !textProps.contains(key.value)) continue;
+      final found = parts(entry.value);
+      if (found != null) emit('key', key.value, found, span(entry), null);
+    }
+    super.visitSetOrMapLiteral(node);
+  }
+
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    final init = unwrap(node.initializer);
+    final values = init is ListLiteral
+        ? init.elements.whereType<Expression>().toList()
+        : init == null ? <Expression>[] : [init];
+    for (final value in values) {
+      final found = parts(value);
+      if (found == null) continue;
+      final text = found.whereType<String>().join();
+      if (RegExp(r'\s').hasMatch(text.trim())) {
+        emit('const', node.name.lexeme, found, span(value), null);
+      }
+    }
+    super.visitVariableDeclaration(node);
+  }
+}
+
+Future<void> main() async {
+  final input = jsonDecode(await stdin.transform(utf8.decoder).join()) as Map<String, dynamic>;
+  textProps = (input['text_props'] as List).cast<String>().toSet();
+  stored = (input['stored'] as List).cast<String>().toSet();
+  tapNames = (input['tap_names'] as List).cast<String>().toSet();
+  tapArgs = (input['tap_attrs'] as List).cast<String>().toSet();
+  userName = input['user'] as String;
+  final files = <Object>[];
+  for (final file in input['files'] as List) {
+    final path = file['path'] as String;
+    final wanted = file['touched'] as List?;
+    touched = wanted?.cast<int>().toSet();
+    final parsed = parseString(content: file['source'] as String, path: path, throwIfDiagnostics: false);
+    final blocks = <Object>[];
+    String? error;
+    if (parsed.errors.isNotEmpty) {
+      final first = parsed.errors.first;
+      error = 'line ${parsed.lineInfo.getLocation(first.offset).lineNumber}: ${first.message}';
+    } else {
+      parsed.unit.accept(Reader(path, parsed.lineInfo, blocks));
+    }
+    files.add({'path': path, 'error': error, 'blocks': blocks});
+  }
+  stdout.write(jsonEncode({'files': files}));
+}
+"""
