@@ -1,0 +1,149 @@
+Future<void> pollIn(items, client) async {
+  for (final item in items) {
+    await client.poll(item);
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+}
+
+Future<void> pollFor(client, int count) async {
+  for (var i = 0; i < count; i++) {
+    await client.poll(i);
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+}
+
+Future<void> pollWhile(client) async {
+  while (client.active) {
+    await client.poll();
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+}
+
+Future<void> untypedPause(items, client) async {
+  for (final item in items) {
+    await client.poll(item);
+    await Future.delayed(const Duration(seconds: 1));
+  }
+}
+
+Future<void> notAPause(items, client, value) async {
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await client.poll(item);
+    // ruleid: await-in-loop-dart
+    await Future<void>.value(value);
+  }
+  for (var i = 0; i < 3; i++) {
+    // ruleid: await-in-loop-dart
+    await client.poll(i);
+    // ruleid: await-in-loop-dart
+    await Future<void>.value(value);
+  }
+  while (client.active) {
+    // ruleid: await-in-loop-dart
+    await client.poll();
+    // ruleid: await-in-loop-dart
+    await Future<void>.value(value);
+  }
+}
+
+Future<void> anyIsNoPause(items, client, done, pause, wait) async {
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await client.poll(item);
+    // ruleid: await-in-loop-dart
+    await Future<void>.any([done.future, pause(wait)]);
+  }
+}
+
+Future<void> otherClass(items, client, d) async {
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await client.poll(item);
+    // ruleid: await-in-loop-dart
+    await Later<void>.delayed(d);
+  }
+  for (var i = 0; i < 3; i++) {
+    // ruleid: await-in-loop-dart
+    await client.poll(i);
+    // ruleid: await-in-loop-dart
+    await Later<void>.delayed(d);
+  }
+  while (client.active) {
+    // ruleid: await-in-loop-dart
+    await client.poll();
+    // ruleid: await-in-loop-dart
+    await Later<void>.delayed(d);
+  }
+}
+
+Future<void> pauseAsValue(items, client, d) async {
+  for (final item in items) {
+    // ruleid: await-in-loop-dart
+    await client.poll(item);
+    final pause = Future<void>.delayed(d);
+    // ruleid: await-in-loop-dart
+    await pause;
+  }
+}
+
+Future<List<R>> chunkTypedAdd<T, R>(List<T> items, int width, Future<R> Function(T) op) async {
+  final results = <R>[];
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    results.addAll(await Future.wait<R>(group.map((item) => op(item))));
+  }
+  return results;
+}
+Future<void> chunkTypedStmt<T>(List<T> items, int width, op) async {
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    await Future.wait<void>(group.map((item) => op(item)));
+  }
+}
+Future<void> chunkTypedEager<T>(List<T> items, int width, op) async {
+  for (var offset = 0; offset < items.length; offset += width) {
+    final group = items.skip(offset).take(width);
+    await Future.wait<void>(group.map((item) => op(item)), eagerError: true);
+  }
+}
+class Queue {
+  final Set<Future<void>> pending = {};
+  Future<void> drainWhole() async {
+    while (pending.isNotEmpty) {
+      await Future.wait<void>(pending);
+    }
+  }
+  Future<void> drainList() async {
+    while (pending.isNotEmpty) {
+      await Future.wait<void>(pending.toList());
+    }
+  }
+  Future<void> drainSpread() async {
+    while (pending.isNotEmpty) {
+      await Future.wait<void>([...pending]);
+    }
+  }
+  Future<void> drainEager() async {
+    while (pending.isNotEmpty) {
+      await Future.wait<void>(pending, eagerError: true);
+    }
+  }
+}
+Future<List<R>> poolTyped<T, R>(List<T> items, int limit, Future<R> Function(T item) read) async {
+ final results = List<R?>.filled(items.length, null);
+ var next = 0;
+ await Future.wait<void>(List.generate(limit, (_) async {
+  while (next < items.length) {
+   final index = next++;
+   results[index] = await read(items[index]);
+  }
+ }));
+ return results.cast<R>();
+}
+Future<void> inLoopTyped(items, read) async {
+  for (final batch in items) {
+    // ruleid: await-in-loop-dart
+    await Future.wait<void>(batch.map(read));
+  }
+}
