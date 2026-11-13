@@ -231,6 +231,7 @@ STORED_TEXT = (
 )
 IMPORT_LINE = re.compile(r"\s*(?:import|export|part)\b")
 DART_MARKS = ('"', "'", "Text", "TextSpan", "maxLines", "UserContent")
+DART_MARKS += ("onTap", "onPressed", "onLongPress", "ExpansionTile")
 ARB_KEY = re.compile(r'\s*"((?:[^"\\]|\\.)*)"\s*:')
 FIX = "Split it into blocks of one idea each, with dates, names and amounts on their own labelled lines"
 
