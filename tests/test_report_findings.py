@@ -1,6 +1,7 @@
 """A failed gate prints what its report found, and a run with no tests gets no hint."""
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -310,3 +311,97 @@ def test_a_semgrep_timeout_names_each_file_and_the_step(
     assert str(error.value).endswith(step)
     assert "None" not in str(error.value)
     assert ("data module" in str(error.value)) == ("tables" in named)
+
+
+def fallow_repository(tmp_path: Path) -> Path:
+    repository = tmp_path / "repo"
+    member = repository / "packages/web"
+    (member / "src").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    (repository / ".gitattributes").write_text(
+        "packages/web/src/routes.gen.ts linguist-generated=true\n"
+    )
+    for name in ("routes.gen.ts", "app.ts"):
+        (member / "src" / name).write_text("export const value = 1;\n")
+    subprocess.run(["git", "add", "-A"], cwd=repository, check=True)
+    return member
+
+
+def clones_in(kind: str, *groups: list[str], dead: int = 0) -> dict[str, object]:
+    report = json.loads(REPORTS["fallow"])
+    report["dupes"]["clone_groups"] = [
+        {
+            "instances": [
+                {"file": file, "start_line": 1, "end_line": 9, "fragment": "BODY"}
+                for file in files
+            ]
+        }
+        for files in groups
+    ]
+    stats = report["dupes"]["stats"]
+    stats |= {"clone_groups": len(groups), "duplication_percentage": 40.0}
+    stats |= {"clone_instances": 2 * len(groups), "duplicated_lines": 18}
+    if kind == "combined":
+        return report
+    check = report["check"]
+    check |= {"total_issues": dead, "unused_files": ["src/dead.ts"] * dead}
+    check["summary"] |= {"total_issues": dead, "unused_files": dead}
+    no_findings: list[object] = []
+    complexity = {"findings": no_findings, "summary": json.loads(AUDIT_COMPLEXITY)}
+    summary = {"dead_code_issues": dead, "dead_code_has_errors": False}
+    summary |= {"complexity_findings": 0, "duplication_clone_groups": len(groups)}
+    return {
+        "kind": "audit",
+        "command": "audit",
+        "verdict": "warn",
+        "summary": summary,
+        "dead_code": check,
+        "duplication": report["dupes"],
+        "complexity": complexity,
+    }
+
+
+AUDIT_COMPLEXITY = (
+    '{"files_analyzed":1,"functions_analyzed":3,"functions_above_threshold":0,'
+    '"max_crap_threshold":30.0,"severity_critical_count":0,'
+    '"severity_high_count":0,"severity_moderate_count":0}'
+)
+SET_ASIDE = "1 clone group(s) only in generated files set aside"
+GENERATED = ["src/routes.gen.ts", "src/routes.gen.ts"]
+MIXED = ["src/routes.gen.ts", "src/app.ts"]
+KINDS = pytest.mark.parametrize("kind", ["combined", "audit"])
+
+
+@KINDS
+def test_a_clone_group_in_generated_files_only_is_set_aside(
+    kind: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    member = fallow_repository(tmp_path)
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(clones_in(kind, GENERATED)))
+    reports.validate_fallow(path, set(), member)
+    assert SET_ASIDE in capsys.readouterr().out
+
+
+@KINDS
+def test_a_clone_group_with_one_hand_written_instance_still_fails(
+    kind: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    member = fallow_repository(tmp_path)
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(clones_in(kind, GENERATED, MIXED)))
+    with pytest.raises(ValueError, match="findings|passing native audit"):
+        reports.validate_fallow(path, set(), member)
+    assert SET_ASIDE in capsys.readouterr().out
+    output = failed("fallow", path, member, capsys)
+    assert output == "scan: copied code src/routes.gen.ts:1-9 src/app.ts:1-9\n"
+
+
+def test_an_audit_with_generated_clones_and_a_dead_code_finding_still_fails(
+    tmp_path: Path,
+) -> None:
+    member = fallow_repository(tmp_path)
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(clones_in("audit", GENERATED, dead=1)))
+    with pytest.raises(ValueError, match="passing native audit"):
+        reports.validate_fallow(path, set(), member)
