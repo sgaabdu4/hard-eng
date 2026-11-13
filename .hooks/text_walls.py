@@ -36,7 +36,18 @@ KEYS = {
     "words_per_sentence": 20,
 }
 DEFAULT_NUMBERS = (25, 3, 20)
-INLINE = ("strong", "em", "b", "i", "span", "a", "Link")
+INLINE = ("strong", "em", "b", "i", "span", "a", "Link", "sup", "sub", "u", "small") + (
+    "mark",
+    "abbr",
+    "time",
+    "q",
+    "cite",
+    "s",
+    "del",
+    "ins",
+    "kbd",
+    "var",
+)
 TEXT_PROPS = (
     "title",
     "label",
