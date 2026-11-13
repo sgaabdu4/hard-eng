@@ -789,12 +789,16 @@ def whole_branch_balance(root: Path, point: str) -> tuple[str, list[str], int] |
 
 def text_walls_check(
     root: Path,
+    point: str,
+    joins: dict[str, list[int]],
     added: dict[str, list[tuple[int, str]]],
     removed: dict[str, list[tuple[int, str]]],
-    joins: dict[str, list[int]],
-    point: str,
 ) -> None:
-    if any(name.endswith(WALL_SUFFIXES) for name in (*added, *removed, *joins)):
+    if any(
+        name.endswith(WALL_SUFFIXES)
+        for lines in (joins, added, removed)
+        for name in lines
+    ):
         from text_walls import wall_check
 
         wall_check(root, added, removed, joins, point)
@@ -849,4 +853,4 @@ def validate_suppressions(root: Path, base: str | None, screens: bool = True) ->
     if not empty:
         ui_source_check(root, added)
         if screens:
-            text_walls_check(root, added, removed, joins, point)
+            text_walls_check(root, point, joins, added, removed)

@@ -4,8 +4,8 @@ import json
 import re
 import subprocess
 import sys
-from fnmatch import fnmatchcase
 from collections.abc import Sequence
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
