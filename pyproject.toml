@@ -17,6 +17,7 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+tmp_path_retention_policy = "failed"
 
 [tool.coverage.run]
 source = [".", ".hooks"]
