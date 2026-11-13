@@ -120,6 +120,22 @@ def rebase_step(base: str) -> str:
     )
 
 
+def rebase_problem(root: Path, base: str) -> str:
+    try:
+        allowed = merge_settings(root, ("rebaseMergeAllowed",)).get(
+            "rebaseMergeAllowed"
+        )
+    except ShippingError:
+        return rebase_step(base)
+    if allowed is not False:
+        return rebase_step(base)
+    return (
+        "This repository does not allow rebase merges, and Hard Eng merges by "
+        "rebase only, so nothing was merged. Allow rebase merges in the "
+        "repository settings, then run ship again."
+    )
+
+
 def _run(
     root: Path,
     executable: str,
@@ -152,6 +168,13 @@ def git(root: Path, *args: str) -> str:
 
 def gh(root: Path, *args: str) -> str:
     return _run(root, "gh", args, _GH_TIMEOUT)
+
+
+def merge_settings(root: Path, names: tuple[str, ...]) -> dict[str, JsonValue]:
+    return _object(
+        _json(gh(root, "repo", "view", "--json", ",".join(names)), "repository"),
+        "repository merge settings",
+    )
 
 
 def _json(text: str, description: str) -> JsonValue:
@@ -845,7 +868,7 @@ def _ready_state(
     if problem := (
         body_problem(pull.body)
         or commits_problem(pull.commits)
-        or (rebase_step(pull.base_ref) if pull.rebaseable is False else None)
+        or (rebase_problem(root, pull.base_ref) if pull.rebaseable is False else None)
     ):
         raise ShippingError(problem)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
