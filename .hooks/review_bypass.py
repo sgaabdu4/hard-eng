@@ -34,7 +34,7 @@ _REVIEW_QUERY = (
     "...on PullRequestParameters{requireCodeOwnerReview}}}}} "
     "commits(last:1){nodes{commit{oid statusCheckRollup{contexts(first:100){"
     "totalCount nodes{...on CheckRun{name databaseId status conclusion "
-    "checkSuite{app{databaseId} workflowRun{workflow{databaseId}}}} ...on StatusContext{context state}}"
+    "checkSuite{databaseId app{databaseId} workflowRun{workflow{databaseId}}}} ...on StatusContext{context state}}"
     "}}}}}}}}"
 )
 _RULE_QUERY = (
@@ -196,6 +196,25 @@ def _producer(node: dict[str, JsonValue]) -> tuple[int, JsonValue] | None:
     return app, workflow.get("databaseId")
 
 
+def _suite_id(node: dict[str, JsonValue]) -> JsonValue:
+    return _dict(node.get("checkSuite")).get("databaseId")
+
+
+def _newest_suite_passed(group: list[dict[str, JsonValue]]) -> bool:
+    """Every run of the check in the suite of its newest run passed."""
+    try:
+        suite = _suite_id(newest_run(group, "databaseId"))
+    except ShippingError:
+        return False
+    if isinstance(suite, bool) or not isinstance(suite, int) or suite <= 0:
+        return False
+    return all(
+        node.get("status") == "COMPLETED" and node.get("conclusion") in _PASSED
+        for node in group
+        if _suite_id(node) == suite
+    )
+
+
 def _unpassed_check(contexts: list[dict[str, JsonValue]]) -> str | None:
     """The first check whose newest run did not pass; "" when it has no name."""
     runs: dict[tuple[int, JsonValue, JsonValue], list[dict[str, JsonValue]]] = {}
@@ -209,14 +228,7 @@ def _unpassed_check(contexts: list[dict[str, JsonValue]]) -> str | None:
             return str(node.get("name") or "")
         runs.setdefault((*producer, node.get("name")), []).append(node)
     for (_, _, name), group in runs.items():
-        try:
-            newest = newest_run(group, "databaseId")
-        except ShippingError:
-            return str(name or "")
-        if (
-            newest.get("status") != "COMPLETED"
-            or newest.get("conclusion") not in _PASSED
-        ):
+        if not _newest_suite_passed(group):
             return str(name or "")
     return None
 
