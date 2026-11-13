@@ -26,6 +26,9 @@ Authority: Autonomous. The coordinator set the change and its message; the coord
 - [x] A failed merge names the setting → `tests/test_ship_commits.py::test_a_failed_merge_in_a_repository_that_forbids_rebase_merges_names_it`.
 - [x] With the setting on, absent or unreadable, the present step stays → `tests/test_ship_commits.py::test_a_pr_github_cannot_rebase_keeps_the_rebase_step_unless_the_setting_is_false` and `::test_an_unreadable_setting_keeps_the_rebase_step`.
 - [x] A pull request that GitHub can rebase makes no setting call → `tests/test_ship_commits.py::test_a_pr_github_can_rebase_never_reads_the_repository_setting`.
+- [x] The ready check reads the setting of the repository of the pull request → `tests/test_ship_commits.py::test_the_ready_check_reads_the_setting_of_the_repository_of_the_pull_request`.
+- [x] A failed merge reads the setting of the repository of the pull request → `tests/test_ship_commits.py::test_a_failed_merge_reads_the_setting_of_the_repository_of_the_pull_request`.
+- [x] The update command reads the merge method of the repository of its pull request URL → `tests/test_update_pr_checks.py::test_update_pr_reads_the_merge_method_of_the_repository_of_its_pull_request`.
 
 ## Baseline + execution
 
@@ -46,6 +49,7 @@ N/A — no app screens change.
 Result: Passed
 Evidence: `tests/test_ship_commits.py`, `tests/test_update_pr.py`, `tests/test_shipping.py`, `tests/test_ship_actions.py`, `tests/test_gate_speed.py` and `tests/test_skill_links.py` passed; the static gates and `hot-paths` on the three touched hooks passed. The Complete check is run by the coordinator.
 Review: a reader that did not write the text compared the old and the new sentence of `checks.md` with its paragraph. It read the sentence one time, found the same meaning as the code, and found no conflict with "each refusal names its fix" or "squash and merge commits are refused".
+Review: the independent review at `65b9f708` found that the setting was read from the default repository of the CLI, which can differ from the repository of the pull request. Repaired and tested: `merge_settings` now names the repository. The same cause in the update command (`merge_method`) is repaired in the same change.
 E2E: N/A — no user journey; the tests drive `verify` and `merge` with the fake GitHub of the ship tests.
 Retro: (1) Hard Eng fault that a project showed: a printed step that a repository setting makes useless → `tests/test_ship_commits.py::test_a_repository_that_forbids_rebase_merges_is_named_as_the_cause`. (2) The size rule limits a test file to 1000 lines, so the shared reader is patched in the update tests by its module name, one line.
 
