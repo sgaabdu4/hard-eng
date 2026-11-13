@@ -4,10 +4,12 @@ import sys
 from pathlib import Path
 from unittest.mock import Mock
 
+import gate_config
 import pytest
+import update
 import update_pr
 import update_runner
-from conftest import WORKFLOW_TEMPLATE, add_origin, commit, git
+from conftest import WORKFLOW_TEMPLATE, add_origin, commit, git, remove_application
 from test_update_runner import (
     GATES_FILE,
     add_shipping_policy,
@@ -258,3 +260,93 @@ def test_a_refused_push_of_the_update_branch_names_the_next_step(
         f"`{update_runner.UPDATE_COMMAND}` again."
     ) in printed
     assert "returned non-zero exit status" not in printed
+
+
+NEW_RULE = '\nROLE_TOOLS["shared"]["deployment"] = ("trivy",)\n'
+RULE_TEXT = "deploy: the deployment check must run `trivy`; this command does not name it: python3 -c print('DEPLOY')"
+LOAD = (
+    "import sys\nfrom pathlib import Path\nsys.path.insert(0, sys.argv[1])\n"
+    "from gate_config import load_groups\nload_groups(Path(sys.argv[2]))\n"
+)
+
+
+def loading_project(target: Path, deployment: list[str]) -> str:
+    remove_application(target)
+    gates = target / GATES_FILE
+    config = json.loads(gates.read_text())
+    config["shared"] = [
+        {"name": "actionlint", "role": "workflows", "command": ["actionlint"]},
+        {"name": "zizmor", "role": "ci-security", "command": ["zizmor", "."]},
+        {"name": "deploy", "role": "deployment", "command": deployment},
+    ]
+    gates.write_text(json.dumps(config))
+    before = commit(target, "gates the installed release loads")
+    assert gate_config.load_groups(target)
+    return before
+
+
+def release_with_new_load_rule(source: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    tools = source / ".hooks/tool_setup.py"
+    tools.write_text(tools.read_text() + NEW_RULE)
+    revision = commit(source, "require the deployment tool")
+    monkeypatch.setattr(update, "latest_verified", Mock(return_value=revision))
+    return revision
+
+
+def installed_load(target: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-I", "-c", LOAD, str(target / ".hooks"), str(target)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_an_update_whose_release_cannot_load_the_gates_file_is_refused_and_the_project_keeps_its_release(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, old = release
+    before = loading_project(target, ["python3", "-c", "print('DEPLOY')"])
+    add_origin(target)
+    release_with_new_load_rule(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+
+    assert update_runner.apply_update(target) == 0
+    result = (target / update_runner.RESULT_FILE).read_text()
+    assert "Hard Eng update failed" in result
+    assert "the new release cannot load the checks of this project" in result
+    assert RULE_TEXT in result
+    assert FIX_FIRST in result
+    assert git(target, "branch", "--list", update_runner.UPDATE_BRANCH) == ""
+    assert git(target, "rev-parse", "HEAD") == before
+    assert git(target, "status", "--short") == ""
+    assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
+    assert installed_load(target).returncode == 0
+
+
+def test_a_refusal_for_a_missing_product_file_does_not_send_the_reader_to_the_gates_file(
+    release: tuple[Path, Path, str],
+) -> None:
+    source, target, _ = release
+    update_runner.require_loading_gates(target, source)
+    (target / "PRODUCT.md").unlink()
+
+    with pytest.raises(ValueError, match="PRODUCT.md is required") as refusal:
+        update_runner.require_loading_gates(target, source)
+    assert "hard-eng.gates.json" not in str(refusal.value)
+
+
+def test_an_update_whose_release_loads_the_gates_file_still_lands(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    loading_project(target, ["trivy", "config", "."])
+    add_origin(target)
+    revision = release_with_new_load_rule(source, monkeypatch)
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+
+    assert update_runner.apply_update(target) == 0
+    assert revision in (target / update_runner.RESULT_FILE).read_text()
+    branch = f"refs/heads/{update_runner.UPDATE_BRANCH}"
+    marker = json.loads(git(target, "show", f"{branch}:{update.SOURCE_FILE}"))
+    assert marker["revision"] == revision

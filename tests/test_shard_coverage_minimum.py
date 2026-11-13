@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from coverage import __version__ as installed_release
 from coverage.results import display_covered, should_fail_under
 from gate_config import Gate, Group
 from shards import (
@@ -16,8 +17,6 @@ from shards import (
     part_command,
     shown,
 )
-
-from coverage import __version__ as installed_release
 
 PYTEST = ["uv", "run", "pytest", "--cov"]
 COVERAGERC = "[report]\nfail_under = 71\nprecision = 1\n"

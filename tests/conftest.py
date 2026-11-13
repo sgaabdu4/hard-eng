@@ -291,6 +291,17 @@ def shipping_policy() -> "ShippingPolicy":
     return default_policy()
 
 
+def secrets_gates() -> list[dict[str, object]]:
+    template = json.loads(
+        (SOURCE / ".agents/skills/he/templates/hard-eng.javascript.json").read_text()
+    )
+    return [
+        gate
+        for gate in template["shared"]
+        if gate.get("role") in {"secrets-files", "secrets-history"}
+    ]
+
+
 @pytest.fixture(scope="session")
 def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str]:
     """One installed project per test process; each test receives its own copy."""
@@ -334,7 +345,17 @@ def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, st
     )
     old = commit(source, "source baseline")
     init(target)
-    (target / "package.json").write_text('{"private":true}')
+    (target / "package.json").write_text(
+        json.dumps(
+            {
+                "private": True,
+                "scripts": {
+                    "test:coverage": "bun test --coverage",
+                    "test:performance": "bun test perf",
+                },
+            }
+        )
+    )
     (target / "bun.lock").write_text('{"lockfileVersion": 1}\n')
     (target / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": [], "shipping": shipping_policy})
@@ -359,13 +380,14 @@ def release_template(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, st
                     {
                         "name": "actionlint",
                         "role": "workflows",
-                        "command": ["python3", "-c", "print('WORKFLOW_CHECK')"],
+                        "command": ["actionlint"],
                     },
                     {
                         "name": "zizmor",
                         "role": "ci-security",
-                        "command": ["python3", "-c", "print('CI_SECURITY_CHECK')"],
+                        "command": ["zizmor", "."],
                     },
+                    *secrets_gates(),
                 ],
             }
         )

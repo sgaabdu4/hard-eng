@@ -1,15 +1,18 @@
 """A verified update is proven from its tree, even when the base held edited scaffold files."""
 
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import Mock
 
 import change_size
 import pytest
+import tool_setup
 import update
 from conftest import SOURCE, commit, git, load_module
 from coverage_sources import require_listed_sources
 from gate_config import parse_config, repository_files
+from test_update_pr_refusal import loading_project
 from test_updates import fixed_revision
 
 SKILL_LOCK = ".agents/skills/marketing-video/bun.lock"
@@ -162,7 +165,15 @@ def update_beside_code_outside_the_sources(
     for name in ("src/index.ts", "scripts/build.mjs"):
         (target / name).parent.mkdir(exist_ok=True)
         (target / name).write_text("export const a = 1;\n")
+    manifest = target / "package.json"
+    package = json.loads(manifest.read_text())
+    package["scripts"] |= {
+        "lint:boundaries": "bun run boundaries",
+        "boundaries": "bun test boundaries",
+    }
+    manifest.write_text(json.dumps(package))
     commit(target, "code outside the listed sources")
+    monkeypatch.setattr(update, "require_loading_gates", Mock())
     release_now(source, monkeypatch, "release one")
     update.update(target)
     assert '"sources": ["src"]' in (target / "hard-eng.gates.json").read_text()
@@ -179,7 +190,7 @@ def after_the_gate_check(spy: Mock) -> list[str]:
     last = max(
         (n for n, command in enumerate(words) if command[0] != "git"), default=-1
     )
-    return [command[1] for command in words[last + 1 :]]
+    return [command[3 if command[1] == "-c" else 1] for command in words[last + 1 :]]
 
 
 @pytest.mark.parametrize("hosted", [True, False])
@@ -194,7 +205,7 @@ def test_scaffold_update_check_refuses_code_outside_the_sources(
         monkeypatch.setenv("GITHUB_ACTIONS", "true")
     with pytest.raises(ValueError, match="outside its sources: scripts"):
         update.check_scaffold_update(target, base)
-    assert after_the_gate_check(spy) == ["ls-files"]
+    assert after_the_gate_check(spy) == ["ls-files", "check-attr"]
 
 
 def test_a_quick_check_of_a_verified_update_leaves_the_sources_rule_to_the_full_check(
@@ -245,3 +256,27 @@ def test_an_update_adds_the_biome_entry_and_stays_an_update(
     changed = set(git(target, "diff", "--name-only", base).splitlines())
     assert "biome.json" in changed
     assert change_size.update_only(target, base, changed)
+
+
+@pytest.mark.parametrize(
+    "deployment", [["python3", "-c", "print('DEPLOY')"], ["trivy", "config", "."]]
+)
+def test_the_full_check_of_an_update_loads_the_gates_file_with_its_release(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    deployment: list[str],
+) -> None:
+    source, target, _ = release
+    base = loading_project(target, deployment)
+    revision = commit(source, "next release")
+    monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
+    assert revision in update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    monkeypatch.setitem(tool_setup.ROLE_TOOLS["shared"], "deployment", ("trivy",))
+
+    assert update.check_scaffold_update(target, base, sources=False)
+    if deployment[0] == "trivy":
+        assert update.check_scaffold_update(target, base)
+    else:
+        with pytest.raises(ValueError, match="the deployment check must run `trivy`"):
+            update.check_scaffold_update(target, base)

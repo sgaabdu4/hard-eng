@@ -186,12 +186,25 @@ def use_own_hooks(root: Path, candidate: Path) -> None:
 
 
 def install_worktree_hook(root: Path) -> str:
+    from stale_updates import committed_bytes, hide, worktree_place
     from update import install_planned_hook
 
     target, launcher = worktree_hook(root)
-    if install_planned_hook(root, (str(target), launcher)):
-        return "; installed the worktree hook"
-    return ""
+    place, name, main = worktree_place(root, target)
+    foreign = foreign_hook(root, target)
+    if (
+        place == "elsewhere"
+        or (place == "loose" and foreign)
+        or (
+            place == "tracked"
+            and (foreign or committed_bytes(main, name) != launcher.encode())
+        )
+    ):
+        return ""
+    installed = install_planned_hook(root, (str(target), launcher))
+    if place == "loose":
+        hide(main, name)
+    return "; installed the worktree hook" if installed else ""
 
 
 def planned_hook(root: Path, plan: object) -> tuple[str, str]:

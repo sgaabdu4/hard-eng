@@ -195,7 +195,7 @@ exit $c
     config = json.loads(config_path.read_text())
     config["shipping"] = shipping_policy
     config["shared"].append(
-        {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
+        {"name": "shell", "role": "shell", "command": ["shellcheck"]}
     )
     config_path.write_text(json.dumps(config))
     base = commit(target, "existing canonical Python launcher under Husky")

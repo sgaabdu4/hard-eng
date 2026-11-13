@@ -247,6 +247,24 @@ def _head_check_problem(
     ), rollup
 
 
+def _running_check(commit: dict[str, JsonValue], head_sha: str) -> str | None:
+    """The name of a head check that has not finished while the head checks do not all pass."""
+    contexts = _complete_nodes(_dict(commit.get("statusCheckRollup")).get("contexts"))
+    if (
+        commit.get("oid") != head_sha
+        or not contexts
+        or _unpassed_check(contexts) is None
+    ):
+        return None
+    for node in contexts:
+        if "context" in node:
+            if node.get("state") in {"PENDING", "EXPECTED"}:
+                return str(node["context"])
+        elif node.get("status") != "COMPLETED":
+            return str(node.get("name") or "")
+    return None
+
+
 def bypass_problem(
     root: Path, owner: str, name: str, number: int, head_sha: str
 ) -> str | None:
@@ -261,6 +279,8 @@ def bypass_problem(
     )
     if pull.get("viewerDidAuthor") is not True:
         return "the viewer did not author the PR"
+    if (running := _running_check(commit, head_sha)) is not None:
+        return f"a head check still runs: {running}; wait for it, then run this stage again"
     if pull.get("viewerCanMergeAsAdmin") is not True:
         return "the author cannot bypass the review requirement"
     if pull.get("reviewDecision") != "REVIEW_REQUIRED":

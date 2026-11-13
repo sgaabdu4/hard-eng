@@ -349,6 +349,56 @@ def commit_update(
     git_commit(root, names, changes, f"Update Hard Eng to {revision}")
 
 
+def uv_run(source: Path) -> list[str]:
+    return [
+        "uv",
+        "run",
+        "--quiet",
+        "--project",
+        str(source),
+        "--locked",
+        "--no-dev",
+        "--python",
+        sys.executable,
+        "python",
+    ]
+
+
+LOAD_CHECK = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from gate_config import load_groups
+try:
+    load_groups(Path(sys.argv[2]))
+except (OSError, ValueError, TypeError, KeyError) as error:
+    sys.exit(str(error))
+"""
+
+
+def require_loading_gates(root: Path, source: Path) -> None:
+    result = subprocess.run(
+        [
+            *uv_run(source),
+            "-I",
+            "-c",
+            LOAD_CHECK,
+            str(source / ".hooks"),
+            str(root),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    if result.returncode:
+        raise ValueError(
+            "the new release cannot load the checks of this project: "
+            f"{result.stderr.strip() or f'exit {result.returncode}'}"
+        )
+
+
 def exclusive(handle: TextIO) -> bool:
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -634,7 +684,10 @@ def failure_kind(error: Exception) -> type[Exception]:
 
 
 def prepare_update(root: Path, repair: bool = False) -> str:
-    """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
+    """Build the update as one commit on its own branch from the remote base; it first undoes what earlier reruns left in the main hooks folder."""
+    from stale_updates import settle_worktree_hook
+
+    settle_worktree_hook(root)
     note = ""
     if repair:
         note = repair_checkout(

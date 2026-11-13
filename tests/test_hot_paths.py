@@ -79,6 +79,16 @@ def test_each_loop_message_names_the_bounded_helper_of_its_language(
     assert "Ordered work: use" in message
 
 
+def test_the_dart_join_message_names_a_form_that_keeps_the_first_error() -> None:
+    rules = yaml.safe_load(RULES.read_text())["rules"]
+    (message,) = [r["message"] for r in rules if r["id"] == "sequential-awaits-dart"]
+    text = " ".join(message.split())
+    assert "await waitBoth(readA(), readB())" in text
+    assert "Future.wait<void>([first, second], eagerError: true)" in text
+    assert "Do not use a record's .wait or a Future.wait without eagerError" in text
+    assert "together with" not in text
+
+
 def test_every_rule_skips_each_test_folder() -> None:
     """HE-HOT-PATH: no rule scans a test folder that gate_config names."""
     for rule in yaml.safe_load(RULES.read_text())["rules"]:

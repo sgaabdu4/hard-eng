@@ -483,7 +483,8 @@ def private_mcp_release(
 ) -> Path:
     source, target, _ = release
     monkeypatch.setenv("APPWRITE_ENDPOINT", "https://cloud.appwrite.io/v1")
-    (target / "app.js").write_text('import { Client } from "appwrite";\n')
+    (target / "src").mkdir()
+    (target / "src/app.js").write_text('import { Client } from "appwrite";\n')
     if ignored:
         (target / ".gitignore").write_text(".mcp.json\n")
     commit(target, "use Appwrite")

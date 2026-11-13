@@ -214,7 +214,7 @@ def husky_project(target: Path) -> tuple[Path, str]:
     config_path = target / "hard-eng.gates.json"
     config = json.loads(config_path.read_text())
     config["shared"].append(
-        {"name": "shell", "role": "shell", "command": ["python3", "-c", "pass"]}
+        {"name": "shell", "role": "shell", "command": ["shellcheck"]}
     )
     config_path.write_text(json.dumps(config))
     return shim, commit(target, "Husky hooks")
