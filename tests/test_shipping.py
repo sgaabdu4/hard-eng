@@ -122,10 +122,13 @@ def _run(
     conclusion: object = "SUCCESS",
     *,
     name: str = "build",
-    workflow: str = "CI",
+    app: object = 15368,
+    workflow: object = 1,
     status: str = "COMPLETED",
 ) -> dict[str, object]:
-    suite = {"workflowRun": {"workflow": {"name": workflow}}}
+    suite: dict[str, object] = {"app": {"databaseId": app}}
+    if workflow is not None:
+        suite["workflowRun"] = {"workflow": {"databaseId": workflow}}
     return {
         "name": name,
         "databaseId": database_id,
