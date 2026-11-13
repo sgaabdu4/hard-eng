@@ -490,3 +490,16 @@ def test_an_update_whose_release_loads_the_gates_file_still_lands(
     branch = f"refs/heads/{update_runner.UPDATE_BRANCH}"
     marker = json.loads(git(target, "show", f"{branch}:{update.SOURCE_FILE}"))
     assert marker["revision"] == revision
+
+
+def test_the_tip_load_refuses_a_debt_file_that_each_check_would_refuse(
+    release: tuple[Path, Path, str],
+) -> None:
+    _, target, _ = release
+    debt_file = target / "hard-eng.debt.json"
+    debt_file.write_text(json.dumps({"version": 1, "gates": {}}))
+    assert update_pr.load_refusal(target) is None
+    debt_file.write_text(json.dumps({"version": 2, "gates": {}}))
+
+    refusal = update_pr.load_refusal(target)
+    assert refusal is not None and "hard-eng.debt.json must hold version 1" in refusal
