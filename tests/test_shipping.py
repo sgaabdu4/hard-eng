@@ -182,6 +182,8 @@ class FakeGitHub:
             {"total_count": len(checks), "check_runs": checks}
         ]
         self.file_payload: object = [files or []]
+        no_runs: list[object] = []
+        self.push_runs: object = [{"total_count": 0, "workflow_runs": no_runs}]
         self.review: object = _review("0" * 40, viewerDidAuthor=False)
         self.rules: object = None
         self.job: object = None
@@ -221,6 +223,7 @@ class FakeGitHub:
         payloads = {
             "/files?": self.file_payload,
             "/check-runs?": self.check_payload,
+            "/actions/runs?": self.push_runs,
             "/collaborators?": self.collaborators,
             "/compare/": self.comparison,
             "/actions/jobs/": self.job,
