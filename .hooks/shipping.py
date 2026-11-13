@@ -524,6 +524,30 @@ def _pending(
     return PendingCheck(f"required check has not completed: {run['name']}{note}")
 
 
+def _push_suites(root: Path, repository: str, revision: str) -> set[int]:
+    endpoint = (
+        f"repos/{repository}/actions/runs?head_sha={revision}&event=push&per_page=100"
+    )
+    runs = _api_items(root, endpoint, "workflow_runs", "push runs query")
+    return {
+        run["check_suite_id"]
+        for run in runs
+        if isinstance(run.get("check_suite_id"), int)
+    }
+
+
+def _from_push(
+    candidates: list[dict[str, JsonValue]], suites: set[int]
+) -> list[dict[str, JsonValue]]:
+    pushed = [
+        item
+        for item in candidates
+        if isinstance(suite := item.get("check_suite"), dict)
+        and suite.get("id") in suites
+    ]
+    return pushed or candidates
+
+
 def _checks(
     root: Path,
     repository: str,
@@ -532,6 +556,7 @@ def _checks(
     explain: bool,
     *,
     completed_only: bool = False,
+    push_only: bool = False,
 ) -> None:
     endpoint = (
         f"repos/{repository}/commits/{revision}/check-runs?per_page=100&filter=all"
@@ -551,10 +576,11 @@ def _checks(
             and (finished or not completed_only)
         ):
             by_name[name].append(item)
+    suites = _push_suites(root, repository, revision) if push_only else set()
     for name, candidates in by_name.items():
         if not candidates:
             raise PendingCheck(f"required check missing: {name}")
-        run = newest_run(candidates)
+        run = newest_run(_from_push(candidates, suites))
         if run.get("truncated") is True or (
             isinstance(run.get("output"), dict)
             and run["output"].get("truncated") is True
@@ -939,7 +965,14 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         if policy["ui_paths"]:
             paths = changed_paths(resolved_root, owner, name, number)
             _ui_evidence(resolved_root, pull, paths, policy)
-        _checks(resolved_root, repository, revision, policy, True)
+        _checks(
+            resolved_root,
+            repository,
+            revision,
+            policy,
+            True,
+            push_only=stage == "delivered",
+        )
         if stage == "delivered" and target == "Deploy":
             _delivery(resolved_root, policy, revision, url)
         current = _pull(resolved_root, owner, name, number)
