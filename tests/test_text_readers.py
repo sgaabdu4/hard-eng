@@ -123,3 +123,48 @@ def test_the_merge_shard_skips_the_rule(
         tmp_path / "w", "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n"
     )
     validate_suppressions(root, "HEAD", screens=False)
+
+
+STARTED: list[str] = []
+RECORDING: list[bool] = []
+
+
+def record(event: str, arguments: tuple[object, ...]) -> None:
+    if RECORDING and event == "subprocess.Popen":
+        STARTED.append(Path(str(arguments[0])).name)
+
+
+sys.addaudithook(record)
+
+FLUTTER_SCREEN = (
+    "import 'package:flutter/material.dart';\n"
+    "Widget build() => Text.rich(TextSpan(text: 'Hello ', children: [\n"
+    "  TextSpan(text: 'big'),\n"
+    "  TextSpan(text: ' world', style: x),\n"
+    "]));\n"
+    "Widget other() => Text(n.body, maxLines: 2);\n"
+)
+
+
+def test_the_dart_reader_is_built_once_and_a_run_starts_no_dart_process() -> None:
+    """HE-NO-TEXT-WALLS: the Dart reader is compiled into the cache once; a run starts only the compiled reader."""
+    request = text_walls.request(
+        [("lib/a.dart", FLUTTER_SCREEN, None), ("lib/b.dart", "void main( {", None)],
+        "dart",
+    )
+    first, broken = text_readers.read("dart", request)
+    assert [(b["kind"], b["name"], b["line"]) for b in first["blocks"]] == [
+        ("jsx", "Text.rich", 2),
+        ("jsx", "Text", 6),
+    ]
+    assert first["blocks"][0]["parts"] == ["Hello ", "big", " world"]
+    assert first["blocks"][1]["parts"] == [{"x": 1, "field": "body"}]
+    assert first["blocks"][1]["clamp"] == 2
+    assert str(broken["error"]).startswith("line 1:")
+    STARTED.clear()
+    RECORDING.append(True)
+    try:
+        text_readers.read("dart", request)
+    finally:
+        RECORDING.clear()
+    assert STARTED == ["reader.exe"]
