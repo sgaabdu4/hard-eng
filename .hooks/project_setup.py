@@ -76,7 +76,9 @@ def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
             )
 
 
-def validate_dart_exclusions(directory: Path, values: object) -> None:
+def validate_dart_exclusions(
+    directory: Path, values: object, children: frozenset[str] = frozenset()
+) -> None:
     allowed = {
         ".dart_tool/**",
         "**/*.g.dart",
@@ -99,7 +101,7 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
     refused = [
         value
         for value in values
-        if not isinstance(value, str) or value not in allowed | native
+        if not isinstance(value, str) or value not in allowed | native | children
     ]
     if refused:
         raise ValueError(
@@ -109,7 +111,7 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
     roots = {pattern.split("/", 1)[0] for pattern in set(values) & native}
     matches = {
         path
-        for pattern in set(values) - native - {".dart_tool/**"}
+        for pattern in set(values) - native - children - {".dart_tool/**"}
         for path in directory.glob(pattern)
         if path.relative_to(directory).parts[0] not in roots
     }

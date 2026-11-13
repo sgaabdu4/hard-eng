@@ -2,12 +2,12 @@
 
 import json
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
 if TYPE_CHECKING:
-    from gate_config import JsonObject
+    from gate_config import Group, JsonObject
 
 SETTINGS_FILES = (
     ".dart-decimaterc",
@@ -111,8 +111,28 @@ def dart_options(path: Path) -> DartOptions:
     return cast(DartOptions, options)
 
 
+def nested_package_patterns(group: "Group", groups: "list[Group]") -> frozenset[str]:
+    from dependency_graph import child_groups
+
+    return frozenset(
+        f"{PurePosixPath(child['path']).relative_to(group['path'])}/**"
+        for child in child_groups(group, "types", groups)
+    )
+
+
+def exclude_nested_packages(options: "JsonObject", children: frozenset[str]) -> None:
+    if children:
+        analyzer = cast("JsonObject", options.setdefault("analyzer", {}))
+        exclude = cast("list[str]", analyzer.setdefault("exclude", []))
+        exclude.extend(sorted(children - set(exclude)))
+
+
 def validate_dart_includes(
-    path: Path, directory: Path, seen: set[Path] | None = None, packaged: bool = False
+    path: Path,
+    directory: Path,
+    seen: set[Path] | None = None,
+    packaged: bool = False,
+    children: frozenset[str] = frozenset(),
 ) -> None:
     seen = set() if seen is None else seen
     path = path.resolve()
@@ -130,7 +150,7 @@ def validate_dart_includes(
         raise ValueError(
             f"Remove obsolete Dart language flags; use no_dynamic_casts and no_raw_types: {path}"
         )
-    validate_dart_exclusions(directory, analyzer.get("exclude", []))
+    validate_dart_exclusions(directory, analyzer.get("exclude", []), children)
     if any(value == "ignore" for value in analyzer.get("errors", {}).values()):
         raise ValueError(
             f"Dart strict analysis cannot exclude files or ignore diagnostics: {path}"
@@ -157,7 +177,7 @@ def validate_dart_includes(
         package = include.startswith("package:")
         try:
             validate_dart_includes(
-                included, directory, seen.copy(), packaged or package
+                included, directory, seen.copy(), packaged or package, children
             )
         except ValueError as error:
             if packaged or not package:
@@ -247,7 +267,10 @@ def validate_dart_boundaries(
 
 
 def validate_dart_typing(
-    directory: Path, sources: list[str] | tuple[str, ...], package_root: Path | None
+    directory: Path,
+    sources: list[str] | tuple[str, ...],
+    package_root: Path | None,
+    children: frozenset[str] = frozenset(),
 ) -> None:
     from gate_config import JsonObject
     from project_setup import validate_dart_exclusions
@@ -264,7 +287,9 @@ def validate_dart_typing(
             if group == "rules":
                 actual = dart_rule_settings(actual)
             if isinstance(settings, list):
-                validate_dart_exclusions(directory, section_options.get(group, []))
+                validate_dart_exclusions(
+                    directory, section_options.get(group, []), children
+                )
                 continue
             if not isinstance(actual, dict) or any(
                 actual.get(key) != value for key, value in settings.items()
@@ -272,7 +297,7 @@ def validate_dart_typing(
                 raise ValueError(
                     f"Dart requires strict {section}.{group} settings{where}"
                 )
-    validate_dart_includes(path, package_root or directory)
+    validate_dart_includes(path, package_root or directory, children=children)
     for source in {*sources, "test", "tests"}:
         for nested in (directory / source).rglob("analysis_options.yaml"):
             if nested.parent != directory:

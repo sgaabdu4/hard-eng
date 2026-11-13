@@ -12,6 +12,7 @@ import yaml
 from conftest import git
 from dart_boundaries import (
     DART_TYPING,
+    nested_package_patterns,
     validate_dart_boundaries,
     validate_dart_includes,
 )
@@ -777,3 +778,101 @@ def test_a_linter_rule_set_to_false_is_refused_by_name(
     del options["linter"]["rules"]["avoid_print"]
     path.write_text(yaml.safe_dump(options))
     runner.validate_typing(tmp_path, "dart", ["lib"])
+
+
+NESTED_ROOT: Group = {"path": ".", "language": "dart", "checks": []}
+
+
+def nested_group(path: str, language: str = "dart", role: str = "types") -> Group:
+    check: Gate = {"name": role, "role": role, "command": ["dart", "analyze", "."]}
+    return {"path": path, "language": language, "checks": [check]}
+
+
+def nested_project(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    (root / "pubspec.yaml").write_text("name: outer\n")
+    for name in ("packages/inner", "test/support"):
+        (root / name / "lib").mkdir(parents=True)
+        (root / name / "pubspec.yaml").write_text("name: inner\n")
+        (root / name / "lib/b.dart").write_text("void b() {}\n")
+    git(root, "add", ".")
+
+
+@pytest.mark.parametrize(
+    "pattern,children,accepted",
+    [
+        ("packages/inner/**", {"packages/inner/**"}, True),
+        ("packages/**", {"packages/inner/**"}, False),
+        ("test/support/**", {"packages/inner/**"}, False),
+        ("packages/inner/**", set(), False),
+    ],
+)
+def test_dart_exclusions_accept_only_nested_packages_with_own_types_check(
+    tmp_path: Path, pattern: str, children: set[str], accepted: bool
+) -> None:
+    nested_project(tmp_path)
+    if accepted:
+        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
+        return
+    with pytest.raises(ValueError, match="cannot exclude project files"):
+        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
+
+
+def test_nested_package_exclusions_follow_child_types_checks() -> None:
+    groups: list[Group] = [
+        NESTED_ROOT,
+        nested_group("packages/inner"),
+        nested_group("packages/lint", role="lint"),
+        {"path": "packages/docs", "checks": []},
+        nested_group("packages/web", language="javascript"),
+    ]
+    assert nested_package_patterns(NESTED_ROOT, groups) == {"packages/inner/**"}
+    parent = nested_group("packages/inner")
+    below = nested_group("packages/inner/deep")
+    assert nested_package_patterns(parent, [parent, below]) == {"deep/**"}
+    assert nested_package_patterns(NESTED_ROOT, [NESTED_ROOT]) == frozenset()
+
+
+def test_dart_setup_excludes_nested_packages_from_root_analysis(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: outer\n")
+    children = frozenset({"packages/inner/**"})
+    package: Group = {"path": ".", "checks": []}
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, changes, children)
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(changes["analysis_options.yaml"])
+    assert yaml.safe_load(path.read_text())["analyzer"]["exclude"] == [
+        "packages/inner/**"
+    ]
+    runner.validate_typing(tmp_path, "dart", ["lib"], children=children)
+    repeated: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, repeated, children)
+    assert "analysis_options.yaml" not in repeated
+    path.unlink()
+    alone: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, package, alone)
+    assert "exclude" not in yaml.safe_load(alone["analysis_options.yaml"])["analyzer"]
+
+
+def test_the_runner_passes_nested_package_patterns_to_the_dart_validation(
+    installer: ModuleType, runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "pubspec.yaml").write_text("name: outer\n")
+    inner = nested_group("packages/inner")
+    gate: Gate = {"name": "types", "role": "types", "command": ["dart", "analyze", "."]}
+    group: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [gate],
+    }
+    changes: dict[str, str] = {}
+    installer.configure_dart(
+        tmp_path, tmp_path, group, changes, frozenset({"packages/inner/**"})
+    )
+    (tmp_path / "analysis_options.yaml").write_text(changes["analysis_options.yaml"])
+    assert runner.prepare_command(group, gate, 5, [group, inner])
+    with pytest.raises(ValueError, match="cannot exclude project files"):
+        runner.prepare_command(group, gate, 5, [group])
