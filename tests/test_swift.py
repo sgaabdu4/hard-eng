@@ -224,6 +224,30 @@ def test_plugin_added_after_setup_must_be_watched(
     validate_required_checks(root, config)
 
 
+@pytest.mark.parametrize(("platform", "refused"), [("ios", True), ("macos", False)])
+def test_iphone_tests_must_run_on_the_named_simulator_not_on_a_copy(
+    installer: ModuleType, tmp_path: Path, platform: str, refused: bool
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root, (platform,))
+    config = app_config(installer, root)
+    validate_required_checks(root, config)
+    tests = next(
+        gate
+        for gate in swift_group(config, platform)["checks"]
+        if gate["role"] == "tests"
+    )
+    script = tests["command"][2]
+    tests["command"][2] = script.replace(" -parallel-testing-enabled NO", "")
+    assert tests["command"][2] != script
+    if not refused:
+        return validate_required_checks(root, config)
+    with pytest.raises(
+        ValueError, match="ios: the tests command must pass `-parallel-testing"
+    ):
+        validate_required_checks(root, config)
+
+
 def test_setup_adds_the_pods_gate_only_with_a_podfile(
     installer: ModuleType, tmp_path: Path
 ) -> None:
@@ -901,6 +925,7 @@ def test_ios_tests_script_picks_a_simulator_by_id(
     assert result.returncode == 0, result.stderr
     build = next(call for call in calls if call.startswith("xcodebuild"))
     assert f"-destination id={destination} " in build
+    assert " -parallel-testing-enabled NO " in build
     assert "-onlyUsePackageVersionsFromResolvedFile" in build
     assert "SWIFT_TREAT_WARNINGS_AS_ERRORS=$(HARD_ENG_STRICT_$(PROJECT_NAME))" in build
     assert build.endswith("HARD_ENG_STRICT_Runner=YES")
