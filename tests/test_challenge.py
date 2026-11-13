@@ -631,3 +631,17 @@ def test_the_prompt_stays_under_the_byte_limit_with_a_huge_earlier_output(
     prompt = prompt_of(log)
     assert len(prompt.encode()) < 24_000 + 3_000
     assert prompt.count("é") <= 4_000
+
+
+def test_a_later_run_is_told_to_report_an_earlier_finding_that_is_still_open(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first_review(branch, tmp_path, monkeypatch)
+    (branch / "extra.py").write_text("value = 4\n")
+    commit(branch, "repair")
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    assert challenge.challenge(branch, None, None) == 0
+    prompt = prompt_of(log)
+    assert "each earlier finding" in prompt
+    assert "still open" in prompt
+
