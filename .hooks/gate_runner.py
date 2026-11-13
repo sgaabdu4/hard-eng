@@ -73,12 +73,12 @@ def validate_typing(
     directory: Path,
     language: str | None,
     sources: list[str] | tuple[str, ...] = (),
-    package_root: Path | None = None,
+    children: frozenset[str] = frozenset(),
 ) -> None:
     if language == "python":
         validate_pyrefly(directory, ROOT)
     elif language == "dart":
-        validate_dart_typing(directory, sources, package_root)
+        validate_dart_typing(directory, sources, None, children)
 
 
 def reject_test_filters(
@@ -192,7 +192,10 @@ def prepare_command(
     if gate.get("role") == "types":
         directory = ROOT / group["path"]
         language = group.get("language")
-        validate_typing(directory, language, group.get("sources", []))
+        from dart_boundaries import nested_package_patterns
+
+        children = nested_package_patterns(group, groups or [])
+        validate_typing(directory, language, group.get("sources", []), children)
         if language == "python":
             from project_setup import python_interpreter
 

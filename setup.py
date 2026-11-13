@@ -237,7 +237,7 @@ def adopt_root_dart_gates(checks: list[Gate], required: Gate) -> list[list[str]]
     analyzer = [value for value in required["command"] if value != "."]
     for gate in checks:
         paths = gate["command"][len(analyzer) :]
-        # Explicit paths skip analyzer plugins, so earlier directory scopes return to the root.
+        # Explicit paths skip analyzer plugins in Dart 3.13 and older, so earlier directory scopes return to the root.
         if (
             gate["name"] in {required["name"], "strict-" + required["name"]}
             and gate["command"][: len(analyzer)] == analyzer
@@ -252,6 +252,7 @@ def apply_dart_typing(
     options: JsonObject,
     required: dict[str, JsonObject],
     directory: Path,
+    children: frozenset[str] = frozenset(),
 ) -> None:
     from dart_boundaries import dart_rule_settings
     from project_setup import validate_dart_exclusions
@@ -288,24 +289,31 @@ def apply_dart_typing(
                     current.pop("strict-raw-types", None)
                 merge(current, settings, (section, group))
             else:
-                validate_dart_exclusions(directory, current)
+                validate_dart_exclusions(directory, current, children)
 
 
 def configure_dart(
-    root: Path, directory: Path, package: Group, changes: dict[str, str]
+    root: Path,
+    directory: Path,
+    package: Group,
+    changes: dict[str, str],
+    children: frozenset[str] = frozenset(),
 ) -> None:
     import yaml
     from project_setup import migrate_dart_plugins, outside_lib_coverage
 
     outside_lib_coverage(package)
     target = directory / "analysis_options.yaml"
-    from dart_boundaries import DART_TYPING, dart_options
+    from dart_boundaries import DART_TYPING, dart_options, exclude_nested_packages
 
     options = cast("JsonObject", dart_options(target)) if target.exists() else {}
     original = deepcopy(options)
     existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
-    apply_dart_typing(options, cast("dict[str, JsonObject]", DART_TYPING), directory)
+    apply_dart_typing(
+        options, cast("dict[str, JsonObject]", DART_TYPING), directory, children
+    )
+    exclude_nested_packages(options, children)
     content = (
         existing
         if target.exists() and options == original
@@ -412,6 +420,23 @@ def configure_dart_scanner(
         scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json_file(root, scanner)
+
+
+def configure_language(
+    root: Path, package: Group, packages: list[Group], changes: dict[str, str]
+) -> None:
+    from dart_boundaries import nested_package_patterns
+    from python_setup import configure_python
+
+    directory = root / package["path"]
+    language = package.get("language")
+    if language == "dart":
+        nested = nested_package_patterns(package, packages)
+        configure_dart(root, directory, package, changes, nested)
+    elif language == "python":
+        configure_python(root, directory, package, changes)
+    elif language == "javascript":
+        configure_javascript(root, directory, package, changes)
 
 
 def configure_javascript(
@@ -802,8 +827,6 @@ def plan_install(
 
     drop_unanchored_excludes(config)
     typescript = typescript_packages(root, repository_files(root))
-    from python_setup import configure_python
-
     for package in config.get("packages", []):
         strict_scanner_flags(package)
         add_freshness(root, SOURCE, package)
@@ -811,13 +834,7 @@ def plan_install(
         browser_test_coverage(root / package["path"], package)
         configure_semgrep_ignore(root, package, changes)
         configure_typing_checks(package)
-        configure = {
-            "python": configure_python,
-            "dart": configure_dart,
-            "javascript": configure_javascript,
-        }.get(package.get("language", ""))
-        if configure is not None:
-            configure(root, root / package["path"], package, changes)
+        configure_language(root, package, config["packages"], changes)
     from untrusted_input import biome_ignores_hooks
 
     biome_ignores_hooks(root, changes)
