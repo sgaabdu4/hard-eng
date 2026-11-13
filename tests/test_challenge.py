@@ -645,3 +645,21 @@ def test_a_later_run_is_told_to_report_an_earlier_finding_that_is_still_open(
     assert "each earlier finding" in prompt
     assert "still open" in prompt
 
+
+def test_a_cut_newest_review_keeps_the_focus_on_the_whole_change(
+    branch: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first_review(branch, tmp_path, monkeypatch, "a" * 9_000 + "\nVERDICT: findings")
+    (branch / "extra.py").write_text("value = 4\n")
+    head = commit(branch, "repair")
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    capsys.readouterr()
+    assert challenge.challenge(branch, None, None) == 0
+    point = git(branch, "merge-base", "HEAD", "main")
+    assert f"Focus on `git diff {point} {head}`" in prompt_of(log)
+    out = capsys.readouterr().out
+    assert f"focus starts at {point[:12]}" in out
+    assert "newest review was cut" in out
