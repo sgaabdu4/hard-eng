@@ -44,7 +44,7 @@ TEXT_PROPS = (
     "subtitle",
     "hint",
 ) + ("helperText", "note", "text", "details", "summary", "caption", "lead")
-SKIP = ("script", "style", "code", "pre")
+SKIP = ("script", "Script", "style", "code", "pre")
 STORED = ("body", "content", "description", "details", "notes") + (
     "note",
     "summary",
