@@ -634,7 +634,10 @@ def failure_kind(error: Exception) -> type[Exception]:
 
 
 def prepare_update(root: Path, repair: bool = False) -> str:
-    """Build the update as one commit on its own branch from the remote base, leaving this checkout alone."""
+    """Build the update as one commit on its own branch from the remote base; it first undoes what earlier reruns left in the main hooks folder."""
+    from stale_updates import settle_worktree_hook
+
+    settle_worktree_hook(root)
     note = ""
     if repair:
         note = repair_checkout(

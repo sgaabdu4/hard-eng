@@ -499,7 +499,6 @@ def gate_status(root: Path) -> str:
                     ".agents/skills",
                     "hard-eng.gates.json",
                     ".husky/pre-push",
-                    ".husky/post-checkout",
                 ],
                 cwd=root,
                 text=True,
