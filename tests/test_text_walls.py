@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import basic_mode
+import gap_issue
 import pytest
 import text_walls
 from comments import validate_suppressions
@@ -307,3 +309,33 @@ def test_the_list_command_and_the_stdin_judge_share_the_caps(
     )
     assert done.returncode == 1
     assert "line 1: 26 words, at most 25" in done.stdout
+
+
+def test_other_screen_stacks_print_a_gap_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-NO-TEXT-WALLS: Vue, Svelte, Astro, SwiftUI, Compose and Flutter screens print a Gap line that a generic issue can carry."""
+    root = tmp_path / "repo"
+    init(root)
+    files = {
+        "src/a.vue": "<template />\n",
+        "src/b.svelte": "<p />\n",
+        "src/c.astro": "<p />\n",
+        "ios/D.swift": "import SwiftUI\n",
+        "android/E.kt": "import androidx.compose.material3.Text\n",
+        "pubspec.yaml": "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n",
+        "ios/F.swift": "import Foundation\n",
+    }
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    commit(root, "baseline")
+    basic_mode.announce(root, {"version": 1, "packages": [], "shared": []})
+    lines = capsys.readouterr().out.splitlines()
+    gaps = [line for line in lines if line.startswith("Gap: No text wall check for ")]
+    stacks = ["Vue", "Svelte", "Astro", "SwiftUI", "Compose", "Flutter"]
+    assert gaps == [f"Gap: No text wall check for {stack}" for stack in stacks]
+    for stack in stacks:
+        assert gap_issue.generic_problem(f"No text wall check for {stack}") is None
+    assert text_walls.walls_command(root, [], False) == 0
+    assert capsys.readouterr().out.splitlines()[: len(stacks)] == gaps

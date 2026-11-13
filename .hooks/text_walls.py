@@ -405,37 +405,42 @@ def listed_screens(root: Path, paths: list[str], caps: Caps) -> list[str]:
     )
 
 
+def stdin_walls(caps: Caps) -> list[str]:
+    found = []
+    for number, line in enumerate(sys.stdin, 1):
+        if line.strip() and (over := over_caps([json.loads(line)], caps)):
+            found.append(f"line {number}: {over}. {FIX}")
+    return found
+
+
+def listed_walls(root: Path, paths: list[str], caps: Caps) -> list[str]:
+    names = [
+        name for name in listed_screens(root, paths, caps) if (root / name).is_file()
+    ]
+    if not names:
+        return []
+    files = [(name, (root / name).read_text(errors="replace"), None) for name in names]
+    hits = {
+        result["path"]: judged(result["path"], result["blocks"], caps)
+        for result in read("js", request(files))
+    }
+    skipped = generated_sources(
+        root, sorted(name for name, items in hits.items() if items)
+    )
+    return [
+        line for name, items in hits.items() if name not in skipped for _, line in items
+    ]
+
+
 def walls_command(root: Path, paths: list[str], stdin: bool) -> int:
     """Print each text block over the caps; with stdin, judge one JSON string for each line."""
     caps = settings(root)
-    found: list[str] = []
-    if stdin:
-        for number, line in enumerate(sys.stdin, 1):
-            if line.strip() and (over := over_caps([json.loads(line)], caps)):
-                found.append(f"line {number}: {over}. {FIX}")
-    else:
-        names = [
-            name
-            for name in listed_screens(root, paths, caps)
-            if (root / name).is_file()
-        ]
-        if names:
-            files = [
-                (name, (root / name).read_text(errors="replace"), None)
-                for name in names
-            ]
-            hits = {
-                result["path"]: judged(result["path"], result["blocks"], caps)
-                for result in read("js", request(files))
-            }
-            skipped = generated_sources(
-                root, sorted(name for name, items in hits.items() if items)
-            )
-            found = [
-                line
-                for name, items in hits.items()
-                if name not in skipped
-                for _, line in items
-            ]
+    if not stdin:
+        from basic_mode import screen_stacks
+        from gate_config import repository_files
+
+        for stack in screen_stacks(root, repository_files(root)):
+            print(f"Gap: No text wall check for {stack}")
+    found = stdin_walls(caps) if stdin else listed_walls(root, paths, caps)
     print("\n".join(found))
     return int(bool(found))
