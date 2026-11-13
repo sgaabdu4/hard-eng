@@ -1,6 +1,6 @@
 import 'package:app/features/counter/presentation/screens/counter_screen.dart';
 import 'package:app/l10n/app_localizations.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -8,7 +8,10 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: [
+        AppLocalizations.delegate,
+        ...GlobalMaterialLocalizations.delegates,
+      ],
       supportedLocales: AppLocalizations.supportedLocales,
       home: CounterScreen(),
     );
