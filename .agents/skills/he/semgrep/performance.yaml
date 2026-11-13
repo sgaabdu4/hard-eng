@@ -3980,14 +3980,17 @@ rules:
       - pattern-not-inside: if (<... await $E ...>) { ... throw $T; }
       - pattern-not-inside: if (<... await $E ...>) throw $T;
       - pattern-not-inside: for ($I in $C) { ... await Future.delayed(...); }
+      - pattern-not-inside: for ($I in $C) { ... await Future<$T>.delayed(...); }
       - pattern-not-inside: for (...; ...; ...) { ... break; }
       - pattern-not-inside: for (...; ...; ...) { ... return; }
       - pattern-not-inside: for (...; ...; ...) { ... return $R; }
       - pattern-not-inside: for (...; ...; ...) { ... await Future.delayed(...); }
+      - pattern-not-inside: for (...; ...; ...) { ... await Future<$T>.delayed(...); }
       - pattern-not-inside: while ($C) { ... break; }
       - pattern-not-inside: while ($C) { ... return; }
       - pattern-not-inside: while ($C) { ... return $R; }
       - pattern-not-inside: while ($C) { ... await Future.delayed(...); }
+      - pattern-not-inside: while ($C) { ... await Future<$T>.delayed(...); }
       - pattern-not-inside: do { ... break; } while ($C);
       - pattern-not-inside: do { ... return; } while ($C);
       - pattern-not-inside: do { ... return $R; } while ($C);
