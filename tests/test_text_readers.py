@@ -266,3 +266,19 @@ def test_an_install_that_hangs_or_fails_to_start_is_a_plain_refusal(
     with pytest.raises(ValueError, match=f"installing the {label} reader failed"):
         text_readers.reader_folder(prefix, [b"key"], build)
     assert not list((tmp_path / "text-readers").glob(".staging-*"))
+
+
+def test_a_reader_of_another_release_keeps_its_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-NO-TEXT-WALLS: building the reader of one release does not delete the reader folder of another."""
+    monkeypatch.setattr(text_readers, "tool_folder", lambda: tmp_path)
+
+    def build(staging: Path) -> None:
+        fake_reader(staging, ("reader.exe",))
+
+    first = text_readers.reader_folder("dart", [b"one"], build)
+    second = text_readers.reader_folder("dart", [b"two"], build)
+    assert first != second
+    assert first.is_dir()
+    assert second.is_dir()
