@@ -491,16 +491,45 @@ def test_the_template_arb_file_is_judged_by_message(
         "fits": "{count} " + sentence(10) + " " + sentence(14),
         "tooLong": "{count} " + sentence(10) + " " + sentence(15),
         "@tooLong": {"description": sentence(60)},
-        "plural": "{n, plural, one{" + sentence(30) + "} other{ok}}",
+        "pluralShort": "{n, plural, one{# item} other{# items}}",
+        "pluralWall": "{n, plural, one{ok} other{" + sentence(30) + "}}",
+        "nestedWall": "{g, select, male{{n, plural, one{He has # item} other{"
+        + sentence(30)
+        + "}}} other{Done.}}",
+        "sumOver": sentence(10)
+        + " {n, plural, one{"
+        + sentence(8)
+        + "} other{"
+        + sentence(7)
+        + "}} "
+        + sentence(8),
+        "sumFits": sentence(10)
+        + " {n, plural, one{"
+        + sentence(8)
+        + "} other{"
+        + sentence(7)
+        + "}} "
+        + sentence(6),
+        "brokenShort": "{n, plural, one{Just a few words",
     }
-    (root / "lib/l10n/app_en.arb").write_text(json.dumps(new, indent=2) + "\n")
-    (root / "lib/l10n/app_fr.arb").write_text(json.dumps(new, indent=2) + "\n")
+    arb = json.dumps(new, indent=2) + "\n"
+    (root / "lib/l10n/app_en.arb").write_text(arb)
+    (root / "lib/l10n/app_fr.arb").write_text(arb)
     message = refused(root)
-    assert "lib/l10n/app_en.arb:6: 26 words" in message
-    assert "lib/l10n/app_en.arb:5:" not in message
-    assert "oldWall" not in message
+    rows = arb.splitlines()
+
+    def at(key: str) -> str:
+        number = next(
+            n for n, row in enumerate(rows, 1) if row.strip().startswith(f'"{key}"')
+        )
+        return f"lib/l10n/app_en.arb:{number}:"
+
+    assert f"{at('tooLong')} 26 words" in message
+    for key in ("pluralWall", "nestedWall", "sumOver"):
+        assert at(key) in message, key
+    for key in ("fits", "pluralShort", "sumFits", "brokenShort", "oldWall"):
+        assert at(key) not in message, key
     assert "app_fr" not in message
-    assert "lib/l10n/app_en.arb:10:" not in message
 
 
 def test_a_guard_or_map_on_a_stored_field_reads_the_elements_inside(
