@@ -524,7 +524,7 @@ def _pending(
     return PendingCheck(f"required check has not completed: {run['name']}{note}")
 
 
-def _push_suites(root: Path, repository: str, revision: str) -> set[int]:
+def _push_suites(root: Path, repository: str, revision: str, base: str) -> set[int]:
     endpoint = (
         f"repos/{repository}/actions/runs?head_sha={revision}&event=push&per_page=100"
     )
@@ -532,7 +532,7 @@ def _push_suites(root: Path, repository: str, revision: str) -> set[int]:
     return {
         run["check_suite_id"]
         for run in runs
-        if isinstance(run.get("check_suite_id"), int)
+        if isinstance(run.get("check_suite_id"), int) and run.get("head_branch") == base
     }
 
 
@@ -576,7 +576,8 @@ def _checks(
             and (finished or not completed_only)
         ):
             by_name[name].append(item)
-    suites = _push_suites(root, repository, revision) if push_only else set()
+    base = policy["base"]
+    suites = _push_suites(root, repository, revision, base) if push_only else set()
     for name, candidates in by_name.items():
         if not candidates:
             raise PendingCheck(f"required check missing: {name}")
