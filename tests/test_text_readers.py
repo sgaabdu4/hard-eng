@@ -244,3 +244,25 @@ def test_a_reader_with_its_parser_package_deleted_runs_again() -> None:
     folder = next((text_readers.tool_folder() / "text-readers").glob("js-*"))
     shutil.rmtree(folder / "node_modules/oxc-parser")
     assert text_readers.read("js", request)[0]["blocks"]
+
+
+@pytest.mark.parametrize(("prefix", "label"), [("js", "TSX and JSX"), ("dart", "Dart")])
+@pytest.mark.parametrize(
+    "error", [subprocess.TimeoutExpired(["bun"], 120), OSError("no space left")]
+)
+def test_an_install_that_hangs_or_fails_to_start_is_a_plain_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prefix: str,
+    label: str,
+    error: Exception,
+) -> None:
+    """HE-NO-TEXT-WALLS: a timeout or an operating system error of an install or build gives the install-failed refusal."""
+    monkeypatch.setattr(text_readers, "tool_folder", lambda: tmp_path)
+
+    def build(staging: Path) -> None:
+        raise error
+
+    with pytest.raises(ValueError, match=f"installing the {label} reader failed"):
+        text_readers.reader_folder(prefix, [b"key"], build)
+    assert not list((tmp_path / "text-readers").glob(".staging-*"))

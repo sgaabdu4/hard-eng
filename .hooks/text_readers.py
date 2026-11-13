@@ -21,13 +21,14 @@ NEEDS_BUN = (
     "or in CI add an oven-sh/setup-bun step before the check"
 )
 INSTALL_FAILED = (
-    "HE-NO-TEXT-WALLS: installing the TSX and JSX reader failed: {error}. "
+    "HE-NO-TEXT-WALLS: installing the {kind} reader failed: {error}. "
     "Run the check once with network access"
 )
 NEEDS_DART = (
     "HE-NO-TEXT-WALLS: reading the changed Flutter screens needs the Dart SDK 3.11 or newer "
     "once, to build its reader. Install Dart or Flutter, or in CI add the Dart SDK before the check"
 )
+LABELS = {"js": "TSX and JSX", "dart": "Dart"}
 READY = {"js": "node_modules/oxc-parser/package.json", "dart": "reader.exe"}
 READ_FAILED = "HE-NO-TEXT-WALLS: the {kind} reader failed: {error}"
 
@@ -75,7 +76,9 @@ def install_js(staging: Path) -> None:
         check=False,
     )
     if done.returncode:
-        raise ValueError(INSTALL_FAILED.format(error=done.stderr.strip()))
+        raise ValueError(
+            INSTALL_FAILED.format(kind=LABELS["js"], error=done.stderr.strip())
+        )
 
 
 def compile_dart(staging: Path) -> None:
@@ -119,6 +122,11 @@ def reader_folder(
             try:
                 build(staging)
                 staging.rename(folder)
+            except (subprocess.SubprocessError, OSError) as error:
+                shutil.rmtree(staging, ignore_errors=True)
+                raise ValueError(
+                    INSTALL_FAILED.format(kind=LABELS[prefix], error=error)
+                ) from error
             except BaseException:
                 shutil.rmtree(staging, ignore_errors=True)
                 raise
