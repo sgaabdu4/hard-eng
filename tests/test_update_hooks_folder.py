@@ -374,3 +374,184 @@ def test_a_committed_kept_copy_is_never_deleted_when_the_hook_is_given_back(
     assert update_runner.apply_update(project) == 0
     assert (project / KEPT_COPY).read_text() == OWNER_HOOK
     assert " D " not in short_status(project)
+
+
+OWNER_MARKER = '#!/bin/sh\necho "$1" > owner.ran\n'
+HUSKY_MARKER = 'echo "$1" > owner.ran\n'
+
+
+def track_owner_hook(project: Path, hook: str, text: str, mode: int) -> Path:
+    path = project / hook
+    path.write_text(text)
+    path.chmod(mode)
+    commit(project, "the project's own post-checkout hook")
+    git(project, "push", "-q", "--no-verify", "origin", "main")
+    return path
+
+
+def newer_release(source: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reference = source / ".agents/skills/he/references/workflow.md"
+    reference.write_text(reference.read_text() + "\nnewer release\n")
+    select_release(source, monkeypatch)
+
+
+def update_paths(project: Path) -> list[str]:
+    branch = update_runner.UPDATE_BRANCH
+    return git(project, "diff", "--name-only", "main", branch).splitlines()
+
+
+def land_update(project: Path) -> None:
+    branch = update_runner.UPDATE_BRANCH
+    git(project, "push", "-q", "--no-verify", "origin", f"{branch}:main")
+    git(project, "pull", "-q", "--ff-only", "origin", "main")
+
+
+def a_new_worktree_runs_both_hooks(project: Path) -> None:
+    linked = a_linked_worktree_shares_the_env_file(project)
+    assert (linked / "owner.ran").is_file()
+
+
+def settled(project: Path) -> tuple[str, str, str]:
+    branch = update_runner.UPDATE_BRANCH
+    return (
+        git(project, "rev-parse", "HEAD"),
+        git(project, "rev-parse", branch),
+        short_status(project),
+    )
+
+
+@pytest.mark.parametrize(
+    ("hooks", "hook", "launcher", "text"),
+    [
+        (".githooks", LAUNCHER, hook_chain.WORKTREE_LAUNCHER, OWNER_MARKER),
+        (
+            ".husky",
+            ".husky/post-checkout",
+            hook_chain.HUSKY_WORKTREE_LAUNCHER,
+            HUSKY_MARKER,
+        ),
+    ],
+    ids=["git-hooks", "husky"],
+)
+def test_the_update_commit_chains_a_tracked_project_post_checkout_hook(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    hooks: str,
+    hook: str,
+    launcher: str,
+    text: str,
+) -> None:
+    project = installed_project(release, monkeypatch, hooks)
+    track_owner_hook(project, hook, text, 0o755)
+    newer_release(release[0], monkeypatch)
+    assert update_runner.apply_update(project) == 0
+    branch = update_runner.UPDATE_BRANCH
+    assert {hook, f"{hook}.project"} <= set(update_paths(project))
+    assert git(project, "show", f"{branch}:{hook}") == launcher.strip()
+    assert git(project, "show", f"{branch}:{hook}.project") == text.strip()
+    assert git(project, "ls-tree", branch, "--", f"{hook}.project").startswith("100755")
+    land_update(project)
+    assert short_status(project) == ""
+    a_new_worktree_runs_both_hooks(project)
+    before = settled(project)
+    assert update_runner.apply_update(project) == 0
+    assert settled(project) == before
+
+
+def test_a_project_without_its_own_post_checkout_hook_gets_no_hook_in_the_update_commit(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tracked_hooks_project(release, monkeypatch)
+    newer_release(release[0], monkeypatch)
+    assert update_runner.apply_update(project) == 0
+    assert update_paths(project)
+    assert not [name for name in update_paths(project) if "post-checkout" in name]
+
+
+def test_a_tracked_hook_that_is_already_the_launcher_stays_out_of_the_update_commit(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tracked_hooks_project(release, monkeypatch)
+    track_owner_hook(project, LAUNCHER, hook_chain.WORKTREE_LAUNCHER, 0o755)
+    newer_release(release[0], monkeypatch)
+    assert update_runner.apply_update(project) == 0
+    assert update_paths(project)
+    assert not [name for name in update_paths(project) if "post-checkout" in name]
+
+
+def test_a_kept_copy_that_matches_the_tracked_hook_gets_only_the_launcher(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tracked_hooks_project(release, monkeypatch)
+    (project / KEPT_COPY).write_text(OWNER_MARKER)
+    (project / KEPT_COPY).chmod(0o755)
+    track_owner_hook(project, LAUNCHER, OWNER_MARKER, 0o755)
+    newer_release(release[0], monkeypatch)
+    assert update_runner.apply_update(project) == 0
+    assert LAUNCHER in update_paths(project)
+    assert KEPT_COPY not in update_paths(project)
+
+
+def test_a_kept_copy_that_differs_from_the_tracked_hook_refuses_the_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tracked_hooks_project(release, monkeypatch)
+    (project / KEPT_COPY).write_text(OWNER_HOOK)
+    (project / KEPT_COPY).chmod(0o755)
+    track_owner_hook(project, LAUNCHER, OWNER_MARKER, 0o755)
+    newer_release(release[0], monkeypatch)
+    with pytest.raises(ValueError, match="merge them into post-checkout.project"):
+        update_runner.prepare_update(project)
+    assert update_runner.update_branch_tip(project) == ""
+
+
+def old_updater_release(source: Path) -> None:
+    chain = source / ".hooks/hook_chain.py"
+    text = chain.read_text()
+    assert "def keep_copy_mode(" in text
+    chain.write_text(text.replace("def keep_copy_mode(", "def keep_the_mode("))
+
+
+def new_updater_release(source: Path) -> None:
+    chain = source / ".hooks/hook_chain.py"
+    chain.write_text(
+        chain.read_text().replace("def keep_the_mode(", "def keep_copy_mode(")
+    )
+
+
+@pytest.mark.parametrize(
+    ("hooks", "hook", "text", "chained"),
+    [
+        (".githooks", LAUNCHER, OWNER_MARKER, False),
+        (".husky", ".husky/post-checkout", HUSKY_MARKER, True),
+    ],
+    ids=["git-hooks", "husky"],
+)
+def test_an_installed_updater_that_gives_a_new_copy_no_mode_chains_only_a_hook_that_needs_none(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    hooks: str,
+    hook: str,
+    text: str,
+    chained: bool,
+) -> None:
+    old_updater_release(release[0])
+    project = installed_project(release, monkeypatch, hooks)
+    track_owner_hook(project, hook, text, 0o755)
+    new_updater_release(release[0])
+    newer_release(release[0], monkeypatch)
+    assert update_runner.apply_update(project) == 0
+    assert (hook in update_paths(project)) == chained
+    assert (f"{hook}.project" in update_paths(project)) == chained
+
+
+def test_an_untracked_kept_copy_of_the_owner_stops_the_update_that_would_replace_it(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tracked_hooks_project(release, monkeypatch)
+    track_owner_hook(project, LAUNCHER, OWNER_MARKER, 0o755)
+    (project / KEPT_COPY).write_text(OWNER_HOOK)
+    newer_release(release[0], monkeypatch)
+    with pytest.raises(ValueError, match="replace local files that Git does not track"):
+        update_runner.prepare_update(project)
+    assert update_runner.update_branch_tip(project) == ""

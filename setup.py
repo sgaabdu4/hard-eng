@@ -960,10 +960,19 @@ if __name__ == "__main__":
                 "path": os.path.relpath(hook, args.repository.resolve()),
                 "content": launcher,
             }
+            import hook_chain
+
+            chain = (
+                {}
+                if os.environ.get(hook_chain.LOOSE_PLAN)
+                else hook_chain.chain_worktree_hook(
+                    args.repository.resolve(), args.previous_source
+                )
+            )
             print(
                 json.dumps(
                     {
-                        "files": {**changes, **dict.fromkeys(retired)},
+                        "files": {**changes, **dict.fromkeys(retired), **chain},
                         "links": links,
                         "hook": hook_plan,
                     }
