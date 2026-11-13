@@ -13,6 +13,7 @@ const TAP_ATTRS = new Set(request.tap_attrs);
 const USER = request.user;
 const SLOT = { x: 1 };
 const NO_CLAMP = 1000;
+const LISTS = new Set(["map", "flatMap", "filter"]);
 const LETTER = /[\p{L}\p{N}]/u;
 const CLAMP_STYLES = new Set(["WebkitLineClamp", "lineClamp"]);
 const WRAPPERS = new Set(["ParenthesizedExpression", "TSAsExpression", "TSSatisfiesExpression", "TSNonNullExpression", "ChainExpression", "TSTypeAssertion"]);
@@ -100,8 +101,14 @@ function storedField(node) {
     if (!node.computed && node.property.type === "Identifier" && STORED.has(node.property.name)) return node.property.name;
     return "";
   }
-  if (node.type === "CallExpression") return node.callee.type === "MemberExpression" ? storedField(node.callee.object) : "";
-  if (node.type === "LogicalExpression") return storedField(node.left) || storedField(node.right);
+  if (node.type === "CallExpression") {
+    const callee = node.callee;
+    if (callee.type !== "MemberExpression" || LISTS.has(callee.property.name)) return "";
+    return storedField(callee.object);
+  }
+  if (node.type === "LogicalExpression") {
+    return node.operator === "&&" ? storedField(node.right) : storedField(node.left) || storedField(node.right);
+  }
   if (node.type === "ConditionalExpression") return storedField(node.consequent) || storedField(node.alternate);
   return "";
 }
@@ -261,14 +268,15 @@ function walkInto(node, stack) {
 }
 
 function expressionParts(expression, stack, from, to) {
-  const parts = stringOf(expression);
-  if (parts) return { parts, lines: span(from, to) };
-  const field = storedField(expression);
-  if (field) return { parts: [{ x: 1, field }], lines: span(from, to) };
   if (holdsJsx(expression)) {
     walkInto(expression, stack);
-    return { parts: [], lines: [] };
+    const inner = stringOf(expression);
+    return inner ? { parts: inner, lines: span(from, to) } : { parts: [], lines: [] };
   }
+  const field = storedField(expression);
+  if (field) return { parts: [{ x: 1, field }], lines: span(from, to) };
+  const parts = stringOf(expression);
+  if (parts) return { parts, lines: span(from, to) };
   return { parts: [SLOT], lines: [] };
 }
 
@@ -398,6 +406,7 @@ import 'package:analyzer/source/line_info.dart';
 
 const slot = {'x': 1};
 const noClamp = 1000;
+const lists = {'map', 'where', 'expand', 'toList'};
 final letter = RegExp(r'[\p{L}\p{N}]', unicode: true);
 late Set<String> textProps, stored, tapNames, tapArgs;
 late String userName;
@@ -495,8 +504,11 @@ String storedField(Expression? raw) {
     return stored.contains(node.propertyName.name) ? node.propertyName.name : '';
   }
   if (node is PostfixExpression) return storedField(node.operand);
-  if (node is MethodInvocation) return storedField(node.target);
+  if (node is MethodInvocation) {
+    return lists.contains(node.methodName.name) ? '' : storedField(node.target);
+  }
   if (node is BinaryExpression) {
+    if (node.operator.lexeme == '&&') return storedField(node.rightOperand);
     final left = storedField(node.leftOperand);
     return left.isNotEmpty ? left : storedField(node.rightOperand);
   }
