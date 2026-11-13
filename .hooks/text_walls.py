@@ -201,10 +201,10 @@ def settings(root: Path) -> Caps:
     return Caps(numbers[0], numbers[1], numbers[2], tuple(paths))
 
 
-def request(
+def reader_query(
     files: Sequence[tuple[str, str, Sequence[int] | None]], kind: str = "js"
 ) -> dict[str, object]:
-    """The request that every reader takes: the word lists and each file with its touched lines."""
+    """The query that every reader takes: the word lists and each file with its touched lines."""
     dart = kind == "dart"
     return {
         "inline": INLINE,
@@ -381,7 +381,7 @@ def read_all(
     results = [arb_blocks(*item) for item in kinds["arb"]]
     for kind in ("js", "dart"):
         if kinds[kind]:
-            results += read(kind, request(kinds[kind], kind))
+            results += read(kind, reader_query(kinds[kind], kind))
     return results
 
 

@@ -476,7 +476,7 @@ def test_the_template_arb_file_is_judged_by_message(
 ) -> None:
     """HE-NO-TEXT-WALLS: each message of the template ARB file is one block, a placeholder is one word, keys with @ are skipped, other catalogs are not read, and no process starts."""
 
-    def no_reader(kind: str, request: dict[str, object]) -> list[object]:
+    def no_reader(kind: str, query: dict[str, object]) -> list[object]:
         raise AssertionError(kind)
 
     monkeypatch.setattr(text_walls, "read", no_reader)
