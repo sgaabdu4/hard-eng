@@ -572,3 +572,19 @@ def test_a_stored_field_passed_into_a_prop_is_not_stored_text_rendering(
         if f"src/Card.tsx:{number}:" in message
     ]
     assert flagged == [number for number, (bad, _) in enumerate(rows, 3) if bad]
+
+
+def test_the_list_command_reports_a_file_that_it_cannot_read(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-NO-TEXT-WALLS: a file with broken syntax prints its error line and the list command fails."""
+    root = tmp_path / "repo"
+    init(root)
+    (root / "src").mkdir()
+    (root / "src/Broken.tsx").write_text("const a = <p>oops</div>;\n")
+    (root / "src/Fine.tsx").write_text(screen("<p>Short.</p>"))
+    commit(root, "baseline")
+    assert text_walls.walls_command(root, [], False) == 1
+    printed = capsys.readouterr().out
+    assert "src/Broken.tsx: the text cannot be read, line 1:" in printed
+    assert "Fine" not in printed
