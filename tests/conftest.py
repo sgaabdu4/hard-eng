@@ -181,6 +181,30 @@ def change(tmp_path: Path, name: str, before: str, after: str) -> Path:
     return root
 
 
+def flutter_project(tmp_path: Path, before: str, after: str, flutter: bool) -> Path:
+    root = change(tmp_path, "lib/screen.dart", before, before)
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [
+                    {"name": "app", "path": ".", "language": "dart"},
+                    {"name": "tool", "path": "tool", "language": "dart"},
+                ],
+                "shared": [],
+            }
+        )
+    )
+    sdk = (
+        "dependencies:\n  flutter:\n    sdk: flutter\n"
+        if flutter
+        else "environment:\n  sdk: ^3.11.0\n"
+    )
+    (root / "pubspec.yaml").write_text(f"name: app\n{sdk}")
+    commit(root, "project files")
+    (root / "lib/screen.dart").write_text(after)
+    return root
+
+
 def add_origin(root: Path) -> Path:
     git(root, "branch", "-M", "main")
     remote = root.parent / "origin.git"

@@ -12,7 +12,7 @@ import gap_issue
 import pytest
 import text_walls
 from comments import validate_suppressions
-from conftest import SOURCE, change, commit, init
+from conftest import SOURCE, change, commit, flutter_project, init
 
 RULE = "HE-NO-TEXT-WALLS"
 BASE = "export const A = () => <main />;\n"
@@ -359,3 +359,50 @@ def test_no_starter_screen_holds_a_text_wall(
     assert len(screens) >= 5
     assert text_walls.walls_command(root, [], False) == 0
     assert capsys.readouterr().out.strip() == ""
+
+
+def test_flutter_text_follows_the_same_rules(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: a Flutter wall is refused, rich text spans merge, stored text needs two lines at most and a tap, and a package that is not Flutter is not judged."""
+    long = sentence(46)
+    thirty = sentence(30)
+    rows = [
+        (True, f"const Text('{long}'),"),
+        (True, f"Text('{long}'),"),
+        (False, "Text('Save now. Pay later. Rest well.'),"),
+        (
+            True,
+            f"Text.rich(TextSpan(text: '{sentence(10)} ', children: [TextSpan(text: '{sentence(10)} '), TextSpan(text: '{sentence(10)}')])),",
+        ),
+        (
+            False,
+            f"Text.rich(TextSpan(text: '{sentence(14)} ', children: [WidgetSpan(child: Icon(x)), TextSpan(text: '{sentence(14)}')])),",
+        ),
+        (False, "InkWell(onTap: open, child: Text(n.body, maxLines: 2)),"),
+        (True, "InkWell(onTap: open, child: Text(n.body, maxLines: 3)),"),
+        (True, "InkWell(onTap: open, child: Text(n.body)),"),
+        (True, "Text(n.body, maxLines: 2),"),
+        (False, "UserContent(child: Text(n.body)),"),
+        (True, "UserContent(child: Text('Literal text')),"),
+        (True, f"TextField(decoration: InputDecoration(labelText: '{thirty}')),"),
+        (False, "Text(l10n.counter(count)),"),
+    ]
+    lines = [
+        "import 'package:flutter/material.dart';",
+        "Widget a() => Column(children: [",
+    ]
+    lines += [text for _, text in rows] + ["]);"]
+    root = flutter_project(tmp_path, "// base\n", "\n".join(lines) + "\n", True)
+    (root / "tool/lib").mkdir(parents=True)
+    (root / "tool/pubspec.yaml").write_text(
+        "name: tool\nenvironment:\n  sdk: ^3.11.0\n"
+    )
+    (root / "tool/lib/wall.dart").write_text(f"final a = Text('{long}');\n")
+    message = refused(root)
+    expected = [number for number, (bad, _) in enumerate(rows, 3) if bad]
+    flagged = [
+        number
+        for number in range(1, len(lines) + 1)
+        if f"lib/screen.dart:{number}:" in message
+    ]
+    assert flagged == expected
+    assert "tool/lib" not in message
