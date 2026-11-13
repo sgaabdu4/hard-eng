@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
@@ -281,15 +282,33 @@ def problems(block: Block, caps: Caps) -> str:
     return found
 
 
-def judged(name: str, blocks: list[Block], caps: Caps) -> list[tuple[str, str]]:
-    """The (flattened text, finding) pair of each block over a cap."""
+class Finding(NamedTuple):
+    name: str
+    line: int
+    lines: tuple[int, ...]
+    text: str
+    reason: str
+
+    def key(self) -> tuple[str, str]:
+        return self.text, self.reason
+
+    def describe(self) -> str:
+        return f"{self.name}:{self.line}: {self.reason}"
+
+
+def unreadable(name: str, error: str) -> str:
+    return f"{name}: the text cannot be read, {error}. Fix the syntax of the file"
+
+
+def judged(name: str, blocks: list[Block], caps: Caps) -> list[Finding]:
+    """One finding for each block over a cap, with its flattened text and its reason."""
     out = []
     for block in blocks:
         if block["kind"] == "const" and not is_prose(block["parts"]):
             continue
         if found := problems(block, caps):
             text = " ".join(flatten(block["parts"]).split())
-            out.append((text, f"{name}:{block['line']}: {found}"))
+            out.append(Finding(name, block["line"], tuple(block["lines"]), text, found))
     return out
 
 
@@ -350,13 +369,28 @@ def read_all(
     return results
 
 
-def unchanged_texts(root: Path, point: str, names: list[str]) -> set[str]:
-    files = base_sources(root, point, names)
-    return {
-        " ".join(flatten(block["parts"]).split())
-        for result in read_all(files)
-        for block in result["blocks"]
-    }
+def old_findings(
+    root: Path, point: str, names: list[str], caps: Caps
+) -> Counter[tuple[str, str]]:
+    """How many times each finding stood in the changed files at the base."""
+    return Counter(
+        finding.key()
+        for result in read_all(base_sources(root, point, names))
+        for finding in judged(result["path"], result["blocks"], caps)
+    )
+
+
+def untouched_findings(
+    files: list[tuple[str, str, list[int]]], caps: Caps
+) -> Counter[tuple[str, str]]:
+    """How many times each finding stands in lines that the change did not touch."""
+    touched = {name: set(lines) for name, _, lines in files}
+    return Counter(
+        finding.key()
+        for result in read_all([(name, text, None) for name, text, _ in files])
+        for finding in judged(result["path"], result["blocks"], caps)
+        if not touched[finding.name] & set(finding.lines)
+    )
 
 
 def text_lines(
@@ -397,29 +431,25 @@ def wall_check(
     ]
     if not files:
         return
-    found: dict[str, list[tuple[str, str]]] = {}
+    found: list[Finding] = []
+    lines: list[str] = []
     for result in read_all(files):
-        name = result["path"]
         if result["error"]:
-            found[name] = [
-                (
-                    "",
-                    f"{name}: the text cannot be read, {result['error']}. Fix the syntax of the file",
-                )
-            ]
-        elif hits := judged(name, result["blocks"], caps):
-            found[name] = hits
-    if not found:
-        return
-    skipped = generated_sources(root, sorted(found))
-    old = unchanged_texts(root, point, names)
-    lines = [
-        line
-        for name, hits in found.items()
-        if name not in skipped
-        for text, line in hits
-        if not text or text not in old
-    ]
+            lines.append(unreadable(result["path"], result["error"]))
+        else:
+            found += judged(result["path"], result["blocks"], caps)
+    if found:
+        skipped = generated_sources(root, sorted({item.name for item in found}))
+        found = [item for item in found if item.name not in skipped]
+    if found:
+        excused = old_findings(root, point, names, caps) - untouched_findings(
+            files, caps
+        )
+        for item in found:
+            if excused[item.key()] > 0:
+                excused[item.key()] -= 1
+            else:
+                lines.append(item.describe())
     if lines:
         raise ValueError(
             f"HE-NO-TEXT-WALLS: Screen text comes in short blocks of at most {caps.words} "
@@ -477,7 +507,10 @@ def listed_walls(root: Path, paths: list[str], caps: Caps) -> list[str]:
         root, sorted(name for name, items in hits.items() if items)
     )
     return [
-        line for name, items in hits.items() if name not in skipped for _, line in items
+        item.describe()
+        for name, items in hits.items()
+        if name not in skipped
+        for item in items
     ]
 
 
