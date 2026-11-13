@@ -110,7 +110,7 @@ def clip(text: str, limit: int) -> str:
 def known(root: Path, commit: str) -> bool:
     return (
         subprocess.run(
-            ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+            ["git", "cat-file", "-e", commit + "^{commit}"],
             cwd=root,
             capture_output=True,
             check=False,
