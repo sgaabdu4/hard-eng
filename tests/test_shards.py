@@ -896,7 +896,7 @@ def test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact(
         (other_runs / f"pytest-{number}").mkdir(parents=True)
     monkeypatch.setenv("TMPDIR", str(shared))
     settings = shard_project / "pyproject.toml"
-    settings.write_text(settings.read_text() + 'addopts = "-n 2"\n')
+    settings.write_text(settings.read_text() + 'addopts = "-n 1"\n')
     assert run_part(runner, "1") is False
     assert (other_runs / "pytest-1").is_dir()
     assert {line for line in log_lines(shard_project) if line.startswith("ran ")} == {
