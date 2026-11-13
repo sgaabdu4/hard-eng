@@ -173,7 +173,6 @@ def update_beside_code_outside_the_sources(
     }
     manifest.write_text(json.dumps(package))
     commit(target, "code outside the listed sources")
-    monkeypatch.setattr(update, "require_loading_gates", Mock())
     release_now(source, monkeypatch, "release one")
     update.update(target)
     assert '"sources": ["src"]' in (target / "hard-eng.gates.json").read_text()

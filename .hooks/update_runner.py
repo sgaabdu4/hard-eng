@@ -87,7 +87,7 @@ def stale_error(root: Path, revision: str) -> ValueError:
 
     return UpdateNeeded(
         f"Hard Eng freshness check found newer verified revision {revision}. "
-        f"Last update result: {last_result(root)}. {next_step(root)} "
+        f"Last update result: {last_result(root).rstrip('.')}. {next_step(root)} "
         "Shipping stays blocked until this branch contains the current Hard Eng; then reverify."
     )
 
@@ -362,41 +362,6 @@ def uv_run(source: Path) -> list[str]:
         sys.executable,
         "python",
     ]
-
-
-LOAD_CHECK = """
-import sys
-from pathlib import Path
-sys.path.insert(0, sys.argv[1])
-from gate_config import load_groups
-try:
-    load_groups(Path(sys.argv[2]))
-except (OSError, ValueError, TypeError, KeyError) as error:
-    sys.exit(str(error))
-"""
-
-
-def require_loading_gates(root: Path, source: Path) -> None:
-    result = subprocess.run(
-        [
-            *uv_run(source),
-            "-I",
-            "-c",
-            LOAD_CHECK,
-            str(source / ".hooks"),
-            str(root),
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=120,
-    )
-    if result.returncode:
-        raise ValueError(
-            "the new release cannot load the checks of this project: "
-            f"{result.stderr.strip() or f'exit {result.returncode}'}"
-        )
 
 
 def exclusive(handle: TextIO) -> bool:
