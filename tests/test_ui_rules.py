@@ -8,23 +8,11 @@ from pathlib import Path
 import pytest
 import ui_rules
 from comments import UI_MARKS, UI_SUFFIXES, validate_suppressions
-from conftest import SOURCE, commit, git, init
+from conftest import SOURCE, change, commit, git, init
 
 RULE = "HE-UI-SOURCE"
 TRANSITION_STEP = "List the properties that change"
 COLOUR_STEP = "Use a colour of the theme"
-
-
-def change(tmp_path: Path, name: str, before: str, after: str) -> Path:
-    root = tmp_path / "repo"
-    root.parent.mkdir(exist_ok=True)
-    init(root)
-    (root / "README.md").write_text("fixture\n")
-    (root / name).parent.mkdir(parents=True, exist_ok=True)
-    (root / name).write_text(before)
-    commit(root, "baseline")
-    (root / name).write_text(after)
-    return root
 
 
 def refused(root: Path) -> str:

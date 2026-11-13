@@ -2,8 +2,14 @@
 
 import json
 import re
-from pathlib import Path
+import subprocess
+from fnmatch import fnmatchcase
+from pathlib import Path, PurePosixPath
 from typing import NamedTuple
+
+from comments import is_test_path
+from gate_config import generated_sources
+from text_readers import Block, read
 
 SLOT = ""
 WORD = re.compile(r"\S+")
@@ -115,9 +121,10 @@ def measure(parts: list[object]) -> tuple[int, int, int]:
 def settings(root: Path) -> Caps:
     """The caps of a project; each key is optional, so a project can change a number, never a file."""
     try:
-        raw = json.loads((root / "hard-eng.gates.json").read_text()).get("text_walls")
-    except FileNotFoundError:
-        raw = None
+        data = json.loads((root / "hard-eng.gates.json").read_text())
+    except (OSError, ValueError):
+        data = None
+    raw = data.get("text_walls") if isinstance(data, dict) else None
     if raw is None:
         return Caps(*KEYS.values(), ())
     if not isinstance(raw, dict):
@@ -166,3 +173,135 @@ def request(files: list[tuple[str, str, list[int] | None]]) -> dict[str, object]
             for path, source, touched in files
         ],
     }
+
+
+PLAIN_WORD = re.compile(r"[A-Za-z]+(?:'[a-z]+)?")
+SCREEN_SUFFIXES = (".tsx", ".jsx")
+UNOWNED_FOLDERS = (".hooks/", ".agents/", ".claude/")
+FIX = "Split it into blocks of one idea each, with dates, names and amounts on their own labelled lines"
+
+
+def is_prose(parts: list[object]) -> bool:
+    """A copy constant is prose when it starts like a sentence and most of its words are plain words."""
+    words = flatten(parts).split()
+    if not words:
+        return False
+    plain = sum(bool(PLAIN_WORD.fullmatch(word.strip(".,;:!?\"'()"))) for word in words)
+    starts = words[0][:1].isupper() or any(
+        word.rstrip(CLOSERS).endswith(SENTENCE_ENDS) for word in words
+    )
+    return starts and plain * 10 >= len(words) * 7
+
+
+def problems(block: Block, caps: Caps) -> list[str]:
+    words, sentences, longest = measure(block["parts"])
+    found = []
+    if words > caps.words:
+        found.append(f"{words} words, at most {caps.words}")
+    if sentences > caps.sentences:
+        found.append(f"{sentences} sentences, at most {caps.sentences}")
+    if longest > caps.sentence_words:
+        found.append(f"a sentence of {longest} words, at most {caps.sentence_words}")
+    return found
+
+
+def judged(name: str, blocks: list[Block], caps: Caps) -> list[tuple[str, str]]:
+    """The (flattened text, finding) pair of each block over a cap."""
+    out = []
+    for block in blocks:
+        if block["kind"] == "const" and not is_prose(block["parts"]):
+            continue
+        if over := problems(block, caps):
+            text = " ".join(flatten(block["parts"]).split())
+            out.append((text, f"{name}:{block['line']}: {'; '.join(over)}. {FIX}"))
+    return out
+
+
+def in_scope(name: str, caps: Caps) -> bool:
+    return (
+        name.endswith(SCREEN_SUFFIXES)
+        and not name.startswith(UNOWNED_FOLDERS)
+        and ".stories." not in name
+        and not is_test_path(PurePosixPath(name))
+        and (not caps.paths or any(fnmatchcase(name, glob) for glob in caps.paths))
+    )
+
+
+def base_sources(root: Path, point: str, names: list[str]) -> list[tuple[str, str, None]]:
+    """The text of each file at the base, from one git process."""
+    wanted = [f"{point}:{name}\n" for name in names]
+    done = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        cwd=root,
+        input="".join(wanted).encode(),
+        capture_output=True,
+        check=True,
+    )
+    out, data = [], done.stdout
+    for name in names:
+        end = data.index(b"\n")
+        header = data[:end].split()
+        data = data[end + 1 :]
+        if header[-1] == b"missing":
+            continue
+        size = int(header[2])
+        out.append((name, data[:size].decode(errors="replace"), None))
+        data = data[size + 1 :]
+    return out
+
+
+def unchanged_texts(root: Path, point: str, names: list[str]) -> set[str]:
+    files = base_sources(root, point, names)
+    if not files:
+        return set()
+    return {
+        " ".join(flatten(block["parts"]).split())
+        for result in read("js", request(files))
+        for block in result["blocks"]
+    }
+
+
+def wall_check(
+    root: Path,
+    added: dict[str, list[tuple[int, str]]],
+    removed: dict[str, list[tuple[int, str]]],
+    joins: dict[str, list[int]],
+    point: str,
+) -> None:
+    caps = settings(root)
+    names = sorted(name for name in {*added, *removed, *joins} if in_scope(name, caps))
+    files = [
+        (
+            name,
+            (root / name).read_text(errors="replace"),
+            sorted({number for number, _ in added.get(name, [])} | set(joins.get(name, []))),
+        )
+        for name in names
+        if (root / name).is_file() and (name in added or name in joins)
+    ]
+    if not files:
+        return
+    found: dict[str, list[tuple[str, str]]] = {}
+    for result in read("js", request(files)):
+        name = result["path"]
+        if result["error"]:
+            found[name] = [("", f"{name}: the text cannot be read, {result['error']}. Fix the syntax of the file")]
+        elif hits := judged(name, result["blocks"], caps):
+            found[name] = hits
+    if not found:
+        return
+    skipped = generated_sources(root, sorted(found))
+    old = unchanged_texts(root, point, names)
+    lines = [
+        line
+        for name, hits in found.items()
+        if name not in skipped
+        for text, line in hits
+        if not text or text not in old
+    ]
+    if lines:
+        raise ValueError(
+            f"HE-NO-TEXT-WALLS: Screen text comes in short blocks of at most {caps.words} "
+            f"words and {caps.sentences} sentences, and a sentence of at most "
+            f"{caps.sentence_words} words. " + "; ".join(lines)
+        )

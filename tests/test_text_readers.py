@@ -1,7 +1,16 @@
 """HE-NO-TEXT-WALLS: the TSX and JSX reader returns the text blocks of every changed file from one process."""
 
+import subprocess
+import sys
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+
+import comments
+import pytest
 import text_readers
 import text_walls
+from comments import validate_suppressions
+from conftest import SOURCE, change, configure, gate
 
 SCREEN = (
     "export const A = () => (\n"
@@ -41,3 +50,66 @@ def test_the_reader_returns_the_blocks_of_each_file_and_a_finding_for_a_broken_o
     ]
     assert [b["name"] for b in second["blocks"]] == ["title"]
     assert third["error"].startswith("line 1:")
+
+
+WALL = "<p>" + " ".join(["word"] * 40) + "</p>"
+
+
+@pytest.mark.parametrize("name", ["src/a.py", "src/a.ts", "src/a.css", "README.md", "lib/a.dart"])
+def test_a_change_with_no_screen_file_starts_no_reader_and_loads_no_rule_module(
+    tmp_path: Path, name: str
+) -> None:
+    """HE-NO-TEXT-WALLS: only a TSX or JSX file starts a reader or loads the rule module."""
+    root = change(tmp_path, name, "base\n", f"base\n{WALL}\n")
+    code = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(SOURCE / '.hooks')!r})\n"
+        "started = []\n"
+        "sys.addaudithook(lambda event, args: event == 'subprocess.Popen' and "
+        "started.append(str(args[0]).rsplit('/', 1)[-1]))\n"
+        "import comments\n"
+        f"comments.validate_suppressions(__import__('pathlib').Path({str(root)!r}), 'HEAD')\n"
+        "print(sorted(set(started) - {'git'}), 'text_walls' in sys.modules, 'text_readers' in sys.modules)\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.strip() == "[] False False"
+
+
+def test_a_missing_tool_fails_closed_with_its_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-NO-TEXT-WALLS: a missing Bun names its install step, and a file that cannot be parsed is a finding."""
+    root = change(tmp_path, "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n")
+    with monkeypatch.context() as patch:
+        patch.setattr(text_readers, "shutil", SimpleNamespace(which=lambda name: None))
+        with pytest.raises(ValueError, match="needs Bun") as error:
+            validate_suppressions(root, "HEAD")
+    assert "oven-sh/setup-bun" in str(error.value)
+    (root / "src/a.tsx").write_text("const a = <p>oops</div>;\n")
+    with pytest.raises(ValueError, match="HE-NO-TEXT-WALLS") as broken:
+        validate_suppressions(root, "HEAD")
+    assert "src/a.tsx" in str(broken.value)
+    assert "line 1:" in str(broken.value)
+
+
+def test_the_merge_shard_skips_the_rule(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-NO-TEXT-WALLS: the merge shard has no Bun, so it asks for no screen check; other shards do."""
+    configure(tmp_path, [gate("suite", "pass")])
+    seen: list[bool] = []
+
+    def stop(root: Path, base: str | None, screens: bool = True) -> None:
+        seen.append(screens)
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(comments, "validate_suppressions", stop)
+        for shard in ("merge", "rest", None):
+            with pytest.raises(KeyboardInterrupt):
+                runner.check(base="0" * 40, shard=shard)
+    assert seen == [False, True, True]
+    root = change(tmp_path / "w", "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n")
+    validate_suppressions(root, "HEAD", screens=False)

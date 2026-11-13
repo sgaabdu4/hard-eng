@@ -52,7 +52,8 @@ UI_MARKS = (
     "colorLiteral",
 )
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
-DIFF_HUNK_HEADER = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)")
+DIFF_HUNK_HEADER = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,(\d+))?")
+WALL_SUFFIXES = (".tsx", ".jsx", "hard-eng.gates.json")
 CONTROL_KEYWORD_BEFORE = re.compile(r"\b(if|while|for|with)\s*$")
 STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\\n])*"')
 
@@ -478,7 +479,7 @@ DIFF = (
 
 
 def changed_lines(
-    diff: str,
+    diff: str, joins: dict[str, list[int]] | None = None
 ) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
     """Added and removed (line number, text) pairs per file of a zero-context diff."""
     added: dict[str, list[tuple[int, str]]] = {}
@@ -490,6 +491,8 @@ def changed_lines(
             in_hunk = False
         elif hunk:
             old, new, in_hunk = int(hunk[1]), int(hunk[2]), True
+            if joins is not None and hunk[3] == "0":
+                joins.setdefault(name, []).extend([new, new + 1] if new else [1])
         elif in_hunk and line[:1] == "+":
             added.setdefault(name, []).append((new, line[1:]))
             new += 1
@@ -506,13 +509,13 @@ def changed_lines(
 
 
 def diff_lines(
-    root: Path, base: str
+    root: Path, base: str, joins: dict[str, list[int]] | None = None
 ) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
     """Added and removed (line number, text) pairs per file; untracked files count as added."""
     diff = subprocess.check_output(
         [*DIFF, base, "--"], cwd=root, text=True, errors="replace"
     )
-    added, removed = changed_lines(diff)
+    added, removed = changed_lines(diff, joins)
     untracked = subprocess.check_output(
         [*GIT_LISTING, "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,
@@ -784,10 +787,26 @@ def whole_branch_balance(root: Path, point: str) -> tuple[str, list[str], int] |
     return whole, *assertion_balance(root, added, removed, skipped)
 
 
-def validate_suppressions(root: Path, base: str | None) -> None:
+def text_walls_check(
+    root: Path,
+    added: dict[str, list[tuple[int, str]]],
+    removed: dict[str, list[tuple[int, str]]],
+    joins: dict[str, list[int]],
+    point: str,
+) -> None:
+    if any(name.endswith(WALL_SUFFIXES) for name in (*added, *removed, *joins)):
+        from text_walls import wall_check
+
+        wall_check(root, added, removed, joins, point)
+
+
+def validate_suppressions(
+    root: Path, base: str | None, screens: bool = True
+) -> None:
+    joins: dict[str, list[int]] = {}
     try:
         point, empty = diff_base(root, base or default_branch_point(root) or "HEAD")
-        added, removed = diff_lines(root, point)
+        added, removed = diff_lines(root, point, joins)
     except subprocess.CalledProcessError as error:
         raise ValueError(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
@@ -831,3 +850,5 @@ def validate_suppressions(root: Path, base: str | None) -> None:
         )
     if not empty:
         ui_source_check(root, added)
+        if screens:
+            text_walls_check(root, added, removed, joins, point)
