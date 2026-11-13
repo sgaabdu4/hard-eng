@@ -8756,7 +8756,7 @@ rules:
       - dart
     paths: *paths
     severity: ERROR
-    message: The second call does not use the first result. Start both together with Future.wait or a record's .wait.
+    message: "The second call does not use the first result. Start both and join them with one await of the project's `waitBoth` helper (add it if missing): `final (a, b) = await waitBoth(readA(), readB());`. The helper awaits `Future.wait<void>([first, second], eagerError: true)`, then returns `(await first, await second)`. Do not use a record's .wait or a Future.wait without eagerError: these two forms wait for every call before they throw, and a record's .wait throws ParallelWaitError in place of the original error."
     patterns:
       - pattern-regex: (?m)^[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+(\w+)\s*=\s*await\s+(?>((?:[a-z]\w*?(?=[A-Z])|\w*_)?(?i:session|connection|conn|transaction|cursor|readline|reader|writer|socket|dialog|lock|mutex|queue|channel|tx|trx|rl|ws|page)(?![a-z])\w*)\b|\w+)(?:[^;(){}\[\]]|(?<g>\((?:[^()]|(?&g))*+\)|\{(?:[^{}]|(?&g))*+\}|\[(?:[^\[\]]|(?&g))*+\]))*+;[ \t]*\n[ \t]*(?:final|var|[A-Z]\w*(?:<[^=;\n]*>)?\??)\s+\w+\s*=\s*await\s+(?!\2\b)(?:(?!\b\1\b)[^;(){}\[\]]|(?<h>\((?:(?!\b\1\b)[^()]|(?&h))*+\)|\{(?:(?!\b\1\b)[^{}]|(?&h))*+\}|\[(?:(?!\b\1\b)[^\[\]]|(?&h))*+\]))*+;
   - id: in-order-needs-reason-dart
