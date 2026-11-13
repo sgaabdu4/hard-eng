@@ -248,6 +248,31 @@ def test_iphone_tests_must_run_on_the_named_simulator_not_on_a_copy(
         validate_required_checks(root, config)
 
 
+@pytest.mark.parametrize(
+    ("command", "refused"),
+    [
+        (["xcodebuild", "-scheme", "Runner", "test"], True),
+        (["sh", "-c", "xcodebuild -scheme Runner test"], True),
+        (["xcodebuild", "test", "-parallel-testing-enabled", "NO"], False),
+        (["swift", "test"], False),
+    ],
+)
+def test_iphone_tests_rule_reads_each_form_of_the_xcode_command(
+    installer: ModuleType, tmp_path: Path, command: list[str], refused: bool
+) -> None:
+    root = tmp_path / "app"
+    flutter_app(root)
+    config = app_config(installer, root)
+    tests = next(
+        gate for gate in swift_group(config)["checks"] if gate["role"] == "tests"
+    )
+    tests["command"] = command
+    if not refused:
+        return validate_required_checks(root, config)
+    with pytest.raises(ValueError, match="ios: the tests command must pass"):
+        validate_required_checks(root, config)
+
+
 def test_setup_adds_the_pods_gate_only_with_a_podfile(
     installer: ModuleType, tmp_path: Path
 ) -> None:
@@ -959,6 +984,7 @@ def test_macos_tests_script_keeps_the_project_files_unchanged(
     else:
         assert result.returncode == 0, result.stderr
         assert "-destination platform=macOS " in calls[-1]
+        assert "-parallel-testing-enabled" not in calls[-1]
 
 
 def test_tests_script_reads_exported_coverage_when_xccov_cannot_load_the_bundle(
