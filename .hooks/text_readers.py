@@ -130,9 +130,6 @@ def reader_folder(
             except BaseException:
                 shutil.rmtree(staging, ignore_errors=True)
                 raise
-            for older in root.glob(f"{prefix}-*"):
-                if older != folder:
-                    shutil.rmtree(older, ignore_errors=True)
     return folder
 
 
