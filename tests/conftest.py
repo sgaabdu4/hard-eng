@@ -171,6 +171,18 @@ def init(root: Path) -> None:
         config.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
 
 
+def change(tmp_path: Path, name: str, before: str, after: str) -> Path:
+    root = tmp_path / "repo"
+    root.parent.mkdir(exist_ok=True)
+    init(root)
+    (root / "README.md").write_text("fixture\n")
+    (root / name).parent.mkdir(parents=True, exist_ok=True)
+    (root / name).write_text(before)
+    commit(root, "baseline")
+    (root / name).write_text(after)
+    return root
+
+
 def add_origin(root: Path) -> Path:
     git(root, "branch", "-M", "main")
     remote = root.parent / "origin.git"

@@ -5,6 +5,11 @@ from pathlib import Path
 
 import pytest
 import text_walls
+from comments import validate_suppressions
+from conftest import change, commit, init
+
+RULE = "HE-NO-TEXT-WALLS"
+BASE = "export const A = () => <main />;\n"
 
 X = {"x": 1}
 
@@ -69,3 +74,119 @@ def test_settings_default_and_refuse_invalid_values(tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="HE-NO-TEXT-WALLS") as error:
             text_walls.settings(tmp_path)
         assert fix in str(error.value)
+
+
+def sentence(count: int) -> str:
+    return " ".join(["Word"] + ["word"] * (count - 1)) + "."
+
+
+def screen(*lines: str) -> str:
+    return "export const A = () => (\n  <main>\n" + "".join(f"    {x}\n" for x in lines) + "  </main>\n);\n"
+
+
+def refused(root: Path) -> str:
+    with pytest.raises(ValueError, match=RULE) as error:
+        validate_suppressions(root, "HEAD")
+    return str(error.value)
+
+
+def test_a_46_word_literal_paragraph_is_refused_with_its_step(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: a long literal paragraph fails with its file, its line, its count and the step."""
+    long = " ".join(["word"] * 46)
+    root = change(tmp_path, "src/Card.tsx", BASE, screen("<p>", f"  {long}", "</p>"))
+    message = refused(root)
+    assert "src/Card.tsx:4:" in message
+    assert "46 words" in message
+    assert "at most 25" in message
+    assert "Split" in message
+
+
+def test_the_three_caps_each_refuse_one_block(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: three short sentences pass; a fourth sentence and a 21-word sentence are refused."""
+    short = "Save now. Pay later. Rest well."
+    lines = [
+        f"<p>{short}</p>",
+        f"<p>{short} Go on.</p>",
+        f"<p>{sentence(21)}</p>",
+        f"<p>{sentence(20)} {sentence(5)}</p>",
+    ]
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*lines))
+    message = refused(root)
+    assert "src/Card.tsx:3:" not in message
+    assert "src/Card.tsx:4: 4 sentences" in message
+    assert "src/Card.tsx:5: a sentence of 21 words" in message
+    assert "src/Card.tsx:6:" not in message
+
+
+def test_each_text_form_is_one_block(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: inline elements merge, text props, object keys and prose constants are blocks, a class string passes."""
+    ten = sentence(10).rstrip(".")
+    classes = " ".join(f"text-sm-{n}" for n in range(30))
+    source = (
+        f'const INTRO = "Hello {sentence(30)}";\n'
+        f'const CLASSES = "{classes}";\n'
+        f'const COPY = {{ description: "{sentence(30)}" }};\n'
+        "export const A = () => (\n"
+        "  <main>\n"
+        f"    <p>{ten} <strong>{ten}</strong> {ten}</p>\n"
+        f'    <Card title="{sentence(30)}" />\n'
+        f"    <p>{ten}<br />{ten}</p>\n"
+        "  </main>\n"
+        ");\n"
+    )
+    root = change(tmp_path, "src/Card.tsx", BASE, source)
+    message = refused(root)
+    for line in (1, 3, 6, 7):
+        assert f"src/Card.tsx:{line}:" in message
+    for line in (2, 8):
+        assert f"src/Card.tsx:{line}:" not in message
+    assert "30 words" in message
+
+
+def old_wall() -> str:
+    return screen("<p>", f"  {sentence(30)}", "</p>", "<p>Short.</p>")
+
+
+def test_only_touched_text_is_judged(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: an old wall passes until a change touches it; a move passes; an edit and a deleted break are judged."""
+    wall = old_wall()
+    root = change(tmp_path / "a", "src/Card.tsx", wall, wall.replace("Short.", "Brief."))
+    validate_suppressions(root, "HEAD")
+    wrapped = "".join(f"  {line}\n" for line in wall.splitlines())
+    moved = change(tmp_path / "b", "src/Card.tsx", wall, wrapped)
+    validate_suppressions(moved, "HEAD")
+    edited = change(tmp_path / "c", "src/Card.tsx", wall, wall.replace("word", "work", 1))
+    assert "src/Card.tsx:4:" in refused(edited)
+    halves = screen("<p>", f"  {sentence(13)}", "  <br />", f"  {sentence(13)}", "</p>")
+    joined = change(tmp_path / "d", "src/Card.tsx", halves, halves.replace("    <br />\n", ""))
+    assert "26 words" in refused(joined)
+
+
+def test_exempt_files_and_paths_are_not_judged(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: tests, stories, generated files, tool folders and files outside paths are not judged."""
+    root = tmp_path / "repo"
+    init(root)
+    (root / ".gitattributes").write_text("src/gen/** linguist-generated\n")
+    commit(root, "baseline")
+    wall = old_wall()
+    for name in (
+        "src/Card.test.tsx",
+        "src/Card.stories.tsx",
+        "tests/Card.tsx",
+        "src/gen/Card.tsx",
+        ".claude/Card.tsx",
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(wall)
+    validate_suppressions(root, "HEAD")
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"packages": [], "text_walls": {"paths": ["app/**"]}})
+    )
+    (root / "src/Page.tsx").write_text(wall)
+    validate_suppressions(root, "HEAD")
+    (root / "app").mkdir()
+    (root / "app/Page.tsx").write_text(wall)
+    message = refused(root)
+    assert "app/Page.tsx:" in message
+    assert "src/Page.tsx" not in message
+
