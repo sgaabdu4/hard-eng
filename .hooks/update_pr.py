@@ -182,9 +182,11 @@ LOAD_CHECK = """
 import sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
+import debt
 from gate_config import load_groups
 try:
     load_groups(Path(sys.argv[2]))
+    debt.load(Path(sys.argv[2]))
 except (OSError, ValueError, TypeError, KeyError) as error:
     sys.exit(str(error))
 """
