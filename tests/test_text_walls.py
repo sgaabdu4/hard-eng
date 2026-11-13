@@ -435,6 +435,7 @@ def test_flutter_text_follows_the_same_rules(tmp_path: Path) -> None:
         (True, f"TextField(decoration: InputDecoration(labelText: '{thirty}')),"),
         (False, "Text(l10n.counter(count)),"),
         (False, "Text(n.details.map((d) => d.label).join(', ')),"),
+        (False, "Card(description: n.description),"),
     ]
     lines = [
         "import 'package:flutter/material.dart';",
@@ -544,6 +545,25 @@ def test_html_phrasing_tags_stay_in_one_block(tmp_path: Path) -> None:
         (True, f"<p>{sentence(13)} <{tag}>1</{tag}> {sentence(12)}</p>") for tag in tags
     ]
     rows.append((False, f"<p>{sentence(13)} <label>{sentence(13)}</label></p>"))
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
+    message = refused(root)
+    flagged = [
+        number
+        for number in range(1, len(rows) + 5)
+        if f"src/Card.tsx:{number}:" in message
+    ]
+    assert flagged == [number for number, (bad, _) in enumerate(rows, 3) if bad]
+
+
+def test_a_stored_field_passed_into_a_prop_is_not_stored_text_rendering(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-TEXT-WALLS: a stored field handed to a component prop passes; one rendered as html is refused."""
+    rows = [
+        (False, "<Card description={n.description} />"),
+        (False, "<Card body={n.body} title={n.title} />"),
+        (True, "<div dangerouslySetInnerHTML={{ __html: n.body }} />"),
+    ]
     root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
     message = refused(root)
     flagged = [
