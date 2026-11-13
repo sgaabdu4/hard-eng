@@ -1,6 +1,5 @@
 """HE-NO-TEXT-WALLS: the TSX and JSX reader returns the text blocks of every changed file from one process."""
 
-import json
 import subprocess
 import sys
 from pathlib import Path

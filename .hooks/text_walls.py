@@ -10,9 +10,9 @@ from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 from comments import is_test_path
+from flutter_screens import screen_files
 from gate_config import generated_sources
 from project_files import GIT_LISTING
-from flutter_screens import screen_files
 from text_readers import Block, FileBlocks, read
 
 SLOT = ""
@@ -327,10 +327,14 @@ def base_sources(
 
 
 def read_all(
-    files: list[tuple[str, str, Sequence[int] | None]],
+    files: Sequence[tuple[str, str, Sequence[int] | None]],
 ) -> list[FileBlocks]:
     """Each file goes to the reader of its language; a message catalog is read here."""
-    kinds = {"js": [], "dart": [], "arb": []}
+    kinds: dict[str, list[tuple[str, str, Sequence[int] | None]]] = {
+        "js": [],
+        "dart": [],
+        "arb": [],
+    }
     for item in files:
         kinds[
             "arb"
