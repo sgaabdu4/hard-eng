@@ -52,7 +52,7 @@ SCREEN_MARKS = {
     ".swift": ("import SwiftUI", "SwiftUI"),
     ".kt": ("androidx.compose", "Compose"),
 }
-SCREEN_STACKS = ("Vue", "Svelte", "Astro", "SwiftUI", "Compose", "Flutter")
+SCREEN_STACKS = ("Vue", "Svelte", "Astro", "SwiftUI", "Compose")
 
 
 def trivial(path: Path) -> bool:
@@ -169,10 +169,6 @@ def screen_stacks(root: Path, files: list[Path]) -> list[str]:
         elif mark := SCREEN_MARKS.get(path.suffix):
             if mark[0] in path.read_text(errors="replace"):
                 found.add(mark[1])
-        elif path.name == "pubspec.yaml" and "sdk: flutter" in path.read_text(
-            errors="replace"
-        ):
-            found.add("Flutter")
     return [stack for stack in SCREEN_STACKS if stack in found]
 
 
