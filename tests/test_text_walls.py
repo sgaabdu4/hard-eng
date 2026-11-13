@@ -207,6 +207,13 @@ def test_only_touched_text_is_judged(tmp_path: Path) -> None:
     elsewhere = change(tmp_path / "g", "src/Card.tsx", wall, screen())
     (elsewhere / "src/Other.tsx").write_text(wall)
     validate_suppressions(elsewhere, "HEAD")
+    padded = wall + "".join(f"export const k{n} = {n};\n" for n in range(40))
+    renamed = change(tmp_path / "h", "src/A.tsx", padded, padded)
+    git(renamed, "mv", "src/A.tsx", "src/B.tsx")
+    (renamed / "src/B.tsx").write_text(
+        padded.replace(f"  {sentence(30)}", f"      {sentence(30)}")
+    )
+    validate_suppressions(renamed, "HEAD")
 
 
 def test_exempt_files_and_paths_are_not_judged(tmp_path: Path) -> None:
