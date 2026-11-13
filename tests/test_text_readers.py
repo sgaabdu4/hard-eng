@@ -1,5 +1,6 @@
 """HE-NO-TEXT-WALLS: the TSX and JSX reader returns the text blocks of every changed file from one process."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ import pytest
 import text_readers
 import text_walls
 from comments import validate_suppressions
-from conftest import SOURCE, change, configure, gate
+from conftest import SOURCE, change, commit, configure, gate
 
 SCREEN = (
     "export const A = () => (\n"
@@ -67,6 +68,10 @@ def test_a_change_with_no_screen_file_starts_no_reader_and_loads_no_rule_module(
 ) -> None:
     """HE-NO-TEXT-WALLS: only a TSX or JSX file starts a reader or loads the rule module."""
     root = change(tmp_path, name, "base\n", f"base\n{WALL}\n")
+    assert started_after(root) == "[] False False"
+
+
+def started_after(root: Path) -> str:
     code = (
         "import sys\n"
         f"sys.path.insert(0, {str(SOURCE / '.hooks')!r})\n"
@@ -80,7 +85,47 @@ def test_a_change_with_no_screen_file_starts_no_reader_and_loads_no_rule_module(
     done = subprocess.run(
         [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
     )
-    assert done.stdout.strip() == "[] False False"
+    return done.stdout.strip()
+
+
+def flutter_project(tmp_path: Path, before: str, after: str, flutter: bool) -> Path:
+    root = change(tmp_path, "lib/screen.dart", before, before)
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "packages": [{"name": "app", "path": ".", "language": "dart"}],
+                "shared": [],
+            }
+        )
+    )
+    sdk = (
+        "dependencies:\n  flutter:\n    sdk: flutter\n"
+        if flutter
+        else "environment:\n  sdk: ^3.11.0\n"
+    )
+    (root / "pubspec.yaml").write_text(f"name: app\n{sdk}")
+    commit(root, "project files")
+    (root / "lib/screen.dart").write_text(after)
+    return root
+
+
+@pytest.mark.parametrize(
+    ("flutter", "line"),
+    [
+        (True, "final count = 1;"),
+        (True, "import 'package:flutter/material.dart';"),
+        (False, "final a = Text('Hello there');"),
+    ],
+)
+def test_a_dart_change_with_no_text_line_starts_no_process(
+    tmp_path: Path, flutter: bool, line: str
+) -> None:
+    """HE-NO-TEXT-WALLS: a Dart change starts no process unless a Flutter package gets a touched line with text."""
+    root = flutter_project(tmp_path, "// base\n", f"// base\n{line}\n", flutter)
+    seen = started_after(root)
+    assert seen.startswith("[] ")
+    if not flutter:
+        assert seen == "[] False False"
 
 
 def test_a_missing_tool_fails_closed_with_its_step(

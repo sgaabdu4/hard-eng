@@ -787,6 +787,14 @@ def whole_branch_balance(root: Path, point: str) -> tuple[str, list[str], int] |
     return whole, *assertion_balance(root, added, removed, skipped)
 
 
+def flutter_changed(root: Path, names: list[str]) -> bool:
+    if not any(name.endswith((".dart", ".arb")) for name in names):
+        return False
+    from flutter_screens import screen_files
+
+    return bool(screen_files(root, names))
+
+
 def text_walls_check(
     root: Path,
     point: str,
@@ -794,10 +802,9 @@ def text_walls_check(
     added: dict[str, list[tuple[int, str]]],
     removed: dict[str, list[tuple[int, str]]],
 ) -> None:
-    if any(
-        name.endswith(WALL_SUFFIXES)
-        for lines in (joins, added, removed)
-        for name in lines
+    names = [*joins, *added, *removed]
+    if any(name.endswith(WALL_SUFFIXES) for name in names) or flutter_changed(
+        root, names
     ):
         from text_walls import wall_check
 
