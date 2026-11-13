@@ -1,5 +1,6 @@
 """CI test shards: the field, the split, the shard run and the report merge."""
 
+import getpass
 import json
 import os
 import shutil
@@ -261,11 +262,18 @@ def pytest_group(path: str, checks: list[Gate]) -> Group:
 
 
 @pytest.fixture
-def shard_project(runner: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Path:
+def shard_project(
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Path:
     for name in [*os.environ]:
         if name.startswith(("COV_CORE_", "COVERAGE_")):
             monkeypatch.delenv(name)
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    monkeypatch.setenv(
+        "PYTEST_DEBUG_TEMPROOT", str(tmp_path_factory.mktemp("inner-temp"))
+    )
     root = runner.ROOT
     log = root / "log.txt"
     (root / "pyproject.toml").write_text(
@@ -877,11 +885,20 @@ def test_other_options_pass_the_settings_check(
 
 
 def test_a_worker_count_in_the_pytest_settings_leaves_the_shard_files_exact(
-    runner: ModuleType, shard_project: Path
+    runner: ModuleType,
+    shard_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
+    shared = tmp_path_factory.mktemp("shared-temp")
+    other_runs = shared / f"pytest-of-{getpass.getuser()}"
+    for number in range(1, 5):
+        (other_runs / f"pytest-{number}").mkdir(parents=True)
+    monkeypatch.setenv("TMPDIR", str(shared))
     settings = shard_project / "pyproject.toml"
     settings.write_text(settings.read_text() + 'addopts = "-n 2"\n')
     assert run_part(runner, "1") is False
+    assert (other_runs / "pytest-1").is_dir()
     assert {line for line in log_lines(shard_project) if line.startswith("ran ")} == {
         "ran tests/test_a.py"
     }
