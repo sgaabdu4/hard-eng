@@ -14,7 +14,6 @@ RULE_FILES = (
     "text_walls.py",
     "text_readers.py",
     "text_reader_programs.py",
-    "text_walls.package.json",
     "text_walls.bun.lock",
 )
 WALL = "export const A = () => <p>" + " ".join(["word"] * 40) + "</p>;\n"

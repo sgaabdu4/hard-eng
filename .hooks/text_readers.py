@@ -16,6 +16,7 @@ from text_reader_programs import DART_READER, JS_READER
 
 HOOKS = Path(__file__).resolve().parent
 LIMIT = 120
+JS_MANIFEST = '{"private": true, "dependencies": {"oxc-parser": "0.158.0"}}\n'
 NEEDS_BUN = (
     "HE-NO-TEXT-WALLS: reading the changed TSX or JSX screens needs Bun. Install Bun, "
     "or in CI add an oven-sh/setup-bun step before the check"
@@ -61,9 +62,7 @@ def install_js(staging: Path) -> None:
     environment.setdefault(
         "BUN_INSTALL_CACHE_DIR", str(tool_folder() / "bun" / "cache")
     )
-    (staging / "package.json").write_bytes(
-        (HOOKS / "text_walls.package.json").read_bytes()
-    )
+    (staging / "package.json").write_text(JS_MANIFEST)
     (staging / "bun.lock").write_bytes((HOOKS / "text_walls.bun.lock").read_bytes())
     (staging / "reader.mjs").write_text(JS_READER)
     done = subprocess.run(
@@ -177,7 +176,7 @@ def read(kind: str, request: dict[str, object]) -> list[FileBlocks]:
     folder = reader_folder(
         "js",
         [
-            (HOOKS / "text_walls.package.json").read_bytes(),
+            JS_MANIFEST.encode(),
             (HOOKS / "text_walls.bun.lock").read_bytes(),
             JS_READER.encode(),
         ],
