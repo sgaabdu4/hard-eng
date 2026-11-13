@@ -25,6 +25,7 @@ def _delivered_fake(
     checks: list[dict[str, object]],
     *,
     push_suites: tuple[int, ...] = (_PUSH_SUITE,),
+    elsewhere: tuple[int, ...] = (),
 ) -> Fixture:
     fixture = _fixture(tmp_path, target="Merge")
     pull = _pull(
@@ -35,7 +36,11 @@ def _delivered_fake(
         merge_commit_sha=fixture.head,
     )
     fake = FakeGitHub(pull, [{**check, "head_sha": fixture.head} for check in checks])
-    runs = [{"id": suite, "check_suite_id": suite} for suite in push_suites]
+    runs = [
+        {"id": suite, "check_suite_id": suite, "head_branch": branch}
+        for branch, suites in (("main", push_suites), ("release", elsewhere))
+        for suite in suites
+    ]
     fake.push_runs = [{"total_count": len(runs), "workflow_runs": runs}]
     _patch_gh(monkeypatch, fake)
     real_git = shipping.git
@@ -78,6 +83,19 @@ def test_delivered_refuses_when_the_push_run_failed(
         tmp_path,
         monkeypatch,
         [_run_of(_PUSH_SUITE, 1, "failure"), _run_of(_OTHER_SUITE, 2, "success")],
+    )
+    with pytest.raises(shipping.ShippingError, match="not successful"):
+        _verify(fixture)
+
+
+def test_delivered_refuses_when_the_base_push_run_failed_and_a_push_to_another_branch_passed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _delivered_fake(
+        tmp_path,
+        monkeypatch,
+        [_run_of(_PUSH_SUITE, 1, "failure"), _run_of(_OTHER_SUITE, 2, "success")],
+        elsewhere=(_OTHER_SUITE,),
     )
     with pytest.raises(shipping.ShippingError, match="not successful"):
         _verify(fixture)
