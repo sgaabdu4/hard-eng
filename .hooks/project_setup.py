@@ -98,10 +98,13 @@ def validate_dart_exclusions(
     options = directory / "analysis_options.yaml"
     if not isinstance(values, list):
         raise TypeError(f"exclude in {options} must be a list of patterns")
+    known = allowed | native | children
+    if not known.issuperset(value for value in values if isinstance(value, str)):
+        from dart_boundaries import localization_exclusions
+
+        known |= localization_exclusions(directory)
     refused = [
-        value
-        for value in values
-        if not isinstance(value, str) or value not in allowed | native | children
+        value for value in values if not isinstance(value, str) or value not in known
     ]
     if refused:
         raise ValueError(

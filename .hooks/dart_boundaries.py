@@ -120,11 +120,36 @@ def nested_package_patterns(group: "Group", groups: "list[Group]") -> frozenset[
     )
 
 
-def exclude_nested_packages(options: "JsonObject", children: frozenset[str]) -> None:
-    if children:
+def localization_file(options: object) -> PurePosixPath | None:
+    """The main file that gen-l10n writes, relative to its package."""
+    if not isinstance(options, dict) or options.get("synthetic-package", False):
+        return None
+    folder = options.get("output-dir", options.get("arb-dir", "lib/l10n"))
+    name = options.get("output-localization-file", "app_localizations.dart")
+    return PurePosixPath(str(folder), PurePosixPath(str(name)).name)
+
+
+def localization_exclusions(directory: Path) -> frozenset[str]:
+    """Flutter 3.50's gen-l10n lists deprecated delegates in its main file (flutter/flutter#191072)."""
+    path = directory / "l10n.yaml"
+    if not path.is_file():
+        return frozenset()
+    import yaml
+
+    try:
+        main = localization_file(yaml.safe_load(path.read_text()) or {})
+    except yaml.YAMLError:
+        return frozenset()
+    if main is None or main.is_absolute() or ".." in main.parts:
+        return frozenset()
+    return frozenset({main.as_posix()})
+
+
+def add_exclusions(options: "JsonObject", patterns: frozenset[str]) -> None:
+    if patterns:
         analyzer = cast("JsonObject", options.setdefault("analyzer", {}))
         exclude = cast("list[str]", analyzer.setdefault("exclude", []))
-        exclude.extend(sorted(children - set(exclude)))
+        exclude.extend(sorted(patterns - set(exclude)))
 
 
 def validate_dart_includes(

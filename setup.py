@@ -304,7 +304,12 @@ def configure_dart(
 
     outside_lib_coverage(package)
     target = directory / "analysis_options.yaml"
-    from dart_boundaries import DART_TYPING, dart_options, exclude_nested_packages
+    from dart_boundaries import (
+        DART_TYPING,
+        add_exclusions,
+        dart_options,
+        localization_exclusions,
+    )
 
     options = cast("JsonObject", dart_options(target)) if target.exists() else {}
     original = deepcopy(options)
@@ -313,7 +318,7 @@ def configure_dart(
     apply_dart_typing(
         options, cast("dict[str, JsonObject]", DART_TYPING), directory, children
     )
-    exclude_nested_packages(options, children)
+    add_exclusions(options, children | localization_exclusions(directory))
     content = (
         existing
         if target.exists() and options == original
@@ -352,21 +357,18 @@ def arb_language(arb: Path) -> str | None:
 
 def localization_outputs(root: Path, directory: Path) -> list[str]:
     import yaml
+    from dart_boundaries import localization_file
     from project_files import read_project_file
 
     localization = directory / "l10n.yaml"
     if not localization.is_file():
         return []
     options = read_project_file(localization, root, yaml.safe_load) or {}
-    if not isinstance(options, dict) or options.get("synthetic-package", False):
+    main = localization_file(options)
+    if main is None:
         return []
     arbs = directory / str(options.get("arb-dir", "lib/l10n"))
-    output = directory / str(
-        options.get("output-dir", options.get("arb-dir", "lib/l10n"))
-    )
-    name = Path(
-        str(options.get("output-localization-file", "app_localizations.dart"))
-    ).name
+    output, name = directory / main.parent, main.name
     stem, _, extension = name.partition(".")  # gen-l10n splits at the first dot.
     languages = {arb_language(arb) for arb in arbs.glob("*.arb")} - {None}
     names = [name, *(f"{stem}_{language}.{extension}" for language in languages)]
