@@ -249,7 +249,7 @@ def test_user_content_takes_expressions_only(tmp_path: Path) -> None:
 
 
 def test_structural_skips_are_not_judged(tmp_path: Path) -> None:
-    """HE-NO-TEXT-WALLS: structured data, script, style, code and pre are skipped; inline code is one word."""
+    """HE-NO-TEXT-WALLS: structured data, script, Script, style, code and pre are skipped; inline code is one word."""
     long = " ".join(["word"] * 40)
     source = (
         f'const DATA = {{ "@type": "Article", description: "{long}" }};\n'
@@ -259,6 +259,7 @@ def test_structural_skips_are_not_judged(tmp_path: Path) -> None:
         f"    <style>{long}</style>\n"
         f"    <code>{long}</code>\n"
         f"    <pre>{long}</pre>\n"
+        f'    <Script id="init" strategy="lazyOnload">{{`window.list = [{long}]; f();`}}</Script>\n'
         f"    <p>Ten words <code>{long}</code> after the code.</p>\n"
         f"    <p>{long}</p>\n"
         "  </main>\n"
@@ -267,9 +268,9 @@ def test_structural_skips_are_not_judged(tmp_path: Path) -> None:
     root = change(tmp_path, "src/Card.tsx", BASE, source)
     message = refused(root)
     flagged = [
-        number for number in range(1, 11) if f"src/Card.tsx:{number}:" in message
+        number for number in range(1, 12) if f"src/Card.tsx:{number}:" in message
     ]
-    assert flagged == [9]
+    assert flagged == [10]
 
 
 def test_the_list_command_and_the_stdin_judge_share_the_caps(
