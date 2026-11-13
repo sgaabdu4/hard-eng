@@ -83,6 +83,31 @@ def project_copy(hook: Path) -> Path:
     return hook.with_name(hook.name + ".project")
 
 
+def ignored(root: Path, path: Path) -> bool:
+    found = subprocess.run(
+        ["git", "check-ignore", "-q", "--", str(path.relative_to(root))],
+        cwd=root,
+        check=False,
+    )
+    return found.returncode == 0
+
+
+def committed_hook_names(root: Path, hooks: list[tuple[Path, bool]]) -> list[str]:
+    """The hooks inside the work tree that an install commits; a kept copy goes where its hook goes, so an ignored hook keeps both local."""
+    names: list[str] = []
+    for path, chained in hooks:
+        if (
+            path.is_relative_to(root)
+            and ".git" not in path.relative_to(root).parts
+            and not ignored(root, path)
+        ):
+            names += [
+                str(member.relative_to(root))
+                for member in [path, project_copy(path)][: 1 + chained]
+            ]
+    return names
+
+
 def keeps_copy(hook: Path) -> bool:
     copy = project_copy(hook)
     return copy.exists() or copy.is_symlink()
