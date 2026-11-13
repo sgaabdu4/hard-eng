@@ -535,3 +535,20 @@ def test_an_edited_old_flutter_block_is_judged_again(tmp_path: Path) -> None:
         tmp_path / "b", screen_of(plain), screen_of(plain, indent="    "), True
     )
     validate_suppressions(moved, "HEAD")
+
+
+def test_html_phrasing_tags_stay_in_one_block(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: phrasing elements join the text around them into one block, and a label does not."""
+    tags = "sup sub u small mark abbr time q cite s del ins kbd var".split()
+    rows = [
+        (True, f"<p>{sentence(13)} <{tag}>1</{tag}> {sentence(12)}</p>") for tag in tags
+    ]
+    rows.append((False, f"<p>{sentence(13)} <label>{sentence(13)}</label></p>"))
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*(text for _, text in rows)))
+    message = refused(root)
+    flagged = [
+        number
+        for number in range(1, len(rows) + 5)
+        if f"src/Card.tsx:{number}:" in message
+    ]
+    assert flagged == [number for number, (bad, _) in enumerate(rows, 3) if bad]
