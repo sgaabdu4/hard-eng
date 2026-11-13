@@ -389,6 +389,34 @@ def test_the_bypass_names_the_first_check_that_did_not_pass(
     assert problem == "not every head check succeeded: lint"
 
 
+def _blocked_without_admin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rollup: str, message: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    fake = FakeGitHub(_pull(fixture, mergeable_state="blocked"), [_check(fixture.head)])
+    fake.review = _review(fixture.head, rollup, viewerCanMergeAsAdmin=False)
+    _ready_outcome(fixture, fake, monkeypatch, message)
+
+
+def test_a_check_that_still_runs_is_named_before_the_review_rule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _blocked_without_admin(
+        tmp_path,
+        monkeypatch,
+        "PENDING",
+        "a head check still runs: build; wait for it, then run this stage again",
+    )
+
+
+def test_the_review_text_stays_when_each_head_check_passed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _blocked_without_admin(
+        tmp_path, monkeypatch, "SUCCESS", "the author cannot bypass the review"
+    )
+
+
 _RULES_URL = "https://github.com/acme/widget/settings/rules"
 _NO_RULE: JsonValue = {"branchProtectionRule": None, "rules": EMPTY}
 _UNREADABLE = (
