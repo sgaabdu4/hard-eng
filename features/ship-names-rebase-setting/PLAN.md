@@ -45,6 +45,7 @@ N/A — no app screens change.
 
 Result: Passed
 Evidence: `tests/test_ship_commits.py`, `tests/test_update_pr.py`, `tests/test_shipping.py`, `tests/test_ship_actions.py`, `tests/test_gate_speed.py` and `tests/test_skill_links.py` passed; the static gates and `hot-paths` on the three touched hooks passed. The Complete check is run by the coordinator.
+Review: a reader that did not write the text compared the old and the new sentence of `checks.md` with its paragraph. It read the sentence one time, found the same meaning as the code, and found no conflict with "each refusal names its fix" or "squash and merge commits are refused".
 E2E: N/A — no user journey; the tests drive `verify` and `merge` with the fake GitHub of the ship tests.
 Retro: (1) Hard Eng fault that a project showed: a printed step that a repository setting makes useless → `tests/test_ship_commits.py::test_a_repository_that_forbids_rebase_merges_is_named_as_the_cause`. (2) The size rule limits a test file to 1000 lines, so the shared reader is patched in the update tests by its module name, one line.
 
