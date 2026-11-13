@@ -1,12 +1,13 @@
 """HE-NO-TEXT-WALLS: an update brings the rule and its pinned reader to an old project with no change to its gates file."""
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 import update
-from conftest import commit
+from conftest import SEAL, commit
 from test_updates import select_release
 
 RULE_FILES = (
@@ -42,8 +43,13 @@ def test_an_updated_old_project_refuses_a_new_wall_with_its_gates_file_unchanged
         "from comments import validate_suppressions\n"
         f"validate_suppressions(Path({str(target)!r}), 'HEAD')\n"
     )
+    sealed = {**os.environ, "RUNNER_TEMP": str(SEAL / "runner")}
     done = subprocess.run(
-        [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=False
+        [sys.executable, "-I", "-c", code],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=sealed,
     )
     assert done.returncode == 1
     assert "HE-NO-TEXT-WALLS" in done.stderr
