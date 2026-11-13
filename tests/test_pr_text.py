@@ -366,14 +366,31 @@ def _workflow_text() -> str:
     return (SOURCE / ".github/workflows/pr-text.yml").read_text()
 
 
-def _run_step(tmp_path: Path, body: str) -> subprocess.CompletedProcess[str]:
+def _run_step(
+    tmp_path: Path, body: str, current: str | None = None
+) -> subprocess.CompletedProcess[str]:
     steps = yaml.safe_load(_workflow_text())["jobs"]["pr-text"]["steps"]
     run = next(step["run"] for step in steps if "run" in step)
-    work = tmp_path / "work"
-    work.mkdir(parents=True)
+    work, tools, now, temp = (
+        tmp_path / name for name in ("work", "tools", "now", "temp")
+    )
+    for folder in (work, tools, now, temp):
+        folder.mkdir(parents=True)
     (work / ".hooks").symlink_to(SOURCE / ".hooks")
     shutil.copy(_project(tmp_path) / "hard-eng.gates.json", work)
-    environment = {**os.environ, "GITHUB_EVENT_PATH": _event(tmp_path, body)}
+    stand_in = tools / "gh"
+    stand_in.write_text('#!/bin/sh\necho "$*" > "$GH_ASKED"\ncat "$GH_ANSWER"\n')
+    stand_in.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
+        "GITHUB_EVENT_PATH": _event(tmp_path, body),
+        "GH_ANSWER": str(now / "none") if current is None else _event(now, current),
+        "GH_ASKED": str(tmp_path / "asked"),
+        "RUNNER_TEMP": str(temp),
+        "PR": "1",
+        "REPO": "acme/widget",
+    }
     return subprocess.run(
         ["bash", "-c", run],
         check=False,
@@ -397,6 +414,26 @@ def test_pr_text_workflow_step_fails_a_pr_whose_text_breaks_the_rules(
     assert _run_step(tmp_path / "good", _VALID).returncode == 0
 
 
+def test_the_step_judges_the_text_that_the_pr_has_now_not_the_text_of_the_event(
+    tmp_path: Path,
+) -> None:
+    mended = _run_step(tmp_path / "mended", _GOOD, current=_VALID)
+    assert mended.returncode == 0
+    asked = (tmp_path / "mended" / "asked").read_text()
+    assert asked == "api repos/acme/widget/pulls/1 --jq {pull_request: .}\n"
+    broken = _run_step(tmp_path / "broken", _VALID, current=_GOOD)
+    assert broken.returncode == 1
+    assert "Not checked" in broken.stderr
+
+
+def test_a_new_event_waits_for_the_running_pr_text_job_and_never_cancels_it() -> None:
+    job = yaml.safe_load(_workflow_text())["jobs"]["pr-text"]
+    assert job["concurrency"] == {
+        "group": "pr-text-check-${{ github.event.pull_request.number }}",
+        "cancel-in-progress": False,
+    }
+
+
 def test_pr_text_check_runs_on_each_push_and_edit_and_the_footer_job_skips_pushes() -> (
     None
 ):
@@ -413,10 +450,6 @@ def test_each_job_holds_its_own_concurrency_group_so_a_push_cannot_cancel_the_fo
 ):
     workflow = yaml.safe_load(_workflow_text())
     assert "concurrency" not in workflow
-    assert workflow["jobs"]["pr-text"]["concurrency"] == {
-        "group": "pr-text-check-${{ github.event.pull_request.number }}",
-        "cancel-in-progress": True,
-    }
     assert workflow["jobs"]["remove-claude-footer"]["concurrency"] == {
         "group": (
             "pr-text-${{ github.event.pull_request.number }}-"
@@ -432,4 +465,8 @@ def test_pr_text_job_reads_the_pr_files_with_the_workflow_token_and_nothing_more
     job = yaml.safe_load(_workflow_text())["jobs"]["pr-text"]
     assert job["permissions"] == {"contents": "read", "pull-requests": "read"}
     check = next(step for step in job["steps"] if "run" in step)
-    assert check["env"] == {"GH_TOKEN": "${{ github.token }}"}
+    assert check["env"] == {
+        "GH_TOKEN": "${{ github.token }}",
+        "PR": "${{ github.event.pull_request.number }}",
+        "REPO": "${{ github.repository }}",
+    }
