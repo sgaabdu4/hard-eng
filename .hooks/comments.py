@@ -746,12 +746,11 @@ def assertion_balance(
     root: Path,
     added: dict[str, list[tuple[int, str]]],
     removed: dict[str, list[tuple[int, str]]],
+    skipped: set[str],
 ) -> tuple[list[str], int]:
-    names = scoped_names(added, removed)
-    skipped = generated_sources(root, names)
     gained = 0
     blocks: list[tuple[str, list[tuple[int, str]]]] = []
-    for name in names:
+    for name in scoped_names(added, removed):
         if name not in skipped and is_test_path(PurePosixPath(name)):
             gained += len(assertion_lines(name, added.get(name, [])))
             blocks += [(name, b) for b in removed_blocks(removed.get(name, []))]
@@ -774,22 +773,29 @@ def is_ancestor(root: Path, older: str, newer: str) -> bool:
     )
 
 
+def whole_branch_balance(root: Path, point: str) -> tuple[str, list[str], int] | None:
+    """The assertion balance from the branch point, when it lies before the judged range."""
+    whole = default_branch_point(root)
+    if not whole or whole == point or not is_ancestor(root, whole, point):
+        return None
+    added, removed = diff_lines(root, whole)
+    skipped = generated_sources(root, scoped_names(added, removed))
+    return whole, *assertion_balance(root, added, removed, skipped)
+
+
 def validate_suppressions(root: Path, base: str | None) -> None:
     try:
         point, empty = diff_base(root, base or default_branch_point(root) or "HEAD")
         added, removed = diff_lines(root, point)
-        lost, gained = assertion_balance(root, added, removed)
-        if len(lost) > gained and base:
-            whole = default_branch_point(root)
-            if whole and whole != point and is_ancestor(root, whole, point):
-                lost, gained = assertion_balance(root, *diff_lines(root, whole))
-                point = whole
     except subprocess.CalledProcessError as error:
         raise ValueError(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
         ) from error
     names = scoped_names(added, removed)
     skipped = generated_sources(root, names)
+    lost, gained = assertion_balance(root, added, removed, skipped)
+    if len(lost) > gained and base and (whole := whole_branch_balance(root, point)):
+        point, lost, gained = whole
     found = security_switch_offs(root, added)
     for name in names:
         pattern = switch_off_pattern(name)
