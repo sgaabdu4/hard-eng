@@ -49,6 +49,7 @@ CODEBASE_MEMORY = {
 
 import process_group
 import source_trees
+import text_readers
 import update
 
 stop_listed_brokers = process_group.stop_idle_codex_brokers
@@ -74,15 +75,12 @@ def keep_machine_brokers(
 process_group.stop_idle_codex_brokers = keep_machine_brokers
 
 
-@pytest.fixture(scope="session", autouse=True)
-def one_reader_folder(tmp_path_factory: pytest.TempPathFactory) -> Generator[None]:
+def session_reader_folder() -> Path:
     """The text readers install once for a test session, not once for each test."""
-    import text_readers
+    return SEAL / "readers"
 
-    folder = tmp_path_factory.mktemp("text-readers")
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(text_readers, "tool_folder", lambda: folder)
-        yield
+
+text_readers.tool_folder = session_reader_folder
 
 
 def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

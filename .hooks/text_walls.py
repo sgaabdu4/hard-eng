@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 from fnmatch import fnmatchcase
+from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
@@ -21,7 +22,8 @@ OPENERS = "\"'“‘("
 SENTENCE_ENDS = (".", "!", "?", "…")
 CJK_ENDS = ("。", "！", "？")
 ABBREVIATIONS = frozenset(
-    "e.g. i.e. etc. vs. mr. mrs. ms. dr. st. no. approx. incl. min. max. a.m. p.m.".split()
+    ("e.g.", "i.e.", "etc.", "vs.", "mr.", "mrs.", "ms.", "dr.", "st.", "no.")
+    + ("approx.", "incl.", "min.", "max.", "a.m.", "p.m.")
 )
 DOTTED = re.compile(r"^(?:[^\W\d_]\.)+$")
 CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿]+")
@@ -31,16 +33,40 @@ KEYS = {
     "sentences_per_block": 3,
     "words_per_sentence": 20,
 }
+DEFAULT_NUMBERS = (25, 3, 20)
 INLINE = ("strong", "em", "b", "i", "span", "a", "Link")
 TEXT_PROPS = (
-    "title label description body message subtitle hint helperText note text details "
-    "summary caption lead"
-).split()
+    "title",
+    "label",
+    "description",
+    "body",
+    "message",
+    "subtitle",
+    "hint",
+) + ("helperText", "note", "text", "details", "summary", "caption", "lead")
 SKIP = ("script", "style", "code", "pre")
-STORED = "body content description details notes note summary comment bio about".split()
-TAP_NAMES = ("button", "a", "Link", "summary", "Pressable", "TouchableOpacity", "TouchableHighlight")
+STORED = ("body", "content", "description", "details", "notes") + (
+    "note",
+    "summary",
+    "comment",
+    "bio",
+    "about",
+)
+TAP_NAMES = (
+    "button",
+    "a",
+    "Link",
+    "summary",
+    "Pressable",
+    "TouchableOpacity",
+    "TouchableHighlight",
+)
 TAP_ATTRS = ("onClick", "onPress", "href")
 USER_CONTENT = "UserContent"
+
+
+class SettingsError(ValueError):
+    pass
 
 
 class Caps(NamedTuple):
@@ -110,8 +136,7 @@ def measure_line(text: str) -> tuple[int, int, int]:
 def measure(parts: list[object]) -> tuple[int, int, int]:
     """Words, sentences and the longest sentence of one block; a line break ends a sentence."""
     lines = [
-        measure_line(CJK_END.sub(r"\1 ", line))
-        for line in flatten(parts).split("\n")
+        measure_line(CJK_END.sub(r"\1 ", line)) for line in flatten(parts).split("\n")
     ]
     return (
         sum(line[0] for line in lines),
@@ -128,23 +153,23 @@ def settings(root: Path) -> Caps:
         data = None
     raw = data.get("text_walls") if isinstance(data, dict) else None
     if raw is None:
-        return Caps(*KEYS.values(), ())
+        return Caps(*DEFAULT_NUMBERS, ())
     if not isinstance(raw, dict):
-        raise ValueError(
+        raise SettingsError(
             "HE-NO-TEXT-WALLS: `text_walls` in hard-eng.gates.json must be an object; "
             "remove it or give it the keys " + ", ".join([*KEYS, "paths"])
         )
     unknown = sorted(set(raw) - {*KEYS, "paths"})
     if unknown:
-        raise ValueError(
+        raise SettingsError(
             f"HE-NO-TEXT-WALLS: `text_walls` has the unknown key {unknown[0]!r}; "
             "remove it or use " + ", ".join([*KEYS, "paths"])
         )
-    numbers = []
+    numbers: list[int] = []
     for key, default in KEYS.items():
         value = raw.get(key, default)
         if type(value) is not int or value < 1:
-            raise ValueError(
+            raise SettingsError(
                 f"HE-NO-TEXT-WALLS: `text_walls.{key}` must be a whole number of 1 or more; "
                 "set it in hard-eng.gates.json or remove it to use " + str(default)
             )
@@ -153,14 +178,16 @@ def settings(root: Path) -> Caps:
     if not isinstance(paths, list) or not all(
         isinstance(path, str) and path.endswith("/**") for path in paths
     ):
-        raise ValueError(
+        raise SettingsError(
             "HE-NO-TEXT-WALLS: `text_walls.paths` must be a list of folder globs that "
             "end in /**, for example app/**; it narrows the folders and never exempts a file"
         )
-    return Caps(*numbers, tuple(paths))
+    return Caps(numbers[0], numbers[1], numbers[2], tuple(paths))
 
 
-def request(files: list[tuple[str, str, list[int] | None]]) -> dict[str, object]:
+def request(
+    files: Sequence[tuple[str, str, Sequence[int] | None]],
+) -> dict[str, object]:
     """The request that every reader takes: the word lists and each file with its touched lines."""
     return {
         "inline": INLINE,
@@ -180,9 +207,7 @@ def request(files: list[tuple[str, str, list[int] | None]]) -> dict[str, object]
 PLAIN_WORD = re.compile(r"[A-Za-z]+(?:'[a-z]+)?")
 SCREEN_SUFFIXES = (".tsx", ".jsx")
 UNOWNED_FOLDERS = (".hooks/", ".agents/", ".claude/")
-USER_LITERAL = (
-    "UserContent holds literal text. Pass the text as an expression, for example {item.text}"
-)
+USER_LITERAL = "UserContent holds literal text. Pass the text as an expression, for example {item.text}"
 STORED_TEXT = (
     "Stored text `{field}` shows in full. Render it inside UserContent, or clamp it "
     "to 2 lines or fewer inside a control that opens the full text"
@@ -206,14 +231,19 @@ def literal_text(parts: list[object]) -> bool:
     return any(
         bool(HAS_LETTER_OR_DIGIT.search(part))
         if isinstance(part, str)
-        else isinstance(part, dict) and any(literal_text(b) for b in part.get("alt", []))
+        else isinstance(part, dict)
+        and any(literal_text(b) for b in part.get("alt", []))
         for part in parts
     )
 
 
 def stored_field(parts: list[object]) -> str:
     return next(
-        (str(part["field"]) for part in parts if isinstance(part, dict) and "field" in part),
+        (
+            str(part["field"])
+            for part in parts
+            if isinstance(part, dict) and "field" in part
+        ),
         "",
     )
 
@@ -237,8 +267,8 @@ def problems(block: Block, caps: Caps) -> str:
     found = over_caps(parts, caps)
     found += f". {FIX}" if found else ""
     field = stored_field(parts)
-    clamp = block["clamp"]
-    if field and not (clamp is not None and clamp <= 2 and block["tap"]):
+    clamp, tap = block["clamp"], block["tap"]
+    if field and not (clamp is not None and clamp <= 2 and tap):
         found += (" " if found else "") + STORED_TEXT.format(field=field)
     return found
 
@@ -265,17 +295,17 @@ def in_scope(name: str, caps: Caps) -> bool:
     )
 
 
-def base_sources(root: Path, point: str, names: list[str]) -> list[tuple[str, str, None]]:
+def base_sources(
+    root: Path, point: str, names: list[str]
+) -> list[tuple[str, str, None]]:
     """The text of each file at the base, from one git process."""
     wanted = [f"{point}:{name}\n" for name in names]
-    done = subprocess.run(
+    data = subprocess.check_output(
         ["git", "cat-file", "--batch"],
         cwd=root,
         input="".join(wanted).encode(),
-        capture_output=True,
-        check=True,
     )
-    out, data = [], done.stdout
+    out: list[tuple[str, str, None]] = []
     for name in names:
         end = data.index(b"\n")
         header = data[:end].split()
@@ -312,7 +342,9 @@ def wall_check(
         (
             name,
             (root / name).read_text(errors="replace"),
-            sorted({number for number, _ in added.get(name, [])} | set(joins.get(name, []))),
+            sorted(
+                {number for number, _ in added.get(name, [])} | set(joins.get(name, []))
+            ),
         )
         for name in names
         if (root / name).is_file() and (name in added or name in joins)
@@ -323,7 +355,12 @@ def wall_check(
     for result in read("js", request(files)):
         name = result["path"]
         if result["error"]:
-            found[name] = [("", f"{name}: the text cannot be read, {result['error']}. Fix the syntax of the file")]
+            found[name] = [
+                (
+                    "",
+                    f"{name}: the text cannot be read, {result['error']}. Fix the syntax of the file",
+                )
+            ]
         elif hits := judged(name, result["blocks"], caps):
             found[name] = hits
     if not found:
@@ -349,31 +386,56 @@ def listed_screens(root: Path, paths: list[str], caps: Caps) -> list[str]:
     if paths:
         return sorted(path for path in paths if in_scope(path, caps))
     listing = subprocess.check_output(
-        [*GIT_LISTING, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.tsx", "*.jsx"],
+        [
+            *GIT_LISTING,
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "*.tsx",
+            "*.jsx",
+        ],
         cwd=root,
         text=True,
     )
-    return sorted(name for name in set(filter(None, listing.split("\0"))) if in_scope(name, caps))
+    return sorted(
+        name for name in set(filter(None, listing.split("\0"))) if in_scope(name, caps)
+    )
 
 
 def walls_command(root: Path, paths: list[str], stdin: bool) -> int:
     """Print each text block over the caps; with stdin, judge one JSON string for each line."""
     caps = settings(root)
+    found: list[str] = []
     if stdin:
-        found = []
         for number, line in enumerate(sys.stdin, 1):
             if line.strip() and (over := over_caps([json.loads(line)], caps)):
                 found.append(f"line {number}: {over}. {FIX}")
     else:
-        names = [name for name in listed_screens(root, paths, caps) if (root / name).is_file()]
-        found = []
+        names = [
+            name
+            for name in listed_screens(root, paths, caps)
+            if (root / name).is_file()
+        ]
         if names:
-            files = [(name, (root / name).read_text(errors="replace"), None) for name in names]
+            files = [
+                (name, (root / name).read_text(errors="replace"), None)
+                for name in names
+            ]
             hits = {
                 result["path"]: judged(result["path"], result["blocks"], caps)
                 for result in read("js", request(files))
             }
-            skipped = generated_sources(root, sorted(name for name, items in hits.items() if items))
-            found = [line for name, items in hits.items() if name not in skipped for _, line in items]
+            skipped = generated_sources(
+                root, sorted(name for name, items in hits.items() if items)
+            )
+            found = [
+                line
+                for name, items in hits.items()
+                if name not in skipped
+                for _, line in items
+            ]
     print("\n".join(found))
     return int(bool(found))

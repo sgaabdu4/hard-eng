@@ -800,9 +800,7 @@ def text_walls_check(
         wall_check(root, added, removed, joins, point)
 
 
-def validate_suppressions(
-    root: Path, base: str | None, screens: bool = True
-) -> None:
+def validate_suppressions(root: Path, base: str | None, screens: bool = True) -> None:
     joins: dict[str, list[int]] = {}
     try:
         point, empty = diff_base(root, base or default_branch_point(root) or "HEAD")
