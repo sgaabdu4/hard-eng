@@ -166,9 +166,10 @@ def screen_stacks(root: Path, files: list[Path]) -> list[str]:
     for path in project_files(root, files):
         if label := SCREEN_SUFFIXES.get(path.suffix):
             found.add(label)
-        elif mark := SCREEN_MARKS.get(path.suffix):
-            if mark[0] in path.read_text(errors="replace"):
-                found.add(mark[1])
+        elif (mark := SCREEN_MARKS.get(path.suffix)) and mark[0] in path.read_text(
+            errors="replace"
+        ):
+            found.add(mark[1])
     return [stack for stack in SCREEN_STACKS if stack in found]
 
 
