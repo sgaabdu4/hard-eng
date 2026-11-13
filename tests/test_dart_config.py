@@ -874,5 +874,49 @@ def test_the_runner_passes_nested_package_patterns_to_the_dart_validation(
     )
     (tmp_path / "analysis_options.yaml").write_text(changes["analysis_options.yaml"])
     assert runner.prepare_command(group, gate, 5, [group, inner])
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        runner.prepare_command(group, gate, 5, [group])
+
+
+def test_a_parent_only_change_keeps_the_nested_package_exclusion(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gate_config import load_groups
+
+    with (tmp_path / ".git/config").open("a") as settings:
+        settings.write("[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n")
+    for path in (".", "packages/inner"):
+        (tmp_path / path / "lib").mkdir(parents=True, exist_ok=True)
+        (tmp_path / path / "lib/a.dart").write_text("void a() {}\n")
+        (tmp_path / path / "pubspec.yaml").write_text("name: fixture\n")
+    git(tmp_path, "add", ".")
+    config = installer.gate_config(tmp_path)
+    packages = config["packages"]
+    assert [package["path"] for package in packages] == [".", "packages/inner"]
+    for package in packages:
+        package["depends_on"] = []
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    children = nested_package_patterns(packages[0], packages)
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, packages[0], changes, children)
+    (tmp_path / "analysis_options.yaml").write_text(changes["analysis_options.yaml"])
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-qm", "baseline")
+    (tmp_path / "lib/a.dart").write_text("void a() {}\nvoid b() {}\n")
+    selected = load_groups(tmp_path, "HEAD", dependents=False)
+    assert [
+        group["path"]
+        for group in selected
+        if any(check["role"] == "types" for check in group["checks"])
+    ] == ["."]
+    prepared: list[list[str]] = []
+
+    def prepare(group: Group, gate: Gate, _timeout: float, *_rest: object) -> bool:
+        if gate.get("role") == "types" and group.get("language") == "dart":
+            prepared.append(runner.prepare_command(group, gate, 5, selected))
+        return False
+
+    monkeypatch.setattr(runner, "run_gate", prepare)
+    runner.run_gates(selected, 5, None)
+    assert prepared == [["dart", "analyze", "--fatal-infos", "."]]

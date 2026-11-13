@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
+CONFIGURED: list[Group] = []
 CHANGED_DART: dict[str, list[str]] = {}
 RECORDING = threading.Event()
 TEST_REPORTS = {"python-tests", "lcov-tests", "dart-tests", "xcode-tests"}
@@ -194,7 +195,7 @@ def prepare_command(
         language = group.get("language")
         from dart_boundaries import nested_package_patterns
 
-        children = nested_package_patterns(group, groups or [])
+        children = nested_package_patterns(group, CONFIGURED or groups or [])
         validate_typing(directory, language, group.get("sources", []), children)
         if language == "python":
             from project_setup import python_interpreter
@@ -658,6 +659,7 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
     output_lock = threading.Lock()
     FAILED_GATES.clear()
     config = parse_config((ROOT / "hard-eng.gates.json").read_text())
+    CONFIGURED[:] = config["packages"]
     return run_checks(
         [(group, gate) for group in groups for gate in group["checks"]],
         lambda group, gate: run_gate(
