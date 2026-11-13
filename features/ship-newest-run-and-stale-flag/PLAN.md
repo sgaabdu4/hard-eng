@@ -23,7 +23,7 @@ Authority: Autonomous. The maintainer reported both faults; the coordinator set 
 ## Acceptance + steps
 
 - [x] The bypass allows a check whose older run was cancelled or failed and whose newer run passed → `tests/test_review_bypass.py::test_the_bypass_judges_each_check_by_its_newest_run` rows `older-cancelled-newer-passed` and `older-failed-newer-passed`.
-- [x] The bypass refuses a newest run that failed, was cancelled, is not completed or has no valid id, the newest failed run of two same-named checks in different workflows, a status context that is not SUCCESS, and an incomplete context list → the same test, the other rows.
+- [x] The bypass refuses a newest run that failed, was cancelled, is not completed or has no valid id, the newest failed run of two same-named checks in different workflows, a status context that is not SUCCESS, and an incomplete context list → `tests/test_review_bypass.py::test_the_bypass_judges_each_check_by_its_newest_run` (the other rows).
 - [x] A stale "cannot rebase" report on a current branch with no merge commit says to close and open the pull request → `tests/test_ship_commits.py::test_a_stale_cannot_rebase_report_says_to_close_and_open_the_pull_request`.
 - [x] A branch that is behind, has a merge commit, has an unreadable or incomplete comparison keeps the present step → `tests/test_ship_commits.py::test_a_cannot_rebase_report_keeps_the_rebase_step_unless_the_branch_is_current`.
 - [x] The repository setting message makes no comparison call, and a pull request that GitHub can rebase makes no new call → `tests/test_ship_commits.py::test_the_setting_message_and_a_rebaseable_pr_add_no_comparison_call`.
