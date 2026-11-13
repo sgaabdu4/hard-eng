@@ -1,13 +1,13 @@
 """The assertion count judges the whole branch when a later push range shows a net loss."""
 
-import json
 import subprocess
 from pathlib import Path
 
 import pytest
 from comments import validate_suppressions
-from conftest import SOURCE, commit, git, init
+from conftest import commit, git, init
 from shipping import ShippingPolicy
+from test_comments import pre_push_repo
 
 OFF = "A change must not switch a check off"
 KEPT = "def test_kept():\n    assert a() == 1\n    assert b() == 2\n"
@@ -63,9 +63,7 @@ def test_assertions_moved_between_test_files_across_two_pushes_pass(
     validate_suppressions(root, pushed)
 
 
-def test_a_net_loss_from_the_branch_point_still_fails_a_later_push(
-    tmp_path: Path,
-) -> None:
+def refused_later_push(tmp_path: Path) -> tuple[Path, str]:
     root = branch_root(tmp_path, {"tests/test_a.py": KEPT})
     (root / "NOTES.md").write_text("notes\n")
     pushed = commit(root, "an unrelated first push")
@@ -73,48 +71,25 @@ def test_a_net_loss_from_the_branch_point_still_fails_a_later_push(
     commit(root, "drop an assertion")
     with pytest.raises(ValueError, match=OFF) as error:
         validate_suppressions(root, pushed)
-    message = str(error.value)
+    return root, str(error.value)
+
+
+def test_a_net_loss_from_the_branch_point_still_fails_a_later_push(
+    tmp_path: Path,
+) -> None:
+    _, message = refused_later_push(tmp_path)
     assert "tests lose 1 assertion lines net (1 removed, 0 added)" in message
 
 
 def test_the_loss_message_names_the_range_it_judged(tmp_path: Path) -> None:
-    root = branch_root(tmp_path, {"tests/test_a.py": KEPT})
-    (root / "NOTES.md").write_text("notes\n")
-    pushed = commit(root, "an unrelated first push")
-    (root / "tests/test_a.py").write_text(KEPT.replace("    assert b() == 2\n", ""))
-    commit(root, "drop an assertion")
-    with pytest.raises(ValueError, match=OFF) as error:
-        validate_suppressions(root, pushed)
-    assert f"since {git(root, 'rev-parse', 'main')[:12]}" in str(error.value)
+    root, message = refused_later_push(tmp_path)
+    assert f"since {git(root, 'rev-parse', 'main')[:12]}" in message
 
 
 def test_pre_push_accepts_a_test_the_branch_added_then_deleted(
     tmp_path: Path, completed_plan: str, shipping_policy: ShippingPolicy
 ) -> None:
-    root, bare = tmp_path / "repo", tmp_path / "origin.git"
-    init(root)
-    git(tmp_path, "init", "--bare", "-q", str(bare))
-    git(root, "branch", "-M", "main")
-    (root / ".hooks").mkdir()
-    for source in (SOURCE / ".hooks").glob("*.py"):
-        (root / ".hooks" / source.name).write_bytes(source.read_bytes())
-    for name in ("PRODUCT.md", "DESIGN.md"):
-        (root / name).write_text((SOURCE / name).read_text())
-    check = {"name": "noop", "command": ["python3", "-c", "pass"]}
-    gates: dict[str, object] = {
-        "packages": [],
-        "shipping": shipping_policy,
-        "shared": [check],
-    }
-    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
-    commit(root, "baseline")
-    git(root, "remote", "add", "origin", str(bare))
-    git(root, "push", "-q", "origin", "main")
-    hook = root / ".git/hooks/pre-push"
-    hook.write_text(
-        '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py" pre-push\n'
-    )
-    hook.chmod(0o755)
+    root = pre_push_repo(tmp_path, shipping_policy)
     git(root, "switch", "-qc", "feature")
     (root / "PLAN.md").write_text(completed_plan)
     (root / "tests").mkdir()
