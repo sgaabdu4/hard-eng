@@ -190,9 +190,14 @@ def prompt_for(root: Path, point: str, revision: str) -> str:
     prompt = PROMPT.format(point=point, revision=revision)
     reviews = earlier_reviews(root, revision)
     declined = declined_findings(root, point, revision)
-    last = reviews[0][0] if reviews else point
+    last = point
     if reviews or declined:
         block, kept, decided = history_block(reviews, declined)
+        whole = not reviews or (
+            kept >= 1 and len(reviews[0][2].encode()) <= REVIEW_BYTES
+        )
+        if reviews and whole:
+            last = reviews[0][0]
         nonce = os.urandom(8).hex()
         fence = f"FENCE {nonce}"
         prompt += HISTORY.format(
@@ -205,14 +210,16 @@ def prompt_for(root: Path, point: str, revision: str) -> str:
         )
     else:
         kept = decided = 0
+        whole = True
     print(
         f"Earlier reviews passed: {kept}; plan decisions passed: {decided}; "
         f"focus starts at {last[:12]}"
     )
-    if kept < len(reviews) or decided < len(declined):
+    if kept < len(reviews) or decided < len(declined) or not whole:
+        newest = "" if whole else "; the newest review was cut, so the focus is the whole change"
         print(
             f"Cut for size: {len(reviews) - kept} older reviews, "
-            f"{len(declined) - decided} older decisions"
+            f"{len(declined) - decided} older decisions{newest}"
         )
     return prompt
 
