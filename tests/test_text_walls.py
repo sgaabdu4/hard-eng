@@ -2,6 +2,7 @@
 
 import io
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -339,3 +340,21 @@ def test_other_screen_stacks_print_a_gap_line(
         assert gap_issue.generic_problem(f"No text wall check for {stack}") is None
     assert text_walls.walls_command(root, [], False) == 0
     assert capsys.readouterr().out.splitlines()[: len(stacks)] == gaps
+
+
+def test_no_starter_screen_holds_a_text_wall(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-NO-TEXT-WALLS: each TSX or JSX starter screen that Hard Eng ships passes its own rule."""
+    root = tmp_path / "repo"
+    init(root)
+    for starter in ("nextjs", "opennext", "vite"):
+        shutil.copytree(
+            SOURCE / ".agents/starters" / starter,
+            root / starter,
+            ignore=shutil.ignore_patterns("node_modules"),
+        )
+    screens = text_walls.listed_screens(root, [], text_walls.settings(root))
+    assert len(screens) >= 5
+    assert text_walls.walls_command(root, [], False) == 0
+    assert capsys.readouterr().out.strip() == ""
