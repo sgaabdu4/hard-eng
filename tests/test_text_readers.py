@@ -11,7 +11,7 @@ import pytest
 import text_readers
 import text_walls
 from comments import validate_suppressions
-from conftest import SOURCE, change, commit, configure, gate
+from conftest import SOURCE, change, configure, flutter_project, gate
 
 SCREEN = (
     "export const A = () => (\n"
@@ -86,27 +86,6 @@ def started_after(root: Path) -> str:
         [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
     )
     return done.stdout.strip()
-
-
-def flutter_project(tmp_path: Path, before: str, after: str, flutter: bool) -> Path:
-    root = change(tmp_path, "lib/screen.dart", before, before)
-    (root / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "packages": [{"name": "app", "path": ".", "language": "dart"}],
-                "shared": [],
-            }
-        )
-    )
-    sdk = (
-        "dependencies:\n  flutter:\n    sdk: flutter\n"
-        if flutter
-        else "environment:\n  sdk: ^3.11.0\n"
-    )
-    (root / "pubspec.yaml").write_text(f"name: app\n{sdk}")
-    commit(root, "project files")
-    (root / "lib/screen.dart").write_text(after)
-    return root
 
 
 @pytest.mark.parametrize(
