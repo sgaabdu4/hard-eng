@@ -30,14 +30,14 @@ def test_the_reader_returns_the_blocks_of_each_file_and_a_finding_for_a_broken_o
     None
 ):
     """HE-NO-TEXT-WALLS: one request holds every file; a touched-line list narrows the blocks of one file."""
-    request = text_walls.request(
+    query = text_walls.reader_query(
         [
             ("a.tsx", SCREEN, None),
             ("b.tsx", SCREEN, [7]),
             ("c.tsx", "const a = <p>oops</div>;", None),
         ]
     )
-    first, second, third = text_readers.read("js", request)
+    first, second, third = text_readers.read("js", query)
     assert [(b["kind"], b["name"], b["line"]) for b in first["blocks"]] == [
         ("jsx", "p", 4),
         ("prop", "title", 7),
@@ -185,11 +185,11 @@ FLUTTER_SCREEN = (
 
 def test_the_dart_reader_is_built_once_and_a_run_starts_no_dart_process() -> None:
     """HE-NO-TEXT-WALLS: the Dart reader is compiled into the cache once; a run starts only the compiled reader."""
-    request = text_walls.request(
+    query = text_walls.reader_query(
         [("lib/a.dart", FLUTTER_SCREEN, None), ("lib/b.dart", "void main( {", None)],
         "dart",
     )
-    first, broken = text_readers.read("dart", request)
+    first, broken = text_readers.read("dart", query)
     assert [(b["kind"], b["name"], b["line"]) for b in first["blocks"]] == [
         ("jsx", "Text.rich", 2),
         ("jsx", "Text", 6),
@@ -201,7 +201,7 @@ def test_the_dart_reader_is_built_once_and_a_run_starts_no_dart_process() -> Non
     STARTED.clear()
     RECORDING.append(True)
     try:
-        text_readers.read("dart", request)
+        text_readers.read("dart", query)
     finally:
         RECORDING.clear()
     assert STARTED == ["reader.exe"]
@@ -239,11 +239,11 @@ def test_a_half_deleted_reader_folder_is_built_again(
 
 def test_a_reader_with_its_parser_package_deleted_runs_again() -> None:
     """HE-NO-TEXT-WALLS: after the parser package is deleted from the cached folder, the next run installs it again."""
-    request = text_walls.request([("a.tsx", SCREEN, None)])
-    text_readers.read("js", request)
+    query = text_walls.reader_query([("a.tsx", SCREEN, None)])
+    text_readers.read("js", query)
     folder = next((text_readers.tool_folder() / "text-readers").glob("js-*"))
     shutil.rmtree(folder / "node_modules/oxc-parser")
-    assert text_readers.read("js", request)[0]["blocks"]
+    assert text_readers.read("js", query)[0]["blocks"]
 
 
 @pytest.mark.parametrize(("prefix", "label"), [("js", "TSX and JSX"), ("dart", "Dart")])

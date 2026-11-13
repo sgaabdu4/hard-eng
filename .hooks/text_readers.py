@@ -133,13 +133,13 @@ def reader_folder(
 
 
 def run_reader(
-    command: list[str], folder: Path, request: dict[str, object], kind: str
+    command: list[str], folder: Path, query: dict[str, object], kind: str
 ) -> list[FileBlocks]:
     try:
         done = subprocess.run(
             command,
             cwd=folder,
-            input=json.dumps(request),
+            input=json.dumps(query),
             capture_output=True,
             text=True,
             timeout=LIMIT,
@@ -155,8 +155,8 @@ def run_reader(
     return files
 
 
-def read(kind: str, request: dict[str, object]) -> list[FileBlocks]:
-    """One reader process reads every file of the request."""
+def read(kind: str, query: dict[str, object]) -> list[FileBlocks]:
+    """One reader process reads every file of the query."""
     if kind == "dart":
         folder = reader_folder(
             "dart",
@@ -168,7 +168,7 @@ def read(kind: str, request: dict[str, object]) -> list[FileBlocks]:
             ],
             compile_dart,
         )
-        return run_reader([str(folder / "reader.exe")], folder, request, "Dart")
+        return run_reader([str(folder / "reader.exe")], folder, query, "Dart")
     if kind != "js":
         raise ValueError(READ_FAILED.format(kind=kind, error="no such reader"))
     if shutil.which("bun") is None:
@@ -182,6 +182,4 @@ def read(kind: str, request: dict[str, object]) -> list[FileBlocks]:
         ],
         install_js,
     )
-    return run_reader(
-        ["bun", str(folder / "reader.mjs")], folder, request, "TSX and JSX"
-    )
+    return run_reader(["bun", str(folder / "reader.mjs")], folder, query, "TSX and JSX")
