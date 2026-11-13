@@ -111,31 +111,6 @@ class _PullRequest:
     rebaseable: bool | None = field(compare=False)
 
 
-def rebase_step(base: str) -> str:
-    return (
-        f"GitHub cannot rebase this PR onto {base}, so nothing was merged. "
-        f"Rebase the branch on origin/{base} and push it with --force-with-lease. "
-        "If GitHub still cannot rebase it, cut its commits (HE-PR-COMMITS). "
-        "Then wait for the checks and run ship again."
-    )
-
-
-def rebase_problem(root: Path, repository: str, base: str) -> str:
-    try:
-        allowed = merge_settings(root, repository, ("rebaseMergeAllowed",)).get(
-            "rebaseMergeAllowed"
-        )
-    except ShippingError:
-        return rebase_step(base)
-    if allowed is not False:
-        return rebase_step(base)
-    return (
-        "This repository does not allow rebase merges, and Hard Eng merges by "
-        "rebase only, so nothing was merged. Allow rebase merges in the "
-        "repository settings, then run ship again."
-    )
-
-
 def _run(
     root: Path,
     executable: str,
@@ -839,12 +814,17 @@ def _graphql_pull(
     return data, _object(repository.get("pullRequest"), "review PR")
 
 
+def _compare(
+    root: Path, owner: str, name: str, base: str, head: str, query: str = ""
+) -> dict[str, JsonValue]:
+    endpoint = f"repos/{owner}/{name}/compare/{base}...{head}{query}"
+    return _object(_json(gh(root, "api", endpoint), "base comparison"), "base")
+
+
 def _current_with_base(
     root: Path, identity: tuple[str, str, int], base: str, head: str
 ) -> None:
-    owner, name, _ = identity
-    endpoint = f"repos/{owner}/{name}/compare/{base}...{head}"
-    comparison = _object(_json(gh(root, "api", endpoint), "base comparison"), "base")
+    comparison = _compare(root, identity[0], identity[1], base, head)
     behind = comparison.get("behind_by")
     if type(behind) is not int:
         raise ShippingError("PR comparison with its base is invalid")
@@ -876,12 +856,13 @@ def _ready_state(
         raise ShippingError("a review conversation is unresolved or uncounted")
     from change_size import commits_problem
     from pr_text import body_problem
+    from ship_actions import rebase_problem
 
     if problem := (
         body_problem(pull.body)
         or commits_problem(pull.commits)
         or (
-            rebase_problem(root, "/".join(identity[:2]), pull.base_ref)
+            rebase_problem(root, "/".join(identity[:2]), pull.base_ref, pull.head_sha)
             if pull.rebaseable is False
             else None
         )
