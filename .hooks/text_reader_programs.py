@@ -247,8 +247,7 @@ function visitAttributes(node, stack) {
     const key = attrName(attr);
     const container = attr.value && attr.value.type === "JSXExpressionContainer" ? attr.value.expression : attr.value;
     if (TEXT_PROPS.has(key)) {
-      let parts = stringOf(container);
-      if (!parts && container && storedField(container)) parts = [{ x: 1, field: storedField(container) }];
+      const parts = stringOf(container);
       if (parts) emit("prop", key, parts, span(attr.start, attr.end), stack);
     }
     if (key === "dangerouslySetInnerHTML" && container) {
@@ -639,8 +638,7 @@ class Reader extends RecursiveAstVisitor<void> {
     for (final argument in args.arguments.whereType<NamedArgument>()) {
       final key = argument.name.lexeme;
       if (!textProps.contains(key) || consumed.contains(argument)) continue;
-      final field = storedField(argument.argumentExpression);
-      final found = field.isNotEmpty ? [{'x': 1, 'field': field}] : parts(argument.argumentExpression);
+      final found = parts(argument.argumentExpression);
       if (found != null) emit('prop', key, found, span(argument), node);
     }
   }
