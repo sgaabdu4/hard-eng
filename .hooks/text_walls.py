@@ -529,14 +529,19 @@ def listed_walls(root: Path, paths: list[str], caps: Caps) -> list[str]:
     if not names:
         return []
     files = [(name, (root / name).read_text(errors="replace"), None) for name in names]
+    results = read_all(files)
     hits = {
         result["path"]: judged(result["path"], result["blocks"], caps)
-        for result in read_all(files)
+        for result in results
     }
     skipped = generated_sources(
         root, sorted(name for name, items in hits.items() if items)
     )
     return [
+        unreadable(result["path"], result["error"])
+        for result in results
+        if result["error"]
+    ] + [
         item.describe()
         for name, items in hits.items()
         if name not in skipped
