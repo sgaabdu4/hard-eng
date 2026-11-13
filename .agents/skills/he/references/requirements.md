@@ -52,6 +52,12 @@ A change fails when its added lines in UI source hold a transition on every prop
 
 Proof: check
 
+## HE-NO-TEXT-WALLS
+
+On-screen text comes in short blocks: at most 25 words and 3 sentences in a block, and at most 20 words in a sentence. A project may change these three numbers in the `text_walls` setting of `hard-eng.gates.json`, never for one file. Dates, times, names, amounts and counts stand on their own labelled lines, not inside a sentence; review judges this sentence. A stored free-text field, such as a body or a description, renders only inside the `UserContent` component, or in an element clamped to 2 lines or fewer inside a control that opens the full text. `UserContent` takes expressions only, never literal text. The check reads TSX and JSX files and the Dart files of Flutter packages, and judges only the blocks whose text a change adds or edits; older blocks stay until touched. Script, style, code and pre elements and structured data (`@context` or `@type`) are not judged; tests, stories, generated files and paths under `.hooks/`, `.agents/` and `.claude/` are exempt. `python3 .hooks/hard-eng.py text-walls` lists every current hit, and `text-walls --stdin` judges strings that a server builds.
+
+Proof: check
+
 ## HE-UNTRUSTED-JSON
 
 In JavaScript and TypeScript, parsed JSON has the type `unknown` until code validates it. TypeScript configurations must load the Hard Eng declarations that set this type.
