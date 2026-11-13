@@ -3,12 +3,14 @@
 import json
 import re
 import subprocess
+import sys
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 from comments import is_test_path
 from gate_config import generated_sources
+from project_files import GIT_LISTING
 from text_readers import Block, read
 
 SLOT = ""
@@ -216,10 +218,7 @@ def stored_field(parts: list[object]) -> str:
     )
 
 
-def problems(block: Block, caps: Caps) -> str:
-    parts = block["parts"]
-    if block["user"]:
-        return USER_LITERAL if literal_text(parts) else ""
+def over_caps(parts: list[object], caps: Caps) -> str:
     words, sentences, longest = measure(parts)
     over = []
     if words > caps.words:
@@ -228,7 +227,15 @@ def problems(block: Block, caps: Caps) -> str:
         over.append(f"{sentences} sentences, at most {caps.sentences}")
     if longest > caps.sentence_words:
         over.append(f"a sentence of {longest} words, at most {caps.sentence_words}")
-    found = "; ".join(over) + f". {FIX}" if over else ""
+    return "; ".join(over)
+
+
+def problems(block: Block, caps: Caps) -> str:
+    parts = block["parts"]
+    if block["user"]:
+        return USER_LITERAL if literal_text(parts) else ""
+    found = over_caps(parts, caps)
+    found += f". {FIX}" if found else ""
     field = stored_field(parts)
     clamp = block["clamp"]
     if field and not (clamp is not None and clamp <= 2 and block["tap"]):
@@ -336,3 +343,37 @@ def wall_check(
             f"words and {caps.sentences} sentences, and a sentence of at most "
             f"{caps.sentence_words} words. " + "; ".join(lines)
         )
+
+
+def listed_screens(root: Path, paths: list[str], caps: Caps) -> list[str]:
+    if paths:
+        return sorted(path for path in paths if in_scope(path, caps))
+    listing = subprocess.check_output(
+        [*GIT_LISTING, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.tsx", "*.jsx"],
+        cwd=root,
+        text=True,
+    )
+    return sorted(name for name in set(filter(None, listing.split("\0"))) if in_scope(name, caps))
+
+
+def walls_command(root: Path, paths: list[str], stdin: bool) -> int:
+    """Print each text block over the caps; with stdin, judge one JSON string for each line."""
+    caps = settings(root)
+    if stdin:
+        found = []
+        for number, line in enumerate(sys.stdin, 1):
+            if line.strip() and (over := over_caps([json.loads(line)], caps)):
+                found.append(f"line {number}: {over}. {FIX}")
+    else:
+        names = [name for name in listed_screens(root, paths, caps) if (root / name).is_file()]
+        found = []
+        if names:
+            files = [(name, (root / name).read_text(errors="replace"), None) for name in names]
+            hits = {
+                result["path"]: judged(result["path"], result["blocks"], caps)
+                for result in read("js", request(files))
+            }
+            skipped = generated_sources(root, sorted(name for name, items in hits.items() if items))
+            found = [line for name, items in hits.items() if name not in skipped for _, line in items]
+    print("\n".join(found))
+    return int(bool(found))
