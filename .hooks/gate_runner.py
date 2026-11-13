@@ -783,6 +783,10 @@ def deliver(args: "Namespace") -> int:
         from hot_paths import scan_all
 
         return scan_all(ROOT, paths=args.paths)
+    if args.command == "text-walls":
+        from text_walls import walls_command
+
+        return walls_command(ROOT, args.paths, args.stdin)
     if args.command == "gap-issue":
         from gap_issue import file_gap
 
@@ -888,6 +892,12 @@ def main() -> int:
         "hot-paths",
         help="List known slow patterns in the named files, else the whole repository",
     ).add_argument("paths", nargs="*")
+    walls = commands.add_parser(
+        "text-walls",
+        help="List screen text blocks over the caps, or judge server strings with --stdin",
+    )
+    walls.add_argument("paths", nargs="*")
+    walls.add_argument("--stdin", action="store_true")
     mutating = commands.add_parser(
         "mutation",
         help="Report changed lines whose tests miss small deliberate bugs",
@@ -960,6 +970,7 @@ def main() -> int:
         "gap-issue",
         "ci-usage",
         "hot-paths",
+        "text-walls",
     }:
         return deliver(args)
     from agent_hooks import handle_event

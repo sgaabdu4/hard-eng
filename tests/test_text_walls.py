@@ -1,12 +1,15 @@
 """HE-NO-TEXT-WALLS: screen text comes in short blocks of at most 25 words and 3 sentences."""
 
+import io
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import text_walls
 from comments import validate_suppressions
-from conftest import change, commit, init
+from conftest import SOURCE, change, commit, init
 
 RULE = "HE-NO-TEXT-WALLS"
 BASE = "export const A = () => <main />;\n"
@@ -249,3 +252,43 @@ def test_structural_skips_are_not_judged(tmp_path: Path) -> None:
     message = refused(root)
     flagged = [number for number in range(1, 11) if f"src/Card.tsx:{number}:" in message]
     assert flagged == [9]
+
+
+def test_the_list_command_and_the_stdin_judge_share_the_caps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-NO-TEXT-WALLS: the list command and the --stdin judge read the caps of the project and the same count."""
+    root = tmp_path / "repo"
+    init(root)
+    gates(root, {"words_per_block": 30, "words_per_sentence": 30})
+    (root / "src").mkdir()
+    (root / "src/Card.tsx").write_text(
+        screen(f"<p>{sentence(28)}</p>", f"<p>{sentence(40)}</p>")
+    )
+    (root / "src/Card.test.tsx").write_text(screen(f"<p>{sentence(40)}</p>"))
+    commit(root, "baseline")
+    assert text_walls.walls_command(root, [], False) == 1
+    listed = capsys.readouterr().out
+    assert "src/Card.tsx:4: 40 words, at most 30" in listed
+    assert "src/Card.tsx:3:" not in listed
+    assert "Card.test" not in listed
+    assert text_walls.walls_command(root, ["src/Card.tsx"], False) == 1
+    capsys.readouterr()
+    strings = [sentence(28), sentence(40), "Short.\nSecond line."]
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO("".join(json.dumps(text) + "\n" for text in strings))
+    )
+    assert text_walls.walls_command(root, [], True) == 1
+    judged = capsys.readouterr().out
+    assert "line 2: 40 words, at most 30" in judged
+    assert "line 1:" not in judged
+    assert "line 3:" not in judged
+    done = subprocess.run(
+        [sys.executable, str(SOURCE / ".hooks/hard-eng.py"), "text-walls", "--stdin"],
+        input=json.dumps(sentence(26)) + "\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 1
+    assert "line 1: 26 words, at most 25" in done.stdout
