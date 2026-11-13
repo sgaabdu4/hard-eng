@@ -12,7 +12,7 @@ import gap_issue
 import pytest
 import text_walls
 from comments import validate_suppressions
-from conftest import SOURCE, change, commit, flutter_project, init
+from conftest import SOURCE, change, commit, flutter_project, git, init
 
 RULE = "HE-NO-TEXT-WALLS"
 BASE = "export const A = () => <main />;\n"
@@ -178,6 +178,35 @@ def test_only_touched_text_is_judged(tmp_path: Path) -> None:
         tmp_path / "d", "src/Card.tsx", halves, halves.replace("    <br />\n", "")
     )
     assert "26 words" in refused(joined)
+    clamped = '<button><p className="line-clamp-2">{n.body}</p></button>'
+    plain = "<div><p>{n.body}</p></div>"
+    wall_row = "<p>" + sentence(30) + "</p>"
+    for number, (before, after) in enumerate(
+        [
+            ([clamped], ["<button><p>{n.body}</p></button>"]),
+            ([clamped], [plain]),
+            (
+                ["<UserContent>{n.body}</UserContent>"],
+                ["<UserContent>{n.body}</UserContent>", "<p>{n.description}</p>"],
+            ),
+            ([wall_row], [wall_row, wall_row]),
+        ]
+    ):
+        edited = change(
+            tmp_path / f"e{number}", "src/Card.tsx", screen(*before), screen(*after)
+        )
+        assert "src/Card.tsx" in refused(edited), number
+    old_stored = screen(plain)
+    reindented = change(
+        tmp_path / "f",
+        "src/Card.tsx",
+        old_stored,
+        "".join(f"  {line}\n" for line in old_stored.splitlines()),
+    )
+    validate_suppressions(reindented, "HEAD")
+    elsewhere = change(tmp_path / "g", "src/Card.tsx", wall, screen())
+    (elsewhere / "src/Other.tsx").write_text(wall)
+    validate_suppressions(elsewhere, "HEAD")
 
 
 def test_exempt_files_and_paths_are_not_judged(tmp_path: Path) -> None:
@@ -482,3 +511,20 @@ def test_a_guard_or_map_on_a_stored_field_reads_the_elements_inside(
         if f"src/Card.tsx:{number}:" in message
     ]
     assert flagged == expected
+
+
+def test_an_edited_old_flutter_block_is_judged_again(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: a Flutter block whose clamp is removed is refused, and a re-indented old stored block passes."""
+    clamped = "InkWell(onTap: open, child: Text(n.body, maxLines: 2)),"
+    plain = "InkWell(onTap: open, child: Text(n.body)),"
+
+    def screen_of(*rows: str, indent: str = "  ") -> str:
+        body = "".join(f"{indent}{row}\n" for row in rows)
+        return f"Widget a() => Column(children: [\n{body}]);\n"
+
+    edited = flutter_project(tmp_path / "a", screen_of(clamped), screen_of(plain), True)
+    assert "lib/screen.dart:2:" in refused(edited)
+    moved = flutter_project(
+        tmp_path / "b", screen_of(plain), screen_of(plain, indent="    "), True
+    )
+    validate_suppressions(moved, "HEAD")
