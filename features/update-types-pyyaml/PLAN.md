@@ -41,6 +41,7 @@ N/A — dependency only; no visible UI.
 
 Result: Passed
 Evidence: on this branch the command of the `freshness` gate reported no outdated direct dependency (exit 0), and the command of the `types` gate reported 0 diagnostics (exit 0). The lock file changed for this one package only.
+Review: the independent review at 55a38a70 found nothing.
 E2E: N/A — no user journey changes.
 Retro: (1) The push refused the change without a plan, because a change of `pyproject.toml` always needs one → None — the refusal named the step, and this plan is reused for each new release of the package. (2) An upstream release failed the gate on the base branch → None — outside cause; the gate worked as designed.
 Delivery target: Merge
