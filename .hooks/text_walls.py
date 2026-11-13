@@ -12,7 +12,8 @@ from typing import NamedTuple
 from comments import is_test_path
 from gate_config import generated_sources
 from project_files import GIT_LISTING
-from text_readers import Block, read
+from flutter_screens import screen_files
+from text_readers import Block, FileBlocks, read
 
 SLOT = ""
 WORD = re.compile(r"\S+")
@@ -216,6 +217,9 @@ STORED_TEXT = (
     "Stored text `{field}` shows in full. Render it inside UserContent, or clamp it "
     "to 2 lines or fewer inside a control that opens the full text"
 )
+IMPORT_LINE = re.compile(r"\s*(?:import|export|part)\b")
+DART_MARKS = ('"', "'", "Text", "TextSpan", "maxLines", "UserContent")
+ARB_KEY = re.compile(r'\s*"((?:[^"\\]|\\.)*)"\s*:')
 FIX = "Split it into blocks of one idea each, with dates, names and amounts on their own labelled lines"
 
 
@@ -289,9 +293,9 @@ def judged(name: str, blocks: list[Block], caps: Caps) -> list[tuple[str, str]]:
     return out
 
 
-def in_scope(name: str, caps: Caps) -> bool:
+def in_scope(name: str, caps: Caps, flutter: set[str]) -> bool:
     return (
-        name.endswith(SCREEN_SUFFIXES)
+        (name.endswith(SCREEN_SUFFIXES) or name in flutter)
         and not name.startswith(UNOWNED_FOLDERS)
         and ".stories." not in name
         and not is_test_path(PurePosixPath(name))
@@ -322,15 +326,45 @@ def base_sources(
     return out
 
 
+def read_all(
+    files: list[tuple[str, str, Sequence[int] | None]],
+) -> list[FileBlocks]:
+    """Each file goes to the reader of its language; a message catalog is read here."""
+    kinds = {"js": [], "dart": [], "arb": []}
+    for item in files:
+        kinds[
+            "arb"
+            if item[0].endswith(".arb")
+            else "dart"
+            if item[0].endswith(".dart")
+            else "js"
+        ].append(item)
+    results = [arb_blocks(*item) for item in kinds["arb"]]
+    for kind in ("js", "dart"):
+        if kinds[kind]:
+            results += read(kind, request(kinds[kind], kind))
+    return results
+
+
 def unchanged_texts(root: Path, point: str, names: list[str]) -> set[str]:
     files = base_sources(root, point, names)
-    if not files:
-        return set()
     return {
         " ".join(flatten(block["parts"]).split())
-        for result in read("js", request(files))
+        for result in read_all(files)
         for block in result["blocks"]
     }
+
+
+def text_lines(
+    added: dict[str, list[tuple[int, str]]],
+    removed: dict[str, list[tuple[int, str]]],
+    name: str,
+) -> bool:
+    """Whether a changed Dart line can hold screen text: a quote or a text widget, outside an import line."""
+    return any(
+        not IMPORT_LINE.match(text) and any(mark in text for mark in DART_MARKS)
+        for _, text in (*added.get(name, []), *removed.get(name, []))
+    )
 
 
 def wall_check(
@@ -341,7 +375,9 @@ def wall_check(
     point: str,
 ) -> None:
     caps = settings(root)
-    names = sorted(name for name in {*added, *removed, *joins} if in_scope(name, caps))
+    changed = [*added, *removed, *joins]
+    flutter = set(screen_files(root, changed))
+    names = sorted(name for name in set(changed) if in_scope(name, caps, flutter))
     files = [
         (
             name,
@@ -351,12 +387,14 @@ def wall_check(
             ),
         )
         for name in names
-        if (root / name).is_file() and (name in added or name in joins)
+        if (root / name).is_file()
+        and (name in added or name in joins)
+        and (not name.endswith(".dart") or text_lines(added, removed, name))
     ]
     if not files:
         return
     found: dict[str, list[tuple[str, str]]] = {}
-    for result in read("js", request(files)):
+    for result in read_all(files):
         name = result["path"]
         if result["error"]:
             found[name] = [
@@ -388,7 +426,8 @@ def wall_check(
 
 def listed_screens(root: Path, paths: list[str], caps: Caps) -> list[str]:
     if paths:
-        return sorted(path for path in paths if in_scope(path, caps))
+        flutter = set(screen_files(root, paths))
+        return sorted(path for path in paths if in_scope(path, caps, flutter))
     listing = subprocess.check_output(
         [
             *GIT_LISTING,
@@ -400,13 +439,15 @@ def listed_screens(root: Path, paths: list[str], caps: Caps) -> list[str]:
             "--",
             "*.tsx",
             "*.jsx",
+            "*.dart",
+            "*.arb",
         ],
         cwd=root,
         text=True,
     )
-    return sorted(
-        name for name in set(filter(None, listing.split("\0"))) if in_scope(name, caps)
-    )
+    listed = set(filter(None, listing.split("\0")))
+    flutter = set(screen_files(root, sorted(listed)))
+    return sorted(name for name in listed if in_scope(name, caps, flutter))
 
 
 def stdin_walls(caps: Caps) -> list[str]:
@@ -426,7 +467,7 @@ def listed_walls(root: Path, paths: list[str], caps: Caps) -> list[str]:
     files = [(name, (root / name).read_text(errors="replace"), None) for name in names]
     hits = {
         result["path"]: judged(result["path"], result["blocks"], caps)
-        for result in read("js", request(files))
+        for result in read_all(files)
     }
     skipped = generated_sources(
         root, sorted(name for name, items in hits.items() if items)
@@ -448,3 +489,54 @@ def walls_command(root: Path, paths: list[str], stdin: bool) -> int:
     found = stdin_walls(caps) if stdin else listed_walls(root, paths, caps)
     print("\n".join(found))
     return int(bool(found))
+
+
+def icu_parts(message: str) -> list[object]:
+    """A message with each placeholder group `{...}` as one slot."""
+    parts: list[object] = []
+    depth, start = 0, 0
+    for index, char in enumerate(message):
+        if char == "{":
+            if depth == 0:
+                parts.append(message[start:index])
+            depth += 1
+        elif char == "}" and depth:
+            depth -= 1
+            if depth == 0:
+                parts.append({"x": 1})
+                start = index + 1
+    parts.append(message[start:])
+    return parts
+
+
+def arb_blocks(name: str, text: str, touched: Sequence[int] | None) -> FileBlocks:
+    """One block for each message of a template ARB file; keys that start with @ are skipped."""
+    try:
+        data = json.loads(text)
+    except ValueError as error:
+        line = getattr(error, "lineno", 1)
+        return {"path": name, "error": f"line {line}: {error}", "blocks": []}
+    lines = {}
+    for number, row in enumerate(text.splitlines(), 1):
+        if key := ARB_KEY.match(row):
+            lines.setdefault(key[1], number)
+    blocks: list[Block] = []
+    for key, value in data.items() if isinstance(data, dict) else []:
+        line = lines.get(key, 1)
+        if key.startswith("@") or not isinstance(value, str):
+            continue
+        if touched is not None and line not in touched:
+            continue
+        blocks.append(
+            {
+                "line": line,
+                "lines": [line],
+                "kind": "key",
+                "name": key,
+                "parts": icu_parts(value),
+                "clamp": None,
+                "tap": False,
+                "user": False,
+            }
+        )
+    return {"path": name, "error": None, "blocks": blocks}
