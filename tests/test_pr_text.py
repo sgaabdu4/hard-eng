@@ -7,14 +7,17 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import shipping
 import yaml
 from conftest import SOURCE
 from pr_text import body_problem, event_problem
 from test_shipping import (
     _DIAGRAM,
+    _UI_BODY,
     FakeGitHub,
     _check,
     _fixture,
+    _patch_gh,
     _pull,
     _ready_outcome,
 )
@@ -165,6 +168,7 @@ def _event(
 ) -> str:
     event = {
         "pull_request": {
+            "number": 1,
             "body": body,
             "user": {"login": author},
             "head": {"ref": head, "repo": {"full_name": repo}},
@@ -177,9 +181,13 @@ def _event(
 
 
 def _project(
-    tmp_path: Path, *, shipping: bool = True, bad_shipping: bool = False
+    tmp_path: Path,
+    *,
+    shipping: bool = True,
+    bad_shipping: bool = False,
+    ui_paths: list[str] | None = None,
 ) -> Path:
-    root = _fixture(tmp_path).root
+    root = _fixture(tmp_path, ui_paths=ui_paths).root
     if not shipping or bad_shipping:
         gates = root / "hard-eng.gates.json"
         payload = json.loads(gates.read_text())
@@ -258,6 +266,102 @@ def test_event_problem_treats_a_gates_file_with_a_bad_shipping_value_as_no_shipp
     assert event_problem(_event(tmp_path, _VALID, base="develop"), root) is None
 
 
+_UNCHANGED = "UI appearance: unchanged \u2014 same screen before and after.\n"
+_EDIT_HINT = "Edit the PR text; this check runs again on each edit."
+
+
+def _ui_problem(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
+    files: list[dict[str, object]],
+    ui_paths: list[str] | None = None,
+) -> tuple[str | None, list[tuple[str, ...]]]:
+    root = _project(tmp_path, ui_paths=["src/**"] if ui_paths is None else ui_paths)
+    (tmp_path / "pull").mkdir()
+    fake = FakeGitHub(_pull(_fixture(tmp_path / "pull")), [], files)
+    _patch_gh(monkeypatch, fake)
+    return event_problem(_event(tmp_path, body), root), fake.calls
+
+
+def test_remote_check_refuses_a_ui_change_without_pictures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    problem, calls = _ui_problem(
+        tmp_path, monkeypatch, _VALID, [{"filename": "src/App.tsx"}]
+    )
+    assert problem is not None
+    assert problem.startswith("UI changes require distinct Before and After")
+    assert problem.endswith(f". {_EDIT_HINT}")
+    assert [call[-1] for call in calls] == [
+        "repos/acme/widget/pulls/1/files?per_page=100"
+    ]
+
+
+@pytest.mark.parametrize("evidence", [_UI_BODY + "\n", _UNCHANGED])
+def test_remote_check_accepts_a_ui_change_with_pictures_or_an_unchanged_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evidence: str
+) -> None:
+    problem, _ = _ui_problem(
+        tmp_path, monkeypatch, evidence + _VALID, [{"filename": "src/App.tsx"}]
+    )
+    assert problem is None
+
+
+@pytest.mark.parametrize(
+    ("changed", "refused"),
+    [
+        ({"filename": "README.md"}, False),
+        ({"filename": "lib/new.ts", "previous_filename": "src/old.ts"}, True),
+    ],
+)
+def test_remote_check_matches_ui_paths_on_new_and_old_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed: dict[str, object],
+    refused: bool,
+) -> None:
+    problem, _ = _ui_problem(tmp_path, monkeypatch, _VALID, [changed])
+    assert (problem is not None) is refused
+
+
+def test_remote_check_runs_no_files_query_without_ui_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    problem, calls = _ui_problem(
+        tmp_path, monkeypatch, _VALID, [{"filename": "src/App.tsx"}], ui_paths=[]
+    )
+    assert problem is None
+    assert calls == []
+
+
+def test_remote_check_fails_with_one_line_when_the_files_query_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(_root: Path, *_args: str) -> str:
+        raise shipping.ShippingError("gh query failed")
+
+    monkeypatch.setattr(shipping, "gh", broken)
+    root = _project(tmp_path, ui_paths=["src/**"])
+    problem = event_problem(_event(tmp_path, _VALID), root)
+    assert problem is not None
+    assert "\n" not in problem
+    assert problem.startswith("The list of files that the PR changes is unavailable")
+    assert "gh query failed" in problem
+    assert problem.endswith(f". {_EDIT_HINT}")
+
+
+def test_remote_check_reports_the_text_fault_before_missing_pictures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    problem, calls = _ui_problem(
+        tmp_path, monkeypatch, _GOOD, [{"filename": "src/App.tsx"}]
+    )
+    assert problem is not None
+    assert "Not checked" in problem
+    assert calls == []
+
+
 def _workflow_text() -> str:
     return (SOURCE / ".github/workflows/pr-text.yml").read_text()
 
@@ -320,3 +424,12 @@ def test_each_job_holds_its_own_concurrency_group_so_a_push_cannot_cancel_the_fo
         ),
         "cancel-in-progress": False,
     }
+
+
+def test_pr_text_job_reads_the_pr_files_with_the_workflow_token_and_nothing_more() -> (
+    None
+):
+    job = yaml.safe_load(_workflow_text())["jobs"]["pr-text"]
+    assert job["permissions"] == {"contents": "read", "pull-requests": "read"}
+    check = next(step for step in job["steps"] if "run" in step)
+    assert check["env"] == {"GH_TOKEN": "${{ github.token }}"}
