@@ -238,6 +238,7 @@ def scaffold_files(source: Path) -> set[str]:
                 "*.py",
                 "ruff.toml",
                 "dart_declarations.pubspec.*",
+                "text_walls.*",
                 "untrusted-input.d.ts",
             )
             for path in (source / ".hooks").glob(pattern)
