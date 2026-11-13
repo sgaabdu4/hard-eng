@@ -216,7 +216,11 @@ def prompt_for(root: Path, point: str, revision: str) -> str:
         f"focus starts at {last[:12]}"
     )
     if kept < len(reviews) or decided < len(declined) or not whole:
-        newest = "" if whole else "; the newest review was cut, so the focus is the whole change"
+        newest = (
+            ""
+            if whole
+            else "; the newest review was cut, so the focus is the whole change"
+        )
         print(
             f"Cut for size: {len(reviews) - kept} older reviews, "
             f"{len(declined) - decided} older decisions{newest}"
