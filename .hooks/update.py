@@ -13,7 +13,7 @@ from pathlib import Path
 import agent_hooks
 import hook_chain
 import source_trees
-from gate_config import SOURCE_FILE, parse_config, repository_files
+from gate_config import SOURCE_FILE, load_groups, repository_files
 from local_edits import refusal_reason
 from mcp_setup import retired_settings
 from project_files import keep, tell_once
@@ -26,11 +26,13 @@ from update_runner import (
     known_failure,
     rebase_sessions,
     remember_failure,
+    require_loading_gates,
     stale_error,
     tree_entries,
     undo_hooked_commit,
     update_attempt,
     update_blocker,
+    uv_run,
 )
 
 COMMIT_ID = re.compile(r"[0-9a-f]{40}")
@@ -308,16 +310,7 @@ def update_plan(
 ) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str], list[str]]:
     planned = subprocess.run(
         [
-            "uv",
-            "run",
-            "--quiet",
-            "--project",
-            str(source),
-            "--locked",
-            "--no-dev",
-            "--python",
-            sys.executable,
-            "python",
+            *uv_run(source),
             str(source / "setup.py"),
             str(root),
             "--plan",
@@ -810,6 +803,7 @@ def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
     local_settings(root)
     validate_gates(root, source, changes)
     commit_update(root, changes, links, revision)
+    require_loading_gates(root, source)
     retire_local_generation(root)
     if hook[0] not in changes:
         install_planned_hook(root, hook)
@@ -959,11 +953,7 @@ def check_scaffold_update(root: Path, base: str, *, sources: bool = True) -> boo
     except (subprocess.CalledProcessError, StaleRelease):
         return False
     if sources:
-        from coverage_sources import require_listed_sources
-
-        gates = parse_config((root / "hard-eng.gates.json").read_text())
-        files = repository_files(root)
-        require_listed_sources(root, gates["packages"], files, python_only=False)
+        load_groups(root)
     print(
         "Scaffold-only update: source CI verified and the gate configuration accepted.",
         flush=True,

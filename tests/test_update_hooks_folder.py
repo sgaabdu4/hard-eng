@@ -1,6 +1,7 @@
 """Hard Eng's worktree launcher never leaves a tracked hooks folder dirty."""
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +12,7 @@ import hook_chain
 import pytest
 import update
 import update_runner
-from conftest import add_origin, commit, git, init
+from conftest import SOURCE, add_origin, commit, git, init
 from test_hook_chain import husky_shims
 from test_update_runner import SRC_PROJECT, add_src_package
 from test_updates import select_release
@@ -56,6 +57,8 @@ def installed_project(
         check=True,
         capture_output=True,
     )
+    for name in ("PRODUCT.md", "DESIGN.md"):
+        shutil.copyfile(SOURCE / name, project / name)
     git(project, "rm", "-q", f"{hooks}/post-checkout")
     commit(project, "installed before the worktree launcher")
     add_origin(project)
