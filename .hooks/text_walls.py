@@ -232,6 +232,10 @@ STORED_TEXT = (
 IMPORT_LINE = re.compile(r"\s*(?:import|export|part)\b")
 DART_MARKS = ('"', "'", "Text", "TextSpan", "maxLines", "UserContent")
 DART_MARKS += ("onTap", "onPressed", "onLongPress", "ExpansionTile")
+ICU_CHOICE = re.compile(
+    r"\s*[\w.]+\s*,\s*(plural|select|selectordinal)\s*,(?:\s*offset:\d+)?"
+)
+ICU_BRANCH = re.compile(r"\s*[^\s{}]+\s*\{")
 ARB_KEY = re.compile(r'\s*"((?:[^"\\]|\\.)*)"\s*:')
 FIX = "Split it into blocks of one idea each, with dates, names and amounts on their own labelled lines"
 
@@ -564,22 +568,68 @@ def walls_command(root: Path, paths: list[str], stdin: bool) -> int:
     return int(bool(found))
 
 
-def icu_parts(message: str) -> list[object]:
-    """A message with each placeholder group `{...}` as one slot."""
-    parts: list[object] = []
-    depth, start = 0, 0
-    for index, char in enumerate(message):
-        if char == "{":
-            if depth == 0:
-                parts.append(message[start:index])
+def matching(text: str, start: int) -> int:
+    """The index of the brace that closes the brace at start, or -1."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "{":
             depth += 1
-        elif char == "}" and depth:
+        elif text[index] == "}":
             depth -= 1
             if depth == 0:
-                parts.append({"x": 1})
-                start = index + 1
+                return index
+    return -1
+
+
+def icu_branches(inner: str, hashes: bool) -> list[list[object]]:
+    """The measured branches of a plural, select or selectordinal argument; none for a simple argument."""
+    head = ICU_CHOICE.match(inner)
+    if not head:
+        return []
+    body = inner[head.end() :]
+    branches: list[list[object]] = []
+    position = 0
+    while found := ICU_BRANCH.match(body, position):
+        close = matching(body, found.end() - 1)
+        if close < 0:
+            return []
+        branches.append(
+            icu_message(body[found.end() : close], hashes or head[1] != "select")
+        )
+        position = close + 1
+    return branches
+
+
+def icu_message(message: str, hashes: bool) -> list[object]:
+    parts: list[object] = []
+    index = start = 0
+    while index < len(message):
+        char = message[index]
+        if char == "#" and hashes:
+            parts += [message[start:index], {"x": 1}]
+            start = index + 1
+        elif char == "{":
+            end = matching(message, index)
+            parts.append(message[start:index])
+            branches = icu_branches(message[index + 1 : end], hashes)
+            if branches:
+                rest = icu_message(message[end + 1 :], hashes)
+                return [*parts, {"alt": [[*branch, *rest] for branch in branches]}]
+            parts.append({"x": 1})
+            index, start = end, end + 1
+        index += 1
     parts.append(message[start:])
     return parts
+
+
+def icu_parts(message: str) -> list[object]:
+    """A message as parts: a simple argument is one slot, a plural or select argument is an alternative of its branches; unbalanced braces make plain text."""
+    depth = 0
+    for char in message:
+        depth += (char == "{") - (char == "}")
+        if depth < 0:
+            return [message]
+    return icu_message(message, False) if depth == 0 else [message]
 
 
 def arb_blocks(name: str, text: str, touched: Sequence[int] | None) -> FileBlocks:
