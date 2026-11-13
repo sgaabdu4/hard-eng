@@ -46,6 +46,7 @@ N/A — no app screens change.
 Result: Passed
 Evidence: `tests/test_swift.py` passed (86 tests). One real run of the iPhone tests command with the flag in an installed project: exit 0, 4 of 4 tests passed, the system log held no "cloned device" line, each boot line named the simulator that the command chose, and macOS saved no new crash report.
 Review: the independent review at 456d4da1 found that the rule read only the text `xcodebuild test` in one argument, and that the shared command also turned parallel testing off for the Mac tests. Both are repaired: the rule reads the joined command, and only the iPhone branch sets the flag.
+Review declined: the rule refuses a quoted form such as `-parallel-testing-enabled "NO"` and a wrapper script whose name holds `xcodebuild` :: by design. The refusal names the exact text to write, so the repair is one plain flag. No installed project uses a quoted form or such a wrapper, and a rule that reads shell quoting would be larger than the fault.
 E2E: N/A — no user journey; the real `xcodebuild test` run proves the flag.
 Retro: (1) Escaped bug that real use showed: the tests command let Xcode copy the simulator, and the first start of each copy crashed a system service. No gate can see a crash window of macOS, so the prevention is the rule and its tests → `tests/test_swift.py::test_iphone_tests_must_run_on_the_named_simulator_not_on_a_copy`. (2) The first test run used a Python without the project packages → None — one wrong command, corrected at once; the gate file names the right one.
 
