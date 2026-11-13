@@ -125,7 +125,5 @@ def test_pre_push_accepts_a_test_the_branch_added_then_deleted(
     assert first.returncode == 0, first.stderr[-2000:]
     (root / "tests/test_new.py").unlink()
     git(root, "commit", "-qam", "delete the test")
-    second = subprocess.run(
-        push, cwd=root, capture_output=True, text=True, check=False
-    )
+    second = subprocess.run(push, cwd=root, capture_output=True, text=True, check=False)
     assert second.returncode == 0, second.stderr[-2000:]
