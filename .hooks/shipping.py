@@ -120,9 +120,9 @@ def rebase_step(base: str) -> str:
     )
 
 
-def rebase_problem(root: Path, base: str) -> str:
+def rebase_problem(root: Path, repository: str, base: str) -> str:
     try:
-        allowed = merge_settings(root, ("rebaseMergeAllowed",)).get(
+        allowed = merge_settings(root, repository, ("rebaseMergeAllowed",)).get(
             "rebaseMergeAllowed"
         )
     except ShippingError:
@@ -170,9 +170,14 @@ def gh(root: Path, *args: str) -> str:
     return _run(root, "gh", args, _GH_TIMEOUT)
 
 
-def merge_settings(root: Path, names: tuple[str, ...]) -> dict[str, JsonValue]:
+def merge_settings(
+    root: Path, repository: str, names: tuple[str, ...]
+) -> dict[str, JsonValue]:
     return _object(
-        _json(gh(root, "repo", "view", "--json", ",".join(names)), "repository"),
+        _json(
+            gh(root, "repo", "view", repository, "--json", ",".join(names)),
+            "repository",
+        ),
         "repository merge settings",
     )
 
@@ -868,7 +873,11 @@ def _ready_state(
     if problem := (
         body_problem(pull.body)
         or commits_problem(pull.commits)
-        or (rebase_problem(root, pull.base_ref) if pull.rebaseable is False else None)
+        or (
+            rebase_problem(root, "/".join(identity[:2]), pull.base_ref)
+            if pull.rebaseable is False
+            else None
+        )
     ):
         raise ShippingError(problem)
     _current_with_base(root, identity, pull.base_ref, pull.head_sha)
