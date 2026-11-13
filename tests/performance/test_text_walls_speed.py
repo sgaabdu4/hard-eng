@@ -43,8 +43,12 @@ def test_one_thousand_screen_files_take_under_one_second_of_cpu(
     (root / "src").mkdir()
     for number in range(1000):
         (root / f"src/Panel{number}.tsx").write_text(SCREEN)
+    wall = SCREEN.replace("Manage it any time.", " ".join(["word"] * 40))
+    (root / "src/Panel500.tsx").write_text(wall)
     caps = text_walls.settings(root)
     assert text_walls.listed_walls(root, ["src/Panel0.tsx"], caps) == []
     before = used()
-    assert text_walls.listed_walls(root, [], caps) == []
+    found = text_walls.listed_walls(root, [], caps)
     assert used() - before < 1.0
+    assert len(found) == 1
+    assert found[0].startswith("src/Panel500.tsx:")

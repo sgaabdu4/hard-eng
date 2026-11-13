@@ -77,7 +77,7 @@ process_group.stop_idle_codex_brokers = keep_machine_brokers
 
 def session_reader_folder() -> Path:
     """The text readers install once for a test session, not once for each test."""
-    return SEAL / "readers"
+    return SEAL / "runner" / "hard-eng-tools"
 
 
 text_readers.tool_folder = session_reader_folder
