@@ -34,6 +34,8 @@ Authority: Autonomous. The maintainer set the three changes and their decisions;
 - [x] Earlier text sits in a nonce fence it cannot close → `tests/test_challenge.py::test_earlier_review_text_is_fenced_and_cannot_close_the_fence`.
 - [x] The command prints the counts and the focus commit → `tests/test_challenge.py::test_the_command_prints_how_many_earlier_reviews_and_decisions_it_passed`.
 - [x] Records of an earlier task on a reused branch name are not passed, and a huge earlier output keeps the prompt under the byte limit → `tests/test_challenge.py::test_records_of_an_earlier_task_on_a_reused_branch_name_are_not_passed` and `::test_the_prompt_stays_under_the_byte_limit_with_a_huge_earlier_output`.
+- [x] A later run is told to report an earlier finding that is still open → `tests/test_challenge.py::test_a_later_run_is_told_to_report_an_earlier_finding_that_is_still_open`.
+- [x] A cut newest review keeps the focus on the whole change → `tests/test_challenge.py::test_a_cut_newest_review_keeps_the_focus_on_the_whole_change`.
 - [x] Nothing new loads at session start or at Stop → `tests/test_gate_speed.py::test_the_session_start_modules_compile_no_more_patterns_at_import` and `tests/test_gate_speed.py::test_stop_with_nothing_changed_loads_no_network_module`.
 
 ## Baseline + execution
@@ -53,6 +55,7 @@ N/A — no app screens change.
 ## Verification
 
 Result: Passed
+Review: the first real independent review at `f2ab9862` found two faults in the review memory (a later review could say clean with an earlier finding open; a cut newest review still narrowed the focus). Both are repaired and tested.
 Evidence: focused runs of `tests/test_comments_push_range.py`, `tests/test_comments.py`, `tests/test_mutation.py`, `tests/test_challenge.py`, `tests/test_gate_speed.py` and `tests/test_skill_links.py` passed; the static gates (format, lint, complexity, annotations, types, dead-code, duplicates, declarations, shipped-format, shipped-focused-tests) and `hot-paths` on the touched hooks passed. The result of `python3 .hooks/hard-eng.py check --plan-stage Complete --base origin/develop` is recorded in the pull request.
 E2E: N/A — no user journey; the push row runs a real `git push` through the pre-push hook and the review rows run the command with a fake reviewer CLI.
 Retro: (1) Hard Eng fault that a project showed: pre-push judged the assertion count over a smaller range than `check` and CI, so it refused a branch they passed → `tests/test_comments_push_range.py::test_a_test_the_branch_added_and_a_later_push_deleted_loses_nothing`. (2) Found while reading the callers: the stop check counts Git processes, and the first form of the fix started one more; the attribute lookup now runs once per range → `tests/test_gate_speed.py::test_stop_after_a_source_edit_starts_few_git_processes`.
