@@ -290,10 +290,12 @@ def require_swift_groups(root: Path, config: GateConfig, files: list[Path]) -> N
                 "before the tests; add it as a lockfiles check"
             )
         if Path(path).name == "ios" and any(
-            "xcodebuild test" in argument and SERIAL_TESTS not in argument
-            for gate in group["checks"]
-            if gate.get("role") == "tests"
-            for argument in gate["command"]
+            "xcodebuild" in script and SERIAL_TESTS not in script
+            for script in (
+                " ".join(gate["command"])
+                for gate in group["checks"]
+                if gate.get("role") == "tests"
+            )
         ):
             raise ValueError(
                 f"{path}: the tests command must pass `{SERIAL_TESTS}` to `xcodebuild "
