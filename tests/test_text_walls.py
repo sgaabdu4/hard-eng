@@ -406,3 +406,35 @@ def test_flutter_text_follows_the_same_rules(tmp_path: Path) -> None:
     ]
     assert flagged == expected
     assert "tool/lib" not in message
+
+
+def test_the_template_arb_file_is_judged_by_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-NO-TEXT-WALLS: each message of the template ARB file is one block, a placeholder is one word, keys with @ are skipped, other catalogs are not read, and no process starts."""
+
+    def no_reader(kind: str, request: dict[str, object]) -> list[object]:
+        raise AssertionError(kind)
+
+    monkeypatch.setattr(text_walls, "read", no_reader)
+    old = {"@@locale": "en", "oldWall": sentence(40), "short": "Hi."}
+    root = flutter_project(tmp_path, "// base\n", "// base\n", True)
+    (root / "lib/l10n").mkdir()
+    (root / "lib/l10n/app_en.arb").write_text(json.dumps(old, indent=2) + "\n")
+    (root / "lib/l10n/app_fr.arb").write_text(json.dumps(old, indent=2) + "\n")
+    commit(root, "catalogs")
+    new = {
+        **old,
+        "fits": "{count} " + sentence(10) + " " + sentence(14),
+        "tooLong": "{count} " + sentence(10) + " " + sentence(15),
+        "@tooLong": {"description": sentence(60)},
+        "plural": "{n, plural, one{" + sentence(30) + "} other{ok}}",
+    }
+    (root / "lib/l10n/app_en.arb").write_text(json.dumps(new, indent=2) + "\n")
+    (root / "lib/l10n/app_fr.arb").write_text(json.dumps(new, indent=2) + "\n")
+    message = refused(root)
+    assert "lib/l10n/app_en.arb:6: 26 words" in message
+    assert "lib/l10n/app_en.arb:5:" not in message
+    assert "oldWall" not in message
+    assert "app_fr" not in message
+    assert "lib/l10n/app_en.arb:10:" not in message
