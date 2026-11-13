@@ -49,13 +49,19 @@ def test_the_reader_returns_the_blocks_of_each_file_and_a_finding_for_a_broken_o
         "! Second line.",
     ]
     assert [b["name"] for b in second["blocks"]] == ["title"]
-    assert third["error"].startswith("line 1:")
+    assert str(third["error"]).startswith("line 1:")
+
+
+def no_bun(name: str) -> None:
+    return None
 
 
 WALL = "<p>" + " ".join(["word"] * 40) + "</p>"
 
 
-@pytest.mark.parametrize("name", ["src/a.py", "src/a.ts", "src/a.css", "README.md", "lib/a.dart"])
+@pytest.mark.parametrize(
+    "name", ["src/a.py", "src/a.ts", "src/a.css", "README.md", "lib/a.dart"]
+)
 def test_a_change_with_no_screen_file_starts_no_reader_and_loads_no_rule_module(
     tmp_path: Path, name: str
 ) -> None:
@@ -81,9 +87,11 @@ def test_a_missing_tool_fails_closed_with_its_step(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """HE-NO-TEXT-WALLS: a missing Bun names its install step, and a file that cannot be parsed is a finding."""
-    root = change(tmp_path, "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n")
+    root = change(
+        tmp_path, "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n"
+    )
     with monkeypatch.context() as patch:
-        patch.setattr(text_readers, "shutil", SimpleNamespace(which=lambda name: None))
+        patch.setattr(text_readers, "shutil", SimpleNamespace(which=no_bun))
         with pytest.raises(ValueError, match="needs Bun") as error:
             validate_suppressions(root, "HEAD")
     assert "oven-sh/setup-bun" in str(error.value)
@@ -111,5 +119,7 @@ def test_the_merge_shard_skips_the_rule(
             with pytest.raises(KeyboardInterrupt):
                 runner.check(base="0" * 40, shard=shard)
     assert seen == [False, True, True]
-    root = change(tmp_path / "w", "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n")
+    root = change(
+        tmp_path / "w", "src/a.tsx", "export const a = 1;\n", f"const a = {WALL};\n"
+    )
     validate_suppressions(root, "HEAD", screens=False)

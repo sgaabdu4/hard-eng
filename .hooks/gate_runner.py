@@ -20,6 +20,7 @@ from ci_jobs import (
     LanguageFilter,
     add_language_filters,
     add_shard_option,
+    add_walls_command,
     language_filter,
     language_groups,
 )
@@ -892,12 +893,7 @@ def main() -> int:
         "hot-paths",
         help="List known slow patterns in the named files, else the whole repository",
     ).add_argument("paths", nargs="*")
-    walls = commands.add_parser(
-        "text-walls",
-        help="List screen text blocks over the caps, or judge server strings with --stdin",
-    )
-    walls.add_argument("paths", nargs="*")
-    walls.add_argument("--stdin", action="store_true")
+    add_walls_command(commands.add_parser)
     mutating = commands.add_parser(
         "mutation",
         help="Report changed lines whose tests miss small deliberate bugs",

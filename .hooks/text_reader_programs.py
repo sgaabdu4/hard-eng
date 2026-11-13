@@ -1,6 +1,6 @@
 """The reader programs that run beside the parser of each screen language, as text."""
 
-JS_READER = r'''import { readFileSync } from "node:fs";
+JS_READER = r"""import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 
 const request = JSON.parse(readFileSync(0, "utf8"));
@@ -387,4 +387,4 @@ for (const file of request.files) {
   files.push({ path: file.path, error: null, blocks });
 }
 process.stdout.write(JSON.stringify({ files }));
-'''
+"""

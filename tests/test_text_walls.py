@@ -63,7 +63,9 @@ def test_settings_default_and_refuse_invalid_values(tmp_path: Path) -> None:
     (tmp_path / "hard-eng.gates.json").write_text('{"packages": []}')
     assert text_walls.settings(tmp_path) == default
     gates(tmp_path, {"words_per_block": 30, "paths": ["app/(app)/**"]})
-    assert text_walls.settings(tmp_path) == text_walls.Caps(30, 3, 20, ("app/(app)/**",))
+    assert text_walls.settings(tmp_path) == text_walls.Caps(
+        30, 3, 20, ("app/(app)/**",)
+    )
     for bad, fix in [
         ({"words_per_block": 0}, "words_per_block"),
         ({"sentences_per_block": True}, "sentences_per_block"),
@@ -84,7 +86,11 @@ def sentence(count: int) -> str:
 
 
 def screen(*lines: str) -> str:
-    return "export const A = () => (\n  <main>\n" + "".join(f"    {x}\n" for x in lines) + "  </main>\n);\n"
+    return (
+        "export const A = () => (\n  <main>\n"
+        + "".join(f"    {x}\n" for x in lines)
+        + "  </main>\n);\n"
+    )
 
 
 def refused(root: Path) -> str:
@@ -153,15 +159,21 @@ def old_wall() -> str:
 def test_only_touched_text_is_judged(tmp_path: Path) -> None:
     """HE-NO-TEXT-WALLS: an old wall passes until a change touches it; a move passes; an edit and a deleted break are judged."""
     wall = old_wall()
-    root = change(tmp_path / "a", "src/Card.tsx", wall, wall.replace("Short.", "Brief."))
+    root = change(
+        tmp_path / "a", "src/Card.tsx", wall, wall.replace("Short.", "Brief.")
+    )
     validate_suppressions(root, "HEAD")
     wrapped = "".join(f"  {line}\n" for line in wall.splitlines())
     moved = change(tmp_path / "b", "src/Card.tsx", wall, wrapped)
     validate_suppressions(moved, "HEAD")
-    edited = change(tmp_path / "c", "src/Card.tsx", wall, wall.replace("word", "work", 1))
+    edited = change(
+        tmp_path / "c", "src/Card.tsx", wall, wall.replace("word", "work", 1)
+    )
     assert "src/Card.tsx:4:" in refused(edited)
     halves = screen("<p>", f"  {sentence(13)}", "  <br />", f"  {sentence(13)}", "</p>")
-    joined = change(tmp_path / "d", "src/Card.tsx", halves, halves.replace("    <br />\n", ""))
+    joined = change(
+        tmp_path / "d", "src/Card.tsx", halves, halves.replace("    <br />\n", "")
+    )
     assert "26 words" in refused(joined)
 
 
@@ -194,7 +206,6 @@ def test_exempt_files_and_paths_are_not_judged(tmp_path: Path) -> None:
     assert "src/Page.tsx" not in message
 
 
-
 def test_stored_text_needs_user_content_or_a_short_clamp_with_a_tap(
     tmp_path: Path,
 ) -> None:
@@ -212,7 +223,9 @@ def test_stored_text_needs_user_content_or_a_short_clamp_with_a_tap(
     ]
     root = change(tmp_path, "src/Card.tsx", BASE, screen(*lines))
     message = refused(root)
-    flagged = [number for number in range(3, 12) if f"src/Card.tsx:{number}:" in message]
+    flagged = [
+        number for number in range(3, 12) if f"src/Card.tsx:{number}:" in message
+    ]
     assert flagged == [3, 8, 9]
     assert "UserContent" in message
 
@@ -250,7 +263,9 @@ def test_structural_skips_are_not_judged(tmp_path: Path) -> None:
     )
     root = change(tmp_path, "src/Card.tsx", BASE, source)
     message = refused(root)
-    flagged = [number for number in range(1, 11) if f"src/Card.tsx:{number}:" in message]
+    flagged = [
+        number for number in range(1, 11) if f"src/Card.tsx:{number}:" in message
+    ]
     assert flagged == [9]
 
 
