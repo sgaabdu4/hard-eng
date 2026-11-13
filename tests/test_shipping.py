@@ -117,9 +117,46 @@ def _check(revision: str, **changes: object) -> dict[str, object]:
 _OWNER = {"login": "owner", "permissions": {"push": True}}
 
 
-def _review(head: str, rollup: object = "SUCCESS", **changes: object) -> object:
+def _run(
+    database_id: object = 1,
+    conclusion: object = "SUCCESS",
+    *,
+    name: str = "build",
+    app: object = 15368,
+    workflow: object = 1,
+    status: str = "COMPLETED",
+    suite: object = ...,
+) -> dict[str, object]:
+    suite_id = database_id if suite is ... else suite
+    suite = {"databaseId": suite_id, "app": {"databaseId": app}}
+    if workflow is not None:
+        suite["workflowRun"] = {"workflow": {"databaseId": workflow}}
+    return {
+        "name": name,
+        "databaseId": database_id,
+        "status": status,
+        "conclusion": conclusion,
+        "checkSuite": suite,
+    }
+
+
+def _contexts(*nodes: object) -> dict[str, object]:
+    return {"totalCount": len(nodes), "nodes": list(nodes)}
+
+
+_ROLLUP_RUNS = {
+    "SUCCESS": _run(),
+    "FAILURE": _run(conclusion="FAILURE"),
+    "PENDING": _run(conclusion=None, status="IN_PROGRESS"),
+}
+
+
+def _review(
+    head: str, rollup: object = "SUCCESS", contexts: object = None, **changes: object
+) -> object:
     empty = {"totalCount": 0, "nodes": []}
-    checks = {"state": rollup, "contexts": empty}
+    run = _ROLLUP_RUNS.get(str(rollup), _run())
+    checks = {"state": rollup, "contexts": contexts or _contexts(run)}
     pull: dict[str, object] = {
         "viewerDidAuthor": True,
         "viewerCanMergeAsAdmin": True,
@@ -152,15 +189,23 @@ class FakeGitHub:
         self.codeowners: dict[str, str] = {}
         self.comparison: object = {"behind_by": 0}
         self.calls: list[tuple[str, ...]] = []
+        self.setting_reads: list[tuple[str, ...]] = []
+        self.rebase_merge_allowed: object = True
         self.attachment_response = (
             "HTTP/2 206 Partial Content\ncontent-type: image/png\n"
             "content-length: 1\ncontent-range: bytes 0-0/85098\n"
         )
 
-    def __call__(self, _root: Path, *args: str) -> str:
-        self.calls.append(args)
-        if args[0] != "api":
+    def _setting(self, args: tuple[str, ...]) -> str:
+        if args[:2] != ("repo", "view"):
             raise AssertionError(args)
+        self.setting_reads.append(args)
+        return json.dumps({"rebaseMergeAllowed": self.rebase_merge_allowed})
+
+    def __call__(self, _root: Path, *args: str) -> str:
+        if args[0] != "api":
+            return self._setting(args)
+        self.calls.append(args)
         if args[1] == "graphql":
             return json.dumps(self.rules if "Administer" in args[-1] else self.review)
         if "--method" in args:

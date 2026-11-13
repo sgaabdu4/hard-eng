@@ -8,7 +8,7 @@ from pathlib import Path
 
 from gate_config import SOURCE_FILE, JsonValue
 from review_bypass import author_only_review_block
-from shipping import ShippingError, gh, load_policy
+from shipping import ShippingError, _pr_url, gh, load_policy, merge_settings
 from stale_updates import registered_worktrees
 from update_runner import (
     REPAIR_SUBJECT,
@@ -47,12 +47,11 @@ MERGE_METHODS = (
 REPAIR_TITLE = "Repair the Hard Eng installation"
 
 
-def merge_method(root: Path) -> str:
-    allowed = json.loads(
-        gh(root, "repo", "view", "--json", ",".join(name for name, _ in MERGE_METHODS))
+def merge_method(root: Path, url: str) -> str:
+    owner, repository, _ = _pr_url(url)
+    allowed = merge_settings(
+        root, f"{owner}/{repository}", tuple(name for name, _ in MERGE_METHODS)
     )
-    if not isinstance(allowed, dict):
-        raise ShippingError("repository merge settings must be an object")
     for name, flag in MERGE_METHODS:
         if allowed.get(name) is True:
             return flag
@@ -318,7 +317,7 @@ def settle(
             waiting = "--admin"
         else:
             print(f"Auto-merge waits for the PR's merge rules: {problem}.")
-    merging = ["pr", "merge", url, waiting, merge_method(root)]
+    merging = ["pr", "merge", url, waiting, merge_method(root, url)]
     merging += ["--match-head-commit", head]
     if not merge:
         print(

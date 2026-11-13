@@ -156,9 +156,7 @@ def test_the_install_change_compares_each_older_block_whole(tmp_path: Path) -> N
         validate_comments(root, "HEAD")
 
 
-def test_pre_push_rejects_a_pushed_comment_block(
-    tmp_path: Path, completed_plan: str, shipping_policy: ShippingPolicy
-) -> None:
+def pre_push_repo(tmp_path: Path, shipping_policy: ShippingPolicy) -> Path:
     root, bare = tmp_path / "repo", tmp_path / "origin.git"
     init(root)
     git(tmp_path, "init", "--bare", "-q", str(bare))
@@ -183,6 +181,13 @@ def test_pre_push_rejects_a_pushed_comment_block(
         '#!/bin/sh\nexec python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py" pre-push\n'
     )
     hook.chmod(0o755)
+    return root
+
+
+def test_pre_push_rejects_a_pushed_comment_block(
+    tmp_path: Path, completed_plan: str, shipping_policy: ShippingPolicy
+) -> None:
+    root = pre_push_repo(tmp_path, shipping_policy)
     git(root, "switch", "-qc", "feature")
     (root / "PLAN.md").write_text(completed_plan)
     (root / "app.py").write_text("# narrates\n# the next line\nx = 1\n")

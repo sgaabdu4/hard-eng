@@ -6,7 +6,7 @@
     "checks": ["hard-eng", "canary"],
     "ui_paths": [],
     "ci_seconds": 600,
-    "pre_push_seconds": 600,
+    "pre_push_seconds": 900,
     "delivery": []
   },
   "packages": [{

@@ -605,3 +605,46 @@ def test_the_python_mutation_report_runs_when_a_performance_test_fails_under_mut
     output = capsys.readouterr().out
     assert "could not run" not in output
     assert "src/shop/price.py:2  if total >= 100 and member: → " in output
+
+
+def run_dart_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, listed: str
+) -> list[list[str]]:
+    calls: list[list[str]] = []
+
+    def run(
+        command: list[str], _directory: Path, _deadline: object, output: Path
+    ) -> int:
+        calls.append(command)
+        if command[:4] == ["dart", "pub", "global", "list"]:
+            output.write_text(listed)
+        if "run" in command:
+            report = Path(command[-2]) / "mutation-test.xunit.xml"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text("<testsuites/>")
+        return 0
+
+    monkeypatch.setattr(mutation, "run", run)
+    group = package_testing(["dart", "test"])
+    mutation.dart(tmp_path, {"lib/price.dart": {2}}, group, None, tmp_path)
+    return calls
+
+
+def test_an_active_dart_mutation_tool_is_not_activated_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = run_dart_mutation(
+        tmp_path, monkeypatch, "coverage 1.15.1\nmutation_test 1.7.0\n"
+    )
+    assert [c for c in calls if "activate" in c] == []
+
+
+def test_a_missing_dart_mutation_tool_is_activated_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = run_dart_mutation(tmp_path, monkeypatch, "coverage 1.15.1\n")
+    assert calls[:2] == [
+        ["dart", "pub", "global", "list"],
+        ["dart", "pub", "global", "activate", "mutation_test"],
+    ]
+    assert [c for c in calls if "activate" in c] == [calls[1]]
