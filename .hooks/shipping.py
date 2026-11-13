@@ -814,17 +814,15 @@ def _graphql_pull(
     return data, _object(repository.get("pullRequest"), "review PR")
 
 
-def _compare(
-    root: Path, owner: str, name: str, base: str, head: str, query: str = ""
-) -> dict[str, JsonValue]:
-    endpoint = f"repos/{owner}/{name}/compare/{base}...{head}{query}"
+def _compare(root: Path, repository: str, base: str, head: str) -> dict[str, JsonValue]:
+    endpoint = f"repos/{repository}/compare/{base}...{head}"
     return _object(_json(gh(root, "api", endpoint), "base comparison"), "base")
 
 
 def _current_with_base(
     root: Path, identity: tuple[str, str, int], base: str, head: str
 ) -> None:
-    comparison = _compare(root, identity[0], identity[1], base, head)
+    comparison = _compare(root, "/".join(identity[:2]), base, head)
     behind = comparison.get("behind_by")
     if type(behind) is not int:
         raise ShippingError("PR comparison with its base is invalid")

@@ -53,9 +53,8 @@ def rebase_step(base: str) -> str:
 def _stale_rebase_report(root: Path, repository: str, base: str, head: str) -> bool:
     """True when the branch is current with base and has no merge commit."""
     try:
-        owner, name = repository.split("/")
-        comparison = _compare(root, owner, name, base, head, "?per_page=100")
-    except (ShippingError, ValueError):
+        comparison = _compare(root, repository, base, head)
+    except ShippingError:
         return False
     commits = comparison.get("commits")
     return (

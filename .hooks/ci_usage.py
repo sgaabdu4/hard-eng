@@ -253,7 +253,7 @@ def _pull_request_head(
     root: Path, repository: str, base: str, branch: str
 ) -> tuple[str, str]:
     """The head and tree of the one PR merged into this push, whatever the merge method."""
-    from shipping import ShippingError, _json, _object, _sha, _text, gh, git
+    from shipping import ShippingError, _compare, _json, _object, _sha, _text, gh, git
 
     revision = git(root, "rev-parse", "HEAD").strip()
     endpoint = f"repos/{repository}/commits/{revision}/pulls"
@@ -271,8 +271,7 @@ def _pull_request_head(
     if len(heads) != 1:
         raise ShippingError("push merges no single PR")
     head = heads.pop()
-    endpoint = f"repos/{repository}/compare/{base}...{head}"
-    comparison = _object(_json(gh(root, "api", endpoint), "compare"), "compare")
+    comparison = _compare(root, repository, base, head)
     if comparison.get("status") not in {"ahead", "identical"}:
         tree = _compared_tree(comparison, "base_commit")
         if tree is None or tree != _compared_tree(comparison, "merge_base_commit"):
