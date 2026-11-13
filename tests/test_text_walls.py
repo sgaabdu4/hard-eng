@@ -190,3 +190,62 @@ def test_exempt_files_and_paths_are_not_judged(tmp_path: Path) -> None:
     assert "app/Page.tsx:" in message
     assert "src/Page.tsx" not in message
 
+
+
+def test_stored_text_needs_user_content_or_a_short_clamp_with_a_tap(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-TEXT-WALLS: a stored body shows only inside UserContent, or clamped to 2 lines inside a control that a tap opens."""
+    lines = [
+        '<div className="banner"><p>{notice.body}</p></div>',
+        '<button onClick={open}><p className="line-clamp-2">{n.body}</p></button>',
+        '<a href="/n"><p className="truncate">{n.description}</p></a>',
+        "<button onClick={open}><p style={{ WebkitLineClamp: 2 }}>{n.body}</p></button>",
+        "<Pressable onPress={open}><Text numberOfLines={2}>{n.body}</Text></Pressable>",
+        '<button onClick={open}><p className="line-clamp-3">{n.body}</p></button>',
+        '<div><p className="line-clamp-2">{n.body}</p></div>',
+        "<p>{n.title}</p>",
+        "<UserContent>{n.body}</UserContent>",
+    ]
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*lines))
+    message = refused(root)
+    flagged = [number for number in range(3, 12) if f"src/Card.tsx:{number}:" in message]
+    assert flagged == [3, 8, 9]
+    assert "UserContent" in message
+
+
+def test_user_content_takes_expressions_only(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: UserContent passes an expression and refuses literal text."""
+    lines = [
+        "<UserContent>{item.text}</UserContent>",
+        "<UserContent>Literal text</UserContent>",
+        '<UserContent text="Literal text" />',
+        "<UserContent>{`Total ${count}`}</UserContent>",
+        "<UserContent>{item.first + item.last}</UserContent>",
+    ]
+    root = change(tmp_path, "src/Card.tsx", BASE, screen(*lines))
+    message = refused(root)
+    flagged = [number for number in range(3, 8) if f"src/Card.tsx:{number}:" in message]
+    assert flagged == [4, 5, 6]
+
+
+def test_structural_skips_are_not_judged(tmp_path: Path) -> None:
+    """HE-NO-TEXT-WALLS: structured data, script, style, code and pre are skipped; inline code is one word."""
+    long = " ".join(["word"] * 40)
+    source = (
+        f'const DATA = {{ "@type": "Article", description: "{long}" }};\n'
+        "export const A = () => (\n"
+        "  <main>\n"
+        f"    <script>{long}</script>\n"
+        f"    <style>{long}</style>\n"
+        f"    <code>{long}</code>\n"
+        f"    <pre>{long}</pre>\n"
+        f"    <p>Ten words <code>{long}</code> after the code.</p>\n"
+        f"    <p>{long}</p>\n"
+        "  </main>\n"
+        ");\n"
+    )
+    root = change(tmp_path, "src/Card.tsx", BASE, source)
+    message = refused(root)
+    flagged = [number for number in range(1, 11) if f"src/Card.tsx:{number}:" in message]
+    assert flagged == [9]

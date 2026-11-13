@@ -178,6 +178,13 @@ def request(files: list[tuple[str, str, list[int] | None]]) -> dict[str, object]
 PLAIN_WORD = re.compile(r"[A-Za-z]+(?:'[a-z]+)?")
 SCREEN_SUFFIXES = (".tsx", ".jsx")
 UNOWNED_FOLDERS = (".hooks/", ".agents/", ".claude/")
+USER_LITERAL = (
+    "UserContent holds literal text. Pass the text as an expression, for example {item.text}"
+)
+STORED_TEXT = (
+    "Stored text `{field}` shows in full. Render it inside UserContent, or clamp it "
+    "to 2 lines or fewer inside a control that opens the full text"
+)
 FIX = "Split it into blocks of one idea each, with dates, names and amounts on their own labelled lines"
 
 
@@ -193,15 +200,39 @@ def is_prose(parts: list[object]) -> bool:
     return starts and plain * 10 >= len(words) * 7
 
 
-def problems(block: Block, caps: Caps) -> list[str]:
-    words, sentences, longest = measure(block["parts"])
-    found = []
+def literal_text(parts: list[object]) -> bool:
+    return any(
+        bool(HAS_LETTER_OR_DIGIT.search(part))
+        if isinstance(part, str)
+        else isinstance(part, dict) and any(literal_text(b) for b in part.get("alt", []))
+        for part in parts
+    )
+
+
+def stored_field(parts: list[object]) -> str:
+    return next(
+        (str(part["field"]) for part in parts if isinstance(part, dict) and "field" in part),
+        "",
+    )
+
+
+def problems(block: Block, caps: Caps) -> str:
+    parts = block["parts"]
+    if block["user"]:
+        return USER_LITERAL if literal_text(parts) else ""
+    words, sentences, longest = measure(parts)
+    over = []
     if words > caps.words:
-        found.append(f"{words} words, at most {caps.words}")
+        over.append(f"{words} words, at most {caps.words}")
     if sentences > caps.sentences:
-        found.append(f"{sentences} sentences, at most {caps.sentences}")
+        over.append(f"{sentences} sentences, at most {caps.sentences}")
     if longest > caps.sentence_words:
-        found.append(f"a sentence of {longest} words, at most {caps.sentence_words}")
+        over.append(f"a sentence of {longest} words, at most {caps.sentence_words}")
+    found = "; ".join(over) + f". {FIX}" if over else ""
+    field = stored_field(parts)
+    clamp = block["clamp"]
+    if field and not (clamp is not None and clamp <= 2 and block["tap"]):
+        found += (" " if found else "") + STORED_TEXT.format(field=field)
     return found
 
 
@@ -211,9 +242,9 @@ def judged(name: str, blocks: list[Block], caps: Caps) -> list[tuple[str, str]]:
     for block in blocks:
         if block["kind"] == "const" and not is_prose(block["parts"]):
             continue
-        if over := problems(block, caps):
+        if found := problems(block, caps):
             text = " ".join(flatten(block["parts"]).split())
-            out.append((text, f"{name}:{block['line']}: {'; '.join(over)}. {FIX}"))
+            out.append((text, f"{name}:{block['line']}: {found}"))
     return out
 
 
