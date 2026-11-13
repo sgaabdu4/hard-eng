@@ -1,6 +1,6 @@
 # A refused update leaves a branch that can carry the fix
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -57,10 +57,11 @@ N/A — no app screen changes.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: each test of the acceptance list failed on the starting code for the named cause and passes now. The tip load ran on three real installed project trees with the plain host Python: 3 of 3 loaded. The Dart facts were measured with Dart 3.14.0 on a small fixture: the root call gave 20 findings with the nested package and 14 with the exclusion.
+Review: an independent review found two faults. The first tip load ran the plain host Python, which has no yaml package, and refused each Dart project. The exclusion patterns came from the packages of one run, so a change of only the parent package refused the installer's own exclusion. Each has its own repair commit and test.
 E2E: N/A — no user journey; `test_a_fix_on_the_update_branch_is_pushed_and_merged_by_update_pr` runs the real update, push and merge request against a local remote.
-Retro: Pending
+Retro: (1) The tip load refused each Dart project, because the test Python had yaml and the host Python has none → `tests/test_update_pr_refusal.py::test_the_tip_load_works_when_the_host_python_has_no_yaml`. (2) The first runner test gave the validation one selected package and asserted the refusal → `tests/test_dart_config.py::test_a_parent_only_change_keeps_the_nested_package_exclusion`, which goes through the real package selection. (3) The build-time load check of issue 590 had no test for the way out of its own refusal → `tests/test_update_pr_refusal.py::test_a_fix_on_the_update_branch_is_pushed_and_merged_by_update_pr`.
 
 Delivery target: Merge
 Delivery: Pending — the pull request into `develop`, its checks, the release pull request into `main` and the release run.
