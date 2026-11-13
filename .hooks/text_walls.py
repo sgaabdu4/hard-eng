@@ -23,6 +23,16 @@ KEYS = {
     "sentences_per_block": 3,
     "words_per_sentence": 20,
 }
+INLINE = ("strong", "em", "b", "i", "span", "a", "Link")
+TEXT_PROPS = (
+    "title label description body message subtitle hint helperText note text details "
+    "summary caption lead"
+).split()
+SKIP = ("script", "style", "code", "pre")
+STORED = "body content description details notes note summary comment bio about".split()
+TAP_NAMES = ("button", "a", "Link", "summary", "Pressable", "TouchableOpacity", "TouchableHighlight")
+TAP_ATTRS = ("onClick", "onPress", "href")
+USER_CONTENT = "UserContent"
 
 
 class Caps(NamedTuple):
@@ -139,3 +149,20 @@ def settings(root: Path) -> Caps:
             "end in /**, for example app/**; it narrows the folders and never exempts a file"
         )
     return Caps(*numbers, tuple(paths))
+
+
+def request(files: list[tuple[str, str, list[int] | None]]) -> dict[str, object]:
+    """The request that every reader takes: the word lists and each file with its touched lines."""
+    return {
+        "inline": INLINE,
+        "text_props": TEXT_PROPS,
+        "skip": SKIP,
+        "user": USER_CONTENT,
+        "stored": STORED,
+        "tap_names": TAP_NAMES,
+        "tap_attrs": TAP_ATTRS,
+        "files": [
+            {"path": path, "source": source, "touched": touched}
+            for path, source, touched in files
+        ],
+    }

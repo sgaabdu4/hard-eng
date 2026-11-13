@@ -74,6 +74,17 @@ def keep_machine_brokers(
 process_group.stop_idle_codex_brokers = keep_machine_brokers
 
 
+@pytest.fixture(scope="session", autouse=True)
+def one_reader_folder(tmp_path_factory: pytest.TempPathFactory) -> Generator[None]:
+    """The text readers install once for a test session, not once for each test."""
+    import text_readers
+
+    folder = tmp_path_factory.mktemp("text-readers")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(text_readers, "tool_folder", lambda: folder)
+        yield
+
+
 def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Update cleanup sweeps the temporary directory; keep it off this machine's."""
     directory = tmp_path / "tmp"
