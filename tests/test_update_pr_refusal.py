@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from contextlib import suppress
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -10,6 +11,7 @@ import update
 import update_pr
 import update_runner
 from conftest import WORKFLOW_TEMPLATE, add_origin, commit, git, remove_application
+from test_update_pr import FakeGh
 from test_update_runner import (
     GATES_FILE,
     add_shipping_policy,
@@ -43,8 +45,22 @@ def test_update_pr_fails_after_a_remembered_refusal(
     assert update_pr.publish(target) == 1
     printed = capsys.readouterr().out
     assert "Hard Eng update failed" in printed
-    assert "secrets-files requires native" in printed
+    assert "SKILL.md already differs" in printed
     assert "Nothing to publish" not in printed
+
+
+def test_update_pr_refuses_a_tip_that_the_older_gates_rule_rejects(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target, _ = refused_release(release, monkeypatch, wrapped=True)
+    assert update_runner.apply_update(target) == 0
+    capsys.readouterr()
+    assert update_pr.publish(target) == 1
+    printed = capsys.readouterr().out
+    assert "secrets-files requires native" in printed
+    assert f"Fix its checks on branch {update_runner.UPDATE_BRANCH}" in printed
 
 
 NO_NEWER_RELEASE = """
@@ -302,38 +318,128 @@ def installed_load(target: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_an_update_whose_release_cannot_load_the_gates_file_is_refused_and_the_project_keeps_its_release(
+def refused_tip(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> tuple[Path, Path, str]:
     source, target, old = release
-    before = loading_project(target, ["python3", "-c", "print('DEPLOY')"])
-    add_origin(target)
+    loading_project(target, ["python3", "-c", "print('DEPLOY')"])
+    remote = add_origin(target)
     release_with_new_load_rule(source, monkeypatch)
     monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    return target, remote, old
+
+
+def drop_push_hook(root: Path) -> None:
+    git_path = git(
+        root, "rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-push"
+    )
+    Path(git_path).unlink(missing_ok=True)
+
+
+class GreenGh(FakeGh):
+    def __call__(self, root: Path, *args: str) -> str:
+        shown = super().__call__(root, *args)
+        for pull in self.pulls:
+            pull["statusCheckRollup"] = [
+                {"context": "deploy-preview", "state": "SUCCESS"}
+            ]
+        return shown
+
+
+def test_update_pr_requests_no_merge_for_an_unfixed_tip_with_only_an_unrelated_green_check(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target, remote, _ = refused_tip(release, monkeypatch)
+    fresh = target.parent / "fresh"
+    git(target.parent, "clone", "-q", str(remote), str(fresh))
+    git(fresh, "config", "user.name", "Fixture")
+    git(fresh, "config", "user.email", "fixture@example.invalid")
+    fake = GreenGh()
+    monkeypatch.setattr(update_pr, "gh", fake)
+    monkeypatch.setattr("shipping.gh", fake)
+
+    with suppress(ValueError):
+        update_pr.publish(fresh)
+    drop_push_hook(fresh)
+    with suppress(ValueError):
+        update_pr.publish(fresh)
+    capsys.readouterr()
+    assert "pr merge" not in fake.verbs()
+    assert git(remote, "branch", "--list", update_runner.UPDATE_BRANCH) == ""
+
+
+def test_an_update_whose_release_cannot_load_the_gates_file_leaves_the_update_branch_and_the_checkout_untouched(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, _, old = refused_tip(release, monkeypatch)
+    before = git(target, "rev-parse", "HEAD")
 
     assert update_runner.apply_update(target) == 0
     result = (target / update_runner.RESULT_FILE).read_text()
-    assert "Hard Eng update failed" in result
-    assert "the new release cannot load the checks of this project" in result
-    assert RULE_TEXT in result
-    assert FIX_FIRST in result
-    assert git(target, "branch", "--list", update_runner.UPDATE_BRANCH) == ""
+    assert "Hard Eng update failed" not in result
+    branch = f"refs/heads/{update_runner.UPDATE_BRANCH}"
+    marker = json.loads(git(target, "show", f"{branch}:{update.SOURCE_FILE}"))
+    assert marker["revision"] != old
     assert git(target, "rev-parse", "HEAD") == before
     assert git(target, "status", "--short") == ""
     assert json.loads((target / update.SOURCE_FILE).read_text())["revision"] == old
     assert installed_load(target).returncode == 0
 
 
+def test_update_pr_refuses_to_push_an_update_tip_its_release_cannot_load(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target, remote, _ = refused_tip(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    capsys.readouterr()
+
+    assert update_pr.publish(target) == 1
+    printed = capsys.readouterr().out
+    assert RULE_TEXT in printed
+    assert f"Fix its checks on branch {update_runner.UPDATE_BRANCH}" in printed
+    assert git(remote, "branch", "--list", update_runner.UPDATE_BRANCH) == ""
+
+
+def test_a_fix_on_the_update_branch_is_pushed_and_merged_by_update_pr(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target, remote, _ = refused_tip(release, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    drop_push_hook(target)
+    branch = update_runner.UPDATE_BRANCH
+    work = target.parent / "fix"
+    git(target, "worktree", "add", "-q", str(work), branch)
+    gates = work / GATES_FILE
+    config = json.loads(gates.read_text())
+    config["shared"][-1]["command"] = ["trivy", "config", "."]
+    gates.write_text(json.dumps(config))
+    git(work, "commit", "-qam", "meet the new rule")
+    fake = GreenGh()
+    monkeypatch.setattr(update_pr, "gh", fake)
+    monkeypatch.setattr("shipping.gh", fake)
+
+    assert update_pr.publish(work) == 0
+    tip = git(work, "rev-parse", branch)
+    assert git(remote, "rev-parse", branch) == tip
+    merges = [call for call in fake.calls if call[:2] == ("pr", "merge")]
+    assert len(merges) == 1
+    assert merges[0][-1] == tip
+
+
 def test_a_refusal_for_a_missing_product_file_does_not_send_the_reader_to_the_gates_file(
     release: tuple[Path, Path, str],
 ) -> None:
-    source, target, _ = release
-    update_runner.require_loading_gates(target, source)
+    _, target, _ = release
+    assert update_pr.load_refusal(target) is None
     (target / "PRODUCT.md").unlink()
 
-    with pytest.raises(ValueError, match="PRODUCT.md is required") as refusal:
-        update_runner.require_loading_gates(target, source)
-    assert "hard-eng.gates.json" not in str(refusal.value)
+    refusal = update_pr.load_refusal(target)
+    assert refusal is not None and "PRODUCT.md is required" in refusal
+    assert "hard-eng.gates.json" not in refusal
 
 
 def test_an_update_whose_release_loads_the_gates_file_still_lands(
