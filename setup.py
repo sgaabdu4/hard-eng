@@ -870,23 +870,21 @@ def install(root: Path, previous: Path | None = None) -> None:
     changes, links, hook, launcher, deleted = plan_install(root, previous)
     names = sorted({*changes, *links, *deleted})
     worktree, worktree_launcher = hook_chain.worktree_hook(root)
-    for path, chained in (
-        (
-            hook,
-            launcher
-            in {hook_chain.CHAINED_LAUNCHER, hook_chain.HUSKY_CHAINED_LAUNCHER},
-        ),
-        (
-            worktree,
-            hook_chain.foreign_hook(root, worktree) or hook_chain.keeps_copy(worktree),
-        ),
-    ):
-        if path.is_relative_to(root) and ".git" not in path.relative_to(root).parts:
-            names.append(
-                str(path.relative_to(root))
-            )  # A Husky launcher lives in the tree.
-            if chained:
-                names.append(str(hook_chain.project_copy(path).relative_to(root)))
+    names += hook_chain.committed_hook_names(
+        root,
+        [
+            (
+                hook,
+                launcher
+                in {hook_chain.CHAINED_LAUNCHER, hook_chain.HUSKY_CHAINED_LAUNCHER},
+            ),
+            (
+                worktree,
+                hook_chain.foreign_hook(root, worktree)
+                or hook_chain.keeps_copy(worktree),
+            ),
+        ],
+    )
     # Commit only paths without prior local state, so no project edit joins the commit.
     dirty = local_state(root, names)
     retire_local_generation(root)
