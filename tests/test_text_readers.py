@@ -205,3 +205,42 @@ def test_the_dart_reader_is_built_once_and_a_run_starts_no_dart_process() -> Non
     finally:
         RECORDING.clear()
     assert STARTED == ["reader.exe"]
+
+
+def fake_reader(staging: Path, files: tuple[str, ...]) -> None:
+    for name in files:
+        (staging / name).parent.mkdir(parents=True, exist_ok=True)
+        (staging / name).write_text("{}")
+
+
+@pytest.mark.parametrize(
+    ("prefix", "ready"),
+    [("js", "node_modules/oxc-parser/package.json"), ("dart", "reader.exe")],
+)
+def test_a_half_deleted_reader_folder_is_built_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prefix: str, ready: str
+) -> None:
+    """HE-NO-TEXT-WALLS: a cached reader folder is reused only when its parser package or compiled file is there."""
+    monkeypatch.setattr(text_readers, "tool_folder", lambda: tmp_path)
+    built: list[str] = []
+
+    def build(staging: Path) -> None:
+        built.append(prefix)
+        fake_reader(staging, (ready, "reader.mjs"))
+
+    folder = text_readers.reader_folder(prefix, [b"key"], build)
+    assert text_readers.reader_folder(prefix, [b"key"], build) == folder
+    assert built == [prefix]
+    (folder / ready).unlink()
+    assert text_readers.reader_folder(prefix, [b"key"], build) == folder
+    assert built == [prefix, prefix]
+    assert (folder / ready).is_file()
+
+
+def test_a_reader_with_its_parser_package_deleted_runs_again() -> None:
+    """HE-NO-TEXT-WALLS: after the parser package is deleted from the cached folder, the next run installs it again."""
+    request = text_walls.request([("a.tsx", SCREEN, None)])
+    text_readers.read("js", request)
+    folder = next((text_readers.tool_folder() / "text-readers").glob("js-*"))
+    shutil.rmtree(folder / "node_modules/oxc-parser")
+    assert text_readers.read("js", request)[0]["blocks"]

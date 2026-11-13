@@ -28,6 +28,7 @@ NEEDS_DART = (
     "HE-NO-TEXT-WALLS: reading the changed Flutter screens needs the Dart SDK 3.11 or newer "
     "once, to build its reader. Install Dart or Flutter, or in CI add the Dart SDK before the check"
 )
+READY = {"js": "node_modules/oxc-parser/package.json", "dart": "reader.exe"}
 READ_FAILED = "HE-NO-TEXT-WALLS: the {kind} reader failed: {error}"
 
 
@@ -107,12 +108,13 @@ def reader_folder(
         digest.update(hashlib.sha256(part).digest())
     root = tool_folder() / "text-readers"
     folder = root / f"{prefix}-{digest.hexdigest()[:12]}"
-    if folder.is_dir():
+    if (folder / READY[prefix]).is_file():
         return folder
     root.mkdir(parents=True, exist_ok=True)
     with (root / "install.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if not folder.is_dir():
+        if not (folder / READY[prefix]).is_file():
+            shutil.rmtree(folder, ignore_errors=True)
             staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=root))
             try:
                 build(staging)
