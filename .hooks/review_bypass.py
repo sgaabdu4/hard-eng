@@ -34,7 +34,7 @@ _REVIEW_QUERY = (
     "...on PullRequestParameters{requireCodeOwnerReview}}}}} "
     "commits(last:1){nodes{commit{oid statusCheckRollup{contexts(first:100){"
     "totalCount nodes{...on CheckRun{name databaseId status conclusion "
-    "checkSuite{workflowRun{workflow{name}}}} ...on StatusContext{context state}}"
+    "checkSuite{app{databaseId} workflowRun{workflow{databaseId}}}} ...on StatusContext{context state}}"
     "}}}}}}}}"
 )
 _RULE_QUERY = (
@@ -186,21 +186,29 @@ def _other_merge_requirement(
     return None
 
 
-def _workflow_name(node: dict[str, JsonValue]) -> JsonValue:
+def _producer(node: dict[str, JsonValue]) -> tuple[int, JsonValue] | None:
+    """The app id and workflow id of a check run; None when the app is unknown."""
     suite = _dict(node.get("checkSuite"))
-    return _dict(_dict(_dict(suite.get("workflowRun")).get("workflow"))).get("name")
+    app = _dict(suite.get("app")).get("databaseId")
+    if isinstance(app, bool) or not isinstance(app, int) or app <= 0:
+        return None
+    workflow = _dict(_dict(suite.get("workflowRun")).get("workflow"))
+    return app, workflow.get("databaseId")
 
 
 def _unpassed_check(contexts: list[dict[str, JsonValue]]) -> str | None:
     """The first check whose newest run did not pass; "" when it has no name."""
-    runs: dict[tuple[JsonValue, JsonValue], list[dict[str, JsonValue]]] = {}
+    runs: dict[tuple[int, JsonValue, JsonValue], list[dict[str, JsonValue]]] = {}
     for node in contexts:
         if "context" in node:
             if node.get("state") != "SUCCESS":
                 return str(node["context"])
             continue
-        runs.setdefault((_workflow_name(node), node.get("name")), []).append(node)
-    for (_, name), group in runs.items():
+        producer = _producer(node)
+        if producer is None:
+            return str(node.get("name") or "")
+        runs.setdefault((*producer, node.get("name")), []).append(node)
+    for (_, _, name), group in runs.items():
         try:
             newest = newest_run(group, "databaseId")
         except ShippingError:
