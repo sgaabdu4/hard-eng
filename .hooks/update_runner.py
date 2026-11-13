@@ -340,11 +340,13 @@ def commit_update(
     links: dict[str, str | None],
     revision: str,
 ) -> None:
+    from hook_chain import keep_copy_mode
     from update import write_changes, write_links
 
     names = sorted({*changes, *links})
     write_links(root, links)
     write_changes(root, changes)
+    keep_copy_mode(root, names)
     subprocess.run(["git", "add", "--force", "--", *names], cwd=root, check=True)
     git_commit(root, names, changes, f"Update Hard Eng to {revision}")
 

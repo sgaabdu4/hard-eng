@@ -367,3 +367,15 @@ def test_pre_push_help_prints_the_help(tmp_path: Path, option: str) -> None:
     assert outcome.returncode == 0
     assert outcome.stdout.startswith("usage:")
     assert "pre-push" in outcome.stdout
+
+
+def test_an_untracked_project_post_checkout_hook_is_not_chained_for_a_commit(
+    repository: Path,
+) -> None:
+    hook = repository / ".git/hooks/post-checkout"
+    hook.write_text("#!/bin/sh\necho owner\n")
+    git(repository, "config", "core.hooksPath", "hooks-here")
+    (repository / "hooks-here").mkdir()
+    (repository / "hooks-here/post-checkout").write_text("#!/bin/sh\necho owner\n")
+    assert hook_chain.chain_worktree_hook(repository) == {}
+    assert not (repository / "hooks-here/post-checkout.project").exists()

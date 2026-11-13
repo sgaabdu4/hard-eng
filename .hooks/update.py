@@ -307,6 +307,7 @@ def update_plan(
     previous: Path,
     env: dict[str, str] | None = None,
     replace: bool = False,
+    chained: bool = False,
 ) -> tuple[dict[str, str | None], dict[str, str | None], tuple[str, str], list[str]]:
     planned = subprocess.run(
         [
@@ -319,7 +320,7 @@ def update_plan(
             *(["--replace-scaffold"] if replace else []),
         ],
         cwd=root,
-        env=env,
+        env=hook_chain.plan_env(env, chained),
         capture_output=True,
         text=True,
         timeout=60,
@@ -796,7 +797,7 @@ def update(root: Path, repair: bool = False, *, remember: Path | None = None) ->
 
 
 def install_revision(root: Path, source: Path, old: Path, revision: str) -> str:
-    changes, links, hook, _ = update_plan(root, source, old)
+    changes, links, hook, _ = update_plan(root, source, old, chained=True)
     if not changes and not links:
         install_planned_hook(root, hook)
         return "Hard Eng already matches the verified source."
