@@ -179,7 +179,7 @@ def after_the_gate_check(spy: Mock) -> list[str]:
     last = max(
         (n for n, command in enumerate(words) if command[0] != "git"), default=-1
     )
-    return [command[1] for command in words[last + 1 :]]
+    return [command[3 if command[1] == "-c" else 1] for command in words[last + 1 :]]
 
 
 @pytest.mark.parametrize("hosted", [True, False])

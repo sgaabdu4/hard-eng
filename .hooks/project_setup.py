@@ -27,6 +27,7 @@ from gate_config import (
 )
 from hook_chain import is_own
 from project_files import (
+    GIT_LISTING,
     INSTALL_LOCKS,
     dependency_free,
     missing_lock_error,
@@ -113,10 +114,9 @@ def validate_dart_exclusions(directory: Path, values: object) -> None:
         if path.relative_to(directory).parts[0] not in roots
     }
     if roots:
+        listing = [*GIT_LISTING, "ls-files", "-zco", "--exclude-standard", "--"]
         names = subprocess.check_output(
-            ["git", "ls-files", "-zco", "--exclude-standard", "--", *sorted(roots)],
-            cwd=directory,
-            text=True,
+            [*listing, *sorted(roots)], cwd=directory, text=True
         ).split("\0")
         matches.update(
             directory / name
