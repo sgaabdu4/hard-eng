@@ -147,3 +147,36 @@ Future<void> inLoopTyped(items, read) async {
     await Future.wait<void>(batch.map(read));
   }
 }
+
+Future<(A, B)> waitBoth<A, B>(Future<A> first, Future<B> second) async {
+  await Future.wait<void>([first, second], eagerError: true);
+  return (await first, await second);
+}
+
+Future<void> joinTwoReads(readA, readB) async {
+  final (a, b) = await waitBoth(readA(), readB());
+  print([a, b]);
+}
+
+Future<void> inOrderSteps(List<Future<void> Function()> steps, {required String reason}) async {
+  for (final step in steps) {
+    await step();
+  }
+}
+
+Future<void> orderedValues(readA, readB) async {
+  late final A a;
+  late final B b;
+  await inOrderSteps([
+    () async { a = await readA(); },
+    () async { b = await readB(); },
+  ], reason: 'The second read must see the first write');
+  print([a, b]);
+}
+
+Future<void> plainPair(readA, readB) async {
+  // ruleid: sequential-awaits-dart
+  final a = await readA();
+  final b = await readB();
+  print([a, b]);
+}
