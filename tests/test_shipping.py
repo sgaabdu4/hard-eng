@@ -109,6 +109,13 @@ def _check(revision: str, **changes: object) -> dict[str, object]:
         "conclusion": "success",
         "started_at": "2026-09-10T10:00:00Z",
         "completed_at": "2026-09-10T10:00:10Z",
+        "output": {
+            "title": None,
+            "summary": None,
+            "text": None,
+            "annotations_count": 0,
+            "annotations_url": "https://api.github.com/repos/acme/widget/check-runs/1/annotations",
+        },
     }
     result.update(changes)
     return result
