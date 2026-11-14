@@ -58,7 +58,7 @@ Rules:
 Result: Pending
 Evidence: [TODO: Actual commands/results + limits before Complete]
 E2E: Required — [TODO: Journey + E2E test + expected proof; Complete needs Passed evidence or N/A — reason; deployment-only proof uses Delivery plus configured Deploy verifier]
-Real service: Required — [TODO: HE-REAL-SERVICE-RUN: <service>: the changed calls that will run one time against the real service; Complete needs Passed — <service>: what ran + what it returned; no outside service called → N/A — reason; no approved test account → keep Required, set the plan to Draft + ask the user; only the user can approve a skip: N/A — user, <place of the decision>: <reason>]
+Real service: Required — [TODO: <name of the service>: the changed calls that will run one time against the real service, per HE-REAL-SERVICE-RUN; Complete needs Passed — <service>: what ran + what it returned; no outside service called → N/A — reason; no approved test account → keep Required, set the plan to Draft + ask the user; only the user can approve a skip: N/A — user, <place of the decision>: <reason>]
 Retro: [TODO: Required on Complete plans; write it at task end per HE Learn's Retro section, before setting Status: Complete]
 
 [TODO: If shipping: Delivery target: PR, Merge or Deploy; Delivery: Pending — required remote proof.]
