@@ -690,7 +690,7 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
     ):
         raise TypeError("Each gate group must contain a path and checks list")
     directory = (root / group["path"]).resolve()
-    if not directory.is_relative_to(root) or not directory.is_dir():
+    if not directory.is_relative_to(root.resolve()) or not directory.is_dir():
         raise ValueError(
             f"Gate directory must exist inside the project: {group['path']}"
         )
