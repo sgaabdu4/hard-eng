@@ -66,6 +66,8 @@ def real_service(verification: str, status: str) -> None:
         )
     if kind != "N/A" and not SERVICE_FIRST.match(text):
         raise ValueError(f"plan {REAL} {kind} needs the name of the service first")
+    if kind == "Passed" and NO_EVIDENCE.match(text.partition(": ")[2]):
+        raise ValueError(f"plan {REAL} Passed needs {FORMS[REAL][3]}")
 
 
 def run_errors(
