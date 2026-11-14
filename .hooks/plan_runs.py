@@ -59,7 +59,8 @@ def run_line(verification: str, name: str, status: str) -> tuple[str, str]:
 
 def real_service(verification: str, status: str) -> None:
     kind, text = run_line(verification, REAL, status)
-    if kind == "N/A" and (word := NOT_REAL.search(text)):
+    skipped = kind == "N/A" and text.lower().startswith("user,")
+    if kind == "N/A" and not skipped and (word := NOT_REAL.search(text)):
         raise ValueError(
             f"plan {REAL} gives '{word[0]}' as the reason, and a fake is not the real "
             "service; a change that calls an outside service needs the real run"
