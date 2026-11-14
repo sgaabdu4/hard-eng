@@ -3,9 +3,9 @@
 import math
 import os
 import re
-import time
 from pathlib import Path
 from statistics import median
+from time import sleep
 from typing import TYPE_CHECKING
 
 from gate_config import JsonValue
@@ -364,7 +364,7 @@ def reused_pull_request(root: Path, base: str) -> str | None:
             return _covering_head(root, base, policy, ref, release)
         except ShippingError as error:
             if waits and SERVER_ERROR.search(str(error)):
-                time.sleep(waits.pop(0))
+                sleep(waits.pop(0))
                 continue
             who = "merged PR's" if on_push else "earlier"
             where = "push" if on_push else "PR"
