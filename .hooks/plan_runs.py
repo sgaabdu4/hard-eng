@@ -9,6 +9,7 @@ RUN_LINE = re.compile(r"(Required|Passed|Delivery|N/A) — (\S.*)")
 NO_EVIDENCE = re.compile(r"(?i)^(pending|none|blocked|n/a)\b")
 DEPLOY_TARGET = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$")
 SERVICE_FIRST = re.compile(r"[^:]*\S: \S")
+USER_SKIP = re.compile(r"(?i)user, [^:]*\S: \S")
 ONLY_PLACEHOLDER = re.compile(r"(?i)(?:pending|none|blocked|n/a)\W*")
 NOT_REAL = re.compile(
     r"(?i)\b(?:fakes?|faked|mocks?|mocked|stubs?|stubbed|test doubles?|in-memory)\b"
@@ -59,8 +60,8 @@ def run_line(verification: str, name: str, status: str) -> tuple[str, str]:
 
 def real_service(verification: str, status: str) -> None:
     kind, text = run_line(verification, REAL, status)
-    skipped = kind == "N/A" and text.lower().startswith("user,")
-    if kind == "N/A" and not skipped and (word := NOT_REAL.search(text)):
+    reason = kind == "N/A" and not USER_SKIP.match(text)
+    if reason and (word := NOT_REAL.search(text)):
         raise ValueError(
             f"plan {REAL} gives '{word[0]}' as the reason, and a fake is not the real "
             "service; a change that calls an outside service needs the real run"
