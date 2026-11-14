@@ -503,3 +503,17 @@ def test_the_tip_load_refuses_a_debt_file_that_each_check_would_refuse(
 
     refusal = update_pr.load_refusal(target)
     assert refusal is not None and "hard-eng.debt.json must hold version 1" in refusal
+
+
+def test_the_tip_load_reads_a_project_reached_through_a_linked_folder(
+    release: tuple[Path, Path, str], tmp_path: Path
+) -> None:
+    _, target, _ = release
+    link = tmp_path / "linked"
+    link.symlink_to(target, target_is_directory=True)
+
+    assert update_pr.load_refusal(link) is None
+    assert gate_config.load_groups(link) == gate_config.load_groups(target)
+    (target / "PRODUCT.md").unlink()
+    refusal = update_pr.load_refusal(link)
+    assert refusal is not None and "PRODUCT.md is required" in refusal
