@@ -47,7 +47,7 @@ def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
         (PLANNED, "Ready"),
         ("Real service: N/A — the change edits a screen mockup only.\n", "Ready"),
         (
-            "Real service: Passed — payments API: a doubled charge was refused on the test account.\n",
+            "Real service: N/A — the change edits how a doubled charge is shown; it calls no outside service.\n",
             "Complete",
         ),
         (
@@ -55,7 +55,7 @@ def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
             "Ready",
         ),
         (
-            "Real service: N/A — user, chat of 2026-11-14: no test account exists for the bank.\n",
+            "Real service: N/A — user, chat of 2026-11-14: the bank has no sandbox, so the fake stays the only proof.\n",
             "Complete",
         ),
         (
@@ -160,11 +160,13 @@ def test_a_plan_fails_when_its_real_service_run_is_missing_or_a_fake_is_the_reas
 
 
 def test_a_complete_plan_from_before_the_real_service_rule_stays_valid(
-    tmp_path: Path, bare: str
+    tmp_path: Path, bare: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     assert stage(tmp_path, bare, changed=False) == "Complete"
     with pytest.raises(ValueError, match="Real service"):
         stage(tmp_path, bare + "\nReopened for new work.\n")
+    monkeypatch.setattr(plans, "touched_since_update", lambda _: False)
+    assert stage(tmp_path, bare) == "Complete"
 
 
 def test_an_unchanged_complete_plan_with_no_e2e_line_is_refused(
