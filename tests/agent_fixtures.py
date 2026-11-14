@@ -147,6 +147,7 @@ N/A — library change with no visual surface.
 Result: Pending
 Evidence: Pending implementation.
 E2E: N/A — no user journey beyond the unit-tested function.
+Real service: N/A — the function calls no outside service.
 """
 APP = """import sys
 
@@ -324,6 +325,14 @@ def prepare_outside_service(root: Path) -> None:
     with (root / ".gitignore").open("a") as ignores:
         ignores.write("vendor/calls.log\n")
     commit(root, "Clinic helper with the vendor records tool")
+
+
+def real_run_failures(calls: Path, plans: list[str]) -> list[str]:
+    made = calls.read_text() if calls.is_file() else ""
+    failures = [] if "mobile P-1001" in made else ["never ran the real tool on P-1001"]
+    if not any("\nReal service: Passed — " in text for text in plans):
+        failures.append("no changed plan records the run as `Real service: Passed`")
+    return failures
 
 
 def prepare_repeat_failure(root: Path) -> None:
