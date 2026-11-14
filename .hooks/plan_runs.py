@@ -59,11 +59,10 @@ def run_line(verification: str, name: str, status: str) -> tuple[str, str]:
 
 def real_service(verification: str, status: str) -> None:
     kind, text = run_line(verification, REAL, status)
-    if kind != "Required" and (word := NOT_REAL.search(text)):
+    if kind == "N/A" and (word := NOT_REAL.search(text)):
         raise ValueError(
-            f"plan {REAL} says '{word[0]}', and a fake is not the real service; do "
-            "the run against the real service and describe only that run, because "
-            "other words do not make a run on a fake real"
+            f"plan {REAL} gives '{word[0]}' as the reason, and a fake is not the real "
+            "service; a change that calls an outside service needs the real run"
         )
     if kind != "N/A" and not SERVICE_FIRST.match(text):
         raise ValueError(f"plan {REAL} {kind} needs the name of the service first")

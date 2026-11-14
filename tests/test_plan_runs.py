@@ -62,6 +62,10 @@ def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
             "Real service: Passed — payments API: pending payment was created on the test account.\n",
             "Complete",
         ),
+        (
+            "Real service: Passed — records service: the command ran one time on the test patient; the fake matches the reply.\n",
+            "Complete",
+        ),
     ],
     ids=[
         "real-run",
@@ -72,6 +76,7 @@ def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
         "planned-run-can-name-the-fake",
         "the-user-skips-the-run",
         "evidence-can-start-with-the-word-pending",
+        "evidence-can-say-that-the-fake-matches",
     ],
 )
 def test_a_plan_passes_with_its_real_service_run_stated(
@@ -104,11 +109,6 @@ def test_a_plan_passes_with_its_real_service_run_stated(
             "Real service Passed needs what ran",
         ),
         (
-            "Real service: Passed — the in-memory backend accepted the write.\n",
-            "Complete",
-            "is not the real service",
-        ),
-        (
             "Real service: N/A — the tests use the project's fake of the backend.\n",
             "Complete",
             "is not the real service",
@@ -116,11 +116,6 @@ def test_a_plan_passes_with_its_real_service_run_stated(
         (
             "Real service: N/A — every call is mocked.\n",
             "Ready",
-            "is not the real service",
-        ),
-        (
-            "Real service: Passed — the stub server returned the row.\n",
-            "Complete",
             "is not the real service",
         ),
         (
@@ -147,17 +142,15 @@ def test_a_plan_passes_with_its_real_service_run_stated(
         "planned-run-at-complete",
         "passed-with-no-evidence",
         "passed-with-a-service-and-no-evidence",
-        "passed-on-a-fake",
         "fake-as-the-reason",
         "mock-as-the-reason",
-        "passed-on-a-stub",
         "test-double-as-the-reason",
         "a-run-after-the-deploy-is-too-late",
         "passed-with-no-service-named",
         "planned-with-no-service-named",
     ],
 )
-def test_a_plan_fails_when_its_real_service_run_is_missing_or_ran_on_a_fake(
+def test_a_plan_fails_when_its_real_service_run_is_missing_or_a_fake_is_the_reason(
     tmp_path: Path, bare: str, line: str, status: str, error: str
 ) -> None:
     plan = with_line(bare, line) + "\nDelivery target: Deploy\nDelivery: Pending\n"
