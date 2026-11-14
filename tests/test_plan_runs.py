@@ -163,6 +163,14 @@ def test_a_complete_plan_from_before_the_real_service_rule_stays_valid(
         stage(tmp_path, bare + "\nReopened for new work.\n")
 
 
+def test_an_unchanged_complete_plan_with_no_e2e_line_is_refused(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    plan = re.sub(r"(?m)^E2E:.*\n", "", completed_plan)
+    with pytest.raises(ValueError, match="needs one 'E2E:' field"):
+        stage(tmp_path, plan, changed=False)
+
+
 @pytest.mark.parametrize(
     ("handoff", "blockers", "line", "unfinished"),
     [
