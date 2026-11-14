@@ -119,6 +119,11 @@ def test_a_plan_passes_with_its_real_service_run_stated(
             "is not the real service",
         ),
         (
+            "Real service: N/A — user, the tests use a fake of the backend.\n",
+            "Complete",
+            "is not the real service",
+        ),
+        (
             "Real service: N/A — a test double covers the backend.\n",
             "Complete",
             "is not the real service",
@@ -144,6 +149,7 @@ def test_a_plan_passes_with_its_real_service_run_stated(
         "passed-with-a-service-and-no-evidence",
         "fake-as-the-reason",
         "mock-as-the-reason",
+        "a-skip-with-no-place-of-the-decision",
         "test-double-as-the-reason",
         "a-run-after-the-deploy-is-too-late",
         "passed-with-no-service-named",
