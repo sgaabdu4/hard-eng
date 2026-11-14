@@ -20,4 +20,4 @@ Native hooks can deliver consistent prompts while tests/checkers enforce specifi
 
 ## Evidence
 
-User implementation and location instructions, 11 September 2026. [Implementation plan](../../features/he-learn/PLAN.md) records source checks, native behavior and client limitations. Acceptance of this decision does not claim delivery.
+User implementation and location instructions, 11 September 2026. [Implementation plan](https://github.com/sgaabdu4/hard-eng/blob/709d61e1ef074a0d6698a9dc0eb912f929c33728/features/he-learn/PLAN.md) records source checks, native behavior and client limitations. Acceptance of this decision does not claim delivery.
