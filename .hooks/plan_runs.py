@@ -13,7 +13,6 @@ NOT_REAL = re.compile(
     r"(?i)\b(?:fakes?|faked|mocks?|mocked|stubs?|stubbed|test doubles?|in-memory)\b"
 )
 E2E = "E2E"
-E2E_LINE = re.compile(r"(?m)^E2E:")
 REAL = "Real service"
 REAL_HELP = (
     "write one line under Verification: `Real service: Required — <service>: <the "
@@ -75,8 +74,7 @@ def run_errors(
     """A Complete plan from before the Real service rule stays valid: an unchanged one, and one last edited before the installed update."""
     errors = []
     try:
-        if not legacy or E2E_LINE.search(verification):
-            run_line(verification, E2E, status)
+        run_line(verification, E2E, status)
     except ValueError as error:
         errors.append(f"Verification: {error}")
     try:

@@ -68,7 +68,7 @@ Decisions:
 - [ ] The judge of the agent case needs the run on the real tool and a plan line that records it → `tests/test_agent_checks.py::test_outside_service_needs_a_fake_backed_journey_and_one_real_run`
 - [ ] A real agent on each client runs the real tool one time and records the run on the line → N/A — a model run is not a suite test; the result of the outside-service case on each client goes into Verification
 - [ ] The E2E check keeps its refusals after the move → `tests/test_plans.py::test_runtime_journey_cannot_disappear_behind_nonvisual_ux`, `tests/test_plans.py::test_deployment_journey_keeps_delivery_open`
-- [ ] An unchanged Complete plan with no E2E line is refused, because the exemption is removed → `tests/test_plans.py::test_unchanged_complete_plan_predates_newer_rules`
+- [ ] An unchanged Complete plan with no E2E line is refused, because the exemption is removed → `tests/test_plan_runs.py::test_an_unchanged_complete_plan_with_no_e2e_line_is_refused`
 - [ ] The check adds no measurable time to the gate → N/A — a timing is not a suite test; forced runs of the plan check on both versions go into Verification
 - [ ] The new texts and fixtures hold no client data → N/A — a search of the outgoing text before the push, recorded in Verification
 - [ ] The owner gets the decision for each of the three gaps, with the reason for each choice and its limits, and a rule text and a test idea for the project-only parts → N/A — a chat reply and the pull request text, not code
