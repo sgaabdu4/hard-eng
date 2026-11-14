@@ -58,6 +58,10 @@ def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
             "Real service: N/A — user, chat of 2026-11-14: no test account exists for the bank.\n",
             "Complete",
         ),
+        (
+            "Real service: Passed — payments API: pending payment was created on the test account.\n",
+            "Complete",
+        ),
     ],
     ids=[
         "real-run",
@@ -67,6 +71,7 @@ def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
         "doubled-is-not-a-test-double",
         "planned-run-can-name-the-fake",
         "the-user-skips-the-run",
+        "evidence-can-start-with-the-word-pending",
     ],
 )
 def test_a_plan_passes_with_its_real_service_run_stated(
