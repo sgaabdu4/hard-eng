@@ -5,7 +5,10 @@ from pathlib import Path
 
 import plans
 import pytest
+from conftest import draft_plan as draft
 from conftest import init
+from conftest import plan_stage as stage
+from conftest import ready_plan as ready
 
 NO_SERVICE = "Real service: N/A — the fixture command calls no outside service.\n"
 PASSED = (
@@ -27,16 +30,6 @@ def bare(completed_plan: str) -> str:
 
 def with_line(plan: str, line: str) -> str:
     return plan.replace(ANCHOR, line + ANCHOR)
-
-
-def ready(plan: str) -> str:
-    return plan.replace("Status: Complete", "Status: Ready").replace("[x]", "[ ]")
-
-
-def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
-    path = tmp_path / "PLAN.md"
-    path.write_text(plan)
-    return plans.validate_plan(path, changed=changed)
 
 
 @pytest.mark.parametrize(
@@ -201,13 +194,7 @@ def test_an_approval_handoff_waits_for_the_real_service_line(
 ) -> None:
     root = tmp_path / "project"
     init(root)
-    plan = (
-        with_line(bare, line)
-        .replace("Status: Complete", "Status: Draft")
-        .replace("Blockers: None", f"Blockers: {blockers}")
-        .replace("Handoff: Approval", f"Handoff: {handoff}")
-    )
-    (root / "PLAN.md").write_text(plan)
+    (root / "PLAN.md").write_text(draft(with_line(bare, line), handoff, blockers))
     notice, stuck = plans.planning_feedback(root, {"PLAN.md"})
     assert stuck is unfinished
     assert ("Real service" in notice) is unfinished
