@@ -266,6 +266,26 @@ def completed_plan() -> str:
     return plan_document()
 
 
+def ready_plan(plan: str) -> str:
+    return plan.replace("Status: Complete", "Status: Ready").replace("[x]", "[ ]")
+
+
+def draft_plan(plan: str, handoff: str, blockers: str) -> str:
+    return (
+        plan.replace("Status: Complete", "Status: Draft")
+        .replace("Blockers: None", f"Blockers: {blockers}")
+        .replace("Handoff: Approval", f"Handoff: {handoff}")
+    )
+
+
+def plan_stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
+    import plans
+
+    path = tmp_path / "PLAN.md"
+    path.write_text(plan)
+    return plans.validate_plan(path, changed=changed)
+
+
 def install_ux_reference(root: Path) -> None:
     """Put the UX reference where an installed project holds it, for the plan check that reads its rule labels."""
     path = ".agents/skills/he-plan/references/ux.md"
