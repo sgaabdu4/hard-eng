@@ -159,13 +159,17 @@ def test_a_plan_fails_when_its_real_service_run_is_missing_or_a_fake_is_the_reas
     assert "With no approved test account, keep Required" in str(refusal.value)
 
 
+def last_edited_before_the_update(_: Path) -> bool:
+    return False
+
+
 def test_a_complete_plan_from_before_the_real_service_rule_stays_valid(
     tmp_path: Path, bare: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     assert stage(tmp_path, bare, changed=False) == "Complete"
     with pytest.raises(ValueError, match="Real service"):
         stage(tmp_path, bare + "\nReopened for new work.\n")
-    monkeypatch.setattr(plans, "touched_since_update", lambda _: False)
+    monkeypatch.setattr(plans, "touched_since_update", last_edited_before_the_update)
     assert stage(tmp_path, bare) == "Complete"
 
 
