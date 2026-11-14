@@ -137,7 +137,7 @@ Use only a test account, a sandbox or a staging project that the user or the pro
 The Verification section of the plan has one `Real service:` line, in one of three forms:
 
 - `Required — <service>: <the calls that will run>` is valid until Complete.
-- `Passed — <service>: <what ran and what the service returned>` records the run. Say there if the reply matched the fake in the fields that count as read. Name each refusal that you caused, and each one that you did not cause.
+- `Passed — <service>: <what ran and what the service returned>` records the run. Say there if the reply matched the fake in the fields that count as read. Name each refusal that you caused. Name each handled refusal that you did not cause, with the reason.
 - `N/A — <reason>` is for a change that calls no outside service, or for a skip that the user decided, as below.
 
 A run on a fake, a mock, a stub, a test double or an in-memory copy is not a real run. Such a run is not a reason for `N/A`. A run after the release is too late, so the line has no form for it. If you have no approved test account, keep the line `Required`, set the plan to Draft with that blocker and ask the user. Only the user can decide to skip the real run: write `N/A — user, <place of the decision>: <reason>`.
@@ -145,3 +145,13 @@ A run on a fake, a mock, a stub, a test double or an in-memory copy is not a rea
 The check reads only the form of the line. It cannot prove that the run was done, or that the change calls no outside service. A small change has no plan, so it has no `Real service:` line. The rule still applies: run the journey through each changed call one time against the real service, and tell the user what it returned.
 
 Proof: check
+
+## HE-SEND-LIMIT
+
+Unattended code is code that can run again when no person starts each run: a timed job, a queue worker, a webhook handler, an alarm, or a retry that goes on after the request of the person ends. A send is a message to a person (an email, an SMS, a chat message, a push notification, a page or a new issue) or a call that the provider bills or counts against a quota.
+
+Unattended code that can send has a limit: a maximum number of sends for each period. A send that answers one outside event, such as one receipt for each payment, can use one send for each event ID instead of the maximum. This is allowed only when the ID stays the same each time the code runs again for the same event. The count lives outside the run, so the limit holds also when each run fails. An alarm sends one time for a fault, not one time for each failed run. It sends again only after the fault clears or after a set wait, and never more than the maximum for each period. For a change to unattended code or to what starts it, follow the failure path to each send, also to a send in code that the change did not touch.
+
+Test data and staging data cause no real send through an account that a production app uses. They never reach a real person whom the user or the project's rules did not name as a test recipient. Use the capture mode or the sandbox mode of the provider, or an account that no production app shares. A message to a made-up address still counts against the limit of the account that sends it.
+
+Proof: guidance
