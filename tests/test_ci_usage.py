@@ -637,9 +637,9 @@ def test_a_release_pr_lookup_tries_again_only_after_a_github_server_error(
         return answer(root, *args)
 
     monkeypatch.setattr(shipping, "gh", github)
-    monkeypatch.setattr("time.sleep", waits.append)
+    monkeypatch.setattr("ci_usage.sleep", waits.append)
     assert (pr.reused() == pr.head) is reused
-    assert (len(asked), len(waits)) == (tries, tries - 1)
+    assert (len(asked), waits) == (tries, [2.0, 6.0][: tries - 1])
     assert (
         capsys.readouterr().out.startswith("Running the checks again; ") is not reused
     )
