@@ -57,6 +57,10 @@ Decisions:
 9. The exemptions for the Surface, Same cause and Retro lines stay, because thousands of old Complete plans in the installed projects lack those lines.
 10. The line has three forms and no form for a run after the deploy. A run that is possible only on the released service is a decision for the user, with the skip form.
 11. The rule limits the run: only a test account that the user or the project's rules name, never production, payments only in test mode, and the records of the run removed. The run is by hand or a one-time command, so the rule that tests never call the real service stays true.
+12. A reader that did not write the text compared the old and the new prose of the rule entry, the two skills, the test guide, the plan checks reference, the template and the refusal messages. It gave 21 findings, then 2 on a second pass. Each one is repaired: the safety limits of the run, the run outside the test suite, the wider trigger, the help text on each refusal and shorter sentences.
+13. The independent review of the first candidate gave 4 findings. Two are repaired: a local tool is not an outside service, and a placeholder after the service name is refused. One is this record of the reader (Decision 12). One is declined below.
+
+Review declined: an older Complete plan with no E2E line now fails when it is selected, in a project outside the survey :: by decision of the owner on 2026-11-14 to remove old code with no live user. The survey read each of 15,784 Complete plans in the installed projects on this machine and found 0 without the line. The refusal names the missing field, so the repair in such a project is one line.
 
 ## Acceptance + steps
 

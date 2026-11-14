@@ -126,7 +126,7 @@ Proof: check
 
 ## HE-REAL-SERVICE-RUN
 
-An outside service is a program that the project's code does not contain. The code reaches it over a network or through another program. Examples are a hosted database, a payment provider and a message service. The project's own hosted backend is an outside service. A fake of that service can hold the same wrong assumption as the code. Then each test passes and the real service fails.
+An outside service is a system that runs outside the project's own process and keeps its own data or rules. Examples are a hosted database, a payment provider and a message service. The project's own hosted backend is an outside service. The code reaches the service over a network, or through a client program of that service. A local tool, such as Git, a compiler or a test runner, is not an outside service. A fake of that service can hold the same wrong assumption as the code. Then each test passes and the real service fails.
 
 A change can add or change a call to an outside service, or the code that builds its request or reads its reply. Before the plan is Complete, run the journey through each changed call one time against the real service. Do the run with a one-time command or by hand. Do not add it to the test suite. Run a write as the code runs it: the same order, and the same transaction if the code uses one. Compare each field of the reply with the fake. Find the fields that the service fills in, the empty fields, and the fields that the fake has and the reply lacks. If the reply differs from the fake, correct the fake in the same change.
 
