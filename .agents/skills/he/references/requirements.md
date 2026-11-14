@@ -105,3 +105,21 @@ Proof: guidance
 A PR holds at most 100 commits; GitHub can refuse to rebase a longer one. `ship` refuses a PR above the cap, and every `check` except `--quick` warns from 80. Above the cap, move the oldest finished commits to a branch and PR of their own. Merge it, then rebase the rest onto the base. Or join neighbour commits on the same base commit; `git diff <old head> <new head>` must then print nothing. Push the joined branch with `--force-with-lease`, and never pull the old commits back in. Only `ship` applies the cap: the Hard Eng update PR and a PR into a branch other than `shipping.base` never reach it.
 
 Proof: check
+
+## HE-SOURCE-COVERAGE
+
+A plan may use material that the user gave, such as a call record, documents or sheets. Material from another party that the user pastes into the chat is a source too. The client is the party that the work is for, when that party is not the user. The `Sources:` line names each source. For each source that you read in full, write "read in full". If you cannot read a part, name that part in the entry of its source on the `Sources:` line. Also name it in Blockers and set `Handoff: Clarification`. After the user excludes the part, add "excluded by the user" to that entry. The `Sources + coverage` section has one row for each item that the sources name. An item is a person or role, team, screen, rule or requested outcome. Build the rows from the sources themselves, not from your notes or summaries of them.
+
+Each row has one of four statuses. An `In scope` row copies exact words from one line of Acceptance + steps. That line names the item and proves its behavior. A `Later` row names who decided and the place of that decision. Write the word `client` or `user`, then a comma and the place. The name of the person can follow the word in brackets. For a `Later` row, the client decides, or the user when the work is for the user. A `Proposal` row holds a rule, a limit or an exclusion that no source decides. It is your idea, or a choice that the user makes for the work of a client. It needs a yes from the user or the client. After the yes, add who answered and the place of the answer. An `Open` row holds a question for the client or the user. Write each open question and each proposal with no answer in Blockers, in the words of its row, and ask the user. The plan is not Ready before the answers. A proposal with a yes stays a `Proposal` row. After a no, or after the answer to an open question, give the row the status that the answer decides.
+
+An acceptance line built on a rule names, in its own text, the place in the sources that states the rule. If no source states it, the rule is a `Proposal` row, and the acceptance line names the item of that row. Never show your own rule as a rule of the client.
+
+A second reader is required before Ready for more than one source, and for one large source such as a call record or a long document. Start a reader and give it only the sources and the plan, not your notes and not this conversation. It lists each item that the plan lacks, each row with a wrong status and each acceptance line whose rule no source states. Repair each one. Then write what the reader found on the `Reviewer:` line. If no reader can start, set `Reviewer: Pending`, write that in Blockers and set `Handoff: Clarification`. Do not write `N/A` then, and do not write a result that no reader gave.
+
+The `Deliverables:` line names each thing that you make for the client outside the repository, such as a walkthrough video, or `None`. Do not make one while a row is `Open` or a `Proposal` has no answer.
+
+Do not tell the user that the plan covers the sources while a row is `Open`, a `Proposal` has no answer or a required second reader has not run. The Participation rules of the [workflow](workflow.md#participation) say what follows when such a claim is later shown false.
+
+When the request is the only source, write `Sources: N/A — reason`, with no `Reviewer:` line and no rows. The `Deliverables:` line can stay. The check reads only the form. It cannot prove that the rows are complete or true.
+
+Proof: check

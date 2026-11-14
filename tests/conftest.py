@@ -232,6 +232,8 @@ def plan_document() -> str:
 Status: Complete
 ## Outcome + scope
 Verify fixture command exits; no product release.
+## Sources + coverage
+Sources: N/A — the request is the only source.
 ## Repository context
 The test creates commands in a temporary Git repository.
 Same cause: N/A — fixture command, not a fix.

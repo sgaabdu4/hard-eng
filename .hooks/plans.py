@@ -433,7 +433,9 @@ def readiness_errors(
                 e2e_proof(sections[name], status, legacy=legacy)
         except ValueError as error:
             errors.append(f"{name}: {error}")
-    return errors
+    from plan_coverage import coverage_errors
+
+    return errors + coverage_errors(sections, legacy, age)
 
 
 def no_blockers(text: str) -> bool:
