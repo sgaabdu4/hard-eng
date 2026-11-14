@@ -355,6 +355,11 @@ FAKE_RECORDS = 'import json\nprint(json.dumps({"mobile_no": "07700 900123"}))\n'
             "the test suite called the real records tool",
         ),
         ({"features/phone/PLAN.md": "# Phone\n"}, True, "no changed plan names"),
+        (
+            {"features/phone/PLAN.md": "# Phone\n\nE2E: `test_phone.py`\n"},
+            True,
+            "no changed plan records the run",
+        ),
     ],
 )
 def test_outside_service_needs_a_fake_backed_journey_and_one_real_run(
@@ -365,7 +370,8 @@ def test_outside_service_needs_a_fake_backed_journey_and_one_real_run(
         "app.py": PHONE_APP,
         "test_phone.py": PHONE_TEST,
         "fake_records_tool.py": FAKE_RECORDS,
-        "features/phone/PLAN.md": "# Phone\n\nE2E: `test_phone.py`\n",
+        "features/phone/PLAN.md": "# Phone\n\nE2E: `test_phone.py`\nReal service: "
+        "Passed — records tool: mobile P-1001 returned 07700 900123.\n",
         **change,
     }
     for name, text in files.items():

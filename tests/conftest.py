@@ -255,6 +255,7 @@ N/A — fixture commands have no visual interface.
 ## Verification
 Result: Passed
 Evidence: The test asserts the observed command exit; this is fixture data.
+Real service: N/A — the fixture command calls no outside service.
 E2E: Passed — fixture command is invoked through the native CLI and its exit is asserted.
 Retro: None — fixture command, no check failed.
 """
@@ -263,6 +264,26 @@ Retro: None — fixture command, no check failed.
 @pytest.fixture
 def completed_plan() -> str:
     return plan_document()
+
+
+def ready_plan(plan: str) -> str:
+    return plan.replace("Status: Complete", "Status: Ready").replace("[x]", "[ ]")
+
+
+def draft_plan(plan: str, handoff: str, blockers: str) -> str:
+    return (
+        plan.replace("Status: Complete", "Status: Draft")
+        .replace("Blockers: None", f"Blockers: {blockers}")
+        .replace("Handoff: Approval", f"Handoff: {handoff}")
+    )
+
+
+def plan_stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
+    import plans
+
+    path = tmp_path / "PLAN.md"
+    path.write_text(plan)
+    return plans.validate_plan(path, changed=changed)
 
 
 def install_ux_reference(root: Path) -> None:

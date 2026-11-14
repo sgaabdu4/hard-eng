@@ -20,4 +20,4 @@ The same replay gave 20 warnings: about 13 real loops, 3 false alarms and 4 uncl
 
 ## Evidence
 
-User approval, 30 October 2026, after the replay. [Plan](../../features/repeat-tool-failure-warning/PLAN.md) records the tests and the model eval.
+User approval, 30 October 2026, after the replay. [Plan](https://github.com/sgaabdu4/hard-eng/blob/709d61e1ef074a0d6698a9dc0eb912f929c33728/features/repeat-tool-failure-warning/PLAN.md) records the tests and the model eval.

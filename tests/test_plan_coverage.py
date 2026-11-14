@@ -5,7 +5,10 @@ from pathlib import Path
 
 import plans
 import pytest
+from conftest import draft_plan as draft
 from conftest import init
+from conftest import plan_stage as stage
+from conftest import ready_plan as ready
 
 REVIEWED = "Reviewer: a second reader read both sources and the plan; its two missing roles are rows now."
 PART = f"""## Sources + coverage
@@ -43,16 +46,6 @@ def bare(completed_plan: str) -> str:
 
 def with_part(plan: str, part: str) -> str:
     return plan.replace(ANCHOR, part + ANCHOR)
-
-
-def ready(plan: str) -> str:
-    return plan.replace("Status: Complete", "Status: Ready").replace("[x]", "[ ]")
-
-
-def stage(tmp_path: Path, plan: str, *, changed: bool = True) -> str:
-    path = tmp_path / "PLAN.md"
-    path.write_text(plan)
-    return plans.validate_plan(path, changed=changed)
 
 
 @pytest.mark.parametrize(
@@ -185,14 +178,6 @@ def test_a_complete_plan_from_before_the_rule_stays_valid(
     tmp_path: Path, bare: str
 ) -> None:
     assert stage(tmp_path, bare, changed=False) == "Complete"
-
-
-def draft(plan: str, handoff: str, blockers: str) -> str:
-    return (
-        plan.replace("Status: Complete", "Status: Draft")
-        .replace("Blockers: None", f"Blockers: {blockers}")
-        .replace("Handoff: Approval", f"Handoff: {handoff}")
-    )
 
 
 @pytest.mark.parametrize(
