@@ -29,4 +29,4 @@ The model check case `repeated-block` ran three texts on one hook code in each b
 
 ## Evidence
 
-Maintainer request, 11 November 2026. [Plan](../../features/audit-round-eight/PLAN.md), Decided (26), records the tests and the model check.
+Maintainer request, 11 November 2026. [Plan](https://github.com/sgaabdu4/hard-eng/blob/709d61e1ef074a0d6698a9dc0eb912f929c33728/features/audit-round-eight/PLAN.md), Decided (26), records the tests and the model check.
