@@ -1,6 +1,7 @@
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -105,6 +106,10 @@ Status: Ready
 ## Outcome + scope
 
 `average([])` returns `0.0` instead of raising `ZeroDivisionError`; other averages are unchanged. Non-goals: new functions or input types.
+
+## Sources + coverage
+
+Sources: N/A — the request is the only source.
 
 ## Repository context
 
@@ -362,3 +367,99 @@ def prepare_repeated_block(root: Path) -> None:
     (root / "report.py").write_text(REPORT)
     (root / "test_report.py").write_text(REPORT_TESTS)
     commit(root, "Report lines for comma-separated values")
+
+
+CALL_NOTES = """# Call with the school office, 3 March
+
+Present: the head teacher, the office manager and two class teachers.
+
+1. Class teachers want `python3 calc.py report <file>` to print the average of each class.
+2. The office manager wants a second command that prints the school average for the board report.
+3. Teaching assistants only read results. They must not see the marks of one pupil.
+4. The exam team checks each report before it goes out. A report needs two approvals: the class teacher and the exam team.
+5. Parents get a printed summary. The head teacher said that the parent summary waits for the next term (minute 18).
+6. No report runs on a day that the calendar file marks as a holiday.
+"""
+MARKS_SHEET = """# Marks sheet
+
+Columns: pupil, class, mark (0 to 100).
+
+A class with no rows shows `no marks`, not an error.
+"""
+SOURCE_FILES = ("call-notes", "marks-sheet")
+SOURCE_ITEMS = {
+    "the class teachers": ("class teacher",),
+    "the office manager": ("office manager",),
+    "the teaching assistants": ("assistant",),
+    "the exam team": ("exam team",),
+    "the parents": ("parent",),
+    "the head teacher": ("head teacher",),
+    "the average of each class": (
+        "each class",
+        "per class",
+        "per-class",
+        "class average",
+    ),
+    "the school average": (
+        "school average",
+        "school-wide",
+        "whole school",
+        "board report",
+    ),
+    "the marks of one pupil that assistants must not see": (
+        "one pupil",
+        "single pupil",
+        "individual pupil",
+        "each pupil",
+        "per-pupil",
+    ),
+    "the two approvals": ("approval",),
+    "the holiday rule": ("holiday",),
+    "the class with no rows": ("no marks", "empty class"),
+}
+
+
+def prepare_source_material(root: Path) -> None:
+    (root / "docs").mkdir()
+    (root / "docs/call-notes.md").write_text(CALL_NOTES)
+    (root / "docs/marks-sheet.md").write_text(MARKS_SHEET)
+    commit(root, "Material from the school office")
+
+
+def source_coverage_failures(texts: list[str]) -> list[str]:
+    """Each role, rule and outcome of the two source files that no coverage row names, and each decision that no source holds."""
+    part = "\n".join(
+        text.partition("## Sources + coverage")[2].partition("\n## ")[0]
+        for text in texts
+    ).lower()
+    listed = next((line for line in part.splitlines() if "sources:" in line), "")
+    failures = [
+        f"Sources never names {name}" for name in SOURCE_FILES if name not in listed
+    ]
+    rows = [line for line in part.splitlines() if line.lstrip().startswith("- ")]
+    failures += [
+        f"no coverage row names {label}"
+        for label, words in SOURCE_ITEMS.items()
+        if not any(word in row for row in rows for word in words)
+    ]
+    decided = ": later — client,", ": later — client ("
+    if not any(
+        "parent" in row and any(mark in row for mark in decided) for row in rows
+    ):
+        failures.append("the parent summary is not Later by the client's decision")
+    return failures + [
+        f"a decision that no source holds: {row.strip()[:100]}"
+        for row in rows
+        if not any(who in row.partition(": ")[0] for who in ("parent", "head teacher"))
+        and (": later — " in row or (": proposal — " in row and "; yes — " in row))
+    ]
+
+
+def sources_judge[R](
+    usable: Callable[[R], tuple[list[str], list[str]]],
+) -> Callable[[R], list[str]]:
+    def judge(fixture: R) -> list[str]:
+        failures, texts = usable(fixture)
+        return failures + source_coverage_failures(texts)
+
+    return judge

@@ -6,6 +6,14 @@ Status: Draft
 
 [TODO: One sentence: result + non-goals.]
 
+## Sources + coverage
+
+Sources: [TODO: HE-SOURCE-COVERAGE. On this one line: each source the user gave, separated by `;`, each with "read in full", or the part not read + "excluded by the user". Request is the only source → `N/A — reason`, and delete the `Reviewer:` line and the row line below.]
+Reviewer: [TODO: More than one source, or one large source → what a second reader found. It read only the sources + this plan, not your notes or this conversation. Else `N/A — reason`.]
+Deliverables: [TODO: Each thing you make for the client outside the repository (video, document), or `None`. Make none while a row is `Open` or a `Proposal` has no answer.]
+
+- [TODO: One line for each person or role, team, screen, rule and requested outcome that the sources name, no sub-bullets: `<item>: In scope — <exact words from the Acceptance + steps line that names and proves it>`, `<item>: Later — user|client, <place of the decision: call time, page or user reply>` (a name goes in brackets: `client (head teacher), call minute 18`), `<item>: Proposal — <your own rule, limit or exclusion>; yes — user|client, <place of the answer>` (no answer yet → no `; yes` part, and the same words go in Blockers as a question) or `<item>: Open — <question>` (the same words also in Blockers)]
+
 ## Repository context
 
 Owners: [TODO: Relevant paths + decisive evidence links]
@@ -20,7 +28,7 @@ Authority: [TODO: Task mode + user's actual scope/approval; pending if absent]
 
 ## Acceptance + steps
 
-- [ ] [TODO: Observable behavior → `path::test name` or requirement ID + expected result, or N/A — why no test can prove it; repeat only for distinct requirements.]
+- [ ] [TODO: Observable behavior. If it is built on a rule, add the place in the sources that states the rule, or the item of its `Proposal` row. → `path::test name` or requirement ID + expected result, or N/A — why no test can prove it; repeat only for distinct requirements.]
 
 ## Baseline + execution
 

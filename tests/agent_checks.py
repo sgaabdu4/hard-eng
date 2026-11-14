@@ -67,6 +67,8 @@ from agent_fixtures import (
     prepare_ready_plan,
     prepare_repeat_failure,
     prepare_repeated_block,
+    prepare_source_material,
+    sources_judge,
 )
 from challenge import without_host_markers
 from conftest import SOURCE, commit, git, init
@@ -494,6 +496,12 @@ CASES = [
         "Plan putting this calculator online as a small public website people can use. This is a planning-only request: produce the plan and stop; do not build it.",
         prepare_nothing,
         judge_hosted_plan,
+    ),
+    Case(
+        "source-coverage",
+        "Plan the work that docs/call-notes.md and docs/marks-sheet.md ask for. This is a planning-only request: produce the plan and stop; do not implement it.",
+        prepare_source_material,
+        sources_judge(usable_plans),
     ),
     Case(
         "continue-approved",
