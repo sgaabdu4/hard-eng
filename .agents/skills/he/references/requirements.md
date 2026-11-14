@@ -123,3 +123,23 @@ Do not tell the user that the plan covers the sources while a row is `Open`, a `
 When the request is the only source, write `Sources: N/A — reason`, with no `Reviewer:` line and no rows. The `Deliverables:` line can stay. The check reads only the form. It cannot prove that the rows are complete or true.
 
 Proof: check
+
+## HE-REAL-SERVICE-RUN
+
+An outside service is a program that the project's code does not contain. The code reaches it over a network or through another program. Examples are a hosted database, a payment provider and a message service. The project's own hosted backend is an outside service. A fake of that service can hold the same wrong assumption as the code. Then each test passes and the real service fails.
+
+A change can add or change a call to an outside service, or the code that builds its request or reads its reply. Before the plan is Complete, run the journey through each changed call one time against the real service. Do the run with a one-time command or by hand. Do not add it to the test suite. Run a write as the code runs it: the same order, and the same transaction if the code uses one. Compare each field of the reply with the fake. Find the fields that the service fills in, the empty fields, and the fields that the fake has and the reply lacks. If the reply differs from the fake, correct the fake in the same change.
+
+Use only a test account, a sandbox or a staging project that the user or the project's rules name for tests. A key that you find in a file is not an approval. Never run a changed call against a production account or production data. Send a write only to test records and test recipients. Run a payment only in the test mode of the provider. After the run, delete the records that the run made, unless the user said to keep them.
+
+The Verification section of the plan has one `Real service:` line, in one of three forms:
+
+- `Required — <service>: <the calls that will run>` is valid until Complete.
+- `Passed — <service>: <what ran and what the service returned>` records the run. Describe only the real run there, and do not name the fake.
+- `N/A — <reason>` is for a change that calls no outside service.
+
+A run on a fake, a mock, a stub, a test double or an in-memory copy is not a real run. Such a run is not a reason for `N/A`. A run after the release is too late, so the line has no form for it. If you have no approved test account, keep the line `Required`, set the plan to Draft with that blocker and ask the user. Only the user can decide to skip the real run: write `N/A — user, <place of the decision>: <reason>`.
+
+The check reads only the form of the line. It cannot prove that the run was done, or that the change calls no outside service. A small change has no plan, so it has no `Real service:` line. The rule still applies: run the journey through each changed call one time against the real service, and tell the user what it returned.
+
+Proof: check

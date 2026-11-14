@@ -68,6 +68,7 @@ from agent_fixtures import (
     prepare_repeat_failure,
     prepare_repeated_block,
     prepare_source_material,
+    real_run_failures,
     sources_judge,
 )
 from challenge import without_host_markers
@@ -389,8 +390,8 @@ def fake_failures(fixture: Run, calls: Path) -> list[str]:
 
 def judge_outside_service(fixture: Run) -> list[str]:
     calls = fixture.root / "vendor/calls.log"
-    made = calls.read_text() if calls.is_file() else ""
-    failures = [] if "mobile P-1001" in made else ["never ran the real tool on P-1001"]
+    plans = [path.read_text() for path in changed_plans(fixture)]
+    failures = real_run_failures(calls, plans)
     return [*failures, *journey_failures(fixture), *fake_failures(fixture, calls)]
 
 

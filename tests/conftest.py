@@ -255,6 +255,7 @@ N/A — fixture commands have no visual interface.
 ## Verification
 Result: Passed
 Evidence: The test asserts the observed command exit; this is fixture data.
+Real service: N/A — the fixture command calls no outside service.
 E2E: Passed — fixture command is invoked through the native CLI and its exit is asserted.
 Retro: None — fixture command, no check failed.
 """
