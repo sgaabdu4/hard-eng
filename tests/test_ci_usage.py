@@ -608,6 +608,43 @@ def test_a_release_pr_reuses_the_passed_checks_of_the_base_commit(
     assert capsys.readouterr().out == ""
 
 
+@pytest.mark.parametrize(
+    ("errors", "tries", "reused"),
+    [
+        (["gh: Server Error (HTTP 502)"] * 2, 3, True),
+        (["gh: Server Error (HTTP 502)"] * 3, 3, False),
+        (["gh: Not Found (HTTP 404)"], 1, False),
+    ],
+    ids=["two-server-errors", "three-server-errors", "not-a-server-error"],
+)
+def test_a_release_pr_lookup_tries_again_only_after_a_github_server_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    errors: list[str],
+    tries: int,
+    reused: bool,
+) -> None:
+    pr = _release_pr(tmp_path, monkeypatch)
+    answer = shipping.gh
+    asked: list[str] = []
+    waits: list[float] = []
+
+    def github(root: Path, *args: str) -> str:
+        asked.append(args[-1])
+        if len(asked) <= len(errors):
+            raise shipping.ShippingError(f"gh query failed: {errors[len(asked) - 1]}")
+        return answer(root, *args)
+
+    monkeypatch.setattr(shipping, "gh", github)
+    monkeypatch.setattr("time.sleep", waits.append)
+    assert (pr.reused() == pr.head) is reused
+    assert (len(asked), len(waits)) == (tries, tries - 1)
+    assert (
+        capsys.readouterr().out.startswith("Running the checks again; ") is not reused
+    )
+
+
 def _no_completed_run(pr: ReleasePR) -> None:
     pr.runs[:] = [_check(pr.head, status="in_progress", conclusion=None)]
 
