@@ -94,6 +94,11 @@ def test_a_plan_passes_with_its_real_service_run_stated(
             "Real service Passed needs what ran",
         ),
         (
+            "Real service: Passed — records backend: pending\n",
+            "Complete",
+            "Real service Passed needs what ran",
+        ),
+        (
             "Real service: Passed — the in-memory backend accepted the write.\n",
             "Complete",
             "is not the real service",
@@ -136,6 +141,7 @@ def test_a_plan_passes_with_its_real_service_run_stated(
         "no-status",
         "planned-run-at-complete",
         "passed-with-no-evidence",
+        "passed-with-a-service-and-no-evidence",
         "passed-on-a-fake",
         "fake-as-the-reason",
         "mock-as-the-reason",
