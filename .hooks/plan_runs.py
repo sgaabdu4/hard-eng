@@ -9,6 +9,7 @@ RUN_LINE = re.compile(r"(Required|Passed|Delivery|N/A) — (\S.*)")
 NO_EVIDENCE = re.compile(r"(?i)^(pending|none|blocked|n/a)\b")
 DEPLOY_TARGET = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$")
 SERVICE_FIRST = re.compile(r"[^:]*\S: \S")
+ONLY_PLACEHOLDER = re.compile(r"(?i)(?:pending|none|blocked|n/a)\W*")
 NOT_REAL = re.compile(
     r"(?i)\b(?:fakes?|faked|mocks?|mocked|stubs?|stubbed|test doubles?|in-memory)\b"
 )
@@ -66,7 +67,7 @@ def real_service(verification: str, status: str) -> None:
         )
     if kind != "N/A" and not SERVICE_FIRST.match(text):
         raise ValueError(f"plan {REAL} {kind} needs the name of the service first")
-    if kind == "Passed" and NO_EVIDENCE.match(text.partition(": ")[2]):
+    if kind == "Passed" and ONLY_PLACEHOLDER.fullmatch(text.partition(": ")[2]):
         raise ValueError(f"plan {REAL} Passed needs {FORMS[REAL][3]}")
 
 
