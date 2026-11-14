@@ -135,7 +135,7 @@ Use only a test account, a sandbox or a staging project that the user or the pro
 The Verification section of the plan has one `Real service:` line, in one of three forms:
 
 - `Required — <service>: <the calls that will run>` is valid until Complete.
-- `Passed — <service>: <what ran and what the service returned>` records the run. Describe only the real run there, and do not name the fake.
+- `Passed — <service>: <what ran and what the service returned>` records the run. Say there if the reply matched the fake.
 - `N/A — <reason>` is for a change that calls no outside service.
 
 A run on a fake, a mock, a stub, a test double or an in-memory copy is not a real run. Such a run is not a reason for `N/A`. A run after the release is too late, so the line has no form for it. If you have no approved test account, keep the line `Required`, set the plan to Draft with that blocker and ask the user. Only the user can decide to skip the real run: write `N/A — user, <place of the decision>: <reason>`.
