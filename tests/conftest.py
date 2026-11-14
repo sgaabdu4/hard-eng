@@ -84,10 +84,14 @@ text_readers.tool_folder = session_reader_folder
 
 
 def isolate_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Update cleanup sweeps the temporary directory; keep it off this machine's."""
-    directory = tmp_path / "tmp"
+    """Update cleanup sweeps the temporary directory; keep it off this machine's.
+
+    A Mac reaches its temporary folder through a link, so each test does too.
+    """
+    directory = tmp_path / "tmp-real"
     directory.mkdir()
-    monkeypatch.setenv("TMPDIR", str(directory))
+    (tmp_path / "tmp").symlink_to(directory, target_is_directory=True)
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
     monkeypatch.setattr(tempfile, "tempdir", None)
 
 
