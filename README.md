@@ -65,7 +65,7 @@ You or your agent still write `PRODUCT.md` and `DESIGN.md`, because only you kno
 | --- | --- |
 | Empty | Stops and asks for a stack. Rerun with `--new STACK` (flutter, nextjs, opennext, vite or python). |
 | Python, JavaScript/TypeScript or Dart/Flutter | Installs rules, skills, hooks and checks. Keeps your own instructions, skills, hooks and settings. Reports real conflicts. |
-| Another language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift outside a Flutter app, C/C++, shell) | Basic mode: rules, skills, hooks, CI, secret scans, a Semgrep security scan, and an OSV scan when a lockfile exists. Setup prints a `Gap:` line for each missing language check. |
+| Another language (Go, Rust, Java/Kotlin, Ruby, PHP, .NET, Swift outside a Flutter app, C/C++, shell) | Basic mode: rules, skills, hooks, CI, secret scans, a Semgrep security scan, and an OSV scan when a lockfile exists. Setup prints a `Gap:` line for each missing language check, and the agent files each one with `gap-issue`. |
 | Hard Eng already installed | Prepares an update when a newer CI-verified version exists. See [Updates](#updates). |
 
 Setup also:
@@ -78,6 +78,7 @@ Setup also:
   3. Remove the file.
 - Connects Appwrite, Sentry, Dart and Marionette when the project uses them. Every Flutter app gets Marionette, pinned to the `marionette_flutter` version in `pubspec.lock`.
 - Installs the Appwrite and Flutter skills only when the project uses Appwrite or Dart.
+- Installs the [Trello coordinator](.agents/skills/trello-coordinator/SKILL.md) skill only when `trello.json` is at the repository root. This skill runs the project's Trello board. It answers card comments, gives work to worker agents and moves cards with proof.
 - Never pushes.
 
 ```mermaid
@@ -108,6 +109,7 @@ After setup:
 - `python3 .hooks/hard-eng.py update-pr` pushes that branch and opens or reuses the "Update Hard Eng" PR.
   - It merges the PR only after every check passes. Rerun it to merge once pending checks finish.
   - `--no-merge` prints the merge command instead.
+- A newer release gets a load test before the push. For that test, `update-pr` loads the gate file and the debt file of the update branch. It uses the hooks of that release. If the load fails, it stops and gives the fix steps.
 - The update PR may sit beside your task PR. Fix a failing update PR on its own branch first.
 - The update reads only the files that Git tracks on the remote base branch. If it would replace an untracked or ignored local file, it stops and names that file.
 - A refused update retries after a new release, a new commit on the remote base branch or 24 hours. The setup command always retries.
@@ -156,6 +158,7 @@ A small change needs no plan. `check` decides this. It compares the whole branch
 1. **Research.** Read the code, compare options and check current facts at the source. Test risky assumptions with the cheapest useful check.
 2. **Scope.** Write the outcome and the limits. Ask only questions that change the result.
 3. **UX.** For visible changes, show a mock or a preview of the real app. Say which one it is.
+   - Exception: a change to a screen that exists. It gets before and after captures of the real app, not a hand-made mock ([HE-REAL-APP-PREVIEW](.agents/skills/he/references/requirements.md#he-real-app-preview)).
 4. **E2E.** Name the real user journey to test and the expected result, or say why there is none.
 5. **Readiness.** Run the Draft check on the starting code (the baseline), then the Ready check.
 
@@ -176,6 +179,18 @@ flowchart TD
 
 You choose once how much you take part. **Human-led** work asks you to approve the plan one time. **Autonomous** work continues inside the permission you gave. In both modes, the agent never invents your answers and never widens the delivery.
 
+### Plan lines
+
+`check` reads the form of these plan lines. It cannot prove that they are true. An older Complete plan that no change edits is not held to the newer lines.
+
+| Line | What it holds |
+| --- | --- |
+| `Sources:` and its rows | Each source that you gave, and one row for each person, screen, rule and outcome that the sources name ([HE-SOURCE-COVERAGE](.agents/skills/he/references/requirements.md#he-source-coverage)). A second reader checks the rows when there is more than one source, or one large source. That reader is an agent that gets only the sources and the plan. |
+| `Same cause:` | The earlier fixes of the same cause, and every other place where it can occur. |
+| `Single source:` | The one owner of each rule, value or type that the change touches. |
+| `Real service:` | One real run of each changed call to an outside service ([HE-REAL-SERVICE-RUN](.agents/skills/he/references/requirements.md#he-real-service-run)). The run uses a test account, a sandbox or a staging project, and test records only. The agent also makes the service refuse one time for each refusal that the code tells apart by its error. |
+| `Retro:` | The prevention for each failed check and each correction of the task. |
+
 ### Wayfinder (optional)
 
 Use [Wayfinder](.agents/skills/he-plan/references/wayfinding.md) when many open decisions depend on each other, or when you ask for it. It writes a map of tickets: research, your choices, prototypes and prerequisites. Each later session closes one ticket. When the direction is clear, normal planning continues.
@@ -184,7 +199,7 @@ Related skills: [Research](.agents/skills/research/SKILL.md), [Codebase Design](
 
 ## 3. Build
 
-[HE Build](.agents/skills/he-build/SKILL.md) carries out the approved plan on a task branch. The agent builds one complete behavior at a time. After each one, it runs focused checks, reviews the diff and runs the planned [E2E](.agents/skills/e2e/SKILL.md) journey.
+[HE Build](.agents/skills/he-build/SKILL.md) carries out the approved plan on a task branch. The agent builds one complete behavior at a time. After each one, it runs focused checks, [reviews the diff](.agents/skills/code-review/SKILL.md) and runs the planned [E2E](.agents/skills/e2e/SKILL.md) journey.
 
 ```mermaid
 flowchart LR
@@ -220,11 +235,14 @@ flowchart LR
 - Before a big change ships, the agent runs `python3 .hooks/hard-eng.py challenge`, and the other agent reviews the change. Codex reviews Claude Code work. Claude Code reviews Codex work. When the review cannot run or finish, the PR still ships and says that the review was not done.
 - For visible changes, the agent compares the before and after states. It posts an image pair only when the look changed.
 - The agent checks outgoing text for secrets, personal data and private project details.
-- The PR body has two required lines. `ship` refuses a PR without them.
+- The PR body has three required parts. `ship` refuses a PR without them.
   - A line that starts with `Undo:`. It gives the steps to undo the change on that line.
   - A line that starts with `Not checked:`. It names what no check covered.
+  - Two or more Mermaid diagrams, for the states before and after.
 - `ship` also refuses a wall of text: more than 6,000 visible characters, or one visible line over 600. Long lists go into a folded block.
 - `ship` refuses a PR that is behind its base branch. Two PRs that pass alone can break main together, so the agent rebases and the checks run again.
+- `ship` merges with a rebase merge of the head that it checked. It refuses a squash and a merge commit.
+- A PR holds at most 100 commits ([HE-PR-COMMITS](.agents/skills/he/references/requirements.md#he-pr-commits)). `ship` refuses more, and each `check` except `--quick` warns from 80. The cap does not apply to the Hard Eng update PR. It also does not apply to a PR into a branch other than the shipping base.
 - Cleanup happens only after a confirmed merge. Unrelated worktrees stay.
 
 ## 5. Learn
@@ -246,11 +264,13 @@ flowchart LR
 
 The agent prefers a test, checker or hook over new instructions. A skill change is the last choice.
 
+The Stop hook counts each failed check in `.hard-eng/failures.json`. When the same failure shows again after the checkout changed, the hook names it as a repeat.
+
 Decision records live in `docs/adr/`:
 
 - Each one has an `Applies to:` line with path prefixes.
 - When a session changes a file under that prefix, the Stop hook shows the decision once. It asks the agent to confirm that the change follows it.
-- `check` flags two cases: a record without that line, and a record whose last listed file a change deletes.
+- `check` flags two cases: a record without that line, and a record whose last listed file a change deletes ([HE-ADR-SCOPE](.agents/skills/he/references/requirements.md#he-adr-scope)).
 
 ## Checks
 
@@ -345,7 +365,7 @@ A project with a Swift group gets separate jobs:
 - The workflow sets only the ones that are missing, under the runner's temporary folder.
 - Setup also moves those generated lines in any other workflow file to the same form.
 
-More detail: [gates](.agents/skills/he/references/gates.md), [testing](.agents/skills/he/references/testing.md), [shipping](.agents/skills/he-ship/references/checks.md), [this repository's gate file](hard-eng.gates.json).
+More detail: [gates](.agents/skills/he/references/gates.md), [testing](.agents/skills/he/references/testing.md), [shipping](.agents/skills/he-ship/references/checks.md), [this repository's gate file](hard-eng.gates.json). All commands: `python3 .hooks/hard-eng.py --help`.
 
 ## Security
 
@@ -373,6 +393,21 @@ Skills guide the agent. Hooks and checks enforce.
 
 Before the merge, shipping blocks when the installed Hard Eng is out of date or its version cannot be confirmed. It names the next step: run `update-pr`, fix the failing update PR, wait for it, or rebase after it merges.
 
+### More rules
+
+The [requirement registry](.agents/skills/he/references/requirements.md) holds each rule one time, in full. This table gives the short meaning of the rules that this file does not explain in another place:
+
+| Rule | Short meaning | Proof |
+| --- | --- | --- |
+| [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off) | A change adds no suppression, no skipped or focused test, no test retry and no scanner ignore marker. It also removes no more `assert` or `expect(` lines from test files than it adds. | Check |
+| [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) | No comment block in a changed source file has more than one line. Generated output and scaffold paths are exempt. | Check |
+| [HE-DEBT-SHRINK-ONLY](.agents/skills/he/references/requirements.md#he-debt-shrink-only) | In the change that installs Hard Eng, `adopt` can record the old findings one time in `hard-eng.debt.json`. Later changes only remove lines. | Check |
+| [HE-UI-SOURCE](.agents/skills/he/references/requirements.md#he-ui-source) | Added UI lines hold no `transition` on all properties. They also hold none of the listed colour literals outside a theme or token file. | Check |
+| [HE-NO-TEXT-WALLS](.agents/skills/he/references/requirements.md#he-no-text-walls) | On-screen text comes in short blocks. A block has at most 25 words and 3 sentences, and a sentence has at most 20 words. The command `text-walls` lists the hits. | Check |
+| [HE-SEND-LIMIT](.agents/skills/he/references/requirements.md#he-send-limit) | Code that runs with no person present, and can send, has a maximum number of sends for each period. A send that answers one outside event can use one send for each event ID. | Guidance, applied in review |
+| [HE-OUTPUT-PLAIN](.agents/skills/he/references/requirements.md#he-output-plain) | Text for people is plain, simplified technical English. | Guidance |
+| [HE-YAGNI](.agents/skills/he/references/requirements.md#he-yagni) | The agent adds a file, dependency, abstraction, setting or stored state only for a current agreed requirement. Existing code or a direct command must not be enough for it. | Guidance |
+
 ### Quick checks
 
 - The quick checks are format, lint, types and the current-files secret scan. Tests run at pre-push and in CI.
@@ -390,7 +425,7 @@ How a quick check runs `dart analyze --fatal-infos`:
 
 ### Mutation report
 
-The mutation report lists changed lines whose tests miss small deliberate bugs. It never blocks the push. It stops after `pre_push_mutation_seconds`, default 120 s.
+The mutation report lists changed lines whose tests miss small deliberate bugs. It never blocks the push. It stops after `pre_push_mutation_seconds`, default 120 s. `python3 .hooks/hard-eng.py mutation` gives the report at any time.
 
 ### New worktrees
 
