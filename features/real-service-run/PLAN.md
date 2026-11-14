@@ -1,6 +1,6 @@
 # A plan records the real run of each changed call to an outside service
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -59,24 +59,27 @@ Decisions:
 11. The rule limits the run: only a test account that the user or the project's rules name, never production, payments only in test mode, and the records of the run removed. The run is by hand or a one-time command, so the rule that tests never call the real service stays true.
 12. A reader that did not write the text compared the old and the new prose of the rule entry, the two skills, the test guide, the plan checks reference, the template and the refusal messages. It gave 21 findings, then 2 on a second pass. Each one is repaired: the safety limits of the run, the run outside the test suite, the wider trigger, the help text on each refusal and shorter sentences.
 13. The independent review of the first candidate gave 4 findings. Two are repaired: a local tool is not an outside service, and a placeholder after the service name is refused. One is this record of the reader (Decision 12). One is declined below.
+14. A skip that the user decided can name the fake, because a true reason often says that the fake stays the only proof. The exemption needs the full form: the word `user`, a comma, the place of the decision, a colon and the reason.
+15. The definition names three edge cases after a third reader pass: a tool that works only on local files is not an outside service; a database server that the tests start is a test copy and not the real service; a call that only reads public data needs no test account.
+16. The agent case ran 3 times on each client. Run 1 showed the refusal of true evidence (Decision 6). Run 2 on Codex put the rule ID in the place of the service name, because the template text put the ID first; the template now starts with the name of the service, and run 3 wrote the service first.
 
 Review declined: an older Complete plan with no E2E line now fails when it is selected, in a project outside the survey :: by decision of the owner on 2026-11-14 to remove old code with no live user. The survey read each of 15,784 Complete plans in the installed projects on this machine and found 0 without the line. The refusal names the missing field, so the repair in such a project is one line.
 Review declined: a `Passed` text such as "<service>: pending real service run" passes :: the check reads form only (Decision 4). No word rule separates that text from true evidence such as a pending payment, which an earlier pass of the same review asked to accept. A bare placeholder after the service name is refused.
 
 ## Acceptance + steps
 
-- [ ] A plan shaped like the incident, with no real run, a fake as the reason or no service named, is refused at Ready and at Complete → `tests/test_plan_runs.py::test_a_plan_fails_when_its_real_service_run_is_missing_or_a_fake_is_the_reason`
-- [ ] A plan with a real run, a planned run at Ready, a reason that the change calls no outside service, or the skip form of the user stays valid → `tests/test_plan_runs.py::test_a_plan_passes_with_its_real_service_run_stated`
-- [ ] A Draft with an approval handoff waits for the line, and a Draft with a question does not → `tests/test_plan_runs.py::test_an_approval_handoff_waits_for_the_real_service_line`
-- [ ] A Complete plan from before the rule stays valid until an edit → `tests/test_plan_runs.py::test_a_complete_plan_from_before_the_real_service_rule_stays_valid`
-- [ ] The rule has one entry that names the code that builds its request or reads its reply, names the transaction and the fields that the service fills in, tells an empty field apart from a missing field, tells the agent to correct the fake when the real reply differs, and limits the run to a named test account → HE-REAL-SERVICE-RUN
-- [ ] The judge of the agent case needs the run on the real tool and a plan line that records it → `tests/test_agent_checks.py::test_outside_service_needs_a_fake_backed_journey_and_one_real_run`
-- [ ] A real agent on each client runs the real tool one time and records the run on the line → N/A — a model run is not a suite test; the result of the outside-service case on each client goes into Verification
-- [ ] The E2E check keeps its refusals after the move → `tests/test_plans.py::test_runtime_journey_cannot_disappear_behind_nonvisual_ux`, `tests/test_plans.py::test_deployment_journey_keeps_delivery_open`
-- [ ] An unchanged Complete plan with no E2E line is refused, because the exemption is removed → `tests/test_plan_runs.py::test_an_unchanged_complete_plan_with_no_e2e_line_is_refused`
-- [ ] The check adds no measurable time to the gate → N/A — a timing is not a suite test; forced runs of the plan check on both versions go into Verification
-- [ ] The new texts and fixtures hold no client data → N/A — a search of the outgoing text before the push, recorded in Verification
-- [ ] The owner gets the decision for each of the three gaps, with the reason for each choice and its limits, and a rule text and a test idea for the project-only parts → N/A — a chat reply and the pull request text, not code
+- [x] A plan shaped like the incident, with no real run, a fake as the reason or no service named, is refused at Ready and at Complete → `tests/test_plan_runs.py::test_a_plan_fails_when_its_real_service_run_is_missing_or_a_fake_is_the_reason`
+- [x] A plan with a real run, a planned run at Ready, a reason that the change calls no outside service, or the skip form of the user stays valid → `tests/test_plan_runs.py::test_a_plan_passes_with_its_real_service_run_stated`
+- [x] A Draft with an approval handoff waits for the line, and a Draft with a question does not → `tests/test_plan_runs.py::test_an_approval_handoff_waits_for_the_real_service_line`
+- [x] A Complete plan from before the rule stays valid until an edit, and an edited one stays valid when its last edit is older than the installed update → `tests/test_plan_runs.py::test_a_complete_plan_from_before_the_real_service_rule_stays_valid`
+- [x] The rule has one entry that names the code that builds its request or reads its reply, names the transaction and the fields that the service fills in, tells an empty field apart from a missing field, tells the agent to correct the fake when the real reply differs, and limits the run to a named test account → HE-REAL-SERVICE-RUN
+- [x] The judge of the agent case needs the run on the real tool and a plan line that records it → `tests/test_agent_checks.py::test_outside_service_needs_a_fake_backed_journey_and_one_real_run`
+- [x] A real agent on each client runs the real tool one time and records the run on the line → N/A — a model run is not a suite test; the result of the outside-service case on each client goes into Verification
+- [x] The E2E check keeps its refusals after the move → `tests/test_plans.py::test_runtime_journey_cannot_disappear_behind_nonvisual_ux`, `tests/test_plans.py::test_deployment_journey_keeps_delivery_open`
+- [x] An unchanged Complete plan with no E2E line is refused, because the exemption is removed → `tests/test_plan_runs.py::test_an_unchanged_complete_plan_with_no_e2e_line_is_refused`
+- [x] The check adds no measurable time to the gate → N/A — a timing is not a suite test; forced runs of the plan check on both versions go into Verification
+- [x] The new texts and fixtures hold no client data → N/A — a search of the outgoing text before the push, recorded in Verification
+- [x] The owner gets the decision for each of the three gaps, with the reason for each choice and its limits, and a rule text and a test idea for the project-only parts → N/A — a chat reply and the pull request text, not code
 
 ## Baseline + execution
 
@@ -96,11 +99,11 @@ N/A — no screen changes; the change is a plan line, a check and rule text.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — the focused tests, the static gates, the timing, the review and the agent runs.
+Result: Passed
+Evidence: the run line tests passed with 27 tests, and each refusal row that a review or an agent run added failed first on the earlier code. The focused set of 13 test files passed with 737 tests, and the files that the last narrow repairs touch passed again after them. The six static gates passed and the hot path scan found 0. Timing of the plan check alone, not of a whole gate: 30.1 ms before and 30.3 ms after as the median of 200 runs each in new processes with compiled modules, and 28.74 ms against 28.78 ms as the minimum. The independent review ran on 4 candidate commits and gave 4, 1, 1 and 1 findings: 5 are repaired, 4 of them with a failing test first, 1 is recorded as Decision 12 and 2 are declined above. Agent case `outside-service`: 3 runs on each client, and 6 of 6 passed the judge. In each run the agent ran the real tool on the test patient and wrote a `Passed` line with the reply. 3 runs reached a Complete plan; 3 ended earlier because one scan of the sealed copy had not run, which the new line did not cause. A search of the outgoing text for private words found 0. The rule binds each new plan and each Draft with an approval handoff: a survey of the installed projects on this machine found 27 such Drafts and 0 Ready plans.
 E2E: N/A — no user journey of an app changes; the plan check runs through its real command in the tests.
 Real service: N/A — the change calls no outside service; the agent case runs a local tool that stands for one.
-Retro: Pending — written at the task end.
+Retro: (1) The implicit string join lint failed on the new module, the second time in this session → None — the focused static run caught it before the first commit. (2) The size rule refused `tests/test_plans.py` at 1,002 lines → None — the Stop check caught it before the commit, and the test went to the new file. (3) The hot path scan found a regex built inside a function → None — the focused scan caught it before the commit. (4) The types gate refused an untyped lambda in a test after its commit → the build step: run the static gates before each commit that changes a test, not only the lint. (5) The second reader found rows that pointed at a wrong line and a place of the yes that was wrong → HE-SOURCE-COVERAGE. (6) The prose reader found that the first rule text let an agent write to production → None — the Reader step of Writing Great Skills caught it before the first commit. (7) The review found a definition that covered local tools, a placeholder after the service name and a skip with no place → `tests/test_plan_runs.py::test_a_plan_fails_when_its_real_service_run_is_missing_or_a_fake_is_the_reason`. (8) A real agent run showed that the check refused true evidence, and another put the rule ID in the place of the service → `tests/test_plan_runs.py::test_a_plan_passes_with_its_real_service_run_stated`. (9) The builder told the owner that the old plans would leave in this pull request, before it read how the review takes the diff → None — a chat statement, corrected in the report; the removal ships as its own change.
 
 Delivery target: Merge
 Delivery: Pending — the pull request into `develop`, its checks, the release pull request into `main` and the release run.
