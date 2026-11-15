@@ -25,8 +25,8 @@ FEATURE_MAP = """# Feature map
 
 | Feature | How a user reaches it | What proves it works |
 | --- | --- | --- |
-| Sign-in | `/login`, with the `viewer` role in `hard-eng.gates.json` | `python3 .hooks/hard-eng.py browser signin viewer` |
-| Plan label on the dashboard | Sign in, then open `/dashboard`; the label is `#plan-label` | `python3 .hooks/hard-eng.py browser capture <app>/dashboard --state <saved sign-in> --ring '#plan-label'` |
+| Sign-in | `/login`, with the `viewer` role in `hard-eng.gates.json` | `python3 .hooks/hard-eng.py browser signin viewer --session signin` |
+| Plan label on the dashboard | Sign in, then open `/dashboard`; the label is `#plan-label` | `python3 .hooks/hard-eng.py browser capture <app>/dashboard --session capture --state <saved sign-in> --ring '#plan-label'` |
 """
 WIDTHS = (390, 1280)
 LEFT = 20
