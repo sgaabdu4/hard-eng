@@ -333,7 +333,9 @@ SCRIPT_OFF = re.compile(
     r"|\b(xit|xtest|xdescribe|fit|fdescribe)\("
     r"|(/\*|//)\s*(istanbul|c8|v8) ignore"
 )
-DART_OFF = re.compile(r"//\s*ignore(_for_file)?:|@Skip\(")
+DART_OFF = re.compile(
+    r"//\s*ignore(_for_file)?:|@Skip\(|//\s*dart-decimate-ignore-(?:next-line(?![\w-])|file\b)"
+)
 SWIFT_OFF = re.compile(
     r"swift-format-ignore|\bXCTSkip|<(Skipped|Selected)Tests>"
     r'|"(skipped|selected)Tests"|\bskipped\s*=\s*"YES"|\.enabled\(if:\s*false\)'

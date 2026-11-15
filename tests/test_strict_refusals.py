@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from comments import validate_suppressions
 from conftest import commit, init
 from switch_off_forms import RETRY_FORMS, SWITCHES
 from whole_project import validate_whole_project
@@ -77,3 +78,33 @@ def test_gitleaks_rules_pass_and_allowlists_fail(tmp_path: Path) -> None:
             )
         )
         assert ".gitleaks.toml holds an allowlist" in message, form
+
+
+DART_FORMS = [
+    (
+        "// dart-decimate-ignore-next-line complexity",
+        "// dart-decimate-ignore-next-line",
+    ),
+    ("// dart-decimate-ignore-next-line", "// dart-decimate-ignore-next-line"),
+    ("//dart-decimate-ignore-next-line all", "//dart-decimate-ignore-next-line"),
+    (
+        "    // dart-decimate-ignore-next-line\tall",
+        "// dart-decimate-ignore-next-line",
+    ),
+    ("// dart-decimate-ignore-file", "// dart-decimate-ignore-file"),
+    ("// dart-decimate-ignore-file all", "// dart-decimate-ignore-file"),
+]
+
+
+@pytest.mark.parametrize(("form", "shown"), DART_FORMS)
+def test_dart_decimate_ignore_is_a_switch_off(
+    tmp_path: Path, form: str, shown: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a dart-decimate ignore comment fails in an added line and in an old one."""
+    root = project(tmp_path, {"lib/a.dart": "int a() => 1;\n"})
+    (root / "lib/a.dart").write_text(f"{form}\nint a() => 1;\n")
+    with pytest.raises(ValueError, match=OFF) as added:
+        validate_suppressions(root, "HEAD")
+    assert f"lib/a.dart:1 adds {shown!r}" in str(added.value)
+    commit(root, "old")
+    assert f"lib/a.dart:1 holds {shown!r}" in refusal(root)
