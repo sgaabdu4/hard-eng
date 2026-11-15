@@ -105,6 +105,13 @@ def never_recorded(found: Counter[str]) -> int:
     return sum(count for line, count in found.items() if NEVER_FINDINGS.search(line))
 
 
+def debtable(found: Counter[str], first: bool) -> Counter[str] | None:
+    """The lines that may become debt: none at all when a first adoption holds a deferral finding, else all but those."""
+    if first:
+        return None if never_recorded(found) else found
+    return Counter({l: n for l, n in found.items() if not NEVER_FINDINGS.search(l)})
+
+
 def recordable(gate: Gate) -> bool:
     kind = gate.get("report", {}).get("type")
     return gate.get("role") not in NEVER and (
@@ -309,12 +316,14 @@ def record(
             key = f"{group['path']}/{gate['name']}"
             if key not in failed:
                 continue
-            current = fingerprints(root, group, gate, outputs.get(key, ""))
+            current = debtable(
+                fingerprints(root, group, gate, outputs.get(key, "")), old is None
+            )
             if (
-                not recordable(gate)
+                current is None
+                or not recordable(gate)
                 or not current
                 or UNREADABLE in current
-                or never_recorded(current)
                 or lacks_suite(gate, outputs.get(key, ""))
             ):
                 refused.append(key)
