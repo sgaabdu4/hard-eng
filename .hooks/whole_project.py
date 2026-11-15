@@ -34,7 +34,7 @@ NEEDS_NO_LINK = {
     "DECISION",
     "SKILL",
 }
-NEEDS_NO_LINK_FOLDERS = ("docs/adr/", *UNOWNED)
+NEEDS_NO_LINK_FOLDERS = ("docs/adr/", "docs/requirements.md", *UNOWNED)
 
 
 def tracked_files(root: Path) -> list[str]:
