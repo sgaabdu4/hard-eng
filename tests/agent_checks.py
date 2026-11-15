@@ -39,7 +39,7 @@ from datetime import UTC, datetime
 from functools import partial
 from itertools import repeat
 from pathlib import Path
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 from agent_actions import (
     Action,
@@ -99,11 +99,15 @@ class Outcome(NamedTuple):
     settings: dict[str, object] | None = None
 
 
+Access = Literal["grader", "sandboxed", "approved"]
+
+
 class Case(NamedTuple):
     name: str
     prompt: str
     prepare: Callable[[Path], None]
     judge: Callable[[Run], list[str]]
+    access: Access = "sandboxed"
 
 
 def run(fixture: Run, *command: str) -> int:
@@ -556,7 +560,7 @@ CASES = [
         prepare_repeated_block,
         judge_repeated_block,
     ),
-    Case("browser-proof", PROMPT, prepare_browser_app, judge_browser),
+    Case("browser-proof", PROMPT, prepare_browser_app, judge_browser, "approved"),
 ]
 
 
@@ -600,7 +604,7 @@ class Ready(NamedTuple):
 class Client(NamedTuple):
     model: str
     preflight: Callable[[], Ready]
-    run: Callable[[Path, Path, argparse.Namespace, str, bool], Agent]
+    run: Callable[[Path, Path, argparse.Namespace, str, Access], Agent]
     isolation: str
 
 
@@ -675,7 +679,7 @@ def codex_settings(home: Path, thread: object, evidence: Path) -> dict[str, obje
 
 
 def codex_run(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, tools: bool
+    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, access: Access
 ) -> Agent:
     # A fresh home shares only the login; user memories, MCP, hooks, plugins and instructions stay out.
     home = root.parent / "codex-home"
@@ -683,13 +687,6 @@ def codex_run(
     user = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
     (home / "auth.json").symlink_to(user / "auth.json")
     (home / "config.toml").write_text(f'[projects."{root}"]\ntrust_level = "trusted"\n')
-    # Agents get a writable .git and unreviewed project hooks; graders read nothing.
-    access = (
-        ["--sandbox", "workspace-write", "--add-dir", str(root / ".git")]
-        + ["--dangerously-bypass-hook-trust"]
-        if tools
-        else ["--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"]
-    )
     command = [
         "codex",
         "exec",
@@ -700,7 +697,7 @@ def codex_run(
         options.model,
         "--config",
         f'model_reasoning_effort="{options.effort}"',
-        *access,
+        *codex_access(root, access),
         "--output-last-message",
         str(evidence / "last-message.md"),
         prompt,
@@ -730,7 +727,23 @@ def codex_run(
     )
 
 
-def claude_isolation() -> str:
+def codex_access(root: Path, access: Access) -> list[str]:
+    """Agents get a writable .git and unreviewed project hooks; graders read nothing."""
+    if access == "grader":
+        return ["--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"]
+    flags = ["--sandbox", "workspace-write", "--add-dir", str(root / ".git")]
+    flags.append("--dangerously-bypass-hook-trust")
+    # No sandbox starts Chrome; an automatic reviewer stands in for the user's approval.
+    return [*flags, "--approve-for-me"] if access == "approved" else flags
+
+
+def claude_access(access: Access) -> tuple[str, str]:
+    """The settings and permission mode; an approved case may ask auto mode to leave the sandbox."""
+    approved = access == "approved"
+    return claude_isolation(escape=approved), "auto" if approved else "acceptEdits"
+
+
+def claude_isolation(*, escape: bool) -> str:
     """Turn off the user's plugins and keep Bash in a sandbox without network."""
     user = Path.home() / ".claude/settings.json"
     plugins = (
@@ -744,15 +757,16 @@ def claude_isolation() -> str:
             "sandbox": {
                 "enabled": True,
                 "autoAllowBashIfSandboxed": True,
-                "allowUnsandboxedCommands": False,
+                "allowUnsandboxedCommands": escape,
             },
         }
     )
 
 
 def claude_run(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, tools: bool
+    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, access: Access
 ) -> Agent:
+    isolation, permission = claude_access(access)
     command = [
         "claude",
         "--print",
@@ -769,11 +783,11 @@ def claude_run(
         "project,local",
         "--strict-mcp-config",
         "--settings",
-        claude_isolation(),
+        isolation,
         "--permission-mode",
-        "acceptEdits",
+        permission,
         "--no-session-persistence",
-        *([] if tools else ["--tools", ""]),
+        *([] if access != "grader" else ["--tools", ""]),
     ]
     found = stream(command, root, evidence, options.timeout)
     if found is None:
@@ -828,13 +842,13 @@ CLIENTS = {
         "gpt-6-astra",
         codex_preflight,
         codex_run,
-        "codex exec; workspace-write sandbox plus writable .git; fresh CODEX_HOME sharing only the login; fixture trusted; project hooks run without review",
+        "codex exec; workspace-write sandbox plus writable .git; fresh CODEX_HOME sharing only the login; fixture trusted; project hooks run without review; an approved case adds --approve-for-me",
     ),
     "claude": Client(
         "claude-opus-5-5",
         claude_preflight,
         claude_run,
-        "claude --print; project and local settings only; user plugins off; no MCP; acceptEdits with sandboxed, network-less Bash",
+        "claude --print; project and local settings only; user plugins off; no MCP; acceptEdits with sandboxed, network-less Bash; an approved case runs in auto mode and may ask to leave the sandbox",
     ),
 }
 
@@ -848,7 +862,7 @@ def judge_grade(
     with tempfile.TemporaryDirectory(prefix="hard-eng-judge-") as temporary:
         empty = Path(temporary).resolve() / "empty"
         empty.mkdir()
-        agent = client.run(empty, folder, options, prompt, False)
+        agent = client.run(empty, folder, options, prompt, "grader")
     found = re.search(r"\{.*\}", agent.message, re.DOTALL)
     usable = agent.completed and found and not agent.actions
     try:
@@ -865,8 +879,9 @@ def execute(
     with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
         root = Path(temporary).resolve() / "project"
         base = fixture(root, case, options.installed, bare=options.bare)
-        agent = client.run(root, evidence, options, case.prompt, True)
+        agent = client.run(root, evidence, options, case.prompt, case.access)
         agent.settings["usage"] = event_usage(evidence / "events.jsonl")
+        agent.settings["access"] = case.access
         (evidence / "actions.json").write_text(
             json.dumps([action._asdict() for action in agent.actions], indent=2) + "\n"
         )
