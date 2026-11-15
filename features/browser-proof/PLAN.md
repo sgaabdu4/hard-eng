@@ -120,6 +120,8 @@ Authority: Human-loop. The user said "yes pls" to a plan for agent-browser with 
 
 Review declined: personal data in closed shadow roots, canvas, images or video, or on a page that works against the capture, such as a frame that appears and goes within milliseconds around the screenshot :: no page script can read those, and a check before and after each image cannot see between them; hiding is a pattern match over page text (Proposal "hides emails and phones only"), each frame it cannot read becomes a grey box, a frame that slips past fails the capture, and the E2E browser reference tells agents to look at each image and use fake data.
 
+Review declined: the browser-proof judge misses moved images whose link holds a space or a URL escape :: the judge is a test tool, not shipped code; the agent names the folder it moves images to, and every failed eval run is read by hand before a result is recorded, so a wrong fail cannot pass unseen.
+
 ## Baseline + execution
 
 Result: Passed
