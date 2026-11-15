@@ -554,13 +554,15 @@ FRAME_CHANGES = (
     "same.src = OTHER + '/inner.html';"
     "document.body.append(Object.assign(document.createElement('iframe'),"
     "{id: 'late', src: OTHER + '/inner.html'}));"
+    "const spot = document.querySelector('#spot').attachShadow({mode: 'closed'});"
+    "spot.innerHTML = '<iframe id=later src=' + OTHER + '/inner.html></iframe>';"
     "await Promise.resolve();"
     "const kind = (root, id) => { const found = root.querySelector('#' + id);"
     "return found ? found.tagName + ('hardEngFrame' in found.dataset ? ':held' : '') : 'gone'; };"
     "const forced = document.querySelector('#forced').getBoundingClientRect();"
     "return JSON.stringify([shadow.textContent, sameText,"
     "['same', 'hidden', 'forced', 'thing', 'late'].map((id) => kind(document, id))"
-    ".concat(kind(shadow, 'deep')), [forced.width, forced.height]]);})()"
+    ".concat(kind(shadow, 'deep'), kind(spot, 'later')), [forced.width, forced.height]]);})()"
 )
 
 
@@ -573,7 +575,7 @@ def test_capture_replaces_frames_it_cannot_read(
     page(
         tmp_path,
         "nested.html",
-        "<div id=host></div><iframe id=same src='/same.html'></iframe>"
+        "<div id=host></div><div id=spot></div><iframe id=same src='/same.html'></iframe>"
         f"<iframe id=hidden style='display:none' src='{other}/inner.html'></iframe>"
         "<iframe id=forced style='visibility:visible !important;width:200px;"
         f"height:100px' src='{other}/inner.html'></iframe>"
@@ -602,7 +604,7 @@ def test_capture_replaces_frames_it_cannot_read(
     assert shadow.count("[hidden]") == 2
     assert "@" not in shadow
     assert "frame [hidden]" in same
-    assert kinds == ["DIV:held"] * 6
+    assert kinds == ["DIV:held"] * 7
     assert forced == [204, 104]
     assert json.loads(unread) == 0
 
@@ -616,8 +618,9 @@ def test_capture_fails_with_no_image_when_a_frame_slips_past(
         tmp_path,
         "slip.html",
         "<p id=a>a</p><div id=spot style='width:10px;height:10px'></div><script>"
+        "const attach = Element.prototype.attachShadow;"
         "let done = false; new MutationObserver(() => { if (done) return; done = true;"
-        "document.querySelector('#spot').attachShadow({mode: 'open'}).innerHTML ="
+        "attach.call(document.querySelector('#spot'), {mode: 'open'}).innerHTML ="
         f" \"<iframe src='{other}/inner.html'></iframe>\"; }})"
         ".observe(document.documentElement, {childList: true});</script>",
     )
@@ -627,6 +630,39 @@ def test_capture_fails_with_no_image_when_a_frame_slips_past(
     )
     assert code == 1
     assert "no image was kept" in capsys.readouterr().err
+    assert not list((tmp_path / ".hard-eng/browser").glob("*.png"))
+
+
+def test_capture_keeps_no_image_when_the_frame_check_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    checks: list[tuple[str, ...]] = []
+
+    def tool(
+        name: str, folder: Path, session: str, *arguments: str, text: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        del name, session, text
+        if arguments[:1] == ("screenshot",):
+            (folder / arguments[-1]).write_bytes(b"image")
+        if arguments[:2] == ("eval", browser.FRAME_CHECK):
+            checks.append(arguments)
+            if len(checks) == 2:
+                return subprocess.CompletedProcess(arguments, 1, "", "session closed")
+            return subprocess.CompletedProcess(arguments, 0, "0", "")
+        reply = json.dumps("[]") if arguments[:1] == ("eval",) else ""
+        return subprocess.CompletedProcess(arguments, 0, reply, "")
+
+    monkeypatch.setattr(browser, "ensure_tool", lambda: "agent-browser")
+    monkeypatch.setattr(browser, "run_tool", tool)
+    code = browser.browser_command(
+        tmp_path, ["capture", "http://x", "--session", session()]
+    )
+    assert code == 1
+    assert "session closed" in capsys.readouterr().err
+    assert len(checks) == 2
     assert not list((tmp_path / ".hard-eng/browser").glob("*.png"))
 
 

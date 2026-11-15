@@ -80,11 +80,24 @@ const watch = (root) => {
     subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["src", "srcdoc"],
   });
 };
+const wrap = (view) => {
+  const attach = view.Element.prototype.attachShadow;
+  if (attach.hardEngWrapped) return;
+  const wrapped = function (init) {
+    const root = attach.call(this, init);
+    watch(root);
+    return root;
+  };
+  wrapped.hardEngWrapped = true;
+  view.Element.prototype.attachShadow = wrapped;
+};
+wrap(window);
 const watchFrame = (frame) => {
   let inner = null;
   try { inner = frame.contentDocument; } catch (error) { inner = null; }
   if (!inner?.body || (inner.URL === "about:blank" && frame.getAttribute("src"))) return replaceFrame(frame);
   frame.dataset.hardEngRead = "";
+  wrap(inner.defaultView);
   if (!frame.hardEngWatched) {
     frame.hardEngWatched = true;
     frame.addEventListener("load", () => watchFrame(frame));
@@ -299,6 +312,14 @@ def require(result: subprocess.CompletedProcess[str], secret: str = "") -> str:
     return result.stdout
 
 
+def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
+    if json.loads(require(run_tool(tool, folder, session, "eval", FRAME_CHECK))):
+        raise ValueError(
+            f"a frame or embed that the capture could not read was on the page at width {width}, "
+            "so it could show personal data; no image was kept"
+        )
+
+
 def capture_page(tool: str, folder: Path, args: argparse.Namespace, width: int) -> Path:
     state = ["--state", args.state] if args.state and width == WIDTHS[0] else []
     steps = [
@@ -316,15 +337,16 @@ def capture_page(tool: str, folder: Path, args: argparse.Namespace, width: int) 
         raise ValueError(
             f"--ring {', '.join(missing)} matched no visible element at width {width}"
         )
+    unread_frames(tool, folder, args.session, width)
     image = folder / f"{args.name}-{width}.png"
-    require(run_tool(tool, folder, args.session, "screenshot", "--full", str(image)))
-    unread = require(run_tool(tool, folder, args.session, "eval", FRAME_CHECK))
-    if json.loads(unread):
-        image.unlink(missing_ok=True)
-        raise ValueError(
-            f"a frame or embed that the capture could not read was on the page at width {width}, "
-            "so it could show personal data; no image was kept"
+    try:
+        require(
+            run_tool(tool, folder, args.session, "screenshot", "--full", str(image))
         )
+        unread_frames(tool, folder, args.session, width)
+    except (ValueError, subprocess.SubprocessError):
+        image.unlink(missing_ok=True)
+        raise
     return image
 
 
@@ -343,7 +365,7 @@ def capture(root: Path, argv: list[str]) -> int:
     try:
         for width in WIDTHS:
             images.append(capture_page(tool, folder, args, width))
-    except ValueError:
+    except (ValueError, subprocess.SubprocessError):
         for image in images:
             image.unlink(missing_ok=True)
         raise
