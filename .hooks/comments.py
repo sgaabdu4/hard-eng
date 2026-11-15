@@ -76,14 +76,15 @@ NEUTRAL = re.compile(
 )
 
 
-def python_comment_lines(text: str) -> dict[int, str] | None:
-    """Full-line comments by tokenizer, so `#` inside strings is not a comment."""
+def python_comment_lines(text: str, trailing: bool = False) -> dict[int, str] | None:
+    """Full-line comments by tokenizer, so `#` inside strings is not a comment; trailing adds comments after code."""
     try:
         tokens = tokenize.generate_tokens(io.StringIO(text).readline)
         return {
             token.start[0]: token.string
             for token in tokens
-            if token.type == tokenize.COMMENT and token.line.strip().startswith("#")
+            if token.type == tokenize.COMMENT
+            and (trailing or token.line.strip().startswith("#"))
         }
     except (tokenize.TokenError, SyntaxError):
         return None
@@ -175,8 +176,10 @@ def code_step(text: str, index: int, suffix: str, depths: list[int]) -> int | No
     return string_at(text, index, suffix)
 
 
-def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
-    """Comment text of each line that opens with a comment or lies in a spanning block."""
+def slash_comment_lines(
+    text: str, suffix: str, trailing: bool = False
+) -> dict[int, str]:
+    """Comment text of each line that opens with a comment or lies in a spanning block; trailing adds comments after code."""
     found: dict[int, str] = {}
     index, line, blank = 0, 1, True
     depths: list[int] = []
@@ -190,7 +193,7 @@ def slash_comment_lines(text: str, suffix: str) -> dict[int, str]:
             close = text.find("\n" if text[index + 1] == "/" else "*/", index + 2)
             close = len(text) if close < 0 else close + (text[index + 1] == "*") * 2
             parts = text[index:close].split("\n")
-            if blank or len(parts) > 1:
+            if blank or trailing or len(parts) > 1:
                 found.update(enumerate(parts, line))
             index, line, blank = close, line + len(parts) - 1, False
         elif (close := code_step(text, index, suffix, depths)) is not None:
@@ -219,8 +222,8 @@ def shell_code(line: str, quote: str | None) -> tuple[str, set[int], str | None]
     return code, quoted, quote
 
 
-def hash_comment_lines(lines: list[str]) -> dict[int, str]:
-    """Full-line `#` comments outside shell strings and heredocs."""
+def hash_comment_lines(lines: list[str], trailing: bool = False) -> dict[int, str]:
+    """Full-line `#` comments outside shell strings and heredocs; trailing adds comments after a command."""
     found: dict[int, str] = {}
     heredocs: list[tuple[str, bool]] = []
     quote: str | None = None
@@ -234,6 +237,8 @@ def hash_comment_lines(lines: list[str]) -> dict[int, str]:
             found[number] = line
             continue
         code, quoted, quote = shell_code(line, quote)
+        if trailing and len(code) < len(line):
+            found[number] = line[len(code) :]
         quoted |= {i for m in ARITHMETIC.finditer(code) for i in range(*m.span())}
         heredocs = [
             (QUOTE_OR_BACKSLASH.sub("", opened.group(2)), opened.group(1) == "-")
@@ -243,17 +248,25 @@ def hash_comment_lines(lines: list[str]) -> dict[int, str]:
     return found
 
 
+def comment_map(path: Path, text: str, trailing: bool = False) -> dict[int, str]:
+    """Comment text by line number: full-line comments, and comments after code when trailing."""
+    comments = (
+        python_comment_lines(text, trailing) if path.suffix in {".py", ".pyi"} else None
+    )
+    if comments is None:
+        comments = (
+            slash_comment_lines(text, path.suffix, trailing)
+            if path.suffix in SLASH
+            else hash_comment_lines(text.splitlines(), trailing)
+        )
+    return comments
+
+
 def comment_blocks(path: Path, text: str | None = None) -> list[tuple[int, int, int]]:
     """(first narration line, narration lines, last line) of each block with more than one."""
     text = path.read_text(errors="replace") if text is None else text
     lines = text.splitlines()
-    comments = python_comment_lines(text) if path.suffix in {".py", ".pyi"} else None
-    if comments is None:
-        comments = (
-            slash_comment_lines(text, path.suffix)
-            if path.suffix in SLASH
-            else hash_comment_lines(lines)
-        )
+    comments = comment_map(path, text)
     blocks: list[tuple[int, int, int]] = []
     start, length, last = 0, 0, 0
     for number in range(1, len(lines) + 2):

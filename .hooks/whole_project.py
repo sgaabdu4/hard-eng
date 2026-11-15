@@ -1,11 +1,15 @@
 """The full check judges every tracked file with the patterns of the changed-file checks, old code included."""
 
+import re
 import subprocess
 import tomllib
 from pathlib import Path, PurePosixPath
 
 from comments import (
+    HASH,
+    SLASH,
     UNOWNED,
+    comment_map,
     pattern_switch_offs,
     security_hits,
     switch_off_refusal,
@@ -14,6 +18,7 @@ from gate_config import generated_sources
 from project_files import GIT_LISTING
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
+MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 
 
 def tracked_files(root: Path) -> list[str]:
@@ -64,9 +69,34 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
     return found
 
 
+def source_names(root: Path, texts: dict[str, str]) -> list[str]:
+    names = [
+        name
+        for name in texts
+        if Path(name).suffix in HASH | SLASH and not name.startswith(".agents/")
+    ]
+    skipped = generated_sources(root, names)
+    return [name for name in names if name not in skipped]
+
+
+def excuse_markers(root: Path, texts: dict[str, str], names: list[str]) -> list[str]:
+    return [
+        f"{name}:{number} holds a {hit[0]} marker"
+        for name in names
+        for number, comment in comment_map(root / name, texts[name], True).items()
+        if (hit := MARKER.search(comment))
+    ]
+
+
 def validate_whole_project(root: Path) -> None:
     texts = {
         name: (root / name).read_text(errors="replace") for name in tracked_files(root)
     }
     if found := switch_offs(root, texts):
         raise ValueError(switch_off_refusal(found))
+    if found := excuse_markers(root, texts, source_names(root, texts)):
+        raise ValueError(
+            "HE-COMMENT-LINES: A TODO, FIXME, HACK or XXX marker excuses unfinished work: "
+            "fix the cause now and delete the comment; never suppress it. "
+            + "; ".join(found)
+        )
