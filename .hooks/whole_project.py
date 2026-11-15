@@ -25,7 +25,7 @@ MARKDOWN_NAME = re.compile(r"[\w.+-]+\.md\b")
 NEEDS_NO_LINK = {
     "README",
     "AGENTS",
-    "AGENTS.override",
+    "AGENTS.OVERRIDE",
     "PRODUCT",
     "DESIGN",
     "SECURITY",
@@ -114,7 +114,7 @@ def unnamed_markdown(texts: dict[str, str]) -> list[str]:
         for name in texts
         if name.endswith(".md")
         and not name.startswith(NEEDS_NO_LINK_FOLDERS)
-        and PurePosixPath(name).stem not in NEEDS_NO_LINK
+        and PurePosixPath(name).stem.upper() not in NEEDS_NO_LINK
         and not named.get(PurePosixPath(name).name, set()) - {name}
     ]
 
