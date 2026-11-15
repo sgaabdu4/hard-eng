@@ -74,7 +74,7 @@ def execute_provisioned_scanner(
             (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
         (managed / scanner).write_text(
             '#!/bin/sh\nif [ "$1" = config ]; then\n'
-            'printf \'%s\\n\' \'{"config":{"boundaries":[{"from":"lib/domain","disallow":"lib/ui"}],"health":{"max_crap":29}}}\'\n'
+            'printf \'%s\\n\' \'{"config":{"boundaries":[{"from":"lib/domain","disallow":"lib/ui"}],"health":{"max_crap":30}}}\'\n'
             "else\nprintf '%s\\n' managed \"$@\"\nfi\n"
         )
     if stale_local:

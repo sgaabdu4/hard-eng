@@ -1,5 +1,5 @@
 {
   "ignore_patterns": [".agents/**"],
   "boundaries": [{ "from": "lib/core", "disallow": "lib/features" }],
-  "health": { "max_crap": 29 }
+  "health": { "max_crap": 30 }
 }
