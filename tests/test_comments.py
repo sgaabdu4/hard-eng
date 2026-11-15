@@ -119,9 +119,10 @@ def test_touched_files_answer_for_older_blocks_and_generated_output_is_skipped(
     assert "untouched.py" not in str(error.value)
 
 
-def test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed(
+def test_the_install_change_fails_older_blocks_in_files_it_touches(
     tmp_path: Path,
 ) -> None:
+    """HE-COMMENT-LINES: the change that installs Hard Eng gets no exemption for older blocks."""
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     old = "# written long ago\n# across two lines\nx = 1\n"
@@ -130,19 +131,20 @@ def test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed(
     (root / ".hooks").mkdir()
     (root / ".hooks/hard-eng.py").write_text("")
     (root / "app.py").write_text(old + "y = 2\n")
-    validate_comments(root, "HEAD")
-    (root / "app.py").write_text(old + "# added with the install\n# on two lines\n")
-    with pytest.raises(ValueError, match=r"app\.py:4 holds a 2-line") as error:
-        validate_comments(root, "HEAD")
-    assert "app.py:1" not in str(error.value)
-    (root / "app.py").write_text(old + "y = 2\n")
-    commit(root, "Install Hard Eng")
-    (root / "app.py").write_text(old + "z = 3\n")
     with pytest.raises(ValueError, match=r"app\.py:1 holds a 2-line"):
         validate_comments(root, "HEAD")
+    (root / "app.py").write_text(old + "# added with the install\n# on two lines\n")
+    with pytest.raises(ValueError, match=r"app\.py:1 holds a 2-line") as error:
+        validate_comments(root, "HEAD")
+    assert "app.py:4 holds a 2-line" in str(error.value)
+    (root / "app.py").write_text("x = 1\ny = 2\n")
+    validate_comments(root, "HEAD")
 
 
-def test_the_install_change_compares_each_older_block_whole(tmp_path: Path) -> None:
+def test_the_install_change_names_each_older_block_with_its_own_line(
+    tmp_path: Path,
+) -> None:
+    """HE-COMMENT-LINES: an older block that spans a blank comment line is judged like any other."""
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     spaced = "x = 1\n# first\n#\n# old reason\n"
@@ -151,7 +153,8 @@ def test_the_install_change_compares_each_older_block_whole(tmp_path: Path) -> N
     (root / ".hooks").mkdir()
     (root / ".hooks/hard-eng.py").write_text("")
     (root / "app.py").write_text(spaced + "y = 2\n")
-    validate_comments(root, "HEAD")
+    with pytest.raises(ValueError, match=r"app\.py:2 holds a 2-line"):
+        validate_comments(root, "HEAD")
     (root / "app.py").write_text(spaced.replace("old reason", "new reason"))
     with pytest.raises(ValueError, match=r"app\.py:2 holds a 2-line"):
         validate_comments(root, "HEAD")

@@ -9,7 +9,9 @@ from comments import (
     HASH,
     SLASH,
     UNOWNED,
+    block_hits,
     comment_map,
+    comment_refusal,
     pattern_switch_offs,
     security_hits,
     switch_off_refusal,
@@ -123,12 +125,17 @@ def validate_whole_project(root: Path) -> None:
     }
     if found := switch_offs(root, texts):
         raise ValueError(switch_off_refusal(found))
-    if found := excuse_markers(root, texts, source_names(root, texts)):
+    sources = source_names(root, texts)
+    if found := excuse_markers(root, texts, sources):
         raise ValueError(
             "HE-COMMENT-LINES: A TODO, FIXME, HACK or XXX marker excuses unfinished work: "
             "fix the cause now and delete the comment; never suppress it. "
             + "; ".join(found)
         )
+    if found := [
+        hit for name in sources for hit in block_hits(name, root / name, texts[name])
+    ]:
+        raise ValueError(comment_refusal(found))
     if found := unnamed_markdown(texts):
         raise ValueError(
             "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names is dead weight: "

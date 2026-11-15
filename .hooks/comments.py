@@ -10,7 +10,6 @@ import subprocess
 import tokenize
 from pathlib import Path, PurePosixPath
 
-from debt import git_file
 from gate_config import (
     ALL_ZERO_OBJECT_ID,
     changed_files,
@@ -281,16 +280,20 @@ def comment_blocks(path: Path, text: str | None = None) -> list[tuple[int, int, 
     return blocks
 
 
-def installed_blocks(root: Path, base: str, name: str) -> set[tuple[str, ...]]:
-    """Blocks a file held before the change that installs Hard Eng: old code its tools may touch."""
-    text = git_file(root, base, name)
-    if text is None:
-        return set()
-    lines = text.splitlines()
-    return {
-        tuple(lines[start - 1 : last])
-        for start, _, last in comment_blocks(root / name, text)
-    }
+def block_hits(name: str, path: Path, text: str) -> list[str]:
+    return [
+        f"{name}:{start} holds a {length}-line comment block"
+        for start, length, _ in comment_blocks(path, text)
+    ]
+
+
+def comment_refusal(found: list[str]) -> str:
+    return (
+        "HE-COMMENT-LINES: Code comments are none by default: fix each block below at its cause, "
+        "so that naming, types, structure or a test carry the meaning, then delete the block; "
+        "keep one terse line of why only where they cannot carry a needed non-obvious constraint. "
+        "Never suppress it. " + "; ".join(found)
+    )
 
 
 def validate_comments(root: Path, base: str | None) -> None:
@@ -309,26 +312,16 @@ def validate_comments(root: Path, base: str | None) -> None:
         and not (root / name).is_symlink()
     )
     skipped = generated_sources(root, sources)
-    installing = (root / ".hooks/hard-eng.py").is_file() and (
-        git_file(root, base, ".hooks/hard-eng.py") is None
-    )
-    found: list[str] = []
-    for name in sources:
-        if name in skipped:
-            continue
-        older = installed_blocks(root, base, name) if installing else set()
-        lines = (root / name).read_text(errors="replace").splitlines()
-        found += [
-            f"{name}:{start} holds a {length}-line comment block"
-            for start, length, last in comment_blocks(root / name)
-            if tuple(lines[start - 1 : last]) not in older
-        ]
-    if found:
-        raise ValueError(
-            "HE-COMMENT-LINES: Code comments are none by default: delete each block below, and add one "
-            "terse line of why only where naming, types, structure or a test cannot "
-            "carry a needed non-obvious constraint. " + "; ".join(found)
+    found = [
+        hit
+        for name in sources
+        if name not in skipped
+        for hit in block_hits(
+            name, root / name, (root / name).read_text(errors="replace")
         )
+    ]
+    if found:
+        raise ValueError(comment_refusal(found))
 
 
 PYTHON_OFF = re.compile(
