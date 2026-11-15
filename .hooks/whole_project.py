@@ -138,7 +138,7 @@ def validate_whole_project(root: Path) -> None:
         raise ValueError(comment_refusal(found))
     if found := unnamed_markdown(texts):
         raise ValueError(
-            "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names is dead weight: "
-            "name it where a reader opens it, or delete it; never suppress it. "
+            "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names has no reader: "
+            "fix it at the cause, so name it where a reader opens it or delete it; never suppress it. "
             + "; ".join(found)
         )
