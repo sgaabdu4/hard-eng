@@ -141,3 +141,40 @@ MARKER_STRINGS = [
 @pytest.mark.parametrize(("name", "text"), MARKER_STRINGS)
 def test_marker_words_in_strings_pass(tmp_path: Path, name: str, text: str) -> None:
     validate_whole_project(project(tmp_path, {name: text}))
+
+
+def test_an_unnamed_markdown_file_fails(tmp_path: Path) -> None:
+    """HE-NAMED-MARKDOWN: a markdown file that no other tracked file names fails, old ones too."""
+    root = project(tmp_path, {"notes/extra.md": "text\n", "app.py": "x = 'y.md'\n"})
+    message = refusal(root)
+    assert "notes/extra.md is named by no other tracked file" in message
+    assert "y.md" not in message
+    (root / "own.md").write_text("own.md\n")
+    assert "own.md is named by no other tracked file" in refusal(root)
+
+
+NO_LINK_NEEDED = [
+    "AGENTS.md",
+    "AGENTS.override.md",
+    "PRODUCT.md",
+    "DESIGN.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "DECISION.md",
+    "features/a/PLAN.md",
+    "docs/adr/0001-first.md",
+    ".agents/skills/a/SKILL.md",
+    ".claude/rules/a.md",
+    ".hooks/a.md",
+    "pkg/README.md",
+]
+
+
+def test_a_named_markdown_file_passes(tmp_path: Path) -> None:
+    named = {
+        "README.md": "see notes/extra.md and guide.md\n",
+        "notes/extra.md": "text\n",
+        "sub/guide.md": "text\n",
+    }
+    others = dict.fromkeys(NO_LINK_NEEDED, "text\n")
+    validate_whole_project(project(tmp_path, {**named, **others}))
