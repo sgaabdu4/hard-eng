@@ -10,6 +10,7 @@ import agent_browser
 import pytest
 from agent_actions import Action
 from agent_checks import CASES, Run, fixture
+from conftest import git
 
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
@@ -231,3 +232,18 @@ def test_other_tool_check_flags_calls_not_searches(command: str, flagged: bool) 
         [*BROWSER_ACTIONS, Action("command", command, True)]
     )
     assert bool(failures) == flagged, failures
+
+
+@pytest.mark.parametrize("feature_map", [False, True])
+def test_a_map_run_adds_only_the_committed_feature_map(
+    tmp_path: Path, feature_map: bool
+) -> None:
+    case = next(case for case in CASES if case.name == "browser-proof")
+    root = tmp_path / "project"
+    base = fixture(root, case, feature_map=feature_map)
+    assert (root / "FEATURES.md").exists() == feature_map
+    assert git(root, "rev-parse", "HEAD") == base
+    assert git(root, "status", "--porcelain") == ""
+    assert all(
+        not other.feature_map for other in CASES if other.name != "browser-proof"
+    )

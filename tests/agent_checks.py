@@ -2,6 +2,7 @@
 
 Usage: uv run python tests/agent_checks.py [--client codex|claude] [--model M]
     [--effort E] [--case NAME] [--repeat N] [--source REV] [--bare] [--judge]
+    [--feature-map]
 
 Each case installs this source (or --source REV) into a disposable Git fixture,
 runs one non-interactive agent session kept apart from the user's own agent
@@ -45,7 +46,7 @@ from agent_actions import (
     event_usage,
     loaded_skills,
 )
-from agent_browser import PROMPT, judge_browser, prepare_browser_app
+from agent_browser import FEATURE_MAP, PROMPT, judge_browser, prepare_browser_app
 from agent_clients import CLIENTS, Access, Client
 from agent_fixtures import (
     CALC,
@@ -101,6 +102,7 @@ class Case(NamedTuple):
     prepare: Callable[[Path], None]
     judge: Callable[[Run], list[str]]
     access: Access = "sandboxed"
+    feature_map: str = ""
 
 
 def run(fixture: Run, *command: str) -> int:
@@ -553,12 +555,24 @@ CASES = [
         prepare_repeated_block,
         judge_repeated_block,
     ),
-    Case("browser-proof", PROMPT, prepare_browser_app, judge_browser, "approved"),
+    Case(
+        "browser-proof",
+        PROMPT,
+        prepare_browser_app,
+        judge_browser,
+        "approved",
+        FEATURE_MAP,
+    ),
 ]
 
 
 def fixture(
-    root: Path, case: Case, source: Path = SOURCE, *, bare: bool = False
+    root: Path,
+    case: Case,
+    source: Path = SOURCE,
+    *,
+    bare: bool = False,
+    feature_map: bool = False,
 ) -> str:
     """A committed project with this source installed, then the case's own state."""
     init(root)
@@ -574,6 +588,9 @@ def fixture(
     install_hard_eng(root, source, bare=bare)
     commit(root, "Install Hard Eng")
     case.prepare(root)
+    if feature_map and case.feature_map:
+        (root / "FEATURES.md").write_text(case.feature_map)
+        commit(root, "Add the feature map")
     return git(root, "rev-parse", "HEAD")
 
 
@@ -602,7 +619,13 @@ def execute(
     evidence.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
         root = Path(temporary).resolve() / "project"
-        base = fixture(root, case, options.installed, bare=options.bare)
+        base = fixture(
+            root,
+            case,
+            options.installed,
+            bare=options.bare,
+            feature_map=options.feature_map,
+        )
         agent = client.run(root, evidence, options, case.prompt, case.access)
         agent.settings["usage"] = event_usage(evidence / "events.jsonl")
         agent.settings["access"] = case.access
@@ -660,6 +683,11 @@ def main() -> int:
     parser.add_argument(
         "--judge", action="store_true", help="grade diagnoses with the same client"
     )
+    parser.add_argument(
+        "--feature-map",
+        action="store_true",
+        help="commit the case's feature map file, for cases that have one",
+    )
     options = parser.parse_args()
     if options.repeat < 1:
         parser.error("--repeat must be at least 1")
@@ -700,6 +728,7 @@ def main() -> int:
         "uncommitted_changes": dirty,
         "source": options.source or "checkout",
         "bare": options.bare,
+        "feature_map": options.feature_map,
         "started": started.isoformat(),
         "client": {
             "name": options.client,

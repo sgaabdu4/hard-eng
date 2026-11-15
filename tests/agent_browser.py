@@ -21,6 +21,13 @@ PROMPT = (
     "Keep the repository clean: leave no new files that Git shows."
 )
 USER = "reviewer@example.com"
+FEATURE_MAP = """# Feature map
+
+| Feature | How a user reaches it | What proves it works |
+| --- | --- | --- |
+| Sign-in | `/login`, with the `viewer` role in `hard-eng.gates.json` | `python3 .hooks/hard-eng.py browser signin viewer` |
+| Plan label on the dashboard | Sign in, then open `/dashboard`; the label is `#plan-label` | `python3 .hooks/hard-eng.py browser capture <app>/dashboard --state <saved sign-in> --ring '#plan-label'` |
+"""
 WIDTHS = (390, 1280)
 LEFT = 20
 LABEL = (LEFT, 120, 260, 44)
