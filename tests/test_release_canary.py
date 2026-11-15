@@ -88,6 +88,20 @@ def test_a_run_that_finds_no_project_fails(
     assert [state for state, _ in posted] == ["pending", "failure"]
 
 
+def test_a_python_without_yaml_stops_before_the_check_loses_its_stand_in(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The check would restart through uv and ask GitHub about a local commit."""
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD"])
+
+    def no_module(name: str) -> None:
+        return None
+
+    monkeypatch.setattr(release_canary.importlib.util, "find_spec", no_module)
+    assert release_canary.main() == 1
+    assert "uv run --locked python release_canary.py" in capsys.readouterr().out
+
+
 def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) -> None:
     """Hung tests and installers must not outlive the step."""
     pid_file = tmp_path / "child.pid"

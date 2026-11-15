@@ -4,6 +4,7 @@ With --ci it only sets up and checks the public new projects, for hard-eng's own
 
 import argparse
 import fcntl
+import importlib.util
 import io
 import json
 import os
@@ -850,6 +851,12 @@ def arguments() -> argparse.Namespace:
 
 def main() -> int:
     args = arguments()
+    if importlib.util.find_spec("yaml") is None:
+        print(
+            "This Python has no yaml, so the check would restart through uv and lose the "
+            "canary's verified release. Run: uv run --locked python release_canary.py ..."
+        )
+        return 1
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     with LOCK.open("a") as handle:
         try:
