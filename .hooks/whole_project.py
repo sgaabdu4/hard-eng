@@ -19,6 +19,20 @@ from project_files import GIT_LISTING
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
+MARKDOWN_NAME = re.compile(r"[\w.+-]+\.md\b")
+NEEDS_NO_LINK = {
+    "README",
+    "AGENTS",
+    "AGENTS.override",
+    "PRODUCT",
+    "DESIGN",
+    "SECURITY",
+    "CHANGELOG",
+    "PLAN",
+    "DECISION",
+    "SKILL",
+}
+NEEDS_NO_LINK_FOLDERS = ("docs/adr/", *UNOWNED)
 
 
 def tracked_files(root: Path) -> list[str]:
@@ -88,6 +102,21 @@ def excuse_markers(root: Path, texts: dict[str, str], names: list[str]) -> list[
     ]
 
 
+def unnamed_markdown(texts: dict[str, str]) -> list[str]:
+    named: dict[str, set[str]] = {}
+    for name, text in texts.items():
+        for hit in MARKDOWN_NAME.findall(text):
+            named.setdefault(hit, set()).add(name)
+    return [
+        f"{name} is named by no other tracked file"
+        for name in texts
+        if name.endswith(".md")
+        and not name.startswith(NEEDS_NO_LINK_FOLDERS)
+        and PurePosixPath(name).stem not in NEEDS_NO_LINK
+        and not named.get(PurePosixPath(name).name, set()) - {name}
+    ]
+
+
 def validate_whole_project(root: Path) -> None:
     texts = {
         name: (root / name).read_text(errors="replace") for name in tracked_files(root)
@@ -98,5 +127,11 @@ def validate_whole_project(root: Path) -> None:
         raise ValueError(
             "HE-COMMENT-LINES: A TODO, FIXME, HACK or XXX marker excuses unfinished work: "
             "fix the cause now and delete the comment; never suppress it. "
+            + "; ".join(found)
+        )
+    if found := unnamed_markdown(texts):
+        raise ValueError(
+            "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names is dead weight: "
+            "name it where a reader opens it, or delete it; never suppress it. "
             + "; ".join(found)
         )

@@ -46,6 +46,12 @@ A change fails when its added lines hold any of these: a Python, JavaScript, Typ
 
 Proof: check
 
+## HE-NAMED-MARKDOWN
+
+The full check fails a tracked Markdown file that no other tracked file names, old files too. A file names it when its text holds the file name. Files that tools and people open by name need no link: `README`, `AGENTS`, `AGENTS.override`, `PRODUCT`, `DESIGN`, `SECURITY`, `CHANGELOG`, `PLAN`, `DECISION` and `SKILL` files, anything under `docs/adr/`, and paths under `.hooks/`, `.agents/` and `.claude/`. Name the file where a reader opens it, or delete it. Review, not the check, refuses an excuse for a shortcut inside a named document.
+
+Proof: check
+
 ## HE-UI-SOURCE
 
 A change fails when its added lines in UI source hold a transition on every property (`transition` or `transition-property` with the value `all`, in a stylesheet or a style object, or the Tailwind class `transition-all`; a transition that names no property, such as `transition: 0.3s`, is not flagged) or one of these colour literals outside a theme or token file: a Tailwind arbitrary colour (a hex value, or an `rgb`, `hsl` or `oklch` function whose first argument is not `var(`); Dart `Color(0x`, `Color.from(`, `Color.fromARGB(`, `Color.fromRGBO(` or a `Colors.` name other than `transparent`; Swift `Color(red:`, `UIColor(red:` or `NSColor(red:`, also with an sRGB or Display P3 colour space before `red:`, or `#colorLiteral(`. No other colour form is flagged. UI source = a file with the suffix `.css`, `.scss`, `.less`, `.html`, `.vue`, `.svelte`, `.astro`, `.jsx`, `.tsx`, `.js`, `.ts`, `.dart` or `.swift`. A theme or token file = a file in a folder named `theme`, `token`, `color`, `colour` or `palette` (or the plural), a file whose name, without its last suffix, has one of those words as its last word (`appTheme.dart`, `brand_colors.ts`, not `colors.module.css`; for a name with `+`, any part between the `+` marks, as in `Color+Brand.swift`), or `tailwind.config.*`. Tests, generated files, comment lines and paths under `.hooks/`, `.agents/` and `.claude/` are exempt, and lines that existed before the change are not flagged. Nothing is flagged when the comparison is with the empty tree (for example a new repository's first commit).
