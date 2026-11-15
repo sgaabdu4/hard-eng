@@ -60,6 +60,7 @@ PACKAGES = {
     "jscpd": "npm:jscpd",
     "lhci": "npm:@lhci/cli",
     "k6": "aqua:grafana/k6",
+    "agent-browser": "npm:agent-browser",
 }
 MANAGED_PYTHON_SCANNERS = {"ruff", "pyrefly", "vulture", "semgrep", "zizmor", "poetry"}
 ROLE_TOOLS: dict[str, dict[str, tuple[str, ...]]] = {
@@ -410,7 +411,9 @@ def tool_name(tool: str) -> str:
     return TOOL_BRACKETS_OR_LATEST.sub("", tool)
 
 
-def provision_batch(batch: list[str], timeout: float) -> None:
+def provision_batch(
+    batch: list[str], timeout: float, offline: bool | None = None
+) -> None:
     # Two days avoids newly broken releases.
     batch = [bun_age(tool, RELEASE_AGE_SECONDS) for tool in batch]
     shared = shared_tool_folder()
@@ -430,7 +433,7 @@ def provision_batch(batch: list[str], timeout: float) -> None:
             "MISE_GITHUB_CREDENTIAL_COMMAND",
             'gh auth token --hostname "$MISE_CREDENTIAL_HOST"',
         )
-    if quick_mode():
+    if quick_mode() if offline is None else offline:
         try:
             if use_installed_tools(batch, storage, environment, timeout):
                 return

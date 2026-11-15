@@ -14,7 +14,7 @@ Write the brief per the planning UX "Brief" rule: link planning UX, include its 
 
 1. Coverage table: each agreed item → the screen that shows it, or the automatic step that does it. An agreed item with no row, or a row with neither, fails.
 2. Nothing-lost list: each current action on the touched pages → its new place, or why it goes.
-3. Whole-page captures: each touched page, top to bottom, at 390 and 1280 px wide and at each other width the app supports. They are for the coordinator's check, not for staff.
+3. Whole-page captures: each touched page, top to bottom, with [`browser capture`](../../e2e/SKILL.md#drive-a-browser), and at each other width the app supports. They are for the coordinator's check, not for staff.
 4. Taps table: taps per job, before and after, counted by clicking the real app. It goes in the worker's report and the card's plan, never in the staff image.
 5. Screens: the real app with fake data, as a local patch only. No live writes.
 6. Staff image: one combined image of the After screens only, a plain caption under each and red boxes around what is new. No Before screens and no taps table. The plan and the pull request still keep the real Before per planning UX.

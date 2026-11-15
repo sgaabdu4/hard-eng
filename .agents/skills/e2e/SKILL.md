@@ -27,6 +27,15 @@ flowchart LR
 
 OS-owned dialogs → platform control beyond the app tree. Browser exploration → durable regressions in existing tests. API/CLI journeys need UI runtime only when the journey includes it.
 
+## Drive a browser
+
+- Any browser step or capture without a project runner → `python3 .hooks/hard-eng.py browser`; it installs the tool, so run no other browser tool. Each agent passes its own `--session NAME` and never `close --all`.
+- `browser --session S <step>` runs one agent-browser step (`open`, `click`, `eval`, `console`, `errors`, `close`, ...); `agent-browser --help` lists them. Output files land in `.hard-eng/browser/`.
+- `browser capture <url> --session S [--state FILE] [--ring SELECTOR] [--name NAME]` → whole-page images at 390 and 1280 px, red boxes on each `--ring` element, emails and phone numbers hidden (a pattern match: it misses names). A `--ring` that matches nothing fails.
+- `browser signin <role> --session S` → session file `.hard-eng/browser/state/<role>.json` for `--state`; roles come from `browser.roles` in `hard-eng.gates.json` (`url`, `username_env`, `password_env`, optional `env_file`).
+- Codex in a workspace-write sandbox cannot start Chrome → run browser steps outside the sandbox, with approval.
+- Close each session when done.
+
 ## Prove the journey
 
 - Establish requested behavior, environment/build, actors, permissions and starting data. A reused server or app must run this checkout's current build. Exercise the real user path with stable semantic selectors and observable state waits.

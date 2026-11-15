@@ -20,18 +20,22 @@ if sys.version_info < PYTHON_FLOOR:
         sys.exit(refusal)
     sys.exit(0)
 
-if (
-    __name__ == "__main__"
-    and sys.argv[1:2] in (["session"], ["stop"])
+if __name__ == "__main__" and (
+    sys.argv[1:2] in (["session"], ["stop"])
     and sys.argv[2:] in (["claude"], ["codex"])
+    or sys.argv[1:2] == ["browser"]
+    and sys.argv[2:3] not in (["-h"], ["--help"])
 ):
     from pathlib import Path
 
+    root = Path(__file__).resolve().parents[1]
+    if sys.argv[1] == "browser":
+        from browser import browser_command
+
+        raise SystemExit(browser_command(root, sys.argv[2:]))
     from agent_hooks import handle_event
 
-    raise SystemExit(
-        handle_event(Path(__file__).resolve().parents[1], sys.argv[1], sys.argv[2])
-    )
+    raise SystemExit(handle_event(root, sys.argv[1], sys.argv[2]))
 
 if __name__ == "__main__":
     from gate_runner import run

@@ -129,13 +129,8 @@ def test_fixture_gh_ignores_the_developers_sign_in(
     assert not signed_in
 
 
-def test_gate_validation_rejects_javascript_package_manager_drift(
-    tmp_path: Path,
-) -> None:
-    """HE-PERFORMANCE-SUITE: a package needs a performance suite or a reviewed exception."""
-    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
-    (tmp_path / "bun.lock").touch()
-    group: Group = {
+def javascript_group() -> Group:
+    return {
         "path": ".",
         "language": "javascript",
         "sources": ["src"],
@@ -161,6 +156,15 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
             },
         ],
     }
+
+
+def test_gate_validation_rejects_javascript_package_manager_drift(
+    tmp_path: Path,
+) -> None:
+    """HE-PERFORMANCE-SUITE: a package needs a performance suite or a reviewed exception."""
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+    (tmp_path / "bun.lock").touch()
+    group = javascript_group()
     assert gate_config.validate_group(tmp_path, group, set()) == 7
     performance = group["checks"].pop()
     with pytest.raises(ValueError, match="mandatory performance"):
@@ -194,6 +198,33 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
     group["checks"][0]["command"] = ["bun", "run", "typecheck"]
     with pytest.raises(ValueError, match="must use Bun, not: npx"):
         gate_config.validate_group(tmp_path, group, set())
+
+
+def test_a_react_package_without_its_react_gate_is_refused(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"packageManager": "bun@1.3.0", "dependencies": {"react": "19"}})
+    )
+    (tmp_path / "bun.lock").touch()
+    group = javascript_group()
+    shared = {"lockfiles", "vulnerabilities", "freshness", "security"}
+    with pytest.raises(ValueError, match="missing mandatory checks: react;"):
+        gate_config.validate_package_services(tmp_path, group, {}, {}, shared)
+    group["checks"].append(
+        {
+            "name": "react-doctor",
+            "role": "react",
+            "command": [
+                "react-doctor",
+                "--blocking",
+                "warning",
+                "--no-respect-inline-disables",
+                "--json-out",
+                "coverage/react-doctor.json",
+            ],
+            "report": {"type": "react-doctor", "path": "coverage/react-doctor.json"},
+        }
+    )
+    gate_config.validate_package_services(tmp_path, group, {}, {}, shared)
 
 
 def test_the_shipped_format_gate_covers_each_installed_workflow() -> None:

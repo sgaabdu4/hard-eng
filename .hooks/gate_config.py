@@ -1,6 +1,5 @@
 """Validate required documents and gate configuration before execution."""
 
-import json
 import os
 import re
 import stat
@@ -20,6 +19,7 @@ from dependency_graph import (
 )
 from project_files import (
     GIT_LISTING,
+    biome_formatters,
     group_locks,
     json_text,
     keep,
@@ -34,37 +34,8 @@ type JsonValue = (
 type JsonObject = dict[str, JsonValue]
 
 
-JSONC = re.compile(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', re.DOTALL)
-TRAILING_COMMA = re.compile(r",(\s*[}\]])")
 ALL_ZERO_OBJECT_ID = re.compile(r"0{40}|0{64}")
 SOURCE_FILE = ".hooks/hard-eng-source.json"
-
-
-def biome_formatters(
-    path: Path, seen: set[Path]
-) -> tuple[dict[str, int | str], dict[str, int | str]]:
-    """The formatter and json.formatter options of a Biome file after the local files it extends."""
-    path = path.resolve()
-    if path in seen or not path.is_file():
-        return {}, {}
-    seen.add(path)
-    try:
-        text = JSONC.sub(lambda match: match[1] or "", path.read_text())
-        config = json.loads(TRAILING_COMMA.sub(r"\1", text))
-    except (OSError, ValueError):
-        return {}, {}
-    extends = config.get("extends", [])
-    formatter: dict[str, int | str] = {}
-    own: dict[str, int | str] = {}
-    for name in [extends] if isinstance(extends, str) else extends:
-        if not isinstance(name, str):
-            continue
-        inherited = biome_formatters(path.parent / name, seen)
-        formatter, own = {**formatter, **inherited[0]}, {**own, **inherited[1]}
-    return (
-        {**formatter, **config.get("formatter", {})},
-        {**own, **config.get("json", {}).get("formatter", {})},
-    )
 
 
 def json_layout(root: Path) -> tuple[str, int, int]:
@@ -122,6 +93,7 @@ GateConfig = TypedDict(
         "version": NotRequired[int],
         "scan_git_history": NotRequired[bool],
         "shipping": NotRequired[JsonObject],
+        "browser": NotRequired[JsonObject],
         "file_size_exceptions": NotRequired[dict[str, dict[str, str]]],
     },
 )
@@ -949,6 +921,10 @@ def load_groups(
     config = parse_config((root / "hard-eng.gates.json").read_text())
     if type(config.get("scan_git_history", True)) is not bool:
         raise TypeError("scan_git_history must be true or false")
+    if "browser" in config:
+        from browser import browser_roles
+
+        browser_roles(config)
     if "shipping" in config:
         from shipping import load_policy
 
