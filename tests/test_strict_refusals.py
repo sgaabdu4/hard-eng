@@ -1,10 +1,11 @@
 """The full check judges every tracked file, old code included."""
 
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from comments import validate_suppressions
-from conftest import commit, init
+from conftest import commit, configure, gate, init
 from switch_off_forms import RETRY_FORMS, SWITCHES
 from whole_project import validate_whole_project
 
@@ -215,3 +216,14 @@ def test_each_refusal_names_the_fix_at_the_cause(tmp_path: Path) -> None:
         assert "fix" in message.lower(), kind
         assert "suppress" in message.lower(), kind
         assert "never" in message.lower() or "instead of" in message.lower(), kind
+
+
+def test_quick_check_skips_the_whole_project_pass(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    """HE-NAMED-MARKDOWN: the quick check leaves the whole-project pass to the full check."""
+    configure(tmp_path, [gate("suite", "pass", role="lint", parallel=True)])
+    (tmp_path / "stray.md").write_text("no file names this\n")
+    assert runner.check(quick=True) == 0
+    with pytest.raises(ValueError, match=r"stray\.md is named by no other"):
+        runner.check(quick=False)
