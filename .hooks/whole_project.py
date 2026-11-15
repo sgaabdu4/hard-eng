@@ -52,8 +52,8 @@ def tracked_files(root: Path) -> list[str]:
     )
 
 
-def gitleaks_allowlists(name: str, text: str) -> list[str]:
-    """Allowlist entries of a Gitleaks config; its detection rules stay."""
+def gitleaks_switch_offs(name: str, text: str) -> list[str]:
+    """Allowlist entries and disabled rules of a Gitleaks config; its detection rules stay."""
     try:
         config = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
@@ -68,6 +68,9 @@ def gitleaks_allowlists(name: str, text: str) -> list[str]:
         for rule in config.get("rules", [])
         if "allowlist" in rule or "allowlists" in rule
     ]
+    extend = config.get("extend")
+    if isinstance(extend, dict) and (off := extend.get("disabledRules")):
+        found.append(f"{name} disables the rules {off!r}")
     return found
 
 
@@ -81,7 +84,7 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         found += security_hits(root, name, lines, "holds", base in LINE_IGNORES)
         found += pattern_switch_offs(root, name, lines, "holds")
         if base == ".gitleaks.toml":
-            found += gitleaks_allowlists(name, texts[name])
+            found += gitleaks_switch_offs(name, texts[name])
     return found
 
 

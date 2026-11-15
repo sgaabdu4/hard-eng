@@ -81,6 +81,16 @@ def test_gitleaks_rules_pass_and_allowlists_fail(tmp_path: Path) -> None:
         assert ".gitleaks.toml holds an allowlist" in message, form
 
 
+def test_gitleaks_disabled_rules_fail(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a Gitleaks config that turns a rule off fails; an empty list turns none off."""
+    empty = "[extend]\nuseDefault = true\ndisabledRules = []\n"
+    validate_whole_project(project(tmp_path / "empty", {".gitleaks.toml": empty}))
+    off = "[extend]\nuseDefault = true\ndisabledRules = ['aws-access-token']\n"
+    message = refusal(project(tmp_path / "off", {".gitleaks.toml": off}))
+    assert ".gitleaks.toml disables the rules ['aws-access-token']" in message
+    assert "fix the cause" in message
+
+
 DART_FORMS = [
     (
         "// dart-decimate-ignore-next-line complexity",
