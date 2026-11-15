@@ -146,7 +146,9 @@ def test_the_merge_shard_skips_the_rule(
     configure(tmp_path, [gate("suite", "pass")])
     seen: list[bool] = []
 
-    def stop(root: Path, base: str | None, screens: bool = True) -> None:
+    def stop(
+        root: Path, base: str | None, screens: bool = True, full: bool = False
+    ) -> None:
         seen.append(screens)
         raise KeyboardInterrupt
 
