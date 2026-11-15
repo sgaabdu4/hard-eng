@@ -36,7 +36,7 @@ Proof: check
 
 ## HE-COMMENT-LINES
 
-A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt. In the change that installs Hard Eng, blocks that a file held before that change are also exempt. In each later change, every comment block longer than one line in a changed file fails the check.
+In the full check, no comment in any tracked source file holds a `TODO`, `FIXME`, `HACK` or `XXX` marker, old comments too; the same words inside a string do not count. Fix the cause now, then remove the comment; never suppress it. A changed source file holds no comment block longer than one line. Generated output and scaffold paths are exempt. In the change that installs Hard Eng, blocks that a file held before that change are also exempt. In each later change, every comment block longer than one line in a changed file fails the check.
 
 Proof: check
 

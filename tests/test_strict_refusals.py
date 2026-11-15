@@ -108,3 +108,36 @@ def test_dart_decimate_ignore_is_a_switch_off(
     assert f"lib/a.dart:1 adds {shown!r}" in str(added.value)
     commit(root, "old")
     assert f"lib/a.dart:1 holds {shown!r}" in refusal(root)
+
+
+MARKERS = [
+    ("app.py", "x = 1\n# TODO: later\n", 2, "TODO"),
+    ("app.py", "x = 1  # FIXME later\n", 1, "FIXME"),
+    ("lib/a.dart", "final a = 1; // HACK\n", 1, "HACK"),
+    ("src/a.ts", "/* XXX */\nconst a = 1;\n", 1, "XXX"),
+    ("src/a.ts", "const b = 1; // later TODO\n", 1, "TODO"),
+    ("run.sh", "echo hi # TODO\n", 1, "TODO"),
+    ("run.sh", "# FIXME\necho hi\n", 1, "FIXME"),
+]
+
+
+@pytest.mark.parametrize(("name", "text", "line", "word"), MARKERS)
+def test_excuse_markers_fail_anywhere_in_the_project(
+    tmp_path: Path, name: str, text: str, line: int, word: str
+) -> None:
+    """HE-COMMENT-LINES: a TODO, FIXME, HACK or XXX marker in any comment fails, old ones too."""
+    message = refusal(project(tmp_path, {name: text}))
+    assert f"{name}:{line} holds a {word} marker" in message
+
+
+MARKER_STRINGS = [
+    ("app.py", "x = 'TODO'\ny = \"# FIXME\"\nz = 1  # a TODOS list\n"),
+    ("src/a.ts", "const t = 'HACK';\nconst u = `// XXX`;\n"),
+    ("lib/a.dart", "final s = 'TODO // FIXME';\n"),
+    ("run.sh", "echo 'TODO' \"# HACK\"\n"),
+]
+
+
+@pytest.mark.parametrize(("name", "text"), MARKER_STRINGS)
+def test_marker_words_in_strings_pass(tmp_path: Path, name: str, text: str) -> None:
+    validate_whole_project(project(tmp_path, {name: text}))
