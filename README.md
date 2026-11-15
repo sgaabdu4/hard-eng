@@ -16,6 +16,17 @@ flowchart LR
 
 > **Alpha.** Some hooks and acceptance checks still have limits. See [verified behavior and open gaps](DECISION.md#current-status).
 
+## What "hard" means
+
+Hard Eng is strict on purpose. It refuses bad code. It does not warn and move on.
+
+- **Old code too.** The full check reads the whole project, not only your new lines. An old problem fails until someone fixes it.
+- **No switch-offs.** A comment or config line that turns a check off fails, even an old one.
+- **Fix the cause.** A failure names the fix. For example, a wait for the next frame fails: change the order of events instead.
+- **No excuses in the code.** TODO, FIXME, HACK and XXX notes fail. A markdown file that nothing links to fails.
+
+To adopt Hard Eng in an older project, fix what the first full check finds. Then each change keeps the project clean.
+
 [Setup](#1-setup) · [Plan](#2-plan) · [Build](#3-build) · [Ship](#4-ship) · [Learn](#5-learn) · [Checks](#checks) · [What is enforced](#what-is-enforced)
 
 ## 1. Setup
