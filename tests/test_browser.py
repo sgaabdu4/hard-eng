@@ -169,16 +169,16 @@ def is_red(rows: list[bytes], step: int, x: int, y: int) -> bool:
     return red > 200 and green < 60 and blue < 60
 
 
+def found_at(tool: Path, name: str) -> str:
+    del name
+    return str(tool)
+
+
 def fake_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> Path:
     tool = tmp_path / "agent-browser"
     tool.write_text("#!/bin/sh\n" + body)
     tool.chmod(0o755)
-
-    def which(name: str) -> str:
-        del name
-        return str(tool)
-
-    monkeypatch.setattr(shutil, "which", which)
+    monkeypatch.setattr(shutil, "which", functools.partial(found_at, tool))
     return tool
 
 
@@ -229,10 +229,38 @@ def test_installs_like_other_tools(
     assert log.read_text().splitlines() == ["install"]
     assert sorted(path.name for path in project.iterdir()) == before
 
-    stamp.write_text("/another/checkout/agent-browser")
-    browser.ensure_tool()
-    assert log.read_text().splitlines() == ["install", "install"]
     assert capfd.readouterr().out == ""
+
+
+def test_each_tool_path_installs_chrome_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    import tool_setup
+
+    log = tmp_path / "log"
+    tools = []
+    for checkout in ("first", "second"):
+        (tmp_path / checkout).mkdir()
+        tools.append(
+            fake_tool(tmp_path / checkout, monkeypatch, f"echo {checkout} >> {log}\n")
+        )
+
+    def provision(
+        batch: list[str], timeout: float, offline: bool | None = None
+    ) -> None:
+        del batch, timeout, offline
+
+    monkeypatch.setattr(tool_setup, "provision_batch", provision)
+    monkeypatch.setattr(tool_setup, "shared_tool_folder", lambda: tmp_path / "shared")
+    for tool in [*tools, *tools, *tools]:
+        monkeypatch.setattr(shutil, "which", functools.partial(found_at, tool))
+        assert browser.ensure_tool() == str(tool)
+    clock = tmp_path / "shared/browser-refreshed"
+    started = clock.stat().st_mtime
+    os.utime(clock, (started - 3600,) * 2)
+    browser.ensure_tool()
+    assert log.read_text().splitlines() == ["first", "second"]
+    assert clock.stat().st_mtime == started - 3600
 
 
 def test_parallel_first_runs_install_chrome_once(
@@ -516,15 +544,36 @@ def test_capture_hides_emails_and_phones(
     assert "$1,234.56 on 2026-11-14" in text
 
 
+LATE_FRAMES = (
+    "(async () => {"
+    "const same = document.querySelector('#same');"
+    "const moved = new Promise((done) => same.addEventListener('load', done, {once: true}));"
+    "same.src = OTHER + '/inner.html';"
+    "await moved;"
+    "const late = Object.assign(document.createElement('iframe'), {src: OTHER + '/inner.html'});"
+    "late.style.cssText = 'width:120px;height:80px';"
+    "document.body.append(late);"
+    "await Promise.resolve();"
+    "await new Promise((done) => late.addEventListener('load', done, {once: true}));"
+    "const box = (element) => { const r = element.getBoundingClientRect();"
+    "return [r.left + scrollX, r.top + scrollY, r.width, r.height]; };"
+    "const frames = ['#other', '#same'].map((id) => box(document.querySelector(id)));"
+    "return JSON.stringify([[...document.querySelectorAll('[data-hard-eng-cover]')].map(box),"
+    "[...frames, box(late)]]);})()"
+)
+
+
 def test_capture_hides_inside_shadow_roots_and_frames(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
+    other = site.replace("127.0.0.1", "localhost")
     page(tmp_path, "inner.html", "<p>other frame bob@example.com</p>")
+    page(tmp_path, "same.html", "<p>frame 07700 900111</p>")
     page(
         tmp_path,
         "nested.html",
-        "<div id=host></div><iframe id=same srcdoc='<p>frame 07700 900111</p>'></iframe>"
-        f"<iframe id=other src='{site.replace('127.0.0.1', 'localhost')}/inner.html'"
+        "<div id=host></div><iframe id=same src='/same.html'></iframe>"
+        f"<iframe id=other src='{other}/inner.html'"
         " style='width:200px;height:100px'></iframe>"
         "<script>document.querySelector('#host').attachShadow({mode: 'open'})"
         ".innerHTML = '<p>shadow eve@example.com</p>';</script>",
@@ -556,6 +605,9 @@ def test_capture_hides_inside_shadow_roots_and_frames(
             "[frame.left, frame.top, frame.width, frame.height],"
             "cover ? [box.left, box.top, box.width, box.height] : []]);})()",
         )
+        later = step(
+            "eval", "--stdin", text=LATE_FRAMES.replace("OTHER", json.dumps(other))
+        )
     finally:
         step("close")
     shadow, same, frame, cover = json.loads(json.loads(shown))
@@ -563,6 +615,10 @@ def test_capture_hides_inside_shadow_roots_and_frames(
     assert "@" not in shadow
     assert "frame [hidden]" in same
     assert cover == frame
+    covers, frames = json.loads(json.loads(later))
+    assert len(covers) == 3
+    assert frames[1] in covers
+    assert frames[2] in covers
 
 
 def test_signin_keeps_password_off_command_line(
