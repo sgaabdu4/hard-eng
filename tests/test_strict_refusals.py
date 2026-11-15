@@ -163,6 +163,7 @@ NO_LINK_NEEDED = [
     "CHANGELOG.md",
     "DECISION.md",
     "features/a/PLAN.md",
+    "features/b/plan.md",
     "docs/adr/0001-first.md",
     ".agents/skills/a/SKILL.md",
     ".claude/rules/a.md",
