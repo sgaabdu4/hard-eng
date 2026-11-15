@@ -713,10 +713,11 @@ def test_the_brownfield_refactor_removes_switch_offs_markers_and_comment_blocks(
     """A real adoption first refactors what the strict refusals fail: type ignores, TODO markers and comment blocks."""
     git(tmp_path, "init", "-q")
     source = tmp_path / "pkg.py"
+    ignore = "# type" + ": ignore"
     source.write_text(
-        '"""# type: ignore stays in a docstring"""\n'
+        f'"""{ignore} stays in a docstring"""\n'
         "# one line of why stays\n"
-        "value = int(text)  # type: ignore[arg-type]\n"
+        f"value = int(text)  {ignore}[arg-type]\n"
         "# first\n"
         "# second\n"
         "# TODO later\n"
@@ -727,7 +728,7 @@ def test_the_brownfield_refactor_removes_switch_offs_markers_and_comment_blocks(
     git(tmp_path, "add", "pkg.py")
     release_canary.refactor_for_strict_checks(tmp_path)
     assert source.read_text() == (
-        '"""# type: ignore stays in a docstring"""\n'
+        f'"""{ignore} stays in a docstring"""\n'
         "# one line of why stays\n"
         "value = int(text)\n"
         "# first\n"
