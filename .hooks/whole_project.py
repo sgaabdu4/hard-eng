@@ -10,6 +10,7 @@ from comments import (
     COMMENT_HEADER,
     HASH,
     RETRY_WORDS,
+    SCAN_IGNORES,
     SECURITY_OFF,
     SLASH,
     SWITCH_OFF_HEADER,
@@ -23,6 +24,17 @@ from gate_config import generated_sources
 from project_files import GIT_LISTING
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
+TEXT_SUFFIXES = {
+    *HASH,
+    *SLASH,
+    ".md",
+    ".json",
+    ".toml",
+    ".yaml",
+    ".yml",
+    ".xcscheme",
+    ".xctestplan",
+}
 MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 ALLOWLIST_LINE = re.compile(r"\s*(\[\[?[\w.-]*allowlists?\]\]?|[\w.-]*allowlists?\s*=)")
 PATHS_LINE = re.compile(r"\s*paths\s*=")
@@ -160,12 +172,25 @@ def unnamed_markdown(texts: dict[str, str]) -> list[str]:
     ]
 
 
+def binary(name: str, data: bytes) -> bool:
+    """Git's NUL test, kept only for bytes that are not UTF-8 and a name no check reads as code or settings."""
+    if b"\0" not in data[:8000] or PurePosixPath(name).suffix in TEXT_SUFFIXES:
+        return False
+    if PurePosixPath(name).name in SCAN_IGNORES:
+        return False
+    try:
+        data.decode()
+    except UnicodeDecodeError:
+        return True
+    return False
+
+
 def text_files(root: Path) -> dict[str, str]:
-    """Tracked and new text files; a NUL byte in the first 8,000 marks a binary file, as Git decides."""
+    """Tracked and new text files; a NUL byte cannot hide code or settings from the pass."""
     texts: dict[str, str] = {}
     for name in tracked_files(root):
         data = (root / name).read_bytes()
-        if b"\0" not in data[:8000]:
+        if not binary(name, data):
             text = data.decode(errors="replace")
             texts[name] = text.replace("\r\n", "\n").replace("\r", "\n")
     return texts
