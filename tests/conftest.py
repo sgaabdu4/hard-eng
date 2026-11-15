@@ -492,6 +492,21 @@ def release(
     source_trees.forget_all()
 
 
+@pytest.fixture
+def old_fallow_release(
+    release: tuple[Path, Path, str],
+) -> tuple[Path, Path, str]:
+    """A release whose installed project holds the Fallow gate as an older release wrote it, with no health analysis."""
+    path = release[1] / "hard-eng.gates.json"
+    config = json.loads(path.read_text())
+    checks = [gate for package in config["packages"] for gate in package["checks"]]
+    gate = next(gate for gate in checks if gate.get("role") == "dead-code-duplicates")
+    gate["command"] = [part.removesuffix(",health") for part in gate["command"]]
+    path.write_text(json.dumps(config))
+    commit(release[1], "old Fallow gate")
+    return release
+
+
 def remove_application(target: Path) -> None:
     """The installed project keeps no package: no manifest and no group."""
     (target / "package.json").unlink()

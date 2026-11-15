@@ -528,6 +528,15 @@ def select_release(source: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
 
 
+def test_update_adds_the_strict_scanner_flags_to_an_old_fallow_gate(
+    old_fallow_release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = old_fallow_release
+    select_release(source, monkeypatch)
+    update.update(target)
+    assert "dead-code,dupes,health" in (target / "hard-eng.gates.json").read_text()
+
+
 def test_development_install_does_not_fetch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
