@@ -25,6 +25,9 @@ CONTENT_LENGTH_HEADER = re.compile(r"(?im)^content-length:\s*([^\r\n]+)")
 DELIVERY_TARGET_LINE = re.compile(
     r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*(PR|Merge|Deploy)\s*$"
 )
+ONE_TARGET = (
+    "Verification needs one Delivery target: PR, Merge or Deploy, alone on its line"
+)
 
 Delivery = TypedDict("Delivery", {"name": str, "command": list[str]})
 
@@ -750,9 +753,7 @@ def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
         ) from error
     targets = DELIVERY_TARGET_LINE.findall(sections["Verification"])
     if len(targets) != 1:
-        raise ShippingError(
-            "Verification needs one Delivery target: PR, Merge or Deploy"
-        )
+        raise ShippingError(ONE_TARGET)
     return resolved_plan, targets[0]
 
 
@@ -766,11 +767,11 @@ def target_problem(target: str, delivery: list[Delivery]) -> str | None:
 
 def plan_target_problem(root: Path, verification: str) -> str | None:
     """Why the delivery target in a plan's Verification does not fit the shipping policy."""
+    targets = DELIVERY_TARGET_LINE.findall(verification)
+    if len(targets) != 1:
+        return ONE_TARGET
     policy = load_policy(root)
-    target = DELIVERY_TARGET_LINE.search(verification)
-    if policy is None or not target:
-        return None
-    return target_problem(target[1], policy["delivery"])
+    return None if policy is None else target_problem(targets[0], policy["delivery"])
 
 
 def _delivery_scope(

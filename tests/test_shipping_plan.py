@@ -91,3 +91,18 @@ def test_configured_delivery_checks_need_deploy_target(
             validate_plans(root, base="0" * 40, stage=stage)
     else:
         assert validate_plans(root, base="0" * 40, stage=stage) == stage
+
+
+@pytest.mark.parametrize("stage", ["Ready", "Complete"])
+def test_a_delivery_target_with_more_words_fails_the_plan_check(
+    runner: ModuleType, stage: str
+) -> None:
+    """Ship reads only `Delivery target: Merge`, so the plan check refuses the line ship would refuse."""
+    root = runner.ROOT
+    plan = root / "PLAN.md"
+    plan.write_text(
+        plan.read_text().replace("Status: Complete", f"Status: {stage}")
+        + "\nDelivery target: Merge into develop\nDelivery: Pending\n"
+    )
+    with pytest.raises(ValueError, match="one Delivery target: PR, Merge or Deploy"):
+        validate_plans(root, base="0" * 40, stage=stage)
