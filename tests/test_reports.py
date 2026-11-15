@@ -229,20 +229,19 @@ def test_fallow_unknown_or_malformed_diagnostics_still_fail(
         reports.validate_fallow(path)
 
 
+AUDIT_SUMMARY: JsonObject = {"files_analyzed": 1, "functions_analyzed": 1}
+AUDIT_SUMMARY |= {"max_cyclomatic_threshold": 20, "max_cognitive_threshold": 15}
+AUDIT_SUMMARY |= {"max_crap_threshold": 30.0, "functions_above_threshold": 0}
+AUDIT_SUMMARY |= {"severity_critical_count": 0, "severity_high_count": 0}
+AUDIT_SUMMARY |= {"severity_moderate_count": 0}
+
+
 @pytest.mark.parametrize("threshold", [15, 30.0])
 def test_fallow_audit_requires_active_crap_enforcement(
     tmp_path: Path, threshold: float
 ) -> None:
     combined = json.loads(REPORTS["fallow"])
-    summary: JsonObject = {
-        "max_crap_threshold": threshold,
-        "files_analyzed": 1,
-        "functions_analyzed": 1,
-        "functions_above_threshold": 0,
-        "severity_critical_count": 0,
-        "severity_high_count": 0,
-        "severity_moderate_count": 0,
-    }
+    summary: JsonObject = {**AUDIT_SUMMARY, "max_crap_threshold": threshold}
     audit: JsonObject = {
         "kind": "audit",
         "command": "audit",
@@ -274,13 +273,9 @@ def test_a_clean_fallow_audit_report_passes(tmp_path: Path) -> None:
     """The `fallow audit --gate all` form holds the no rule packs note inside its dead-code section."""
     combined = json.loads(REPORTS["fallow"])
     note: list[JsonValue] = [{"path": ".", "kind": "rule-packs-not-configured"}]
-    summary: JsonObject = {"max_crap_threshold": 30.0, "files_analyzed": 1}
-    summary |= {"functions_analyzed": 1, "functions_above_threshold": 0}
-    summary |= {"severity_critical_count": 0, "severity_high_count": 0}
-    summary |= {"severity_moderate_count": 0}
     audit: JsonObject = {"kind": "audit", "command": "audit", "verdict": "pass"}
     audit |= {"duplication": combined["dupes"]}
-    audit |= {"complexity": {"findings": [], "summary": summary}}
+    audit |= {"complexity": {"findings": [], "summary": {**AUDIT_SUMMARY}}}
     dead_code: JsonObject = {**combined["check"], "unused_files": []}
     audit |= {"dead_code": dead_code}
     dead_code["workspace_diagnostics"] = note

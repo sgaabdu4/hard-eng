@@ -250,21 +250,7 @@ def validate_fallow_audit(report: JsonObject) -> None:
 def validate_health(report: JsonObject) -> None:
     if "health" not in report:
         return
-    health = report["health"]
-    validate_complexity(health)
-    summary = health["summary"] if isinstance(health, dict) else {}
-    if not isinstance(summary, dict):
-        raise TypeError("Fallow health summary must be an object")
-    for key, limit in HEALTH_LIMITS.items():
-        value = summary[key]
-        if (
-            not isinstance(value, (int, float))
-            or isinstance(value, bool)
-            or value > limit
-        ):
-            raise ValueError(
-                f"Fallow {key} is above {limit}; remove the raised health limit from the Fallow settings"
-            )
+    validate_complexity(report["health"])
 
 
 def validate_complexity(complexity: object) -> None:
@@ -281,6 +267,16 @@ def validate_complexity(complexity: object) -> None:
         or threshold <= 0
     ):
         raise ValueError("Fallow CRAP enforcement is disabled or invalid")
+    for key, limit in HEALTH_LIMITS.items():
+        value = summary[key]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value > limit
+        ):
+            raise ValueError(
+                f"Fallow {key} is above {limit}; remove the raised health limit from the Fallow settings"
+            )
     for key in (
         "functions_above_threshold",
         "severity_critical_count",
