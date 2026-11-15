@@ -290,7 +290,8 @@ def test_dart_boundary_gate_requires_blocking_project_rules(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rules: object, valid: bool
 ) -> None:
     def native_config(*_args: object, **_kwargs: object) -> str:
-        return json.dumps({"config": {"boundaries": rules}})
+        config = {"boundaries": rules, "health": {"max_crap": 29}}
+        return json.dumps({"config": config})
 
     monkeypatch.setattr(
         subprocess,
@@ -548,9 +549,8 @@ def test_plain_dart_uses_native_coverage_tool(
     assert "--report-on=bin" in checks["tests"]["command"][2]
     assert checks["tests"]["report"]["stdout"] is False
     scanner = tmp_path / ".dart-decimaterc.json"
-    assert json.loads(scanner.read_text()) == {
-        "ignore_patterns": [".agents/**"],
-    }
+    expected = {"ignore_patterns": [".agents/**"], "health": {"max_crap": 29}}
+    assert json.loads(scanner.read_text()) == expected
     assert (
         "dart run coverage:test_with_coverage"
         in (tmp_path / "analysis_options.yaml").read_text()

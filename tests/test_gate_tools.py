@@ -10,9 +10,12 @@ import pytest
 import reports
 import update
 from conftest import SOURCE
+from dart_boundaries import validate_dart_boundaries
 from fallow_report import Report, validate_scanner_command
 from gate_config import Group, JsonObject, JsonValue
 from project_setup import strict_scanner_flags
+
+from setup import configure_dart_scanner
 
 TEMPLATES = SOURCE / ".agents/skills/he/templates"
 SCRIPTS = {
@@ -323,3 +326,38 @@ def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
         path.write_text(json.dumps(clean_typescript_report(health)))
         with pytest.raises(ValueError, match="CRAP|complexity"):
             reports.validate_fallow(path)
+
+
+def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dart Decimate reports only CRAP scores above its limit, so 29 fails what Fallow's 30 fails."""
+    for folder in ("domain", "ui"):
+        (tmp_path / "lib" / folder).mkdir(parents=True)
+        (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
+    boundaries: list[JsonValue] = [{"from": "lib/domain", "disallow": "lib/ui"}]
+    command = ["dart-decimate", "check", ".", "--strict"]
+
+    def check_with(health: JsonObject) -> None:
+        config: JsonObject = {"boundaries": boundaries, "health": health}
+
+        def native_config(*_args: object, **_kwargs: object) -> str:
+            return json.dumps({"config": config})
+
+        monkeypatch.setattr(subprocess, "check_output", native_config)
+        validate_dart_boundaries(command, tmp_path, 5)
+
+    refused: list[JsonObject] = [{}, {"max_crap": None}, {"max_crap": 30}]
+    refused.append({"max_crap": 0})
+    for health in refused:
+        with pytest.raises(ValueError, match=r'"health": \{"max_crap": 29\}'):
+            check_with(health)
+    for limit in (29, 12):
+        check_with({"max_crap": limit})
+
+    changes: dict[str, str] = {}
+    configure_dart_scanner(tmp_path, tmp_path, changes)
+    written = json.loads(changes[".dart-decimaterc.json"])
+    assert written["health"] == {"max_crap": 29}
+    starter = SOURCE / ".agents/starters/flutter/.dart-decimaterc.json"
+    assert json.loads(starter.read_text())["health"] == {"max_crap": 29}
