@@ -363,6 +363,7 @@ def clones_in(kind: str, *groups: list[str], dead: int = 0) -> dict[str, object]
 
 AUDIT_COMPLEXITY = (
     '{"files_analyzed":1,"functions_analyzed":3,"functions_above_threshold":0,'
+    '"max_cyclomatic_threshold":20,"max_cognitive_threshold":15,'
     '"max_crap_threshold":30.0,"severity_critical_count":0,'
     '"severity_high_count":0,"severity_moderate_count":0}'
 )
