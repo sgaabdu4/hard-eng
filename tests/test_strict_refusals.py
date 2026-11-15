@@ -165,6 +165,7 @@ NO_LINK_NEEDED = [
     "features/a/PLAN.md",
     "features/b/plan.md",
     "docs/adr/0001-first.md",
+    "docs/requirements.md",
     ".agents/skills/a/SKILL.md",
     ".claude/rules/a.md",
     ".hooks/a.md",

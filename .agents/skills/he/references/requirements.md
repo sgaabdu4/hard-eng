@@ -48,7 +48,7 @@ Proof: check
 
 ## HE-NAMED-MARKDOWN
 
-The full check fails a tracked Markdown file that no other tracked file names, old files too. A file names it when its text holds the file name. Files that tools and people open by name need no link: `README`, `AGENTS`, `AGENTS.override`, `PRODUCT`, `DESIGN`, `SECURITY`, `CHANGELOG`, `PLAN`, `DECISION` and `SKILL` files, anything under `docs/adr/`, and paths under `.hooks/`, `.agents/` and `.claude/`. Name the file where a reader opens it, or delete it. Review, not the check, refuses an excuse for a shortcut inside a named document.
+The full check fails a tracked Markdown file that no other tracked file names, old files too. A file names it when its text holds the file name. Files that tools and people open by name need no link: `README`, `AGENTS`, `AGENTS.override`, `PRODUCT`, `DESIGN`, `SECURITY`, `CHANGELOG`, `PLAN`, `DECISION` and `SKILL` files, anything under `docs/adr/`, `docs/requirements.md` (the project rule registry), and paths under `.hooks/`, `.agents/` and `.claude/`. Name the file where a reader opens it, or delete it. Review, not the check, refuses an excuse for a shortcut inside a named document.
 
 Proof: check
 
