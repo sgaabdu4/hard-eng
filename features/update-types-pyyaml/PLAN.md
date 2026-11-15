@@ -6,6 +6,10 @@ Status: Complete
 
 The dev dependency `types-pyyaml` moves to 6.0.12.20261113, so the `freshness` gate passes again. Non-goals: other dependencies, code changes.
 
+## Sources + coverage
+
+Sources: N/A — the request is the freshness gate's own message on another branch; no user source.
+
 ## Repository context
 
 Owners: `pyproject.toml` dev group and `uv.lock`; the `freshness` gate named the command `uv add --group dev 'types-pyyaml>=6.0.12.20261113'`.
@@ -43,7 +47,7 @@ Result: Passed
 Evidence: on this branch the command of the `freshness` gate reported no outdated direct dependency (exit 0), and the command of the `types` gate reported 0 diagnostics (exit 0). The lock file changed for this one package only.
 Review: Pending
 E2E: N/A — no user journey changes.
-Real service: N/A — the change calls no outside service; it moves a type stub package.
+Real service: N/A — the change calls no outside service; it moves the version of a development package that only the type check reads.
 Retro: (1) The push refused the change without a plan, because a change of `pyproject.toml` always needs one → None — the refusal named the step, and this plan is reused for each new release of the package. (2) An upstream release failed the gate on the base branch → None — outside cause; the gate worked as designed.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
