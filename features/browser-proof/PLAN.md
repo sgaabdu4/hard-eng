@@ -1,6 +1,6 @@
 # Agents drive a real browser through one Hard Eng command
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
@@ -81,13 +81,12 @@ Deliverables: None
 ## Repository context
 
 Owners: [tool_setup.py](../../.hooks/tool_setup.py) (`PACKAGES`, `provision_batch`, `RELEASE_AGE_SECONDS`); [gate_runner.py](../../.hooks/gate_runner.py) (commands); [gate_config.py](../../.hooks/gate_config.py) (`GateConfig`); new `.hooks/browser.py`; new `tests/test_browser.py`; new `browser-proof` case in `tests/agent_checks.py` with new `tests/test_agent_checks.py::test_browser_proof_judge_fails_each_missing_item`; [E2E skill](../../.agents/skills/e2e/SKILL.md); [Ship checks](../../.agents/skills/he-ship/references/checks.md) line 99 (red ring); [coordinator mockups](../../.agents/skills/trello-coordinator/references/mockups.md) line 17 (390 and 1280 px); [agent checks](../../tests/agent_checks.py).
-Same cause: in an earlier trial a working browser tool went unused, because it was not installed for agents and no skill named it. No Hard Eng fix came before this one. Other places searched: the walkthrough video skill pins Playwright for polished video delivery, a separate job that stays; the marketing video skill renders staged images in tests, also separate.
+Same cause: in an earlier trial a working browser tool went unused, because it was not installed for agents and no skill named it. No Hard Eng fix came before this one. Other places searched: the walkthrough video skill pins Playwright for polished video delivery, a separate job that stays; the marketing video skill renders staged images in tests, also separate. The Stop check refused this plan's state twice (2026-11-15): Complete with `Required` E2E and Real service lines, then Draft with changed code; shared cause: a hand change of the plan's state with no run of the check at the stage the Stop hook applies. Other places: each later state change of this plan; each runs `check --quick --plan-stage <stage>` first.
 Single source: red ring rule → stays in Ship checks; how to draw it moves to `browser capture`, and Ship links to it. Capture widths 390 and 1280 → `browser capture` defaults; the coordinator mockups line links to it. Release age → `RELEASE_AGE_SECONDS`, reused, not copied. Personal data rule → stays in the E2E skill; `browser capture` enforces the email and phone part. Searched: `.agents/skills`, `.hooks`, `README.md` for "red ring", "390", "1280", "screenshot".
 
 ## Decisions + authorization
 
-Blockers: the Complete check on 2c0da6ec failed `freshness` (types-pyyaml 6.0.12.20261113, a base fault; repair PR from `chore/types-pyyaml-20261113` must merge into develop first), `duplicates` (two copied blocks in `tests/test_browser.py`) and `tests` (`tests/test_shard_workflow.py::test_own_workflow_is_the_generated_shard_form`: the Linux CI step made Hard Eng's own workflow differ from the template).
-Handoff: Approval
+Blockers: None. The Complete check on 2c0da6ec failed three gates; the build repairs them: `freshness` through the repair PR from `chore/types-pyyaml-20261113`, which merges into develop before this branch rebases; `duplicates` and the workflow test in this branch.
 Authority: Human-loop. The user said "yes pls" to a plan for agent-browser with the shared helper, and asked for the talk, AGENTS.md updates and evals after install. On 2026-11-15 the user approved the plan with all its proposals ("Approve all") and asked to start the build. That approval is void: the plan was presented as checked against the talk, but several skip reasons (timers first) were not checked against real code. The user asked on 2026-11-15 for every talk point to be checked. After the check of each talk point, the user approved the repaired plan on 2026-11-15, chose to refuse old timer calls too, and chose whole-project scope for the other new checks. On 2026-11-15 the user approved the split into three plans and PRs (merge each into develop, one release PR to main, then the other repos) and approved PRs in the installed projects and the user's own packages. On 2026-11-15 the user approved the 12 open proposals of the split plan.
 
 ## Acceptance + steps
@@ -148,7 +147,7 @@ N/A — no product screen changes; the images the command makes are evidence for
 
 ## Verification
 
-Result: Passed
+Result: Pending
 Evidence: 2026-11-15, one line each; no host names.
 - Agent checks, `browser-proof --repeat 3` at 134fd91e. New source: Claude 3 of 3 pass (median 533,780 tokens, 13 steps), Codex 3 of 3 pass (median 730,601 tokens, 19 steps). Old source (origin/develop 33e40da3): Claude 0 of 3 (median 705,059 tokens, 18 steps), Codex 0 of 3 (median 522,641 tokens, 18 steps). Tokens = every input, cache and output count once; Codex's input count already holds its cached count. New Codex used more tokens than old Codex, because old runs stopped without the proof; agents looked for Playwright, made images with no ring or hiding, and in some Claude runs the password reached the events. No new source run put the password in the events; Claude named the sign-in file in 2 of 3 runs with masked values, and Codex copied it into a temporary copy of the old app in 1 of 3. An earlier full arm at f571faf5 had 3 harness faults (a search counted as another tool, twice; the auto mode check refused a sandbox exit, once); each was fixed after a failing test and both arms ran again in full.
 - macOS: `tests/test_browser.py` 16 passed with 4 workers at 819a2ab9.
