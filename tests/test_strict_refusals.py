@@ -272,6 +272,16 @@ def test_one_run_reports_every_kind_and_every_hit(tmp_path: Path) -> None:
     ]
 
 
+def test_a_marker_before_a_second_comment_on_the_same_line_fails(
+    tmp_path: Path,
+) -> None:
+    """HE-COMMENT-LINES: a marker in one comment fails when another comment follows it on the line."""
+    root = project(
+        tmp_path, {"a.ts": "const a = 1; /* TODO fix */ /* explanation */\n"}
+    )
+    assert "a.ts:1 holds a TODO marker" in refusal(root)
+
+
 FIXED_NAME_FILES = [
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
