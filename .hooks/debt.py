@@ -105,10 +105,8 @@ def never_recorded(found: Counter[str]) -> int:
     return sum(count for line, count in found.items() if NEVER_FINDINGS.search(line))
 
 
-def debtable(found: Counter[str], first: bool) -> Counter[str] | None:
-    """The lines that may become debt: none at all when a first adoption holds a deferral finding, else all but those."""
-    if first:
-        return None if never_recorded(found) else found
+def debtable(found: Counter[str]) -> Counter[str]:
+    """The lines that may become debt: all but the zero-delay and next-frame findings, which the check keeps refusing."""
     return Counter({l: n for l, n in found.items() if not NEVER_FINDINGS.search(l)})
 
 
@@ -316,24 +314,24 @@ def record(
             key = f"{group['path']}/{gate['name']}"
             if key not in failed:
                 continue
-            current = debtable(
-                fingerprints(root, group, gate, outputs.get(key, "")), old is None
-            )
+            found = fingerprints(root, group, gate, outputs.get(key, ""))
+            current = debtable(found)
             if (
-                current is None
-                or not recordable(gate)
+                not recordable(gate)
                 or not current
                 or UNREADABLE in current
                 or lacks_suite(gate, outputs.get(key, ""))
             ):
                 refused.append(key)
                 continue
+            left_out[key] = never_recorded(found)
             if old is not None:
                 ruff = ruff_check(gate["command"]) >= 0
                 kept = still_found(old.get(key, Counter()), current)
-                if fresh := by_form(current, ruff) - by_form(kept, ruff):
-                    left_out[key] = fresh.total()
+                left_out[key] += (by_form(current, ruff) - by_form(kept, ruff)).total()
                 current = kept
+            if not left_out[key]:
+                del left_out[key]
             if current:
                 gates[key] = dict(sorted(current.items()))
     if refused and old is None:
