@@ -90,6 +90,7 @@ class Run(NamedTuple):
     log: list[str]
     actions: list[Action]
     grade: Callable[[str, str], dict[str, object] | None] | None = None
+    events: Path | None = None
 
 
 class Outcome(NamedTuple):
@@ -879,7 +880,15 @@ def execute(
         grade = (
             partial(judge_grade, client, options, evidence) if options.judge else None
         )
-        result = Run(root, base, agent.message, [], agent.actions, grade)
+        result = Run(
+            root,
+            base,
+            agent.message,
+            [],
+            agent.actions,
+            grade,
+            evidence / "events.jsonl",
+        )
         try:
             failures = case.judge(result)
             status = "fail" if failures else "pass"
