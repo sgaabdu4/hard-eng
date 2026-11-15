@@ -717,17 +717,21 @@ def test_a_performance_budget_failure_is_still_recorded(tmp_path: Path) -> None:
     assert "./performance" in debt.load(tmp_path)
 
 
-def test_a_rule_name_matches_its_record_from_another_temp_folder(
-    tmp_path: Path,
-) -> None:
-    report = tmp_path / "semgrep.json"
+def semgrep_gate() -> tuple[Gate, Group]:
     security: Gate = {
         "name": "security",
         "role": "security",
         "command": ["semgrep"],
         "report": {"type": "semgrep", "path": "semgrep.json"},
     }
-    group: Group = {"path": ".", "checks": [security]}
+    return security, {"path": ".", "checks": [security]}
+
+
+def test_a_rule_name_matches_its_record_from_another_temp_folder(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "semgrep.json"
+    security, group = semgrep_gate()
     stable = "agents.skills.he.semgrep.no-eval"
 
     def semgrep(rule: str) -> None:
@@ -808,3 +812,38 @@ def test_only_the_performance_gate_reads_the_missing_suite_rule(
     written = {"version": 1, "gates": {"./performance": {MISSING_SUITE: 1}}}
     (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
     assert debt.judge(tmp_path, group, PERFORMANCE, True, MISSING_SUITE) is True
+
+
+def test_timer_findings_never_become_debt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-HOT-PATH: an old zero-delay or next-frame call fails, however it got into the debt file."""
+    report = tmp_path / "semgrep.json"
+    security, group = semgrep_gate()
+    timer = "tmp.run1.hard-eng-rules.next-frame-call-javascript"
+    other = "tmp.run1.hard-eng-rules.no-eval"
+
+    def semgrep(*rules: str) -> None:
+        results = [
+            {"check_id": rule, "path": "a.ts", "extra": {"lines": "call(x)"}}
+            for rule in rules
+        ]
+        report.write_text(json.dumps({"results": results}))
+
+    semgrep(timer, other)
+    outputs = {"./security": "x\n"}
+    assert debt.record(tmp_path, [group], {"./security"}, outputs) == 1
+    assert "must pass before adoption" in capsys.readouterr().out
+    assert not (tmp_path / debt.DEBT_FILE).exists()
+
+    semgrep(other)
+    assert debt.record(tmp_path, [group], {"./security"}, outputs) == 0
+    assert debt.judge(tmp_path, group, security, True, "x\n") is False
+    capsys.readouterr()
+
+    recorded = {"x": 1, f"{timer} a.ts call(x)": 1, f"{other} a.ts call(x)": 1}
+    written = {"version": 1, "gates": {"./security": recorded}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
+    semgrep(timer, other)
+    assert debt.judge(tmp_path, group, security, True, "x\n") is True
+    assert "never recorded as old findings" in capsys.readouterr().out

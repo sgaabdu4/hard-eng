@@ -469,7 +469,7 @@ def validate_osv_image(path: Path) -> None:
     validate_osv(path, image=True)
 
 
-def validate_semgrep(path: Path) -> None:
+def validate_semgrep(path: Path, directory: Path | None = None) -> None:
     try:
         report = json.loads(path.read_text())
         if results := report["results"]:
@@ -482,7 +482,7 @@ def validate_semgrep(path: Path) -> None:
             )
         from hot_paths import require_parsed
 
-        require_parsed(report["errors"])
+        require_parsed(report["errors"], directory)
         if report["skipped_rules"] != [] or report["paths"].get("skipped", []) != []:
             raise ValueError("Semgrep reports skipped analysis")
         scanned, timing = report["paths"]["scanned"], report["time"]
@@ -826,6 +826,8 @@ def validate_scanner_report(
         validate_freshness(path, gate, waiting=waiting, directory=directory)
     elif scanner == "fallow":
         validate_fallow(path, sdk_binaries(directory), directory)
+    elif scanner == "semgrep":
+        validate_semgrep(path, directory)
     else:
         SCANNERS[scanner](path)
 
