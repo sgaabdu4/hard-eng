@@ -122,6 +122,8 @@ Review declined: personal data in closed shadow roots, canvas, images or video, 
 
 Review declined: the browser-proof judge misses moved images whose link holds a space or a URL escape :: the judge is a test tool, not shipped code; the agent names the folder it moves images to, and every failed eval run is read by hand before a result is recorded, so a wrong fail cannot pass unseen.
 
+Review declined: other ways a command could use or merely name another browser tool, beyond a direct run, an install, a Python module run and an import in the code an interpreter runs :: the judge is a test tool, not shipped code; the image checks still need images from `browser capture` in its own folder with the ring and the hiding, so another tool cannot make a run pass, and every failed run is read by hand.
+
 ## Baseline + execution
 
 Result: Passed
