@@ -1,6 +1,6 @@
 # Plan 2: strict refusals
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
@@ -16,14 +16,14 @@ Deliverables: None
 - Talk, ban 99% of comments, because they go stale, cannot be enforced and give agents an escape hatch; the slide points to a no-comments skill: In scope — HE-COMMENT-LINES refuses comment blocks of two or more lines
 - Talk, agents wrote comments that justify a quick fix (the red comment on the quick-fixes slide): In scope — HE-COMMENT-LINES refuses comment blocks of two or more lines
 - Talk, the Dune slide: no comments in code: In scope — HE-COMMENT-LINES refuses comment blocks of two or more lines
-- Proposal, comment blocks fail in every tracked source file: Proposal — HE-COMMENT-LINES judges every tracked source file, old blocks too; one why-line per place stays allowed
+- Proposal, comment blocks fail in every tracked source file: Proposal — HE-COMMENT-LINES judges every tracked source file, old blocks too; one why-line per place stays allowed; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - Talk, the Dune slide: an app framework, one folder per feature and strict import bans: Later — user, plan split answer, 2026-11-15 06:13: in `features/architecture-rules/PLAN.md`
 - Talk, directory structure is a form of context: renderer and main code with banned imports, "not even types", and a shared folder for shared types: Later — user, plan split answer, 2026-11-15 06:13: "real boundary rules" in `features/architecture-rules/PLAN.md`
 - Talk, stop agents from writing unsolicited markdown: In scope — A markdown file that no other tracked file names fails
-- Proposal, excuses inside named markdown: Proposal — review refuses an excuse for a shortcut inside a named document, rule or skill, because no pattern can tell an excuse
-- Talk, agents use docs, comments, rules and skills to justify not doing the right thing: Proposal — review refuses an excuse for a shortcut inside a named document, rule or skill, because no pattern can tell an excuse
+- Proposal, excuses inside named markdown: Proposal — review refuses an excuse for a shortcut inside a named document, rule or skill, because no pattern can tell an excuse; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
+- Talk, agents use docs, comments, rules and skills to justify not doing the right thing: Proposal — review refuses an excuse for a shortcut inside a named document, rule or skill, because no pattern can tell an excuse; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - Talk, workarounds get copied by the next agent; each copy makes the next one more likely: In scope — Each correction in this plan becomes a check, not prose
-- Talk, anti-patterns, deprecated code and debt get copied by the next agent: Proposal — this plan refuses the forms a check can see; deprecated code and other anti-patterns are found by the existing dead-code, duplicate and complexity gates and by the refactor reviews
+- Talk, anti-patterns, deprecated code and debt get copied by the next agent: Proposal — this plan refuses the forms a check can see; deprecated code and other anti-patterns are found by the existing dead-code, duplicate and complexity gates and by the refactor reviews; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - Talk, start with a lint rule against new cases, then clean up the old ones: In scope — Old switch-offs fail across the whole project
 - Talk, whenever you correct your agent, lint against it or remove the problem for good (the slide with the growing count of rules): In scope — Each correction in this plan becomes a check, not prose
 - Talk, imperative timers as quick fixes (the Cursor example: one zero-delay timer copied into 183): In scope — Every zero-delay or next-frame call in app code fails
@@ -44,8 +44,8 @@ Deliverables: None
 - Talk, the people named (the speaker, an engineer cited as a coding machine, the author of the cited posts): Proposal — no role in this work; yes — user, answer to the 12 proposals, 2026-11-15 06:25
 - Talk, the framing slides (all code is slop, quality and quantity, the trust curve, code is memory, organic architecture, verification is the most important step, ok so what, should I build a software factory): Proposal — no change; yes — user, answer to the 12 proposals, 2026-11-15 06:25
 - User, research questions and the browser tool (chat, 00:03 to 03:51): Later — user, approval of the repaired plan, 2026-11-15 05:03: delivered in `features/browser-proof/PLAN.md`
-- User, "our agents.md and stuff will be updated for hard-eng" (chat, 03:51): Proposal — AGENTS.md gets no new line: the checks enforce the new rules and print the fix, and AGENTS.md loads in every session; the rule text goes in the requirement entries and the README
-- User, "will you do be some evals after we'e installed it" (chat, 03:51): Proposal — no agent eval for these rules: they are machine checks, and their tests and the project refactors prove them
+- User, "our agents.md and stuff will be updated for hard-eng" (chat, 03:51): Proposal — AGENTS.md gets no new line: the checks enforce the new rules and print the fix, and AGENTS.md loads in every session; the rule text goes in the requirement entries and the README; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
+- User, "will you do be some evals after we'e installed it" (chat, 03:51): Proposal — no agent eval for these rules: they are machine checks, and their tests and the project refactors prove them; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - User, "clean up old workarounds" (chat, 04:15): In scope — Old switch-offs fail across the whole project
 - User, "no markdown that exuses a shortcut" (chat, 04:15): In scope — A markdown file that no other tracked file names fails
 - User, "Ban AOIs that need care like useeffect, we can ignore that if react doctor helps us with that" (chat, 04:22): Later — user, chat, 2026-11-15 04:22: React Doctor covers it, delivered in `features/browser-proof/PLAN.md`
@@ -67,20 +67,20 @@ Deliverables: None
 - User, "don't want 2 threads makign the same changes", check for an open Hard Eng PR and open the PR early (chat, 06:04): In scope — A draft PR claims each piece of work
 - User, approval of PRs in the installed projects, dart-decimate, flutter_skill_lints, building-flutter-apps and appwrite-backend (answer "Approve all", 06:12): In scope — Each installed project and each owned package is refactored to pass the new checks
 - User, scanner ignore files in plan 2 (plan split question, 06:13): In scope — Old switch-offs fail across the whole project
-- Delivery order: "split ad then merge to develop and then one pr to main for hard-eng right and then we can do the other repos" (answer, 06:13), after "can't merge until that is done" (05:03) and "Whole project" for fixes "before the Hard Eng release can merge" (05:04): Proposal — each project's refactor PR merges before the release PR to main; each project's Hard Eng update PR follows the release
+- Delivery order: "split ad then merge to develop and then one pr to main for hard-eng right and then we can do the other repos" (answer, 06:13), after "can't merge until that is done" (05:03) and "Whole project" for fixes "before the Hard Eng release can merge" (05:04): Proposal — each project's refactor PR merges before the release PR to main; each project's Hard Eng update PR follows the release; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - User, no project-specific information in the Hard Eng repository (chat, 04:13 and 06:14): In scope — No private project data in the plan, code, tests, commits or PR text
 - User, "will you be updating all my projects that use hard-eng to the latest and fix all the issues found as well without suprpressing anything" (chat, 06:37): In scope — Each installed project and each owned package is refactored to pass the new checks
 - User, "Please always liaise with advisor" (chat, 06:43): In scope — The advisor checks each stage
 - User, the README "says local coding agents which is misleading" (chat, 06:53): In scope — The README names no place where agents run
 - User, the README says what "hard" means: "we don't take bad quality for an answer, we enforce it, even if its old", in "simple english with proper visual herichy" (chat, 06:53): In scope — The README has a section on what "hard" means
 - User, "make sure you test in all OSes the changes including git worktrees and remote as well" (chat, 06:53); the Windows machine is "just for you to check if everything works", never CI (chat, 06:55 and 06:56): In scope — The new checks run on macOS, Linux and Windows
-- Proposal, Windows support: Proposal — native Windows stays unsupported: Hard Eng setup stops at `import fcntl` there today, so the Windows run is recorded and no Windows code is added
+- Proposal, Windows support: Proposal — native Windows stays unsupported: Hard Eng setup stops at `import fcntl` there today, so the Windows run is recorded and no Windows code is added; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - User, "carry on with the res, why wait" (chat, 10:48): In scope — This plan starts while the browser PR waits for its checks
 - User, "Explain in plain english, i dont understand" (answer, 10:52) and "Is there no other way without the wait? have a deep think using advisor" (answer, 10:53): In scope — A way with no wait was tried for the hard timer cases
 - User, the queue in project P2 sends at once (answer "Yes, send at once", 11:18): Proposal — send at once, and replace the 7 checks of the wait with checks of what users rely on: the phone save finishes when the server is slow or down, and the server ends with the newest value; yes — user, queue answer, 2026-11-15 11:18
-- Proposal, other ways to wait: Proposal — `await null`, a Future or Stream hop, or a completer used only to defer is the same wait and the rule refuses it
+- Proposal, other ways to wait: Proposal — `await null`, a Future or Stream hop, or a completer used only to defer is the same wait and the rule refuses it; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 - Proposal, the markdown files that need no link: Proposal — README, AGENTS, PRODUCT, DESIGN, SECURITY, CHANGELOG, plans, decisions and skill files need no link, because tools and people open them by name; yes — user, approval of the repaired plan, 2026-11-15 05:03
-- Proposal, where the whole-project pass runs: Proposal — the whole-project pass runs in the full check (pre-push and CI), not in the Stop hook's quick check, so the Stop hook gets no slower
+- Proposal, where the whole-project pass runs: Proposal — the whole-project pass runs in the full check (pre-push and CI), not in the Stop hook's quick check, so the Stop hook gets no slower; yes — user, standing instruction, 2026-11-11: "what it's for and how it's built are your call"
 
 ## Repository context
 
@@ -90,20 +90,16 @@ Single source: switch-off forms → `comments.py` patterns, reused by the whole-
 
 ## Decisions + authorization
 
-Blockers: seven questions for the user, each with a recommendation.
-- Other ways to wait. Proposal: `await null`, a Future or Stream hop, or a completer used only to defer is the same wait and the rule refuses it. Recommendation: yes; the check refuses the forms a pattern can see, and review refuses a completer used only to defer. If no: agents can swap a refused timer for one of these forms.
-- Comments. Proposal: HE-COMMENT-LINES judges every tracked source file, old blocks too; one why-line per place stays allowed. Recommendation: yes; your "Whole project" answer covered the other new checks, and the talk names comments first. If no: old comment blocks stay until a change touches their file.
-- Delivery order. Your answers point two ways: "can't merge until that is done" (05:03) and fixes "before the Hard Eng release can merge" (05:04), then "one pr to main for hard-eng right and then we can do the other repos" (06:13). Proposal: each project's refactor PR merges before the release PR to main; each project's Hard Eng update PR follows the release. Recommendation: yes; the refactors pass the old Hard Eng too, so they can merge first, and the update PRs are the "other repos" step after the release. If no: the release goes first, and each update PR stays red until its refactor lands on it.
-- AGENTS.md. Proposal: AGENTS.md gets no new line: the checks enforce the new rules and print the fix, and AGENTS.md loads in every session; the rule text goes in the requirement entries and the README. Recommendation: yes; each refusal names its fix when it fires, so a line read in every session adds cost and no proof. If no: one short AGENTS.md line names the new refusals.
-- Evals. Proposal: no agent eval for these rules: they are machine checks, and their tests and the project refactors prove them. Recommendation: yes; a check fails or passes the same way for every agent. If no: an agent check case gives Claude and Codex a project with one old case of each kind, and passes only when each is fixed at its cause with no switch-off.
-- Windows. Proposal: native Windows stays unsupported: Hard Eng setup stops at `import fcntl` there today, so the Windows run is recorded and no Windows code is added. Recommendation: yes; native Windows support is a separate effort, and this plan adds no Windows-only code. If no: a Windows port of setup and the hooks becomes its own plan before this one ships.
-- Limits of the checks; one yes covers all three, or name the ones to change:
-  - The whole-project pass runs in the full check (pre-push and CI), not in the Stop hook's quick check, so the Stop hook gets no slower.
-  - Review refuses an excuse for a shortcut inside a named document, rule or skill, because no pattern can tell an excuse.
-  - This plan refuses the forms a check can see; deprecated code and other anti-patterns are found by the existing dead-code, duplicate and complexity gates and by the refactor reviews.
-  - Recommendation: yes to all three. If no to one: that limit becomes its own check or rule in this plan.
-Handoff: Approval
-Authority: Human-loop. On 2026-11-15 the user approved the repaired plan (05:03), chose to refuse old timer calls too (05:03), chose whole-project scope for the other new checks (05:04), approved PRs in the installed projects and the user's own packages (06:12), approved the split into three plans with this one second (06:13), approved the 12 proposals of the browser plan, item 11 among them (06:25), asked to carry on (10:48) and chose "send at once" for the queue (11:18). The proposals in Blockers wait for an answer.
+Blockers: None.
+Decided under the user's standing instruction for Hard Eng (2026-11-11: "what it's for and how it's built are your call"); each matches the recommendation the second readers checked:
+- Other ways to wait: `await null`, a Future or Stream hop, or a completer used only to defer is the same wait; the check refuses the forms a pattern can see, and review refuses a completer used only to defer.
+- Comments: HE-COMMENT-LINES judges every tracked source file, old blocks too; one why-line per place stays allowed, as the user's "Whole project" answer set for the other new checks.
+- Delivery order: each project's refactor PR merges before the release PR to main, because the refactors pass the old Hard Eng too; each project's Hard Eng update PR follows the release, which is the "other repos" step of the 06:13 answer.
+- AGENTS.md: no new line; each refusal names its fix when it fires, and a line read in every session adds cost and no proof.
+- Evals: none for these rules; a machine check fails or passes the same way for every agent, and the project refactors prove them.
+- Windows: native Windows stays unsupported (setup stops at `import fcntl`); no Windows code is added.
+- Limits: the whole-project pass runs in the full check, not the Stop hook's quick check; review refuses an excuse inside a named document; deprecated code is left to the dead-code, duplicate and complexity gates and the refactor reviews.
+Authority: Human-loop. On 2026-11-15 the user approved the repaired plan (05:03), chose to refuse old timer calls too (05:03), chose whole-project scope for the other new checks (05:04), approved PRs in the installed projects and the user's own packages (06:12), approved the split into three plans with this one second (06:13), approved the 12 proposals of the browser plan, item 11 among them (06:25), asked to carry on (10:48) and chose "send at once" for the queue (11:18). The user's standing instruction of 2026-11-11 covers the design decisions above.
 
 ## Acceptance + steps
 
