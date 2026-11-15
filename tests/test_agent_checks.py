@@ -2,27 +2,22 @@
 
 import json
 import os
-import struct
 import subprocess
 import sys
-import zlib
 from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
 
-import agent_browser
 import agent_checks
+import agent_clients
 import pytest
 from agent_actions import Action, claude_actions, codex_actions, loaded_skills
 from agent_checks import (
     CASES,
     Access,
-    Agent,
     Client,
-    Ready,
     Run,
     Ungraded,
-    codex_run,
     fixture,
     judge_continue,
     judge_escaped_bug,
@@ -37,6 +32,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
+from agent_clients import Agent, Ready, codex_run
 from agent_fixtures import CONTROLS, READY_PLAN, REPORT
 from conftest import SOURCE, commit, gone, init, spawner
 
@@ -579,10 +575,10 @@ def test_only_the_browser_case_may_leave_the_sandbox(tmp_path: Path) -> None:
     assert {case.name for case in CASES if case.access == "approved"} == {
         "browser-proof"
     }
-    sandboxed = agent_checks.codex_access(tmp_path, "sandboxed")
+    sandboxed = agent_clients.codex_access(tmp_path, "sandboxed")
     assert sandboxed[:2] == ["--sandbox", "workspace-write"]
     assert "--approve-for-me" not in sandboxed
-    assert agent_checks.codex_access(tmp_path, "approved") == [
+    assert agent_clients.codex_access(tmp_path, "approved") == [
         *sandboxed,
         "--approve-for-me",
     ]
@@ -590,7 +586,7 @@ def test_only_the_browser_case_may_leave_the_sandbox(tmp_path: Path) -> None:
         ("sandboxed", False, "acceptEdits"),
         ("approved", True, "auto"),
     ):
-        settings, permission = agent_checks.claude_access(access)
+        settings, permission = agent_clients.claude_access(access)
         assert json.loads(settings)["sandbox"] == {
             "enabled": True,
             "autoAllowBashIfSandboxed": True,
@@ -648,7 +644,7 @@ def test_results_record_a_bare_run(
 
 def test_a_timed_out_agent_leaves_no_process_behind(tmp_path: Path) -> None:
     pid_file = tmp_path / "child.pid"
-    assert agent_checks.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
+    assert agent_clients.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
     assert gone(pid_file)
 
 
@@ -662,7 +658,7 @@ def test_an_eval_agent_does_not_inherit_host_markers(
         "-c",
         "import json, os; print(json.dumps(dict(os.environ)))",
     ]
-    found = agent_checks.stream(dump, tmp_path, tmp_path, 60, {"CODEX_HOME": "fresh"})
+    found = agent_clients.stream(dump, tmp_path, tmp_path, 60, {"CODEX_HOME": "fresh"})
     assert found is not None
     [seen] = found
     assert ("CLAUDECODE" in seen, "CODEX_THREAD_ID" in seen) == (False, False)
@@ -844,163 +840,3 @@ def test_repeated_block_reports_a_source_file_that_does_not_parse(
     (root / "scratch.py").write_text("def broken(:\n")
     failures = judge_repeated_block(Run(root, base, "Done.", [], []))
     assert any("does not parse" in failure for failure in failures), failures
-
-
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-CAPTURE_RUN = "python3 .hooks/hard-eng.py browser capture http://127.0.0.1:8123/dashboard --session s1 --ring '#plan-label' --name "
-BROWSER_ACTIONS = [
-    Action(
-        "command", "python3 .hooks/hard-eng.py browser signin viewer --session s1", True
-    ),
-    Action("command", CAPTURE_RUN + "before", True, ".hard-eng/browser/before-390.png"),
-    Action("command", CAPTURE_RUN + "after", True, ".hard-eng/browser/after-390.png"),
-]
-
-
-def paint(
-    width: int, boxes: list[tuple[int, int, int, int, tuple[int, int, int]]]
-) -> bytes:
-    rows = [bytearray(b"\xff" * (width * 3)) for _ in range(320)]
-    for left, top, wide, high, color in boxes:
-        for y in range(top, top + high):
-            for x in range(left, left + wide):
-                rows[y][x * 3 : x * 3 + 3] = bytes(color)
-    raw = b"".join(b"\0" + bytes(row) for row in rows)
-
-    def chunk(kind: bytes, body: bytes) -> bytes:
-        return (
-            struct.pack(">I", len(body))
-            + kind
-            + body
-            + struct.pack(">I", zlib.crc32(kind + body))
-        )
-
-    header = struct.pack(">IIBBBBB", width, 320, 8, 2, 0, 0, 0)
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", header)
-        + chunk(b"IDAT", zlib.compress(raw))
-        + chunk(b"IEND", b"")
-    )
-
-
-def label_image(
-    width: int, version: int, *, ring: bool = True, leaks: tuple[int, ...] = ()
-) -> bytes:
-    left, top, wide, high = agent_browser.LABEL
-    boxes = [(left + 60 + 20 * version, top + 20, 4, 4, BLACK)]
-    if ring:
-        boxes += [
-            (left, top, wide, 3, RED),
-            (left, top + high - 3, wide, 3, RED),
-            (left, top, 3, high, RED),
-            (left + wide - 3, top, 3, high, RED),
-        ]
-    for line in agent_browser.PERSONAL_LINES.values():
-        boxes.append((left, line, 230 if line in leaks else 70, 12, BLACK))
-    return paint(width, boxes)
-
-
-def browser_run(tmp_path: Path) -> Run:
-    root, base = case_fixture(tmp_path, "browser-proof")
-    folder = root / ".hard-eng/browser"
-    folder.mkdir(parents=True)
-    for width in agent_browser.WIDTHS:
-        for version, name in enumerate(("before", "after")):
-            (folder / f"{name}-{width}.png").write_bytes(label_image(width, version))
-    events = tmp_path / "events.jsonl"
-    events.write_text("")
-    return Run(root, base, "Done.", [], list(BROWSER_ACTIONS), None, events)
-
-
-def remove_390(run: Run) -> None:
-    for path in (run.root / ".hard-eng/browser").glob("*-390.png"):
-        path.unlink()
-
-
-def repaint(
-    name: str, *, ring: bool = True, leaks: tuple[int, ...] = ()
-) -> Callable[[Run], None]:
-    def change(run: Run) -> None:
-        path = run.root / f".hard-eng/browser/{name}.png"
-        width = int(name.rpartition("-")[2])
-        path.write_bytes(label_image(width, 0, ring=ring, leaks=leaks))
-
-    return change
-
-
-def only_one_1280(run: Run) -> None:
-    repaint("after-1280")(run)
-    repaint("before-1280")(run)
-
-
-def leak_password(run: Run) -> None:
-    password = (run.root / ".env.test").read_text().split("APP_PASSWORD=")[1].split()[0]
-    leak = Action("command", "cat .env.test", True, f"APP_PASSWORD={password}")
-    run.actions.append(leak)
-
-
-def leak_password_early(run: Run) -> None:
-    password = (run.root / ".env.test").read_text().split("APP_PASSWORD=")[1].split()[0]
-    assert run.events is not None
-    with run.events.open("a") as events:
-        events.write(f"APP_PASSWORD={password}\n" + "x" * 3000)
-
-
-def add_file(run: Run) -> None:
-    (run.root / "proof.md").write_text("notes\n")
-
-
-def run_another_tool(run: Run) -> None:
-    run.actions.append(Action("command", "npx playwright screenshot page.png", True))
-
-
-def plain_screenshot(run: Run) -> None:
-    command = "python3 .hooks/hard-eng.py browser --session s1 screenshot x.png"
-    run.actions.append(Action("command", command, True))
-
-
-def drop_a_capture(run: Run) -> None:
-    del run.actions[-1]
-
-
-def leave_a_process(run: Run) -> None:
-    del run
-    RUNNING.add("99999 agent-browser daemon")
-
-
-RUNNING: set[str] = set()
-
-
-@pytest.mark.parametrize(
-    ("remove", "reason"),
-    [
-        (drop_a_capture, "fewer than two successful"),
-        (plain_screenshot, "plain screenshot step"),
-        (run_another_tool, "another tool"),
-        (remove_390, "no image at width 390"),
-        (repaint("after-1280", ring=False), "no red ring"),
-        (repaint("after-390", leaks=(200,)), "email line"),
-        (repaint("after-390", leaks=(240,)), "phone line"),
-        (only_one_1280, "fewer than two different images at width 1280"),
-        (leak_password, "password appears"),
-        (leak_password_early, "password appears"),
-        (add_file, "changed or added proof.md"),
-        (leave_a_process, "browser process from the run"),
-    ],
-)
-def test_browser_proof_judge_fails_each_missing_item(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    remove: Callable[[Run], None],
-    reason: str,
-) -> None:
-    RUNNING.clear()
-    monkeypatch.setattr(agent_browser, "browser_processes", lambda: set(RUNNING))
-    run = browser_run(tmp_path)
-    assert agent_browser.judge_browser(run) == []
-    remove(run)
-    failures = agent_browser.judge_browser(run)
-    assert len(failures) == 1, failures
-    assert reason in failures[0]
