@@ -47,7 +47,7 @@ def test_old_switch_offs_anywhere_in_the_project_fail(
 
 
 def test_switch_offs_in_generated_output_pass(tmp_path: Path) -> None:
-    """HE-NO-SWITCH-OFF: generated output and scaffold paths stay exempt."""
+    """HE-NO-SWITCH-OFF: generated output and the folders Hard Eng installs stay exempt."""
     files = {
         ".gitattributes": "*.g.py linguist-generated=true\n",
         "made.g.py": HIDDEN,

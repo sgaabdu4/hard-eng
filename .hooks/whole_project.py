@@ -1,4 +1,4 @@
-"""The full check judges every tracked file with the patterns of the changed-file checks, old code included."""
+"""The full check judges every tracked file and every new file that Git does not ignore, with the patterns of the changed-file checks, old code included."""
 
 import re
 import subprocess
