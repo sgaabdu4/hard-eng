@@ -62,10 +62,40 @@ const watch = (root) => {
   hideAll(root);
   observer.observe(root, { subtree: true, childList: true, characterData: true });
 };
+let ready = false;
+const coverFrame = (frame) => {
+  const box = frame.getBoundingClientRect();
+  if (!box.width || !box.height || !frame.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return;
+  let left = box.left + scrollX, top = box.top + scrollY;
+  for (let view = frame.ownerDocument.defaultView; view.frameElement; view = view.parent) {
+    const outer = view.frameElement.getBoundingClientRect();
+    left += outer.left;
+    top += outer.top;
+  }
+  const page = document.documentElement;
+  const right = Math.min(left + box.width, page.scrollWidth), bottom = Math.min(top + box.height, page.scrollHeight);
+  left = Math.max(left, 0);
+  top = Math.max(top, 0);
+  if (right <= left || bottom <= top) return;
+  const cover = document.createElement("div");
+  cover.dataset.hardEngCover = "";
+  cover.textContent = "[frame hidden]";
+  Object.assign(cover.style, {
+    position: "absolute", left: left + "px", top: top + "px", width: right - left + "px",
+    height: bottom - top + "px", background: "#888", color: "#fff", font: "12px sans-serif",
+    zIndex: "2147483646", pointerEvents: "none",
+  });
+  page.appendChild(cover);
+};
 const watchFrame = (frame) => {
+  if (!frame.hardEngWatched) {
+    frame.hardEngWatched = true;
+    frame.addEventListener("load", () => watchFrame(frame));
+  }
   let inner = null;
   try { inner = frame.contentDocument; } catch (error) { inner = null; }
   if (inner?.body) watch(inner.body);
+  else if (ready) coverFrame(frame);
   else unreadable.add(frame);
 };
 const hideAll = (root) => {
@@ -97,30 +127,8 @@ for (const { element, style, box } of fixed) {
   element.style.top = (atBottom ? pageHeight - innerHeight : 0) + box.top - now.top - scrollY + "px";
   element.style.left = box.left - now.left + "px";
 }
-const pageWidth = document.documentElement.scrollWidth;
-for (const frame of unreadable) {
-  const box = frame.getBoundingClientRect();
-  if (!box.width || !box.height || !frame.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
-  let left = box.left + scrollX, top = box.top + scrollY;
-  for (let view = frame.ownerDocument.defaultView; view.frameElement; view = view.parent) {
-    const outer = view.frameElement.getBoundingClientRect();
-    left += outer.left;
-    top += outer.top;
-  }
-  const right = Math.min(left + box.width, pageWidth), bottom = Math.min(top + box.height, pageHeight);
-  left = Math.max(left, 0);
-  top = Math.max(top, 0);
-  if (right <= left || bottom <= top) continue;
-  const cover = document.createElement("div");
-  cover.dataset.hardEngCover = "";
-  cover.textContent = "[frame hidden]";
-  Object.assign(cover.style, {
-    position: "absolute", left: left + "px", top: top + "px", width: right - left + "px",
-    height: bottom - top + "px", background: "#888", color: "#fff", font: "12px sans-serif",
-    zIndex: "2147483646", pointerEvents: "none",
-  });
-  document.documentElement.appendChild(cover);
-}
+ready = true;
+unreadable.forEach(coverFrame);
 const missing = [];
 for (const selector of RINGS) {
   let found = [];
@@ -200,7 +208,9 @@ def ensure_tool() -> str:
             tool = shutil.which(TOOL)
             if tool is None:
                 raise ValueError(f"{TOOL} is not on PATH after its install")
-            if due or not stamp.is_file() or stamp.read_text() != tool:
+            digest = hashlib.sha256(tool.encode()).hexdigest()[:12]
+            chrome = stamp.parent / f"browser-chrome-{digest}"
+            if due or not chrome.is_file():
                 done = subprocess.run(
                     [tool, "install"],
                     stdout=subprocess.PIPE,
@@ -211,7 +221,9 @@ def ensure_tool() -> str:
                 print(done.stdout, end="")
                 if done.returncode:
                     raise ValueError(f"`{TOOL} install` failed; its messages are above")
-                stamp.write_text(tool)
+                chrome.touch()
+                if due:
+                    stamp.touch()
     return tool
 
 
