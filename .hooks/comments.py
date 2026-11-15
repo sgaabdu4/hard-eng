@@ -193,7 +193,10 @@ def slash_comment_lines(
             close = len(text) if close < 0 else close + (text[index + 1] == "*") * 2
             parts = text[index:close].split("\n")
             if blank or trailing or len(parts) > 1:
-                found.update(enumerate(parts, line))
+                for number, part in enumerate(parts, line):
+                    found[number] = (
+                        f"{found[number]} {part}" if number in found else part
+                    )
             index, line, blank = close, line + len(parts) - 1, False
         elif (close := code_step(text, index, suffix, depths)) is not None:
             index, line, blank = close, line + text.count("\n", index, close), False
