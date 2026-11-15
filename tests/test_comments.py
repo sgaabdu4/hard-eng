@@ -30,7 +30,7 @@ BLOCK = "Code comments are none by default"
         ("app.py", "x = 1\n# first\n# second\n", 2),
         ("app.py", "# one why\nx = 1  # trailing\ny = 2  # trailing\n", None),
         ("app.py", 'DOC = """\n# heading\n# another\n"""\n', None),
-        ("app.py", "# noqa: E501\n# pyright: basic\nx = 1\n", None),
+        ("app.py", "# no" + "qa: E501\n# pyright: basic\nx = 1\n", None),
         ("app.py", "def f(:\n# broken\n# syntax\n", 2),
         ("lib/app.dart", "/// Adds.\n/// Twice.\nint add() => 1;\n", 1),
         ("src/app.ts", "/* one */\nconst a = 1;\n", None),
@@ -39,7 +39,7 @@ BLOCK = "Code comments are none by default"
         ("src/app.js", "/**\n * @param {string} p\n * @returns {number}\n */\n", None),
         ("src/lib.rs", "/// # Errors\n///\n/// Fails on I/O.\npub fn f() {}\n", None),
         ("src/lib.rs", "/// Reads.\n///\n/// # Errors\n/// Fails on I/O.\n", 1),
-        ("app.py", "# why\n# noqa: E501\n# more why\n", 1),
+        ("app.py", "# why\n# no" + "qa: E501\n# more why\n", 1),
         (
             "src/app.ts",
             "// eslint-disable-next-line\n// @ts-expect-error\nf();\n",

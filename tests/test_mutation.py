@@ -1,7 +1,6 @@
 import configparser
 import fnmatch
 import json
-import shutil
 import signal
 import subprocess
 import sys
@@ -528,7 +527,6 @@ def test_mutmut_keeps_the_projects_own_source_paths(tmp_path: Path) -> None:
         assert (tmp_path / "setup.cfg").read_text() == f"{own}source_paths = app\n"
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="mutmut runs through uv")
 @pytest.mark.parametrize("module", ["src/shop/price.py", "price.py"])
 def test_python_mutation_reports_real_survivors_on_changed_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], module: str
