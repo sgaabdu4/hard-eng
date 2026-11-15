@@ -9,6 +9,7 @@ from urllib.parse import unquote, urljoin, urlparse
 if TYPE_CHECKING:
     from gate_config import Group, JsonObject
 
+MAX_CRAP = 29
 SETTINGS_FILES = (
     ".dart-decimaterc",
     ".dart-decimaterc.json",
@@ -289,6 +290,18 @@ def validate_dart_boundaries(
                     f"{directory.name}: the boundary prefix {prefix} in {settings_file} "
                     "matches no .dart file; correct the prefix or remove the rule"
                 )
+    validate_crap_limit(settings, f"{directory.name}: {settings_file}")
+
+
+def validate_crap_limit(settings: "JsonObject", where: str) -> None:
+    health = settings.get("health")
+    limit = health.get("max_crap") if isinstance(health, dict) else None
+    if type(limit) is not int or not 1 <= limit <= MAX_CRAP:
+        raise ValueError(
+            f'{where}: Dart Decimate must fail the CRAP scores that Fallow fails. Set "health": '
+            f'{{"max_crap": {MAX_CRAP}}} in that file: it reports only scores above its limit, '
+            "so 29 matches the limit of 30 that Fallow uses"
+        )
 
 
 def validate_dart_typing(
