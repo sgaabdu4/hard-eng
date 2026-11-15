@@ -832,12 +832,11 @@ def test_timer_findings_never_become_debt(
 
     semgrep(timer, other)
     outputs = {"./security": "x\n"}
-    assert debt.record(tmp_path, [group], {"./security"}, outputs) == 1
-    assert "must pass before adoption" in capsys.readouterr().out
-    assert not (tmp_path / debt.DEBT_FILE).exists()
-
-    semgrep(other)
     assert debt.record(tmp_path, [group], {"./security"}, outputs) == 0
+    assert "Did not record 1 new findings" in capsys.readouterr().out
+    kept = {"agents.skills.he.semgrep.no-eval a.ts call(x)": 1, "x": 1}
+    assert debt.load(tmp_path)["./security"] == kept
+    semgrep(other)
     assert debt.judge(tmp_path, group, security, True, "x\n") is False
     capsys.readouterr()
 
@@ -854,31 +853,36 @@ def test_timer_findings_never_become_debt(
     }
 
 
-def test_flutter_frame_lint_findings_never_become_debt(
+def test_an_install_over_real_dart_analyze_lines_keeps_other_rules_as_debt_and_refuses_the_frame_lint(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """HE-HOT-PATH: an install over an old addPostFrameCallback fails; the Flutter lint is never recorded as debt."""
+    """HE-HOT-PATH: the lines of the analyzer gate keep their other rules as debt, and the Flutter frame lint is never recorded."""
     analysis: Gate = {
         "name": "types",
         "role": "types",
         "command": ["dart", "analyze", "--fatal-infos", "."],
     }
     group: Group = {"path": ".", "checks": [analysis]}
-    frame = "  error - lib/home.dart:12:5 - Do not defer work to the next frame. - avoid_frame_deferral\n"
-    other = "   info - lib/home.dart:3:8 - Unused import. - unused_import\n"
+    text = (Path(__file__).parent / "fixtures/dart-analyze/frame-lint.txt").read_text()
+    frame = [line for line in text.splitlines() if "avoid_frame_deferral" in line]
+    assert len(frame) == 3
     key = "./types"
-    assert debt.record(tmp_path, [group], {key}, {key: frame + other}) == 1
-    assert "must pass before adoption" in capsys.readouterr().out
-    assert not (tmp_path / debt.DEBT_FILE).exists()
+    assert debt.record(tmp_path, [group], {key}, {key: text}) == 0
+    assert "Did not record 3 new findings in ./types" in capsys.readouterr().out
+    recorded = debt.load(tmp_path)[key]
+    rules = {line.rsplit(" - ", 1)[-1] for line in recorded if " - " in line}
+    assert "avoid_frame_deferral" not in rules
+    assert {"deprecated_member_use", "avoid_magic_literals", "avoid_continue"} <= rules
 
-    assert debt.record(tmp_path, [group], {key}, {key: other}) == 0
-    assert debt.judge(tmp_path, group, analysis, True, other) is False
+    assert debt.judge(tmp_path, group, analysis, True, text) is True
+    assert (
+        "3 zero-delay or next-frame calls are never recorded" in capsys.readouterr().out
+    )
+    fixed = "\n".join(line for line in text.splitlines() if line not in frame)
+    assert debt.judge(tmp_path, group, analysis, True, fixed) is False
     capsys.readouterr()
 
-    recorded = {
-        "error - lib/home.dart:N:N - Do not defer work to the next frame. - avoid_frame_deferral": 1
-    }
-    written = {"version": 1, "gates": {key: {**debt.load(tmp_path)[key], **recorded}}}
+    written = {"version": 1, "gates": {key: {**recorded, frame[0].strip(): 1}}}
     (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
-    assert debt.judge(tmp_path, group, analysis, True, frame + other) is True
+    assert debt.judge(tmp_path, group, analysis, True, text) is True
     assert "never recorded as old findings" in capsys.readouterr().out
