@@ -19,6 +19,7 @@ from switch_off_forms import (
     SWITCHES,
     TEST_FLAGS,
 )
+from whole_project import validate_whole_project
 
 BLOCK = "Code comments are none by default"
 
@@ -307,12 +308,15 @@ ROUTES += [row for row in RETRY_FORMS if row[0] == "playwright.config.ts"]
 
 
 @pytest.mark.parametrize(("name", "text", "pattern"), ROUTES)
-def test_switch_off_already_in_the_project_is_not_flagged(
+def test_switch_off_already_in_the_project_fails_the_full_check_only(
     tmp_path: Path, name: str, text: str, pattern: str
 ) -> None:
+    """HE-NO-SWITCH-OFF: the changed-lines check leaves an old switch-off alone; the full check fails it."""
     root = switch_root(tmp_path, name, text)
     (root / name).write_text(text + "\n")
     validate_suppressions(root, "HEAD")
+    with pytest.raises(ValueError, match=OFF):
+        validate_whole_project(root)
 
 
 @pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)

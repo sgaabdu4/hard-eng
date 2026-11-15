@@ -444,6 +444,33 @@ def switch_off_pattern(name: str) -> re.Pattern[str] | None:
     return SCRIPT_OFF if suffix in JAVASCRIPT else None
 
 
+def pattern_switch_offs(
+    root: Path, name: str, lines: list[tuple[int, str]], verb: str
+) -> list[str]:
+    """Suppressions, skips and focus marks in the lines of one source file."""
+    pattern = switch_off_pattern(name)
+    if pattern is None:
+        return []
+    in_test = is_test_path(PurePosixPath(name))
+    tested = in_test and TEST_OFF.get(Path(name).suffix)
+    found = [
+        f"{name}:{number} {verb} {hit[0].strip()!r}"
+        for number, text in lines
+        if (
+            hit := off_hit(pattern, text, in_test)
+            or (tested and re.search(tested, text))
+        )
+    ]
+    return found + marks_in_file(root, name, lines)
+
+
+def switch_off_refusal(found: list[str]) -> str:
+    return (
+        "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
+        "suppressing, skipping, retrying or deleting the check. " + "; ".join(found)
+    )
+
+
 def diff_base(root: Path, base: str) -> tuple[str, bool]:
     head = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
@@ -688,29 +715,42 @@ def lost_assertions(
     return lost
 
 
+def security_hits(
+    root: Path,
+    name: str,
+    lines: list[tuple[int, str]],
+    verb: str,
+    entries: bool,
+) -> list[str]:
+    """Inline markers, ignore entries and test retries in the lines of one file; entries marks a file of ignore entries."""
+    found: list[str] = []
+    for number, text in lines:
+        entry = text.strip()
+        if hit := SECURITY_OFF.search(text):
+            found.append(f"{name}:{number} {verb} {hit[0]!r}")
+        elif entries and entry and not entry.startswith("#"):
+            found.append(f"{name}:{number} {verb} {entry!r}")
+        elif any(word in text for word in RETRY_WORDS):
+            from retry_forms import retry_form, table_retry
+
+            if form := retry_form(name, text) or table_retry(root / name, number, text):
+                found.append(f"{name}:{number} {verb} {form!r}")
+    return found
+
+
 def security_switch_offs(
     root: Path, added: dict[str, list[tuple[int, str]]]
 ) -> list[str]:
-    """Inline markers, ignore entries and test retries in any file hide a failing check."""
     names = sorted(name for name in added if not name.startswith(UNOWNED))
     skipped = generated_sources(root, names)
-    found: list[str] = []
-    for name in (name for name in names if name not in skipped):
-        ignore = PurePosixPath(name).name in SCAN_IGNORES
-        for number, text in added[name]:
-            entry = text.strip()
-            if hit := SECURITY_OFF.search(text):
-                found.append(f"{name}:{number} adds {hit[0]!r}")
-            elif ignore and entry and not entry.startswith("#"):
-                found.append(f"{name}:{number} adds {entry!r}")
-            elif any(word in text for word in RETRY_WORDS):
-                from retry_forms import retry_form, table_retry
-
-                if form := retry_form(name, text) or table_retry(
-                    root / name, number, text
-                ):
-                    found.append(f"{name}:{number} adds {form!r}")
-    return found
+    return [
+        hit
+        for name in names
+        if name not in skipped
+        for hit in security_hits(
+            root, name, added[name], "adds", PurePosixPath(name).name in SCAN_IGNORES
+        )
+    ]
 
 
 def ui_candidate(text: str) -> bool:
@@ -811,7 +851,9 @@ def text_walls_check(
         wall_check(root, added, removed, joins, point)
 
 
-def validate_suppressions(root: Path, base: str | None, screens: bool = True) -> None:
+def validate_suppressions(
+    root: Path, base: str | None, screens: bool = True, full: bool = False
+) -> None:
     joins: dict[str, list[int]] = {}
     try:
         point, empty = diff_base(root, base or default_branch_point(root) or "HEAD")
@@ -827,20 +869,8 @@ def validate_suppressions(root: Path, base: str | None, screens: bool = True) ->
         point, lost, gained = whole
     found = security_switch_offs(root, added)
     for name in names:
-        pattern = switch_off_pattern(name)
-        if name in skipped or pattern is None:
-            continue
-        in_test = is_test_path(PurePosixPath(name))
-        tested = in_test and TEST_OFF.get(Path(name).suffix)
-        found += [
-            f"{name}:{number} adds {hit[0].strip()!r}"
-            for number, text in added.get(name, [])
-            if (
-                hit := off_hit(pattern, text, in_test)
-                or (tested and re.search(tested, text))
-            )
-        ]
-        found += marks_in_file(root, name, added.get(name, []))
+        if name not in skipped:
+            found += pattern_switch_offs(root, name, added.get(name, []), "adds")
     if len(lost) > gained:
         found.append(
             f"tests lose {len(lost) - gained} assertion lines net "
@@ -853,10 +883,11 @@ def validate_suppressions(root: Path, base: str | None, screens: bool = True) ->
             "must stay or get an equal check"
         )
     if found:
-        raise ValueError(
-            "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
-            "suppressing, skipping, retrying or deleting the check. " + "; ".join(found)
-        )
+        raise ValueError(switch_off_refusal(found))
+    if full:
+        from whole_project import validate_whole_project
+
+        validate_whole_project(root)
     if not empty:
         ui_source_check(root, added)
         if screens:
