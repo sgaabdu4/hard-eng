@@ -805,13 +805,13 @@ def test_related_test_flags_follow_the_native_runner(
     }
     other: Group = {"path": "web", "checks": [scan]}
     assert reports.related_test_flags(tests, [group, other], tmp_path, "b") == []
-    for only, flags in (
-        ("dead-code,dupes,health", list[str]()),
-        ("dead-code,dupes", expected),
-    ):
-        scan = {**scan, "command": ["fallow", "--only", only, "--fail-on-issues"]}
+    for only in ("--only=dead-code,dupes,health", "audit", "--fail-on-issues", ""):
+        scan = {**scan, "command": ["fallow", only] if only else ["fallow"]}
         both: Group = {"path": ".", "checks": [tests, scan]}
-        assert reports.related_test_flags(tests, [both], tmp_path, "b") == flags
+        assert reports.related_test_flags(tests, [both], tmp_path, "b") == []
+    scan = {**scan, "command": ["fallow", "--only=dead-code,dupes"]}
+    both = {"path": ".", "checks": [tests, scan]}
+    assert reports.related_test_flags(tests, [both], tmp_path, "b") == expected
 
 
 @pytest.mark.parametrize(
