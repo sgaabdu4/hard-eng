@@ -22,6 +22,7 @@ from project_files import GIT_LISTING
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 ALLOWLIST_LINE = re.compile(r"\s*(\[\[?[\w.-]*allowlists?\]\]?|[\w.-]*allowlists?\s*=)")
+PATHS_LINE = re.compile(r"\s*paths\s*=")
 DISABLED_LINE = re.compile(r"\s*disabledRules\s*=")
 MARKER_HEADER = (
     "HE-COMMENT-LINES: A TODO, FIXME, HACK or XXX marker excuses unfinished work: "
@@ -87,6 +88,8 @@ def gitleaks_switch_offs(name: str, text: str) -> list[str]:
     )
     found = [f"{name}:{n} holds an allowlist" for n in at(ALLOWLIST_LINE)]
     found = found if allowlisted else []
+    if "paths" in config:
+        found += [f"{name}:{n} holds a list of paths" for n in at(PATHS_LINE)]
     extend = config.get("extend")
     if isinstance(extend, dict) and (off := extend.get("disabledRules")):
         found += [f"{name}:{n} disables the rules {off!r}" for n in at(DISABLED_LINE)]
