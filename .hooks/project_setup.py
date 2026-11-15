@@ -718,7 +718,7 @@ def adapt_performance(directory: Path, package: Group) -> None:
 
 def strict_scanner_flags(package: Group) -> None:
     """Give an older scanner gate the flags the check now requires of it."""
-    from fallow_report import native_scanner_command, option
+    from fallow_report import add_health, native_scanner_command, option
 
     for gate in package["checks"]:
         invocation = native_scanner_command(gate["command"])
@@ -733,6 +733,7 @@ def strict_scanner_flags(package: Group) -> None:
             required = required if option(invocation, "--gate") else ["--gate", "all"]
         else:
             required = ["--fail-on-issues"]
+            gate["command"] = add_health(gate["command"])
         if required and required[0] not in invocation:
             gate["command"] = [*gate["command"], *required]
 

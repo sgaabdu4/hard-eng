@@ -754,7 +754,7 @@ def test_gate_rejects_tolerated_or_suppressed_findings(
         "dart-decimate check . --boundary-violations --strict",
         "dart-decimate check . --threshold 0 --strict --format json",
         "react-doctor --blocking=warning --no-respect-inline-disables --json",
-        "fallow --only dead-code,dupes --fail-on-issues",
+        "fallow --only dead-code,dupes,health --fail-on-issues",
     ],
 )
 def test_gate_accepts_strict_scanner_commands(tmp_path: Path, command: str) -> None:

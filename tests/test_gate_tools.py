@@ -7,9 +7,12 @@ from pathlib import Path
 
 import gate_config
 import pytest
+import reports
 import update
 from conftest import SOURCE
-from gate_config import Group
+from fallow_report import Report, validate_scanner_command
+from gate_config import Group, JsonObject, JsonValue
+from project_setup import strict_scanner_flags
 
 TEMPLATES = SOURCE / ".agents/skills/he/templates"
 SCRIPTS = {
@@ -267,3 +270,56 @@ def test_the_import_order_of_the_coverage_package_does_not_depend_on_the_reports
         check=False,
     )
     assert result.returncode == 0, result.stdout
+
+
+def clean_typescript_report(health: JsonObject | None) -> JsonObject:
+    summary: JsonObject = {"files_analyzed": 4, "functions_analyzed": 3}
+    summary |= {"max_cyclomatic_threshold": 20, "max_cognitive_threshold": 15}
+    summary |= {"max_crap_threshold": 30.0, "functions_above_threshold": 0}
+    summary |= {"severity_critical_count": 0, "severity_high_count": 0}
+    summary |= {"severity_moderate_count": 0}
+    clean: JsonObject = {"findings": [], "summary": summary}
+    check: JsonObject = {"total_issues": 0, "summary": {"total_issues": 0}}
+    check["entry_points"] = {"total": 1}
+    stats: JsonObject = {"clone_groups": 0, "duplication_percentage": 0}
+    groups: list[JsonValue] = []
+    stats |= {"total_files": 1, "total_lines": 5, "total_tokens": 30}
+    report: JsonObject = {"kind": "combined", "check": check}
+    report["dupes"] = {"clone_groups": groups, "stats": stats}
+    report["health"] = clean if health is None else {**clean, **health}
+    kinds = ("rule-packs-not-configured", "coverage-auto-detected", "shallow-clone")
+    kinds += ("change-coupling-skipped", "hotspots-skipped")
+    notes: list[JsonValue] = [{"path": ".", "kind": kind} for kind in kinds]
+    report["workspace_diagnostics"] = notes
+    return report
+
+
+def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
+    tmp_path: Path,
+) -> None:
+    """The TypeScript Fallow gate asks for health, so it fails the complexity and CRAP code that the Dart gate fails."""
+    group = template_group(tmp_path, "javascript")
+    (gate,) = [g for g in group["checks"] if g["role"] == "dead-code-duplicates"]
+    command = gate["command"]
+    assert command[command.index("--only") + 1] == "dead-code,dupes,health"
+
+    old = ["fallow", "--only", "dead-code,dupes", "--fail-on-issues"]
+    report: Report = {"type": "fallow", "path": "coverage/fallow.json"}
+    with pytest.raises(ValueError, match="health"):
+        validate_scanner_command(old, report)
+    package: Group = {"path": ".", "checks": [{"name": "scan", "command": [*old]}]}
+    strict_scanner_flags(package)
+    assert package["checks"][0]["command"] == [*old[:2], "dead-code,dupes,health"] + [
+        "--fail-on-issues"
+    ]
+    validate_scanner_command(package["checks"][0]["command"], report)
+
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(clean_typescript_report(None)))
+    reports.validate_fallow(path)
+    found: JsonObject = {"findings": [{"path": "a.ts", "exceeded": "crap"}]}
+    off: JsonObject = {"summary": {"max_crap_threshold": 0}}
+    for health in (found, off):
+        path.write_text(json.dumps(clean_typescript_report(health)))
+        with pytest.raises(ValueError, match="CRAP|complexity"):
+            reports.validate_fallow(path)
