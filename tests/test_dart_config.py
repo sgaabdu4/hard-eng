@@ -956,3 +956,36 @@ def test_one_install_excludes_a_nested_package_that_gets_its_types_check_later(
     before = (gates.read_bytes(), options.read_bytes())
     run_setup(installer, tmp_path)
     assert (gates.read_bytes(), options.read_bytes()) == before
+
+
+def test_a_flutter_package_without_flutter_skill_lints_is_refused(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    """The Flutter rules live in flutter_skill_lints, so a Flutter package without the plugin gets none of them."""
+    options = json.loads(json.dumps(DART_TYPING))
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    pubspec = tmp_path / "pubspec.yaml"
+    pubspec.write_text("name: app\ndependencies:\n  flutter:\n    sdk: flutter\n")
+    with pytest.raises(ValueError, match=r"flutter_skill_lints") as caught:
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+    assert "building-flutter-apps/references/analysis_options.yaml" in str(caught.value)
+
+    options["plugins"] = {"riverpod_lint": "^3.1.9"}
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    with pytest.raises(ValueError, match=r"flutter_skill_lints"):
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+
+    options["plugins"] = {"flutter_skill_lints": "^0.13.4"}
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    runner.validate_typing(tmp_path, "dart", ["lib"])
+
+    nested = tmp_path / "test"
+    nested.mkdir()
+    options.pop("plugins")
+    (nested / "analysis_options.yaml").write_text(yaml.safe_dump(options))
+    runner.validate_typing(tmp_path, "dart", ["lib"])
+
+    pubspec.write_text("name: tool\nenvironment:\n  sdk: ^3.9.0\n")
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    runner.validate_typing(tmp_path, "dart", ["lib"])

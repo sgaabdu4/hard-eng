@@ -214,13 +214,33 @@ def validate_dart_includes(
             ) from error
 
 
+def pubspec_lines(directory: Path) -> list[str]:
+    pubspec = directory / "pubspec.yaml"
+    return pubspec.read_text().splitlines() if pubspec.is_file() else []
+
+
+def flutter_package(directory: Path) -> bool:
+    return any(line.split() == ["sdk:", "flutter"] for line in pubspec_lines(directory))
+
+
 def flutter_without_test(directory: Path) -> bool:
     """A Flutter project that does not list `test` cannot run its outside-lib tests on the Dart VM."""
-    pubspec = directory / "pubspec.yaml"
-    lines = pubspec.read_text().splitlines() if pubspec.is_file() else []
-    return any(line.split() == ["sdk:", "flutter"] for line in lines) and not any(
-        line.split(":")[0].strip() == "test" for line in lines
+    return flutter_package(directory) and not any(
+        line.split(":")[0].strip() == "test" for line in pubspec_lines(directory)
     )
+
+
+def require_flutter_skill_lints(
+    options: DartOptions, path: Path, package_root: Path | None
+) -> None:
+    if package_root not in (None, path.parent) or not flutter_package(path.parent):
+        return
+    plugins = cast("JsonObject", options).get("plugins")
+    if not isinstance(plugins, dict) or "flutter_skill_lints" not in plugins:
+        raise ValueError(
+            f"A Flutter package needs the flutter_skill_lints plugin, which holds the Flutter rules: add it under `plugins` in {path}, "
+            "as .agents/skills/building-flutter-apps/references/analysis_options.yaml lists it"
+        )
 
 
 def has_dart_file(directory: Path, prefix: str) -> bool:
@@ -336,6 +356,7 @@ def validate_dart_typing(
                     f"Dart requires strict {section}.{group} settings{where}"
                 )
     validate_dart_includes(path, package_root or directory, children=children)
+    require_flutter_skill_lints(options, path, package_root)
     for source in {*sources, "test", "tests"}:
         for nested in (directory / source).rglob("analysis_options.yaml"):
             if nested.parent != directory:
