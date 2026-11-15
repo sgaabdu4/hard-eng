@@ -426,11 +426,13 @@ def validate_fallow(
             return
         if audit:
             validate_fallow_audit(report)
+            dead_code = dict(report["dead_code"])
             report = {
                 **report,
                 "kind": "combined",
-                "check": report["dead_code"],
+                "check": dead_code,
                 "dupes": report["duplication"],
+                "workspace_diagnostics": dead_code.pop("workspace_diagnostics", []),
             }
         check, dupes = report["check"], report["dupes"]
         stats = dupes["stats"]

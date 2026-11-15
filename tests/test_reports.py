@@ -16,6 +16,7 @@ from gate_config import (
     Gate,
     Group,
     JsonObject,
+    JsonValue,
     validate_gate,
     validate_package_services,
 )
@@ -266,6 +267,35 @@ def test_fallow_audit_requires_active_crap_enforcement(
     summary["functions_above_threshold"] = 1
     path.write_text(json.dumps(audit))
     with pytest.raises(ValueError, match="complexity findings"):
+        reports.validate_fallow(path)
+
+
+def test_a_clean_fallow_audit_report_passes(tmp_path: Path) -> None:
+    """The `fallow audit --gate all` form holds the no rule packs note inside its dead-code section."""
+    combined = json.loads(REPORTS["fallow"])
+    note: list[JsonValue] = [{"path": ".", "kind": "rule-packs-not-configured"}]
+    summary: JsonObject = {"max_crap_threshold": 30.0, "files_analyzed": 1}
+    summary |= {"functions_analyzed": 1, "functions_above_threshold": 0}
+    summary |= {"severity_critical_count": 0, "severity_high_count": 0}
+    summary |= {"severity_moderate_count": 0}
+    audit: JsonObject = {"kind": "audit", "command": "audit", "verdict": "pass"}
+    audit |= {"duplication": combined["dupes"]}
+    audit |= {"complexity": {"findings": [], "summary": summary}}
+    dead_code: JsonObject = {**combined["check"], "unused_files": []}
+    audit |= {"dead_code": dead_code}
+    dead_code["workspace_diagnostics"] = note
+    unknown: list[JsonValue] = [{"kind": "parse-error"}]
+    path = tmp_path / "audit.json"
+    path.write_text(json.dumps(audit))
+    reports.validate_fallow(path)
+    dead_code["workspace_diagnostics"] = unknown
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match="parse-error"):
+        reports.validate_fallow(path)
+    dead_code["workspace_diagnostics"] = note
+    dead_code["unused_files"] = [{"path": "a.ts"}]
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError):
         reports.validate_fallow(path)
 
 
