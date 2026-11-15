@@ -348,7 +348,7 @@ def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
 def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Dart Decimate reports only CRAP scores above its limit, so 29 fails what Fallow's 30 fails."""
+    """Dart Decimate 0.0.76 fails a CRAP score equal to its limit, so 30 fails what Fallow's 30 fails."""
     for folder in ("domain", "ui"):
         (tmp_path / "lib" / folder).mkdir(parents=True)
         (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
@@ -364,17 +364,17 @@ def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
         monkeypatch.setattr(subprocess, "check_output", native_config)
         validate_dart_boundaries(command, tmp_path, 5)
 
-    refused: list[JsonObject] = [{}, {"max_crap": None}, {"max_crap": 30}]
+    refused: list[JsonObject] = [{}, {"max_crap": None}, {"max_crap": 31}]
     refused.append({"max_crap": 0})
     for health in refused:
-        with pytest.raises(ValueError, match=r'"health": \{"max_crap": 29\}'):
+        with pytest.raises(ValueError, match=r'"health": \{"max_crap": 30\}'):
             check_with(health)
-    for limit in (29, 12):
+    for limit in (30, 12):
         check_with({"max_crap": limit})
 
     changes: dict[str, str] = {}
     configure_dart_scanner(tmp_path, tmp_path, changes)
     written = json.loads(changes[".dart-decimaterc.json"])
-    assert written["health"] == {"max_crap": 29}
+    assert written["health"] == {"max_crap": 30}
     starter = SOURCE / ".agents/starters/flutter/.dart-decimaterc.json"
-    assert json.loads(starter.read_text())["health"] == {"max_crap": 29}
+    assert json.loads(starter.read_text())["health"] == {"max_crap": 30}

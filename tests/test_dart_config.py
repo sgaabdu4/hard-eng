@@ -709,7 +709,7 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
     step = re.search(r'Set (".+?": \[.+?\]) .* make (\S+) for', str(caught.value))
     assert step, str(caught.value)
     key, name = step.groups()
-    (tmp_path / name).write_text("{" + key + ', "health": {"max_crap": 29}}')
+    (tmp_path / name).write_text("{" + key + ', "health": {"max_crap": 30}}')
     for folder in ("domain", "ui"):
         (tmp_path / "lib" / folder).mkdir(parents=True)
         (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
@@ -739,7 +739,7 @@ def test_a_settings_file_that_the_tool_rejects_shows_the_tools_text(
 
 def boundary_tool(monkeypatch: pytest.MonkeyPatch, rules: list[dict[str, str]]) -> None:
     def native_config(*_args: object, **_kwargs: object) -> str:
-        health = {"max_crap": 29}
+        health = {"max_crap": 30}
         return json.dumps({"config": {"boundaries": rules, "health": health}})
 
     monkeypatch.setattr(subprocess, "check_output", native_config)
