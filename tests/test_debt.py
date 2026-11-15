@@ -847,6 +847,11 @@ def test_timer_findings_never_become_debt(
     semgrep(timer, other)
     assert debt.judge(tmp_path, group, security, True, "x\n") is True
     assert "never recorded as old findings" in capsys.readouterr().out
+    assert debt.record(tmp_path, [group], {"./security"}, outputs) == 0
+    assert debt.load(tmp_path)["./security"] == {
+        f"{other} a.ts call(x)": 1,
+        "x": 1,
+    }
 
 
 def test_flutter_frame_lint_findings_never_become_debt(
