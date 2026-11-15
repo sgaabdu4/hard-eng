@@ -16,18 +16,20 @@ flowchart LR
 
 > **Alpha.** Some hooks and acceptance checks still have limits. See [verified behavior and open gaps](DECISION.md#current-status).
 
+[Setup](#1-setup) · [Plan](#2-plan) · [Build](#3-build) · [Ship](#4-ship) · [Learn](#5-learn) · [Checks](#checks) · [What is enforced](#what-is-enforced)
+
 ## What "hard" means
 
-Hard Eng is strict on purpose. It refuses bad code. It does not warn and move on.
+Hard Eng is strict on purpose. It refuses bad code. It does not only give a warning.
 
-- **Old code too.** The full check reads the whole project, not only your new lines. An old problem fails until someone fixes it.
-- **No switch-offs.** A comment or config line that turns a check off fails, even an old one.
-- **Fix the cause.** A failure names the fix. For example, a wait for the next frame fails: change the order of events instead.
-- **No excuses in the code.** TODO, FIXME, HACK and XXX notes fail. A markdown file that nothing links to fails.
+- **Old code too.** The full `check` reads every tracked file, not only your new lines. The [quick checks](#quick-checks) when an agent stops do not. An old case of each rule below fails until someone fixes it.
+- **No switch-offs.** A comment or config line that turns a check off fails, even an old one. Generated output and scaffold paths are exempt.
+- **Fix the cause.** Each of these failures names the fix. For example, a wait with no delay, or a wait for the next frame, fails in app code. The fix is to change the order of events.
+- **No leftover notes.** TODO, FIXME, HACK and XXX in a comment fail. The same words in a string pass. A comment block of two or more lines fails. A markdown file that no other file names fails. README, AGENTS and a few other standard names pass.
 
-To adopt Hard Eng in an older project, fix what the first full check finds. Then each change keeps the project clean.
+To add Hard Eng to an older project, fix each case of these rules that the first full check finds. These rules never go into the debt record. Some other checks can record their old findings one time at install. After that, the record can only get smaller ([HE-DEBT-SHRINK-ONLY](.agents/skills/he/references/requirements.md#he-debt-shrink-only)).
 
-[Setup](#1-setup) · [Plan](#2-plan) · [Build](#3-build) · [Ship](#4-ship) · [Learn](#5-learn) · [Checks](#checks) · [What is enforced](#what-is-enforced)
+For every rule and when it runs, see [What is enforced](#what-is-enforced).
 
 ## 1. Setup
 
@@ -410,8 +412,8 @@ The [requirement registry](.agents/skills/he/references/requirements.md) holds e
 
 | Rule | Short meaning | Proof |
 | --- | --- | --- |
-| [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off) | A change adds no suppression, no skipped or focused test, no test retry and no scanner ignore marker. It also removes no more `assert` or `expect(` lines from test files than it adds. | Check |
-| [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) | No comment block in a changed source file has more than one line. Generated output and scaffold paths are exempt. | Check |
+| [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off) | No tracked file holds a suppression, a skipped or focused test, a test retry or a scanner ignore marker, old ones too. A change also removes no more `assert` or `expect(` lines from test files than it adds. | Check |
+| [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) | No comment block in a tracked source file has more than one line, old ones too. Generated output and scaffold paths are exempt. | Check |
 | [HE-DEBT-SHRINK-ONLY](.agents/skills/he/references/requirements.md#he-debt-shrink-only) | In the change that installs Hard Eng, `adopt` can record the old findings one time in `hard-eng.debt.json`. Later changes only remove lines. | Check |
 | [HE-UI-SOURCE](.agents/skills/he/references/requirements.md#he-ui-source) | Added UI lines hold no `transition` on all properties. They also hold none of the listed colour literals outside a theme or token file. | Check |
 | [HE-NO-TEXT-WALLS](.agents/skills/he/references/requirements.md#he-no-text-walls) | On-screen text comes in short blocks. A block has at most 25 words and 3 sentences, and a sentence has at most 20 words. The command `text-walls` lists the hits. | Check |
