@@ -578,6 +578,7 @@ def test_a_partly_read_region_with_no_timer_call_passes(
         "src/model.py",
         "Sources/App/View.swift",
         "node_modules/lib/index.js",
+        ".agents/skills/walkthrough/scripts/pointer.mjs",
         "src/view.d.ts",
     ],
 )

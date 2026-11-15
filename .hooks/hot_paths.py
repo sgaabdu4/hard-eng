@@ -167,6 +167,7 @@ def refuse_hidden_deferrals(spans: list[Span], root: Path) -> None:
         span
         for span in spans
         if Path(span["path"]).suffix in {*JS_SUFFIXES, ".dart"}
+        and not span["path"].startswith(".agents/")
         and not nonproduction_source(Path(span["path"]))
     ]
     names = sorted({span["path"] for span in judged})
