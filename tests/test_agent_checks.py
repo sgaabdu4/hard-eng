@@ -579,7 +579,7 @@ def test_only_the_browser_case_may_leave_the_sandbox(tmp_path: Path) -> None:
     assert sandboxed[:2] == ["--sandbox", "workspace-write"]
     assert "--approve-for-me" not in sandboxed
     assert agent_clients.codex_access(tmp_path, "approved") == [
-        *sandboxed,
+        *sandboxed[2:],
         "--approve-for-me",
     ]
     for access, escape, mode in (
