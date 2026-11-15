@@ -1,5 +1,6 @@
 """The full check judges every tracked file, old code included."""
 
+import re
 from pathlib import Path
 from types import ModuleType
 
@@ -78,7 +79,7 @@ def test_gitleaks_rules_pass_and_allowlists_fail(tmp_path: Path) -> None:
                 tmp_path / form.strip("[]").replace(" ", "-"), {".gitleaks.toml": text}
             )
         )
-        assert ".gitleaks.toml holds an allowlist" in message, form
+        assert re.search(r"\.gitleaks\.toml:[1-4] holds an allowlist", message), form
 
 
 def test_gitleaks_disabled_rules_fail(tmp_path: Path) -> None:
@@ -87,7 +88,7 @@ def test_gitleaks_disabled_rules_fail(tmp_path: Path) -> None:
     validate_whole_project(project(tmp_path / "empty", {".gitleaks.toml": empty}))
     off = "[extend]\nuseDefault = true\ndisabledRules = ['aws-access-token']\n"
     message = refusal(project(tmp_path / "off", {".gitleaks.toml": off}))
-    assert ".gitleaks.toml disables the rules ['aws-access-token']" in message
+    assert ".gitleaks.toml:3 disables the rules ['aws-access-token']" in message
     assert "fix the cause" in message
 
 
@@ -158,10 +159,10 @@ def test_an_unnamed_markdown_file_fails(tmp_path: Path) -> None:
     """HE-NAMED-MARKDOWN: a markdown file that no other tracked file names fails, old ones too."""
     root = project(tmp_path, {"notes/extra.md": "text\n", "app.py": "x = 'y.md'\n"})
     message = refusal(root)
-    assert "notes/extra.md is named by no other tracked file" in message
+    assert "notes/extra.md:1 is named by no other tracked file" in message
     assert "y.md" not in message
     (root / "own.md").write_text("own.md\n")
-    assert "own.md is named by no other tracked file" in refusal(root)
+    assert "own.md:1 is named by no other tracked file" in refusal(root)
 
 
 NO_LINK_NEEDED = [
@@ -237,5 +238,34 @@ def test_quick_check_skips_the_whole_project_pass(
     configure(tmp_path, [gate("suite", "pass", role="lint", parallel=True)])
     (tmp_path / "stray.md").write_text("no file names this\n")
     assert runner.check(quick=True) == 0
-    with pytest.raises(ValueError, match=r"stray\.md is named by no other"):
+    with pytest.raises(ValueError, match=r"stray\.md:1 is named by no other"):
         runner.check(quick=False)
+
+
+def test_one_run_reports_every_kind_and_every_hit(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a full check lists each refusal kind with every hit, so one run gives the whole work list."""
+    files = {
+        "a.py": HIDDEN + "z = 1  # no" + "qa\n",
+        "b.py": "x = 1  # TO" + "DO later\n",
+        "c.py": OLD_BLOCK,
+        "notes/extra.md": "text\n",
+        ".gitleaks.toml": "[allowlist]\npaths = ['a']\n[extend]\ndisabledRules = ['x']\n",
+    }
+    groups: list[tuple[str, list[str]]] = []
+    for line in refusal(project(tmp_path, files)).splitlines():
+        if line.startswith("  "):
+            groups[-1][1].append(line.strip())
+        else:
+            groups.append((line, []))
+    assert [header.split(":")[0] for header, _ in groups] == [
+        "HE-NO-SWITCH-OFF",
+        "HE-COMMENT-LINES",
+        "HE-COMMENT-LINES",
+        "HE-NAMED-MARKDOWN",
+    ]
+    assert [[hit.split(" ")[0] for hit in hits] for _, hits in groups] == [
+        [".gitleaks.toml:1", ".gitleaks.toml:4", "a.py:2", "a.py:3"],
+        ["b.py:1"],
+        ["c.py:1"],
+        ["notes/extra.md:1"],
+    ]

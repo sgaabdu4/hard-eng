@@ -6,21 +6,31 @@ import tomllib
 from pathlib import Path, PurePosixPath
 
 from comments import (
+    COMMENT_HEADER,
     HASH,
     SLASH,
+    SWITCH_OFF_HEADER,
     UNOWNED,
     block_hits,
     comment_map,
-    comment_refusal,
     pattern_switch_offs,
     security_hits,
-    switch_off_refusal,
 )
 from gate_config import generated_sources
 from project_files import GIT_LISTING
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
+ALLOWLIST_LINE = re.compile(r"\s*(\[\[?[\w.-]*allowlists?\]\]?|[\w.-]*allowlists?\s*=)")
+DISABLED_LINE = re.compile(r"\s*disabledRules\s*=")
+MARKER_HEADER = (
+    "HE-COMMENT-LINES: A TODO, FIXME, HACK or XXX marker excuses unfinished work: "
+    "fix the cause now and delete the comment; never suppress it."
+)
+MARKDOWN_HEADER = (
+    "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names has no reader: "
+    "fix it at the cause, so name it where a reader opens it or delete it; never suppress it."
+)
 MARKDOWN_NAME = re.compile(r"[\w.+-]+\.md\b")
 NEEDS_NO_LINK = {
     "README",
@@ -58,19 +68,20 @@ def gitleaks_switch_offs(name: str, text: str) -> list[str]:
         config = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         return []
-    found = [
-        f"{name} holds an allowlist table {key!r}"
-        for key in ("allowlist", "allowlists")
-        if key in config
-    ]
-    found += [
-        f"{name} holds an allowlist in rule {rule.get('id', '?')!r}"
-        for rule in config.get("rules", [])
-        if "allowlist" in rule or "allowlists" in rule
-    ]
+    lines = text.splitlines()
+
+    def at(pattern: re.Pattern[str]) -> list[int]:
+        return [n for n, line in enumerate(lines, 1) if pattern.match(line)] or [1]
+
+    allowlisted = "allowlist" in config or "allowlists" in config
+    allowlisted = allowlisted or any(
+        "allowlist" in rule or "allowlists" in rule for rule in config.get("rules", [])
+    )
+    found = [f"{name}:{n} holds an allowlist" for n in at(ALLOWLIST_LINE)]
+    found = found if allowlisted else []
     extend = config.get("extend")
     if isinstance(extend, dict) and (off := extend.get("disabledRules")):
-        found.append(f"{name} disables the rules {off!r}")
+        found += [f"{name}:{n} disables the rules {off!r}" for n in at(DISABLED_LINE)]
     return found
 
 
@@ -113,7 +124,7 @@ def unnamed_markdown(texts: dict[str, str]) -> list[str]:
         for hit in MARKDOWN_NAME.findall(text):
             named.setdefault(hit, set()).add(name)
     return [
-        f"{name} is named by no other tracked file"
+        f"{name}:1 is named by no other tracked file"
         for name in texts
         if name.endswith(".md")
         and not name.startswith(NEEDS_NO_LINK_FOLDERS)
@@ -126,22 +137,20 @@ def validate_whole_project(root: Path) -> None:
     texts = {
         name: (root / name).read_text(errors="replace") for name in tracked_files(root)
     }
-    if found := switch_offs(root, texts):
-        raise ValueError(switch_off_refusal(found))
     sources = source_names(root, texts)
-    if found := excuse_markers(root, texts, sources):
-        raise ValueError(
-            "HE-COMMENT-LINES: A TODO, FIXME, HACK or XXX marker excuses unfinished work: "
-            "fix the cause now and delete the comment; never suppress it. "
-            + "; ".join(found)
-        )
-    if found := [
-        hit for name in sources for hit in block_hits(name, root / name, texts[name])
-    ]:
-        raise ValueError(comment_refusal(found))
-    if found := unnamed_markdown(texts):
-        raise ValueError(
-            "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names has no reader: "
-            "fix it at the cause, so name it where a reader opens it or delete it; never suppress it. "
-            + "; ".join(found)
-        )
+    kinds = [
+        (SWITCH_OFF_HEADER, switch_offs(root, texts)),
+        (MARKER_HEADER, excuse_markers(root, texts, sources)),
+        (
+            COMMENT_HEADER,
+            [h for n in sources for h in block_hits(n, root / n, texts[n])],
+        ),
+        (MARKDOWN_HEADER, unnamed_markdown(texts)),
+    ]
+    blocks = [
+        "\n".join([header, *(f"  {hit}" for hit in found)])
+        for header, found in kinds
+        if found
+    ]
+    if blocks:
+        raise ValueError("\n".join(blocks))
