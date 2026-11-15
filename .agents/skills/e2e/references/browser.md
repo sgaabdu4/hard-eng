@@ -10,7 +10,7 @@
 - `browser capture <url> --session S [--state FILE] [--ring SELECTOR] [--name NAME]` writes whole-page images at the standard widths, 390 and 1280 px, to `.hard-eng/browser/<name>-<width>.png` and prints their paths. Without `--name` the name is `capture`, so a second capture replaces the first: pass a name for each, such as `--name before` and `--name after`.
 - `capture` loads `<url>` fresh at each width and closes its session at the end. It cannot show a state reached by clicks: use a URL that opens the state, or plain steps. A plain `screenshot` step hides nothing and draws no rings; add `--full` for the whole page, use fake data, and look at the image before you share it. Give `capture` and `signin` their own session name, not the one you click in.
 - Red boxes go on each element that a `--ring` selector matches in the main page. Rings do not reach into shadow roots or frames. A `--ring` with no visible match at 390 or 1280 px stops the capture with an error, so ring only elements that show at both widths.
-- Emails and phone numbers are hidden, also inside open shadow roots and same-origin frames. A frame that the command cannot read is covered grey. Hiding is a pattern match: it misses names and other personal data, so look at each image and use fake data before you share it.
+- Emails and phone numbers are hidden, also inside open shadow roots and same-origin frames. A frame that the command cannot read, such as an embed from another site, is hidden and marked with a grey box. Hiding is a pattern match: it misses names and other personal data, so look at each image and use fake data before you share it.
 
 ## Sign in
 
