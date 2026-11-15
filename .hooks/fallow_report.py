@@ -152,8 +152,8 @@ def option(invocation: list[str], flag: str) -> str | None:
 
 
 def reads_coverage(command: list[str]) -> bool:
-    only = option(native_scanner_command(command) or [], "--only") or ""
-    return command[:2] == ["bun", "run"] or "health" in only.split(",")
+    only = option(native_scanner_command(command) or [], "--only")
+    return command[:2] == ["bun", "run"] or only is None or "health" in only.split(",")
 
 
 def add_health(command: list[str]) -> list[str]:
