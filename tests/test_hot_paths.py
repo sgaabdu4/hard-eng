@@ -19,6 +19,15 @@ FIXTURES = SOURCE / "tests/fixtures/performance"
 ANNOTATION = re.compile(r"ruleid: (\S+)")
 
 
+def strict_gate() -> Gate:
+    return {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--strict", "--metrics=off"]
+        + ["--time", "--json", "--output", "semgrep.json", "."],
+    }
+
+
 def git(root: Path, *args: str) -> None:
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
@@ -54,7 +63,7 @@ def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
         (tmp_path / "src" / name).write_text("\n".join(lines) + "\n")
     with patch("hot_paths.require_parsed") as parsed:
         results = findings(tmp_path, ["src"], 900)
-    parsed.assert_called_once_with([])
+    parsed.assert_called_once_with([], tmp_path)
     actual = coordinates(results)
     assert sorted(actual) == sorted(expected)
     rules = yaml.safe_load(RULES.read_text())["rules"]
@@ -121,7 +130,7 @@ def test_exact_reported_inputs_keep_all_expected_findings(tmp_path: Path) -> Non
         results = findings(tmp_path, ["."], 900)
     parsed.assert_called_once()
     errors = parsed.call_args.args[0]
-    require_parsed(errors)
+    require_parsed(errors, tmp_path)
     assert sorted(
         (Path(span["file"]).name, span["start"]["line"], error["type"][0])
         for error in errors
@@ -297,13 +306,7 @@ def test_a_partly_parsed_page_passes_the_gate_but_its_findings_fail_it(
         '<a href="https://vercel.com/templates?framework=next.js&utm_source=app">Go</a>'
     )
     slow = "export function seen(text: string) {\n  return /a+b/.test(text);\n}\n"
-    gate: Gate = {
-        "name": "security",
-        "role": "security",
-        "command": ["semgrep", "scan", "--error", "--strict", "--metrics=off"]
-        + ["--time", "--json", "--output", "semgrep.json", "."],
-    }
-    command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
+    command = runner.prepare_command({"path": ".", "checks": []}, strict_gate(), 5)
     report = runner.ROOT / "semgrep.json"
     for code, failed in ((slow, 1), ("", 0)):
         page.write_text(
@@ -462,3 +465,191 @@ def test_a_scan_with_no_semgrep_report_names_the_step_outside_the_sandbox(
         findings(tmp_path, ["app.py"], 120)
     assert text in str(error.value)
     assert "python3 .hooks/hard-eng.py hot-paths" in str(error.value)
+
+
+TIMER_FORMS = {
+    ".ts": [
+        "setTimeout(work)",
+        "setTimeout(work, 0)",
+        "setTimeout(work, 16)",
+        "window.setTimeout(work, 0)",
+        "setTimeout(\n  work,\n  0,\n)",
+        "setImmediate(work)",
+        "requestAnimationFrame(work)",
+        "requestIdleCallback(work)",
+        "queueMicrotask /* later */ (work)",
+        "process . nextTick(work)",
+        "Promise.resolve().then(work)",
+        "Promise\n  .resolve()\n  .then(work)",
+        "await Promise.resolve()",
+        "await null",
+        "await /* tick */ null",
+        "new Promise((resolve) => setTimeout(resolve))",
+    ],
+    ".dart": [
+        "scheduleMicrotask(work)",
+        "Future.microtask(work)",
+        "Future<void>.microtask(work)",
+        "Future.delayed(Duration.zero, work)",
+        "Future<void>.delayed(const Duration(milliseconds: 16), work)",
+        "Future.delayed(\n  Duration.zero,\n  work,\n)",
+        "Timer.run(work)",
+        "Timer(Duration.zero, work)",
+        "Timer(const Duration(milliseconds: 5), work)",
+        "Future(work)",
+        "Future<void>(work)",
+        "await null",
+    ],
+}
+UNREFUSED = {
+    ".ts": [
+        "setTimeout(work, 17)",
+        "setTimeout(work, delay)",
+        "setTimeout(() => log('a,b'), 500)",
+        "test.setTimeout(1000)",
+        "Promise.resolve(value)",
+        "await fetch(url)",
+        "mySetTimeout(work)",
+        "const text = <div>&nbsp;Go</div>",
+    ],
+    ".dart": [
+        "Future.delayed(const Duration(seconds: 1), work)",
+        "Future.delayed(const Duration(milliseconds: 17), work)",
+        "Future.value(1)",
+        "Timer.periodic(const Duration(seconds: 1), work)",
+        "Timer(const Duration(milliseconds: 250), work)",
+        "myFuture(work)",
+        "Future<void> run(void Function() work) async",
+    ],
+}
+
+
+def gap_errors(name: str, text: str) -> list[dict[str, object]]:
+    rows = text.splitlines()
+    span = {
+        "path": name,
+        "start": {"line": 1, "col": 1, "offset": 0},
+        "end": {"line": len(rows), "col": len(rows[-1]) + 1, "offset": len(text)},
+    }
+    return [{"code": 3, "level": "warn", "type": ["PartialParsing", [span]]}]
+
+
+def with_gap(root: Path, name: str, text: str) -> list[dict[str, object]]:
+    path = root / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text + "\n")
+    return gap_errors(name, text)
+
+
+@pytest.mark.parametrize(
+    ("suffix", "form"),
+    [(suffix, form) for suffix, forms in TIMER_FORMS.items() for form in forms],
+)
+def test_a_timer_call_in_a_partly_read_region_fails(
+    tmp_path: Path, suffix: str, form: str
+) -> None:
+    """HE-HOT-PATH: no zero-delay or next-frame call hides in a part Semgrep could not read."""
+    errors = with_gap(tmp_path, f"src/view{suffix}", f"{form};")
+    with pytest.raises(
+        ValueError, match=r"zero-delay or next-frame call: src/view\S+:1 \("
+    ) as caught:
+        require_parsed(errors, tmp_path)
+    assert "Change that code until Semgrep reads it" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("suffix", "text"),
+    [(suffix, text) for suffix, texts in UNREFUSED.items() for text in texts],
+)
+def test_a_partly_read_region_with_no_timer_call_passes(
+    tmp_path: Path, suffix: str, text: str
+) -> None:
+    require_parsed(with_gap(tmp_path, f"src/view{suffix}", f"{text};"), tmp_path)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "tests/view.ts",
+        "src/view.test.ts",
+        "src/view.spec.js",
+        "test/view_test.dart",
+        "integration_test/view.dart",
+        "src/model.py",
+        "Sources/App/View.swift",
+        "node_modules/lib/index.js",
+        "src/view.d.ts",
+    ],
+)
+def test_a_partly_read_region_in_code_the_rule_skips_passes(
+    tmp_path: Path, name: str
+) -> None:
+    require_parsed(
+        with_gap(tmp_path, name, "setTimeout(work, 0); await null"), tmp_path
+    )
+
+
+def test_a_generated_file_with_a_partly_read_timer_call_passes(
+    runner: ModuleType,
+) -> None:
+    errors = with_gap(runner.ROOT, "api/client.ts", "setTimeout(work, 0);")
+    (runner.ROOT / ".gitattributes").write_text("api/client.ts linguist-generated\n")
+    git(runner.ROOT, "add", ".")
+    git(runner.ROOT, "commit", "-qm", "base")
+    require_parsed(errors, runner.ROOT)
+
+
+def test_a_timer_call_in_a_region_semgrep_cannot_read_fails_the_scan(
+    tmp_path: Path,
+) -> None:
+    """HE-HOT-PATH: Semgrep gives up on the whole file for a JSX tag in a type cast; the rule still judges the text."""
+    forms = [
+        "setTimeout(work, 0)",
+        "requestAnimationFrame(work)",
+        "queueMicrotask(work)",
+        "Promise.resolve().then(work)",
+        "await null",
+        "await Promise.resolve()",
+    ]
+    for index, form in enumerate(forms):
+        (tmp_path / f"view{index}.tsx").write_text(
+            "export async function view(work: () => void) {\n"
+            f"  return (<a />)<b>{{{form}}}</b>;\n}}\n"
+        )
+    with patch("hot_paths.require_parsed"):
+        read = {
+            Path(str(found["path"])).name for found in findings(tmp_path, ["."], 900)
+        }
+    unread = {f"view{index}.tsx" for index in range(len(forms))} - read
+    assert unread
+    with pytest.raises(ValueError, match="zero-delay or next-frame call") as caught:
+        findings(tmp_path, ["."], 900)
+    for name in unread:
+        assert f"{name}:" in str(caught.value)
+
+
+def test_the_security_gate_fails_a_timer_call_in_a_region_semgrep_cannot_read(
+    runner: ModuleType,
+) -> None:
+    """HE-HOT-PATH: the gate's report check reads the unread text too, so Semgrep's silence on a gap is no pass."""
+    (runner.ROOT / "view.tsx").write_text(
+        "export function view(work: () => void) {\n"
+        "  return (<a />)<b>{setTimeout(work, 0)}</b>;\n}\n"
+    )
+    command = runner.prepare_command({"path": ".", "checks": []}, strict_gate(), 5)
+    subprocess.run(command, cwd=runner.ROOT, check=False)
+    with pytest.raises(ValueError, match="zero-delay or next-frame call"):
+        validate_semgrep(runner.ROOT / "semgrep.json", runner.ROOT)
+
+
+@pytest.mark.parametrize("language", ["javascript", "dart"])
+def test_the_timer_messages_name_the_fix_at_the_cause(language: str) -> None:
+    """The talk's lint messages tell the agent to fix the root cause, so the refusal never reads as a place to hide."""
+    rules = yaml.safe_load(RULES.read_text())["rules"]
+    (message,) = [
+        r["message"] for r in rules if r["id"] == f"next-frame-call-{language}"
+    ]
+    text = " ".join(message.split())
+    assert "Fix the order of events at its cause: run the work from the" in text
+    assert "owns it." in text
+    assert "suppress" not in text.lower()

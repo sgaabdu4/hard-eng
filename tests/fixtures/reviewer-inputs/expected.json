@@ -218,7 +218,11 @@
       7
     ]
   },
-  "r14_a1_confirm_timeout_width.dart": {},
+  "r14_a1_confirm_timeout_width.dart": {
+    "next-frame-call-dart": [
+      36
+    ]
+  },
   "r14_a1_new_positional_retry_dynamic.dart": {},
   "r14_a1_new_positional_retry_dynamic.js": {},
   "r14_a1_new_positional_retry_dynamic.py": {},
@@ -228,7 +232,11 @@
   "r14_a1_new_positional_retry_options.ts": {},
   "r14_a1_new_positional_retry_spread.js": {},
   "r14_a1_new_positional_retry_spread.ts": {},
-  "r14_a2_confirm_closure_width.js": {},
+  "r14_a2_confirm_closure_width.js": {
+    "next-frame-call-javascript": [
+      21
+    ]
+  },
   "r14_a2_followups_closure_later_width.ts": {},
   "r14_a2_followups_closure_write_in_callback.js": {},
   "r14_a2_followups_closure_write_in_callback.ts": {},
@@ -256,8 +264,16 @@
   },
   "r14_o1_new_computed_one.js": {},
   "r14_o1_new_computed_one.ts": {},
-  "r15_astra_confirm_shadow_width.js": {},
-  "r15_astra_confirm_shadow_width.ts": {},
+  "r15_astra_confirm_shadow_width.js": {
+    "next-frame-call-javascript": [
+      21
+    ]
+  },
+  "r15_astra_confirm_shadow_width.ts": {
+    "next-frame-call-javascript": [
+      21
+    ]
+  },
   "r15_astra_followups_array_arrow.js": {},
   "r15_astra_followups_array_arrow.ts": {},
   "r15_astra_followups_block_array.js": {},
@@ -282,7 +298,11 @@
   "r15_astra_followups_object_options.ts": {},
   "r15_astra_followups_renamed_object.js": {},
   "r15_astra_followups_renamed_object.ts": {},
-  "r15_astra_formatted_shadow_width.js": {},
+  "r15_astra_formatted_shadow_width.js": {
+    "next-frame-call-javascript": [
+      23
+    ]
+  },
   "r15_opus_c1d_destructure.dart": {},
   "r15_opus_c1d_destructure.js": {},
   "r15_opus_c1d_destructure.swift": {},
@@ -306,15 +326,31 @@
       25
     ]
   },
-  "r15_opus_confirm_destructured_width.js": {},
-  "r15_opus_confirm_destructured_width.ts": {},
-  "r15_opus_confirm_member_width.dart": {},
+  "r15_opus_confirm_destructured_width.js": {
+    "next-frame-call-javascript": [
+      25
+    ]
+  },
+  "r15_opus_confirm_destructured_width.ts": {
+    "next-frame-call-javascript": [
+      36
+    ]
+  },
+  "r15_opus_confirm_member_width.dart": {
+    "next-frame-call-dart": [
+      34
+    ]
+  },
   "r15_opus_confirm_member_width.swift": {
     "sequential-awaits-swift": [
       41
     ]
   },
-  "r15_opus_confirm_same_function_arrow.js": {},
+  "r15_opus_confirm_same_function_arrow.js": {
+    "next-frame-call-javascript": [
+      21
+    ]
+  },
   "r15_opus_loops_idx.dart": {
     "await-in-loop-dart": [
       5,
@@ -1614,7 +1650,11 @@
       45
     ]
   },
-  "r18_opus_confirm-fmt_multi_exit.dart": {},
+  "r18_opus_confirm-fmt_multi_exit.dart": {
+    "next-frame-call-dart": [
+      5
+    ]
+  },
   "r18_opus_confirm-fmt_operation_label.swift": {
     "await-in-loop-swift": [
       58,
@@ -1637,7 +1677,11 @@
       32
     ]
   },
-  "r18_opus_confirm_multi_exit.dart": {},
+  "r18_opus_confirm_multi_exit.dart": {
+    "next-frame-call-dart": [
+      5
+    ]
+  },
   "r18_opus_confirm_operation_label.swift": {
     "await-in-loop-swift": [
       56,
@@ -2218,7 +2262,11 @@
       45
     ]
   },
-  "r18_twin_opus_confirm_multi_exit.dart": {},
+  "r18_twin_opus_confirm_multi_exit.dart": {
+    "next-frame-call-dart": [
+      5
+    ]
+  },
   "r18_twin_opus_confirm_operation_label.swift": {
     "await-in-loop-swift": [
       58,
@@ -3541,8 +3589,16 @@
       7
     ]
   },
-  "r20_astra_confirm_runtime_prelude.dart": {},
-  "r20_astra_confirm_runtime_typed.dart": {},
+  "r20_astra_confirm_runtime_prelude.dart": {
+    "next-frame-call-dart": [
+      6
+    ]
+  },
+  "r20_astra_confirm_runtime_typed.dart": {
+    "next-frame-call-dart": [
+      8
+    ]
+  },
   "r20_astra_confirm_typed_join.dart": {},
   "r20_astra_confirm_untyped_join.dart": {},
   "r20_astra_formatted_comment.dart": {},
@@ -3864,6 +3920,9 @@
       75,
       75,
       142
+    ],
+    "next-frame-call-javascript": [
+      96
     ]
   },
   "r20_opus_p19_real.py": {
@@ -3890,6 +3949,9 @@
       75,
       75,
       142
+    ],
+    "next-frame-call-javascript": [
+      96
     ]
   },
   "r20_opus_p19_real_match.py": {
@@ -3985,8 +4047,16 @@
       7
     ]
   },
-  "r20_twin_astra_confirm_runtime_prelude.dart": {},
-  "r20_twin_astra_confirm_runtime_typed.dart": {},
+  "r20_twin_astra_confirm_runtime_prelude.dart": {
+    "next-frame-call-dart": [
+      7
+    ]
+  },
+  "r20_twin_astra_confirm_runtime_typed.dart": {
+    "next-frame-call-dart": [
+      11
+    ]
+  },
   "r20_twin_astra_confirm_typed_join.dart": {},
   "r20_twin_astra_confirm_untyped_join.dart": {},
   "r20_twin_astra_more_dart_local.dart": {},
@@ -4299,6 +4369,9 @@
       75,
       75,
       144
+    ],
+    "next-frame-call-javascript": [
+      98
     ]
   },
   "r20_twin_opus_p19_real.py": {
@@ -4325,6 +4398,9 @@
       75,
       75,
       144
+    ],
+    "next-frame-call-javascript": [
+      98
     ]
   },
   "r20_twin_opus_p19_real_match.py": {
@@ -4411,7 +4487,11 @@
     ]
   },
   "r21_astra_audit_comment.ts": {},
-  "r21_astra_confirm_runtime.mjs": {},
+  "r21_astra_confirm_runtime.mjs": {
+    "next-frame-call-javascript": [
+      7
+    ]
+  },
   "r21_astra_confirm_worker_control.js": {},
   "r21_astra_confirm_worker_explicit.js": {
     "await-in-loop-javascript": [
@@ -4726,7 +4806,11 @@
     ]
   },
   "r21_twin_astra_audit_comment.ts": {},
-  "r21_twin_astra_confirm_runtime.mjs": {},
+  "r21_twin_astra_confirm_runtime.mjs": {
+    "next-frame-call-javascript": [
+      7
+    ]
+  },
   "r21_twin_astra_confirm_worker_control.js": {},
   "r21_twin_astra_confirm_worker_explicit.js": {
     "await-in-loop-javascript": [

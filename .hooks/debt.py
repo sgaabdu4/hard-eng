@@ -29,6 +29,7 @@ GATE_OUTPUT_LIMIT = 8000
 DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
+NEVER_FINDINGS = re.compile(r"next-frame-call-(?:javascript|dart)(?![\w-])")
 MISSING_SUITE = "HE-PERFORMANCE-SUITE"
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 RUNNER_LINES = re.compile(
@@ -95,6 +96,11 @@ def remember(group: Group, gate: Gate, text: str) -> str:
 
 def lacks_suite(gate: Gate, output: str) -> bool:
     return gate.get("role") == "performance" and MISSING_SUITE in output
+
+
+def never_recorded(found: Counter[str]) -> int:
+    """HE-HOT-PATH: the lines of zero-delay and next-frame findings, which are never old findings to keep."""
+    return sum(count for line, count in found.items() if NEVER_FINDINGS.search(line))
 
 
 def recordable(gate: Gate) -> bool:
@@ -241,6 +247,11 @@ def judge(root: Path, group: Group, gate: Gate, failed: bool, output: str) -> bo
     if debt is None or gate.get("role") in NEVER or lacks_suite(gate, output):
         return failed
     current = fingerprints(root, group, gate, output) if failed else Counter()
+    if timers := never_recorded(current):
+        print(
+            f"FAIL {gate['name']} @ {group['path']}: {timers} zero-delay or next-frame calls are never recorded as old findings; fix each as its message says"
+        )
+        return True
     ruff = ruff_check(gate["command"]) >= 0
     old = by_form(debt, ruff)
     if new := by_form(current, ruff) - old:
@@ -301,6 +312,7 @@ def record(
                 not recordable(gate)
                 or not current
                 or UNREADABLE in current
+                or never_recorded(current)
                 or lacks_suite(gate, outputs.get(key, ""))
             ):
                 refused.append(key)
