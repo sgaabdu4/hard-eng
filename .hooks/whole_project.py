@@ -3,11 +3,14 @@
 import re
 import subprocess
 import tomllib
+from itertools import pairwise
 from pathlib import Path, PurePosixPath
 
 from comments import (
     COMMENT_HEADER,
     HASH,
+    RETRY_WORDS,
+    SECURITY_OFF,
     SLASH,
     SWITCH_OFF_HEADER,
     UNOWNED,
@@ -101,9 +104,12 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
     skipped = generated_sources(root, owned)
     found: list[str] = []
     for name in (name for name in owned if name not in skipped):
-        lines = list(enumerate(texts[name].splitlines(), 1))
+        text = texts[name]
+        lines = list(enumerate(text.splitlines(), 1))
         base = PurePosixPath(name).name
-        found += security_hits(root, name, lines, "holds", base in LINE_IGNORES)
+        entries = base in LINE_IGNORES
+        if entries or SECURITY_OFF.search(text) or any(w in text for w in RETRY_WORDS):
+            found += security_hits(root, name, lines, "holds", entries)
         found += pattern_switch_offs(root, name, lines, "holds")
         if base == ".gitleaks.toml":
             found += gitleaks_switch_offs(name, texts[name])
@@ -124,15 +130,25 @@ def excuse_markers(root: Path, texts: dict[str, str], names: list[str]) -> list[
     return [
         f"{name}:{number} holds a {hit[0]} marker"
         for name in names
+        if MARKER.search(texts[name])
         for number, comment in comment_map(root / name, texts[name], True).items()
         if (hit := MARKER.search(comment))
     ]
 
 
+def may_hold_block(name: str, text: str) -> bool:
+    slash = Path(name).suffix in SLASH
+    if slash and "/*" in text:
+        return True
+    token = "//" if slash else "#"
+    marks = [token in line for line in text.splitlines()]
+    return any(a and b for a, b in pairwise(marks))
+
+
 def unnamed_markdown(texts: dict[str, str]) -> list[str]:
     named: dict[str, set[str]] = {}
     for name, text in texts.items():
-        for hit in MARKDOWN_NAME.findall(text):
+        for hit in MARKDOWN_NAME.findall(text) if ".md" in text else ():
             named.setdefault(hit, set()).add(name)
     return [
         f"{name}:1 is named by no other tracked file"
@@ -144,17 +160,31 @@ def unnamed_markdown(texts: dict[str, str]) -> list[str]:
     ]
 
 
+def text_files(root: Path) -> dict[str, str]:
+    """Tracked and new text files; a NUL byte in the first 8,000 marks a binary file, as Git decides."""
+    texts: dict[str, str] = {}
+    for name in tracked_files(root):
+        data = (root / name).read_bytes()
+        if b"\0" not in data[:8000]:
+            text = data.decode(errors="replace")
+            texts[name] = text.replace("\r\n", "\n").replace("\r", "\n")
+    return texts
+
+
 def validate_whole_project(root: Path) -> None:
-    texts = {
-        name: (root / name).read_text(errors="replace") for name in tracked_files(root)
-    }
+    texts = text_files(root)
     sources = source_names(root, texts)
     kinds = [
         (SWITCH_OFF_HEADER, switch_offs(root, texts)),
         (MARKER_HEADER, excuse_markers(root, texts, sources)),
         (
             COMMENT_HEADER,
-            [h for n in sources for h in block_hits(n, root / n, texts[n])],
+            [
+                hit
+                for name in sources
+                if may_hold_block(name, texts[name])
+                for hit in block_hits(name, root / name, texts[name])
+            ],
         ),
         (MARKDOWN_HEADER, unnamed_markdown(texts)),
     ]
