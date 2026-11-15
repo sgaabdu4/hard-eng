@@ -326,6 +326,23 @@ def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
         path.write_text(json.dumps(clean_typescript_report(health)))
         with pytest.raises(ValueError, match="CRAP|complexity"):
             reports.validate_fallow(path)
+    for key in (
+        "max_cyclomatic_threshold",
+        "max_cognitive_threshold",
+        "max_crap_threshold",
+    ):
+        raised = clean_typescript_report(None)
+        health = raised["health"]
+        assert isinstance(health, dict)
+        summary = health["summary"]
+        assert isinstance(summary, dict)
+        summary[key] = 1000.0
+        path.write_text(json.dumps(raised))
+        with pytest.raises(ValueError, match=rf"{key} is above"):
+            reports.validate_fallow(path)
+    skipped = ["fallow", "--skip", "health", "--fail-on-issues"]
+    with pytest.raises(ValueError, match="health"):
+        validate_scanner_command(skipped, report)
 
 
 def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
