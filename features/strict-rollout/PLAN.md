@@ -122,4 +122,6 @@ E2E: Required — P1's journey: its fix PR merges on released Hard Eng, the rele
 Real service: Required — GitHub: P1's update is prepared by the remote `setup.sh` command, which fetches the released Hard Eng from github.com with no stand-in, and its output says verified; `python3 .hooks/hard-eng.py update-pr --no-merge` pushes the branch and opens P1's update PR; after a fresh review and passing checks it merges with the command that run prints.
 Retro: Pending
 
-Delivery target: Merge into develop, then the release PR from develop to main; Delivery: Pending — each project's fix PR, the owned package releases, the release PR and each update PR merged, in that order.
+Delivery target: Merge
+Delivery path: into develop, then the release PR from develop to main.
+Delivery: Pending — each project's fix PR, the owned package releases, the release PR and each update PR merged, in that order.
