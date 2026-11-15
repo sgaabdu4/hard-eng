@@ -558,8 +558,12 @@ LATE_FRAMES = (
     "const box = (element) => { const r = element.getBoundingClientRect();"
     "return [r.left + scrollX, r.top + scrollY, r.width, r.height]; };"
     "const frames = ['#other', '#same'].map((id) => box(document.querySelector(id)));"
-    "return JSON.stringify([[...document.querySelectorAll('[data-hard-eng-cover]')].map(box),"
-    "[...frames, box(late)]]);})()"
+    "frames.push(box(late));"
+    "const covers = [...document.querySelectorAll('[data-hard-eng-cover]')].map(box);"
+    "document.querySelector('#hidden').style.display = 'block';"
+    "const shown = ['#other', '#same', '#hidden'].map((id) => document.querySelector(id))"
+    ".concat(late).map((frame) => getComputedStyle(frame).visibility);"
+    "return JSON.stringify([covers, frames, shown]);})()"
 )
 
 
@@ -573,6 +577,7 @@ def test_capture_hides_inside_shadow_roots_and_frames(
         tmp_path,
         "nested.html",
         "<div id=host></div><iframe id=same src='/same.html'></iframe>"
+        f"<iframe id=hidden style='display:none' src='{other}/inner.html'></iframe>"
         f"<iframe id=other src='{other}/inner.html'"
         " style='width:200px;height:100px'></iframe>"
         "<script>document.querySelector('#host').attachShadow({mode: 'open'})"
@@ -615,7 +620,8 @@ def test_capture_hides_inside_shadow_roots_and_frames(
     assert "@" not in shadow
     assert "frame [hidden]" in same
     assert cover == frame
-    covers, frames = json.loads(json.loads(later))
+    covers, frames, shown = json.loads(json.loads(later))
+    assert shown == ["hidden"] * 4
     assert len(covers) == 3
     assert frames[1] in covers
     assert frames[2] in covers
