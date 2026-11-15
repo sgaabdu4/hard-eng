@@ -868,6 +868,38 @@ def text_walls_check(
         wall_check(root, added, removed, joins, point)
 
 
+def added_switch_offs(
+    root: Path,
+    added: dict[str, list[tuple[int, str]]],
+    names: list[str],
+    skipped: set[str],
+) -> list[str]:
+    found = security_switch_offs(root, added)
+    for name in names:
+        if name not in skipped:
+            found += pattern_switch_offs(root, name, added.get(name, []), "adds")
+    return found
+
+
+def whole_refusals(root: Path) -> list[str]:
+    from whole_project import validate_whole_project
+
+    try:
+        validate_whole_project(root)
+    except ValueError as error:
+        return [str(error)]
+    return []
+
+
+def validate_rules(
+    root: Path, base: str | None, screens: bool = True, full: bool = False
+) -> None:
+    """The full check leaves changed-line findings to the whole-project pass, which holds them all, so one run lists everything."""
+    if not full:
+        validate_comments(root, base)
+    validate_suppressions(root, base, screens, full)
+
+
 def validate_suppressions(
     root: Path, base: str | None, screens: bool = True, full: bool = False
 ) -> None:
@@ -884,10 +916,7 @@ def validate_suppressions(
     lost, gained = assertion_balance(root, added, removed, skipped)
     if len(lost) > gained and base and (whole := whole_branch_balance(root, point)):
         point, lost, gained = whole
-    found = security_switch_offs(root, added)
-    for name in names:
-        if name not in skipped:
-            found += pattern_switch_offs(root, name, added.get(name, []), "adds")
+    found = [] if full else added_switch_offs(root, added, names, skipped)
     if len(lost) > gained:
         found.append(
             f"tests lose {len(lost) - gained} assertion lines net "
@@ -899,12 +928,10 @@ def validate_suppressions(
             "for it(), test() and testWidgets(). An assertion in a test that stays "
             "must stay or get an equal check"
         )
-    if found:
-        raise ValueError(switch_off_refusal(found))
-    if full:
-        from whole_project import validate_whole_project
-
-        validate_whole_project(root)
+    refusals = [switch_off_refusal(found)] if found else []
+    refusals += whole_refusals(root) if full else []
+    if refusals:
+        raise ValueError("\n".join(refusals))
     if not empty:
         ui_source_check(root, added)
         if screens:
