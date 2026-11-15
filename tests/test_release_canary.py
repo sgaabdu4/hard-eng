@@ -707,6 +707,38 @@ def test_the_brownfield_upgrade_drops_the_ended_python(tmp_path: Path) -> None:
         release_canary.drop_ended_python(tmp_path)
 
 
+def test_the_brownfield_refactor_removes_switch_offs_markers_and_comment_blocks(
+    tmp_path: Path,
+) -> None:
+    """A real adoption first refactors what the strict refusals fail: type ignores, TODO markers and comment blocks."""
+    git(tmp_path, "init", "-q")
+    source = tmp_path / "pkg.py"
+    source.write_text(
+        '"""# type: ignore stays in a docstring"""\n'
+        "# one line of why stays\n"
+        "value = int(text)  # type: ignore[arg-type]\n"
+        "# first\n"
+        "# second\n"
+        "# TODO later\n"
+        "\n"
+        "def run() -> int:\n"
+        "    return 1  # trailing note stays\n"
+    )
+    git(tmp_path, "add", "pkg.py")
+    release_canary.refactor_for_strict_checks(tmp_path)
+    assert source.read_text() == (
+        '"""# type: ignore stays in a docstring"""\n'
+        "# one line of why stays\n"
+        "value = int(text)\n"
+        "# first\n"
+        "\n"
+        "def run() -> int:\n"
+        "    return 1  # trailing note stays\n"
+    )
+    with pytest.raises(RuntimeError, match="nothing"):
+        release_canary.refactor_for_strict_checks(tmp_path)
+
+
 def test_the_brownfield_adoption_adds_a_performance_suite_before_adopt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -722,6 +754,7 @@ def test_the_brownfield_adoption_adds_a_performance_suite_before_adopt(
 
     monkeypatch.setattr(release_canary, "must", must)
     monkeypatch.setattr(release_canary, "drop_ended_python", keep_python)
+    monkeypatch.setattr(release_canary, "refactor_for_strict_checks", keep_python)
     work = tmp_path / "work"
     work.mkdir()
     with (tmp_path / "log").open("w") as log:
