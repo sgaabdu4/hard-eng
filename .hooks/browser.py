@@ -1,6 +1,7 @@
 """One browser command for agents: plain steps, sign-in per role and full-page captures."""
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -8,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -31,6 +33,13 @@ SHARED = (
     "Each agent keeps its own browser session: pass --session NAME, and never "
     "`close --all`, because parallel agents share the tool."
 )
+USERNS_LIMIT = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+CHROME_PROFILE = Path("/etc/apparmor.d/agent-browser-chrome")
+PROFILE = (
+    "abi <abi/4.0>,\\ninclude <tunables/global>\\nprofile agent-browser-chrome "
+    "@{HOME}/.agent-browser/browsers/chrome-*/chrome flags=(unconfined) {\\n  userns,\\n}\\n"
+)
+NO_SANDBOX = re.compile(r"(?:^|[\s,])--no-sandbox(?=$|[\s,=])")
 
 PAGE_SCRIPT = """(async () => {
 const phone = /(?<!\\d)(?:\\+\\d{1,3}[\\s.-]?)?(?:\\(\\d{2,5}\\)|\\d{2,5})[\\s.-]?\\d{3,5}(?:[\\s.-]?\\d{3,5})?(?!\\d)/g;
@@ -127,26 +136,75 @@ def output_folder(root: Path) -> Path:
 
 def ensure_tool() -> str:
     """Install agent-browser when missing, else reuse it offline; look for a newer release once a day."""
+    import fcntl
+    from contextlib import redirect_stdout
+
     from tool_setup import PACKAGES, provision_batch, shared_tool_folder
 
     stamp = shared_tool_folder() / "browser-refreshed"
-    due = not stamp.exists() or time.time() - stamp.stat().st_mtime > REFRESH_SECONDS
-    batch = [PACKAGES[TOOL] + "@latest"]
-    try:
-        provision_batch(batch, TIMEOUT, offline=not due)
-    except (subprocess.SubprocessError, OSError, ValueError):
-        if not due:
-            raise
-        provision_batch(batch, TIMEOUT, offline=True)
-        due = False
-    tool = shutil.which(TOOL)
-    if tool is None:
-        raise ValueError(f"{TOOL} is not on PATH after its install")
-    if due:
-        subprocess.run([tool, "install"], check=True, timeout=TIMEOUT)
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.touch()
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    lock = (stamp.parent / "browser-install.lock").open("a")
+    with lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with redirect_stdout(sys.stderr):
+            due = (
+                not stamp.exists()
+                or time.time() - stamp.stat().st_mtime > REFRESH_SECONDS
+            )
+            batch = [PACKAGES[TOOL] + "@latest"]
+            try:
+                provision_batch(batch, TIMEOUT, offline=not due)
+            except (subprocess.SubprocessError, OSError, ValueError):
+                if not due:
+                    raise
+                provision_batch(batch, TIMEOUT, offline=True)
+                due = False
+            tool = shutil.which(TOOL)
+            if tool is None:
+                raise ValueError(f"{TOOL} is not on PATH after its install")
+            if due:
+                done = subprocess.run(
+                    [tool, "install"],
+                    stdout=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                    timeout=TIMEOUT,
+                )
+                print(done.stdout, end="")
+                if done.returncode:
+                    raise ValueError(f"`{TOOL} install` failed; its messages are above")
+                stamp.touch()
     return tool
+
+
+def sandbox_refusal(steps: list[str]) -> str | None:
+    if any(
+        NO_SANDBOX.search(text)
+        for text in [*steps, os.environ.get("AGENT_BROWSER_ARGS", "")]
+    ):
+        return (
+            "browser: --no-sandbox is refused, because it lets a page reach this "
+            "machine and the signed-in session files."
+        )
+    if (
+        USERNS_LIMIT.is_file()
+        and USERNS_LIMIT.read_text().strip() == "1"
+        and not CHROME_PROFILE.is_file()
+    ):
+        return (
+            "browser: this Linux limits user namespaces through AppArmor, so Chrome "
+            "cannot start its sandbox. Never pass --no-sandbox. Ask the user to run "
+            f"once, as root:\n{root_step()}"
+        )
+    return None
+
+
+def root_step() -> str:
+    """The one-time step that lets the downloaded Chrome keep its sandbox under AppArmor."""
+    return (
+        f"printf '{PROFILE}' | sudo tee {CHROME_PROFILE} >/dev/null"
+        f" && sudo apparmor_parser -r {CHROME_PROFILE}"
+    )
 
 
 def refusal(steps: list[str]) -> str | None:
@@ -157,12 +215,19 @@ def refusal(steps: list[str]) -> str | None:
     return None
 
 
+def checkout_space(folder: Path) -> dict[str, str]:
+    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart."""
+    digest = hashlib.sha256(str(folder.resolve()).encode()).hexdigest()[:10]
+    return {**os.environ, "AGENT_BROWSER_NAMESPACE": "he-" + digest}
+
+
 def run_tool(
     tool: str, folder: Path, session: str, *arguments: str, text: str | None = None
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [tool, "--session", session, *arguments],
         cwd=folder,
+        env=checkout_space(folder),
         input=text,
         capture_output=True,
         text=True,
@@ -250,6 +315,7 @@ def signin(root: Path, argv: list[str]) -> int:
     password = environment_value(role["password_env"], env_file)
     tool, folder = ensure_tool(), output_folder(root)
     state = folder / "state" / f"{args.role}.json"
+    login = f"{args.role}-{uuid.uuid4().hex[:12]}"
     state.parent.mkdir(exist_ok=True)
 
     def step(*arguments: str, text: str | None = None) -> str:
@@ -261,7 +327,7 @@ def signin(root: Path, argv: list[str]) -> int:
         step(
             "auth",
             "save",
-            args.role,
+            login,
             "--url",
             role["url"],
             "--username",
@@ -269,10 +335,10 @@ def signin(root: Path, argv: list[str]) -> int:
             "--password-stdin",
             text=password,
         )
-        step("auth", "login", args.role)
+        step("auth", "login", login)
         step("state", "save", str(state))
     finally:
-        run_tool(tool, folder, args.session, "auth", "delete", args.role)
+        run_tool(tool, folder, args.session, "auth", "delete", login)
         run_tool(tool, folder, args.session, "close")
     print(state)
     return 0
@@ -287,11 +353,15 @@ def dispatch(root: Path, argv: list[str]) -> int:
         print(reason, file=sys.stderr)
         return 2
     tool = ensure_tool()
-    os.chdir(output_folder(root))
-    os.execv(tool, [tool, *argv])
+    folder = output_folder(root)
+    os.chdir(folder)
+    os.execve(tool, [tool, *argv], checkout_space(folder))
 
 
 def browser_command(root: Path, argv: list[str]) -> int:
+    if reason := sandbox_refusal(argv):
+        print(reason, file=sys.stderr)
+        return 2
     try:
         return dispatch(root, argv)
     except (ValueError, TypeError, OSError, subprocess.SubprocessError) as error:

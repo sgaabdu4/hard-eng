@@ -34,6 +34,7 @@ OS-owned dialogs → platform control beyond the app tree. Browser exploration �
 - `browser capture <url> --session S [--state FILE] [--ring SELECTOR] [--name NAME]` → whole-page images at 390 and 1280 px, red boxes on each `--ring` element, emails and phone numbers hidden (a pattern match: it misses names). A `--ring` that matches nothing fails.
 - `browser signin <role> --session S` → session file `.hard-eng/browser/state/<role>.json` for `--state`; roles come from `browser.roles` in `hard-eng.gates.json` (`url`, `username_env`, `password_env`, optional `env_file`).
 - Codex in a workspace-write sandbox cannot start Chrome → run browser steps outside the sandbox, with approval.
+- Never pass `--no-sandbox`; the command refuses it. On a Linux that limits user namespaces, the command prints a one-time root step → give it to the user.
 - Close each session when done.
 
 ## Prove the journey

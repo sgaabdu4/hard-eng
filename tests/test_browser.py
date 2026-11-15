@@ -2,6 +2,7 @@ import functools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -94,9 +95,13 @@ def session() -> str:
     return "test-" + uuid.uuid4().hex[:8]
 
 
-def open_sessions(tool: str) -> str:
+def open_sessions(browser: ModuleType, root: Path) -> str:
     return subprocess.run(
-        [tool, "session", "list"], capture_output=True, text=True, check=False
+        [browser.ensure_tool(), "session", "list"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=browser.checkout_space(browser.output_folder(root)),
     ).stdout
 
 
@@ -147,20 +152,48 @@ def decode(path: Path) -> tuple[int, int, list[bytes], int]:
     return width, height, rows, step
 
 
+def plain_step(root: Path, name: str, *arguments: str) -> str:
+    done = subprocess.run(
+        [sys.executable, "-c", PLAIN_STEP, str(root), "--session", name, *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(SOURCE / ".hooks")},
+    )
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
 def is_red(rows: list[bytes], step: int, x: int, y: int) -> bool:
     red, green, blue = rows[y][x * step : x * step + 3]
     return red > 200 and green < 60 and blue < 60
 
 
+def fake_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> Path:
+    tool = tmp_path / "agent-browser"
+    tool.write_text("#!/bin/sh\n" + body)
+    tool.chmod(0o755)
+
+    def which(name: str) -> str:
+        del name
+        return str(tool)
+
+    monkeypatch.setattr(shutil, "which", which)
+    return tool
+
+
 def test_installs_like_other_tools(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    capfd: pytest.CaptureFixture[str],
 ) -> None:
     import tool_setup
 
-    tool = tmp_path / "agent-browser"
     log = tmp_path / "log"
-    tool.write_text(f'#!/bin/sh\necho "$@" >> {log}\n')
-    tool.chmod(0o755)
+    tool = fake_tool(
+        tmp_path, monkeypatch, f'echo "$@" >> {log}\necho "Installing Chrome..."\n'
+    )
     calls: list[tuple[list[str], bool | None]] = []
     broken: list[bool] = []
 
@@ -168,18 +201,13 @@ def test_installs_like_other_tools(
         batch: list[str], timeout: float, offline: bool | None = None
     ) -> None:
         del timeout
+        print("Prepare latest native tools: " + ", ".join(batch))
         calls.append((batch, offline))
         if broken and not offline:
             raise ValueError("offline")
 
     monkeypatch.setattr(tool_setup, "provision_batch", provision)
     monkeypatch.setattr(tool_setup, "shared_tool_folder", lambda: tmp_path / "shared")
-
-    def which(name: str) -> str:
-        del name
-        return str(tool)
-
-    monkeypatch.setattr(browser.shutil, "which", which)
     project = tmp_path / "project"
     project.mkdir()
     (project / "README.md").write_text("x")
@@ -200,6 +228,75 @@ def test_installs_like_other_tools(
     ]
     assert log.read_text().splitlines() == ["install"]
     assert sorted(path.name for path in project.iterdir()) == before
+    assert capfd.readouterr().out == ""
+
+
+def test_parallel_first_runs_install_chrome_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    import tool_setup
+
+    log, busy = tmp_path / "log", tmp_path / "busy"
+    fake_tool(
+        tmp_path,
+        monkeypatch,
+        f"mkdir {busy} || exit 3\nsleep 0.3\necho install >> {log}\nrmdir {busy}\n",
+    )
+
+    def provision(
+        batch: list[str], timeout: float, offline: bool | None = None
+    ) -> None:
+        del batch, timeout, offline
+
+    monkeypatch.setattr(tool_setup, "provision_batch", provision)
+    monkeypatch.setattr(tool_setup, "shared_tool_folder", lambda: tmp_path / "shared")
+    failures: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            browser.ensure_tool()
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            failures.append(error)
+
+    workers = [threading.Thread(target=run) for _ in range(4)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert failures == []
+    assert log.read_text().splitlines() == ["install"]
+
+
+def test_refuses_switching_off_the_sandbox(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    switch = ["--session", "a", "--args", "--disable-gpu,--no-sandbox", "open", "x"]
+    assert browser.browser_command(tmp_path, switch) == 2
+    assert "--no-sandbox" in capsys.readouterr().err
+    monkeypatch.setenv("AGENT_BROWSER_ARGS", "--no-sandbox")
+    assert browser.browser_command(tmp_path, ["--session", "a", "open", "x"]) == 2
+    assert "--no-sandbox" in capsys.readouterr().err
+    monkeypatch.delenv("AGENT_BROWSER_ARGS")
+
+    limit, profile = tmp_path / "limit", tmp_path / "apparmor/agent-browser-chrome"
+    limit.write_text("1\n")
+    monkeypatch.setattr(browser, "USERNS_LIMIT", limit)
+    monkeypatch.setattr(browser, "CHROME_PROFILE", profile)
+    assert browser.browser_command(tmp_path, ["--session", "a", "open", "x"]) == 2
+    message = capsys.readouterr().err
+    assert f"sudo apparmor_parser -r {profile}" in message
+    step = message[message.index("printf") :].split(" | ")[0]
+    text = subprocess.run(
+        ["sh", "-c", step], capture_output=True, text=True, check=True
+    ).stdout
+    assert "@{HOME}/.agent-browser/browsers/chrome-*/chrome" in text
+    assert "  userns,\n" in text
+    profile.parent.mkdir()
+    profile.write_text(text)
+    assert browser.sandbox_refusal(["--session", "a", "open", "x"]) is None
 
 
 def test_runs_from_output_folder(
@@ -214,23 +311,7 @@ def test_runs_from_output_folder(
     name = session()
 
     def step(*arguments: str) -> str:
-        done = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                PLAIN_STEP,
-                str(tmp_path),
-                "--session",
-                name,
-                *arguments,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={**os.environ, "PYTHONPATH": str(SOURCE / ".hooks")},
-        )
-        assert done.returncode == 0, done.stderr
-        return done.stdout
+        return plain_step(tmp_path, name, *arguments)
 
     try:
         step("open", f"{site}/oops.html")
@@ -241,6 +322,23 @@ def test_runs_from_output_folder(
     finally:
         step("close")
     assert (tmp_path / ".hard-eng/browser/shot.png").is_file()
+
+
+def test_same_session_name_in_two_checkouts_stays_apart(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(tmp_path, "one.html", "<p>one</p>")
+    page(tmp_path, "two.html", "<p>two</p>")
+    first, second, name = tmp_path / "first", tmp_path / "second", session()
+    try:
+        plain_step(first, name, "open", f"{site}/one.html")
+        plain_step(second, name, "open", f"{site}/two.html")
+        assert "one.html" in plain_step(first, name, "eval", "location.pathname")
+    finally:
+        plain_step(first, name, "close")
+        plain_step(second, name, "close")
+    for root in (first, second):
+        assert name not in open_sessions(browser, root)
 
 
 def test_refuses_shared_sessions(
@@ -259,7 +357,7 @@ def test_refuses_shared_sessions(
     )
     assert code == 1
     assert "matched no visible element" in capsys.readouterr().err
-    assert name not in open_sessions(browser.ensure_tool())
+    assert name not in open_sessions(browser, tmp_path)
 
 
 def test_capture_draws_boxes_at_both_widths(
@@ -303,7 +401,7 @@ def test_capture_draws_boxes_at_both_widths(
             assert is_red(rows, step, left + wide // 2, top + 1)
             assert is_red(rows, step, left + wide - 2, top + high // 2)
             assert not is_red(rows, step, left + wide // 2, top + high // 2)
-    assert name not in open_sessions(browser.ensure_tool())
+    assert name not in open_sessions(browser, tmp_path)
 
 
 def test_capture_places_fixed_bars_once_at_their_edge(

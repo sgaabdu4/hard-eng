@@ -124,6 +124,9 @@ jobs:
         run: |
           bun x --package="$MISE_PACKAGE" mise --no-config install uv@latest &&
           bun x --package="$MISE_PACKAGE" mise --no-config exec uv@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA" --shard "$SHARD"
+      - name: Let the browser tests keep Chrome's sandbox
+        if: steps.impact.outputs.docs_only != 'true' && runner.os == 'Linux'
+        run: sh -c "$(python3 -I -c 'import sys; sys.path.insert(0, ".hooks"); from browser import root_step; print(root_step())')"
       - name: Run required checks
         if: steps.impact.outputs.docs_only != 'true'
         env:

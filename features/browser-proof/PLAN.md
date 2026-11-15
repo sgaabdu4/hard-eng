@@ -73,6 +73,10 @@ Deliverables: None
 - User, refactor every project that uses Hard Eng with Sonnet builders and Opus reviewers, so all end on the latest Hard Eng (chat, 2026-11-15): Later — user, plan split answer, 2026-11-15 06:13: in its own plan and PR, `features/strict-refusals/PLAN.md`
 - User, no two threads do the same work; check open PRs and open a PR early (chat, 2026-11-15): In scope — A draft PR claims the work
 - User, split, merge each into develop, one release PR to main, then the other repos (plan split question, 2026-11-15): In scope — Delivery order
+- User, the GitHub description says "local coding agents", which misleads (chat, 2026-11-15 06:53): In scope — The repository description
+- User, the readme says what "hard" means: bad quality is refused, old code too, in simple English with a clear layout (chat, 2026-11-15 06:53): Later — user, plan split answer, 2026-11-15 06:13: old code is refused only once the strict refusals land, so the section ships with them in `features/strict-refusals/PLAN.md`
+- User, test the changes on every OS, in git worktrees and remotely; a Windows virtual machine is for checks during this work only, never in CI (chat, 2026-11-15 06:53 to 06:56): In scope — Each OS, worktrees and a remote machine
+- User, always check the work with the advisor (chat, 2026-11-15 06:43): In scope — Research answered in chat
 
 ## Repository context
 
@@ -110,6 +114,8 @@ Authority: Human-loop. The user said "yes pls" to a plan for agent-browser with 
 - [ ] No private project data in the plan, code, tests, commits or PR text: a search of the branch diff, the commit messages and the PR text for private names, paths and contact data finds 0 before each push (publication privacy, Ship checks) → N/A — a text check run before each push; test data uses example.com addresses and fiction phone ranges.
 - [ ] A draft PR claims the work: before work, the open PRs, remote branches, local worktrees and recent sessions of the repository are checked, and a draft PR holds the plan from the start → N/A — a process step; PR 636 opened as the claim on 2026-11-15.
 - [ ] Delivery order: this PR merges into develop first; the strict-refusals and architecture PRs merge into develop next; one release PR then takes develop to main; the other repositories follow → N/A — a delivery order; the Delivery line below records it.
+- [ ] The repository description names no place where agents run, because Hard Eng also runs in CI and on remote machines → N/A — a GitHub setting; `gh repo view --json description` shows the new text.
+- [ ] Each OS, worktrees and a remote machine: the browser tests pass on macOS and on a plain Linux machine reached over SSH with no display, from an empty tool folder with parallel workers; `signin` and `capture` work from a linked worktree of an installed project; two worktrees that use the same `--session` name at the same time do not end each other's browser; Windows gets a recorded result, and no Windows code is added here. Faults found there get failing tests first: parallel first runs install Chrome once, install output stays off standard output, and `--no-sandbox` is refused while a Linux with the user namespace limit gets the root step → new `tests/test_browser.py::test_parallel_first_runs_install_chrome_once`, new `tests/test_browser.py::test_refuses_switching_off_the_sandbox`, `tests/test_browser.py::test_installs_like_other_tools`; the machine runs are recorded one line each in Verification.
 - [ ] One run on a private project's live site (Proposal "read only, test admin account, sign out"): sign in, capture at both widths, sign out → N/A — a live run that no test can repeat; HE-REAL-SERVICE-RUN, Real service line below.
 
 ## Baseline + execution
@@ -124,7 +130,8 @@ Execution: one Sonnet builder for the command, its tests and the skill edits, fi
 - The Codex `workspace-write` sandbox stops every Chrome, Playwright's too (tested 2026-11-15: Chrome needs macOS services the sandbox denies). Recovery: the E2E skill tells Codex to run browser steps outside the sandbox with approval; a full-access Codex worked.
 - About 1.5 GB of memory per open browser (1.0 GB for Playwright CLI). Recovery: `capture` closes its own session.
 - A real-browser test can push the Hard Eng test gate near its time limit. Recovery: measure in the build; move it to its own shard if needed.
-- Linux is not tested; an open report says 0.42 hangs there. Recovery: CI on Linux runs the real-browser test.
+- Ubuntu 23.10 and later limit user namespaces through AppArmor, so the downloaded Chrome cannot start its sandbox, and the tool's own hint says to pass `--no-sandbox` (seen 2026-11-15 on Ubuntu 26.04, host and VM). Recovery: the command refuses `--no-sandbox` and prints a one-time root step that adds an AppArmor profile for the downloaded Chrome; Hard Eng never runs sudo on a person's machine. GitHub's Ubuntu runners keep the limit too (since about the 2026-10-18 image), so Hard Eng's own test job runs the same `root_step()` before its tests; the shared workflow template for installed projects does not change. Chrome as root in a container has no fix that keeps the sandbox, so it is not supported.
+- Parallel first runs raced on the Chrome download ("Text file busy"), and install output reached standard output. Recovery: one install at a time under a file lock, install output on standard error.
 - Limits of the research: one run per tool in the trials; macOS only; the Chrome DevTools CLI judged from its help text only; Reddit not read.
 
 ## ux_reference
