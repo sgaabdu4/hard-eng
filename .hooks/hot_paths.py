@@ -10,6 +10,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
+from comments import code_without_comments
 from gate_config import (
     SOURCE_FILE,
     Gate,
@@ -30,10 +31,8 @@ PYTHON_RULES = RULES.with_name("python.yaml")
 GLOB_SPECIAL = re.compile(r"[][*?]")
 EXCLUDED_LIST = "&excluded [\n"
 EXCLUDED_ITEMS = re.compile(r"^( +)exclude:\n( +)(?=- )", re.MULTILINE)
-COMMENT_TEXT = r"/\*.*?\*/|//[^\n]*"
-COMMENT = re.compile(COMMENT_TEXT, re.DOTALL)
-BREAK = rf"(?:\s|{COMMENT_TEXT})*"
-NEEDED_BREAK = rf"(?:\s|{COMMENT_TEXT})+"
+BREAK = r"\s*"
+NEEDED_BREAK = r"\s+"
 FRAME = r"(?:setImmediate|requestAnimationFrame|requestIdleCallback|queueMicrotask)"
 JS_SUFFIXES = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"}
 JS_FORMS = re.compile(
@@ -117,9 +116,6 @@ def call_arguments(text: str, start: int) -> list[str] | None:
             index += 2 if char == "\\" else 1
             quote = "" if char == quote else quote
             continue
-        if comment := COMMENT.match(text, index):
-            index = comment.end()
-            continue
         if char in "'\"`":
             quote = char
         elif char in CLOSERS:
@@ -139,14 +135,12 @@ def call_arguments(text: str, start: int) -> list[str] | None:
 def short_javascript_delay(arguments: list[str] | None) -> bool:
     if arguments is None or len(arguments) < 2:
         return True
-    delay = COMMENT.sub(" ", arguments[1]).strip()
+    delay = arguments[1].strip()
     return bool(SHORT_NUMBER.fullmatch(delay)) and float(delay) < 17
 
 
 def short_dart_delay(arguments: list[str] | None) -> bool:
-    if arguments is None:
-        return True
-    return bool(SHORT_DURATION.fullmatch(COMMENT.sub(" ", arguments[0]).strip()))
+    return arguments is None or bool(SHORT_DURATION.fullmatch(arguments[0].strip()))
 
 
 def hidden_deferral(text: str, suffix: str) -> str | None:
@@ -154,6 +148,7 @@ def hidden_deferral(text: str, suffix: str) -> str | None:
     dart = suffix == ".dart"
     forms, calls = (DART_FORMS, DART_DELAY) if dart else (JS_FORMS, JS_TIMEOUT)
     short = short_dart_delay if dart else short_javascript_delay
+    text = code_without_comments(text, suffix)
     if found := forms.search(text):
         return " ".join(found[0].split())
     for call in calls.finditer(text):
