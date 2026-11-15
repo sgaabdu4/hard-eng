@@ -847,3 +847,33 @@ def test_timer_findings_never_become_debt(
     semgrep(timer, other)
     assert debt.judge(tmp_path, group, security, True, "x\n") is True
     assert "never recorded as old findings" in capsys.readouterr().out
+
+
+def test_flutter_frame_lint_findings_never_become_debt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """HE-HOT-PATH: an install over an old addPostFrameCallback fails; the Flutter lint is never recorded as debt."""
+    analysis: Gate = {
+        "name": "types",
+        "role": "types",
+        "command": ["dart", "analyze", "--fatal-infos", "."],
+    }
+    group: Group = {"path": ".", "checks": [analysis]}
+    frame = "  error - lib/home.dart:12:5 - Do not defer work to the next frame. - avoid_frame_deferral\n"
+    other = "   info - lib/home.dart:3:8 - Unused import. - unused_import\n"
+    key = "./types"
+    assert debt.record(tmp_path, [group], {key}, {key: frame + other}) == 1
+    assert "must pass before adoption" in capsys.readouterr().out
+    assert not (tmp_path / debt.DEBT_FILE).exists()
+
+    assert debt.record(tmp_path, [group], {key}, {key: other}) == 0
+    assert debt.judge(tmp_path, group, analysis, True, other) is False
+    capsys.readouterr()
+
+    recorded = {
+        "error - lib/home.dart:N:N - Do not defer work to the next frame. - avoid_frame_deferral": 1
+    }
+    written = {"version": 1, "gates": {key: {**debt.load(tmp_path)[key], **recorded}}}
+    (tmp_path / debt.DEBT_FILE).write_text(json.dumps(written))
+    assert debt.judge(tmp_path, group, analysis, True, frame + other) is True
+    assert "never recorded as old findings" in capsys.readouterr().out

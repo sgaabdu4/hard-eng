@@ -29,7 +29,9 @@ GATE_OUTPUT_LIMIT = 8000
 DEBT_LINE = re.compile(r"(?m)^DEBT (\S+) @ (\S+):.*$")
 # Failing tests, broken installs and leaked secrets are never old findings to keep.
 NEVER = {"tests", "lockfiles", "secrets-files", "secrets-history"}
-NEVER_FINDINGS = re.compile(r"next-frame-call-(?:javascript|dart)(?![\w-])")
+NEVER_FINDINGS = re.compile(
+    r"next-frame-call-(?:javascript|dart)(?![\w-])|(?<![\w-])avoid_frame_deferral(?![\w-])"
+)
 MISSING_SUITE = "HE-PERFORMANCE-SUITE"
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 RUNNER_LINES = re.compile(
