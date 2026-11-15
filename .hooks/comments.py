@@ -287,13 +287,16 @@ def block_hits(name: str, path: Path, text: str) -> list[str]:
     ]
 
 
+COMMENT_HEADER = (
+    "HE-COMMENT-LINES: Code comments are none by default: fix each block below at its cause, "
+    "so that naming, types, structure or a test carry the meaning, then delete the block; "
+    "keep one terse line of why only where they cannot carry a needed non-obvious constraint. "
+    "Never suppress it."
+)
+
+
 def comment_refusal(found: list[str]) -> str:
-    return (
-        "HE-COMMENT-LINES: Code comments are none by default: fix each block below at its cause, "
-        "so that naming, types, structure or a test carry the meaning, then delete the block; "
-        "keep one terse line of why only where they cannot carry a needed non-obvious constraint. "
-        "Never suppress it. " + "; ".join(found)
-    )
+    return f"{COMMENT_HEADER} " + "; ".join(found)
 
 
 def validate_comments(root: Path, base: str | None) -> None:
@@ -472,11 +475,14 @@ def pattern_switch_offs(
     return found + marks_in_file(root, name, lines)
 
 
+SWITCH_OFF_HEADER = (
+    "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
+    "suppressing, skipping, retrying or deleting the check."
+)
+
+
 def switch_off_refusal(found: list[str]) -> str:
-    return (
-        "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
-        "suppressing, skipping, retrying or deleting the check. " + "; ".join(found)
-    )
+    return f"{SWITCH_OFF_HEADER} " + "; ".join(found)
 
 
 def diff_base(root: Path, base: str) -> tuple[str, bool]:
