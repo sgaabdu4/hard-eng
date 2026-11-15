@@ -317,3 +317,29 @@ def test_the_python_starter_test_calls_main_directly() -> None:
     assert "runpy" not in text
     assert "run_module" not in text
     assert "__main__" not in text
+
+
+def test_the_flutter_scaffold_loses_the_template_comment_of_its_runner_tests(
+    tmp_path: Path,
+) -> None:
+    """HE-COMMENT-LINES refuses the 3-line comment that `flutter create` writes into each runner test."""
+    template = (
+        "import Flutter\nimport Testing\n\nstruct RunnerTests {\n\n  func testExample() {\n"
+        "    // If you add code to the Runner application, consider adding tests here.\n"
+        "    // See https://developer.apple.com/xcode/swift-testing/ for more information about using\n"
+        "    // Swift Testing.\n  }\n\n}\n"
+    )
+    for platform in ("ios", "macos"):
+        path = tmp_path / platform / "RunnerTests/RunnerTests.swift"
+        path.parent.mkdir(parents=True)
+        path.write_text(template)
+    new_project.drop_template_comments(tmp_path)
+    for platform in ("ios", "macos"):
+        path = tmp_path / platform / "RunnerTests/RunnerTests.swift"
+        assert path.read_text() == template.replace(
+            "".join(
+                line for line in template.splitlines(keepends=True) if "//" in line
+            ),
+            "",
+        )
+        assert "//" not in path.read_text()
