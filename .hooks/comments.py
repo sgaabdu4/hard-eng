@@ -8,6 +8,7 @@ import io
 import re
 import subprocess
 import tokenize
+from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 
 from gate_config import (
@@ -90,6 +91,8 @@ def python_comment_lines(text: str, trailing: bool = False) -> dict[int, str] | 
 
 
 CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
+NESTED_BLOCKS = {".dart", ".rs", ".swift"}
+NOT_NEWLINE = re.compile(r"[^\n]")
 ARITHMETIC = re.compile(r"\$?\(\(.*?\)\)")
 HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*((?:'[^']*'|\"[^\"]*\"|[^\s<>|&;()'\"])+)")
 RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
@@ -175,34 +178,65 @@ def code_step(text: str, index: int, suffix: str, depths: list[int]) -> int | No
     return string_at(text, index, suffix)
 
 
+def comment_end(text: str, index: int, suffix: str) -> int:
+    """Index just past the comment at index; Dart, Rust and Swift block comments nest."""
+    if text[index + 1] == "/":
+        close = text.find("\n", index + 2)
+        return len(text) if close < 0 else close
+    depth, at = 1, index + 2
+    while depth and at < len(text):
+        if text.startswith("*/", at):
+            depth, at = depth - 1, at + 2
+        elif suffix in NESTED_BLOCKS and text.startswith("/*", at):
+            depth, at = depth + 1, at + 2
+        else:
+            at += 1
+    return at if not depth else len(text)
+
+
+def comment_spans(text: str, suffix: str) -> Iterator[tuple[int, int, bool]]:
+    """(start, end, whether only blanks precede it on its line) of each comment outside literals."""
+    index, blank = 0, True
+    depths: list[int] = []
+    while index < len(text):
+        character = text[index]
+        if character == "\n":
+            index, blank = index + 1, True
+        elif character in " \t\r":
+            index += 1
+        elif text.startswith(("//", "/*"), index):
+            close = comment_end(text, index, suffix)
+            yield index, close, blank
+            index, blank = close, False
+        elif (close := code_step(text, index, suffix, depths)) is not None:
+            index, blank = close, False
+        else:
+            literal = CHARACTER.match(text, index) if character == "'" else None
+            index, blank = (literal.end() if literal else index + 1), False
+
+
+def code_without_comments(text: str, suffix: str) -> str:
+    """The text with each comment turned to spaces, line breaks kept."""
+    parts: list[str] = []
+    last = 0
+    for start, close, _ in comment_spans(text, suffix):
+        parts += [text[last:start], NOT_NEWLINE.sub(" ", text[start:close])]
+        last = close
+    return "".join([*parts, text[last:]])
+
+
 def slash_comment_lines(
     text: str, suffix: str, trailing: bool = False
 ) -> dict[int, str]:
     """Comment text of each line that opens with a comment or lies in a spanning block; trailing adds comments after code."""
     found: dict[int, str] = {}
-    index, line, blank = 0, 1, True
-    depths: list[int] = []
-    while index < len(text):
-        character = text[index]
-        if character == "\n":
-            index, line, blank = index + 1, line + 1, True
-        elif character in " \t\r":
-            index += 1
-        elif text.startswith(("//", "/*"), index):
-            close = text.find("\n" if text[index + 1] == "/" else "*/", index + 2)
-            close = len(text) if close < 0 else close + (text[index + 1] == "*") * 2
-            parts = text[index:close].split("\n")
-            if blank or trailing or len(parts) > 1:
-                for number, part in enumerate(parts, line):
-                    found[number] = (
-                        f"{found[number]} {part}" if number in found else part
-                    )
-            index, line, blank = close, line + len(parts) - 1, False
-        elif (close := code_step(text, index, suffix, depths)) is not None:
-            index, line, blank = close, line + text.count("\n", index, close), False
-        else:
-            literal = CHARACTER.match(text, index) if character == "'" else None
-            index, blank = (literal.end() if literal else index + 1), False
+    line, counted = 1, 0
+    for start, close, blank in comment_spans(text, suffix):
+        line, counted = line + text.count("\n", counted, start), start
+        parts = text[start:close].split("\n")
+        if blank or trailing or len(parts) > 1:
+            for number, part in enumerate(parts, line):
+                found[number] = f"{found[number]} {part}" if number in found else part
     return found
 
 

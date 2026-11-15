@@ -488,6 +488,7 @@ TIMER_FORMS = {
         "setTimeout(work, /* now */ 0)",
         "setTimeout(work, // now\n  0)",
         "setTimeout(work, /* wait, now */ 0)",
+        "setTimeout(() => /[//]/.test(path), /* a */ 0)",
         "new Promise((resolve) => setTimeout(resolve))",
     ],
     ".dart": [
@@ -506,6 +507,7 @@ TIMER_FORMS = {
         "await // tick\n  null",
         "Timer(/* now */ Duration.zero, work)",
         "Timer(/* wait, now */ Duration.zero, work)",
+        "Timer(/* outer /* inner */ wait, now */ Duration.zero, work)",
         "Future.delayed(Duration(/* now */ milliseconds: 0), work)",
     ],
 }
@@ -514,6 +516,8 @@ UNREFUSED = {
         "setTimeout(work, 17)",
         "setTimeout(work, delay)",
         "setTimeout(() => log('a,b'), 500)",
+        "setTimeout(() => /[//]/.test(path), 1000)",
+        "const url = 'http://host'; setTimeout(work, 1000)",
         "test.setTimeout(1000)",
         "Promise.resolve(value)",
         "await fetch(url)",
