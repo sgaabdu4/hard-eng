@@ -4,6 +4,7 @@ With --ci it only sets up and checks the public new projects, for hard-eng's own
 
 import argparse
 import fcntl
+import io
 import json
 import os
 import re
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import tokenize
 from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
@@ -96,6 +98,10 @@ def test_signing_round_trips_2k_values_within_budget() -> None:
     # Fastest of 5 runs, so a busy shared runner's pause does not fail a fast build.
     assert min(run_seconds() for _ in range(5)) < 1.0
 """
+SWITCH_OFF = re.compile(
+    r"#\s*(noqa\b|(type|pyright|pyrefly):\s*ignore|pylint:\s*disable|pragma:\s*no cover|fmt:\s*(off|skip))"
+)
+EXCUSE = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 KINDS = ("installed", "scaffold", "greenfield", "brownfield")
 # Installed projects prove the release with their full checks; new projects prove the agents.
 AGENT_KINDS = ("scaffold", "greenfield", "brownfield")
@@ -362,6 +368,44 @@ def drop_ended_python(work: Path) -> None:
     pyproject.write_text(text.replace('">=3.10"', '">=3.11"', 1))
 
 
+def refactored_source(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    dropped: set[int] = set()
+    previous, kept = 0, False
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+        row, column = token.start
+        line = lines[row - 1]
+        bad = SWITCH_OFF.search(token.string)
+        if line[:column].strip():
+            if bad:
+                ending = line[len(line.rstrip("\r\n")) :]
+                lines[row - 1] = line[:column].rstrip() + ending
+            continue
+        kept = kept and row == previous + 1
+        previous = row
+        if bad or EXCUSE.search(token.string) or kept:
+            dropped.add(row)
+        else:
+            kept = True
+    return "".join(line for row, line in enumerate(lines, 1) if row not in dropped)
+
+
+def refactor_for_strict_checks(work: Path) -> None:
+    """The refactor a real adoption makes first: no type ignores, TODO markers or comment blocks."""
+    changed = 0
+    for name in output(["git", "ls-files", "*.py"], work).splitlines():
+        path = work / name
+        text = path.read_text()
+        refactored = refactored_source(text)
+        if refactored != text:
+            path.write_text(refactored)
+            changed += 1
+    if not changed:
+        raise RuntimeError("the brownfield snapshot has nothing left to refactor")
+
+
 def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -> None:
     """Create the target, install Hard Eng from the release and commit."""
     if kind == "brownfield":
@@ -376,6 +420,7 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
         # A real adoption first upgrades the snapshot's old dependencies in their own PR.
         drop_ended_python(work)
         must(work, log, "upgrade failed", ["uv", "lock", "--upgrade"])
+        refactor_for_strict_checks(work)
     else:
         work.mkdir()
         must(work, log, "setup failed", ["git", "init", "-q"])
