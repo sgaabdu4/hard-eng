@@ -679,7 +679,9 @@ def test_a_run_on_another_model_than_requested_is_not_graded(
         judge=lambda _: []
     )
     client = Client("opus", lambda: Ready("1", None), run, "none")
-    options = Namespace(model="opus", installed=SOURCE, bare=False, judge=False)
+    options = Namespace(
+        model="opus", installed=SOURCE, bare=False, judge=False, feature_map=False
+    )
     outcome = agent_checks.execute(case, client, options, tmp_path / "evidence")
     assert outcome.status == status
 
