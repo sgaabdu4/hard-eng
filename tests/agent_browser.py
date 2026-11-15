@@ -110,8 +110,13 @@ CAPTURE = re.compile(r"hard-eng\.py\s+browser\s+capture\b")
 PLAIN_SCREENSHOT = re.compile(
     r"hard-eng\.py\s+browser\s+(?!capture\b|signin\b).*\bscreenshot\b"
 )
+TOOL = r"@?(?:agent-browser|playwright|puppeteer|selenium|chromium|screencapture)\b"
 OTHER_TOOL = re.compile(
-    r"\b(agent-browser|playwright|puppeteer|selenium|chromium|screencapture)\b"
+    rf"(?:^|[;&|(\n]|-l?c\s+[\"'])\s*(?:\S*/)?{TOOL}"
+    r"|\b(?:npx|bunx|uvx|pnpm\s+(?:dlx|exec|add)|yarn\s+(?:dlx|add)|bun\s+add"
+    r"|npm\s+(?:exec|i|install|add)|pip3?\s+install|uv\s+(?:add|pip\s+install)"
+    rf"|brew\s+install)\s+(?:-\S+\s+)*{TOOL}"
+    rf"|\b(?:import|from)\s+[\"']?{TOOL}|\brequire\(\s*[\"']{TOOL}"
 )
 ENTRY = re.compile(r"^(\w+)=(.*)$", re.MULTILINE)
 

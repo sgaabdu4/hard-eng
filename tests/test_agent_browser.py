@@ -194,3 +194,34 @@ def test_judge_reads_images_the_answer_links(
     assert failures == (
         [] if ring else [f"{repaint_moved}: no red ring over the changed label"]
     )
+
+
+CALLS = [
+    "npx playwright screenshot page.png",
+    '/opt/homebrew/bin/bash -lc "npx -y @playwright/test install chromium"',
+    "pip install playwright",
+    "uv pip install selenium",
+    'python3 -c "from playwright.sync_api import sync_playwright"',
+    "node -e \"require('puppeteer')\"",
+    "agent-browser --session s1 open http://127.0.0.1:8123",
+    "cd /tmp && /tmp/tools/bin/agent-browser open http://127.0.0.1:8123",
+    "/opt/homebrew/bin/bash -lc 'screencapture -x page.png'",
+    "chromium --headless --screenshot=page.png http://127.0.0.1:8123",
+]
+SEARCHES = [
+    "/opt/homebrew/bin/bash -lc \"git status --short && git show --stat --oneline HEAD && git show HEAD -- && rg --files -g 'AGENTS.md' -g 'package.json' -g '*playwright*' -g '*README*' -g '*hard-eng*' -g '\"'!node_modules'\"' -g '\"'!.git'\"'\"",
+    "/opt/homebrew/bin/bash -lc \"git status --short; git show --stat --oneline -1; rg --files -g 'AGENTS.md' -g 'package.json' -g '*playwright*' -g 'README*' -g '*requirements*' -g '*test*'\"",
+    "pgrep -fl agent-browser",
+    "ls ~/.agent-browser",
+]
+
+
+@pytest.mark.parametrize(
+    ("command", "flagged"),
+    [(command, True) for command in CALLS] + [(command, False) for command in SEARCHES],
+)
+def test_other_tool_check_flags_calls_not_searches(command: str, flagged: bool) -> None:
+    failures = agent_browser.command_failures(
+        [*BROWSER_ACTIONS, Action("command", command, True)]
+    )
+    assert bool(failures) == flagged, failures
