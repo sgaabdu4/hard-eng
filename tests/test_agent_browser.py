@@ -1,5 +1,6 @@
 """The browser-proof judge on controlled outcomes, without running an agent."""
 
+import os
 import struct
 import zlib
 from collections.abc import Callable
@@ -171,8 +172,12 @@ def test_browser_proof_judge_fails_each_missing_item(
     assert reason in failures[0]
 
 
-@pytest.mark.parametrize("ring", [True, False])
-def test_judge_reads_images_the_answer_links(tmp_path: Path, ring: bool) -> None:
+@pytest.mark.parametrize(
+    ("ring", "relative"), [(True, False), (False, False), (True, True)]
+)
+def test_judge_reads_images_the_answer_links(
+    tmp_path: Path, ring: bool, relative: bool
+) -> None:
     RUNNING.clear()
     run = browser_run(tmp_path)
     moved = tmp_path / "proof"
@@ -181,7 +186,10 @@ def test_judge_reads_images_the_answer_links(tmp_path: Path, ring: bool) -> None
         image.rename(moved / image.name)
     repaint_moved = moved / "after-1280.png"
     repaint_moved.write_bytes(label_image(1280, 1, ring=ring))
-    links = " ".join(f"[{image.name}]({image})" for image in sorted(moved.iterdir()))
+    links = " ".join(
+        f"[{image.name}]({os.path.relpath(image, run.root) if relative else image})"
+        for image in sorted(moved.iterdir())
+    )
     failures = agent_browser.judge_browser(run._replace(message=links))
     assert failures == (
         [] if ring else [f"{repaint_moved}: no red ring over the changed label"]

@@ -30,7 +30,7 @@ HIDDEN_MOST = 110
 INK = 140
 OUTPUT = ".hard-eng/browser"
 BASELINE = "browsers-before.txt"
-LINKED = re.compile(r"(/[^\s()\[\]`'\"]+\.png)")
+LINKED = re.compile(r"([^\s()\[\]`'\"]+\.png)")
 README = """# Plan page
 
 A small dashboard. Start it with `python3 app.py`; it listens on http://127.0.0.1:PORT.
@@ -194,9 +194,11 @@ def image_failures(root: Path, message: str) -> list[str]:
         and str(path.relative_to(root)) not in tracked
     ]
     # The task names no place for the images, so the answer may link ones it moved out.
-    linked = {Path(link) for link in LINKED.findall(message)}
+    linked = {(root / link).resolve() for link in LINKED.findall(message)}
     images += sorted(
-        path for path in linked if path.is_file() and not path.is_relative_to(root)
+        path
+        for path in linked
+        if path.is_file() and not path.is_relative_to(root.resolve())
     )
     failures: list[str] = []
     by_width: dict[int, list[Path]] = {width: [] for width in WIDTHS}
