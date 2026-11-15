@@ -30,8 +30,10 @@ PYTHON_RULES = RULES.with_name("python.yaml")
 GLOB_SPECIAL = re.compile(r"[][*?]")
 EXCLUDED_LIST = "&excluded [\n"
 EXCLUDED_ITEMS = re.compile(r"^( +)exclude:\n( +)(?=- )", re.MULTILINE)
-BREAK = r"(?:\s|/\*.*?\*/|//[^\n]*)*"
-NEEDED_BREAK = r"(?:\s|/\*.*?\*/)+"
+COMMENT_TEXT = r"/\*.*?\*/|//[^\n]*"
+COMMENT = re.compile(COMMENT_TEXT, re.DOTALL)
+BREAK = rf"(?:\s|{COMMENT_TEXT})*"
+NEEDED_BREAK = rf"(?:\s|{COMMENT_TEXT})+"
 FRAME = r"(?:setImmediate|requestAnimationFrame|requestIdleCallback|queueMicrotask)"
 JS_SUFFIXES = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"}
 JS_FORMS = re.compile(
@@ -134,12 +136,14 @@ def call_arguments(text: str, start: int) -> list[str] | None:
 def short_javascript_delay(arguments: list[str] | None) -> bool:
     if arguments is None or len(arguments) < 2:
         return True
-    delay = arguments[1].strip()
+    delay = COMMENT.sub(" ", arguments[1]).strip()
     return bool(SHORT_NUMBER.fullmatch(delay)) and float(delay) < 17
 
 
 def short_dart_delay(arguments: list[str] | None) -> bool:
-    return arguments is None or bool(SHORT_DURATION.fullmatch(arguments[0].strip()))
+    if arguments is None:
+        return True
+    return bool(SHORT_DURATION.fullmatch(COMMENT.sub(" ", arguments[0]).strip()))
 
 
 def hidden_deferral(text: str, suffix: str) -> str | None:

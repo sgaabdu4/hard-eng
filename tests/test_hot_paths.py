@@ -484,6 +484,9 @@ TIMER_FORMS = {
         "await Promise.resolve()",
         "await null",
         "await /* tick */ null",
+        "await // tick\n  null",
+        "setTimeout(work, /* now */ 0)",
+        "setTimeout(work, // now\n  0)",
         "new Promise((resolve) => setTimeout(resolve))",
     ],
     ".dart": [
@@ -499,6 +502,9 @@ TIMER_FORMS = {
         "Future(work)",
         "Future<void>(work)",
         "await null",
+        "await // tick\n  null",
+        "Timer(/* now */ Duration.zero, work)",
+        "Future.delayed(Duration(/* now */ milliseconds: 0), work)",
     ],
 }
 UNREFUSED = {
