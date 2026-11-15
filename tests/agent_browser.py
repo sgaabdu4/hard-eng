@@ -117,7 +117,8 @@ OTHER_TOOL = re.compile(
     r"|npm\s+(?:exec|i|install|add)|pip3?\s+install|uv\s+(?:add|pip\s+install)"
     rf"|brew\s+install)\s+(?:-\S+\s+)*{TOOL}"
     rf"|\bpython3?\s+(?:-\S+\s+)*-m\s+{TOOL}"
-    r"|\b(?:python3?|node|bun|deno)\b(?:(?![;&|]).)*?"
+    r"|\b(?:python3?|node|bun|deno)\s+(?:-\S+\s+)*"
+    r"(?:-[ce]\s+([\"'])(?:(?!\1).)*?|-?\s*<<-?\s*[\"']?(\w+)[\"']?\n(?:(?!\n\2\b).)*?)"
     rf"(?:\b(?:import|from)\s+[\"']?|\brequire\(\s*[\"']){TOOL}",
     re.DOTALL,
 )
