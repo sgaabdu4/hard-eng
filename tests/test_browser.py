@@ -1,3 +1,4 @@
+import fcntl
 import functools
 import json
 import os
@@ -5,11 +6,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
 import zlib
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Mapping
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import ModuleType
@@ -84,7 +86,48 @@ def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     monkeypatch.setenv("PATH", os.environ["PATH"])
     import browser as module
 
+    keep_hosted_sandbox(
+        os.environ,
+        lambda: module.sandbox_refusal([]) is not None,
+        run_as_shell,
+        Path(tempfile.gettempdir()) / "hard-eng-browser-profile.lock",
+    )
     return module
+
+
+def no_provision(monkeypatch: pytest.MonkeyPatch, shared: Path) -> None:
+    import tool_setup
+
+    def provision(
+        batch: list[str], timeout: float, offline: bool | None = None
+    ) -> None:
+        del batch, timeout, offline
+
+    monkeypatch.setattr(tool_setup, "provision_batch", provision)
+    monkeypatch.setattr(tool_setup, "shared_tool_folder", lambda: shared)
+
+
+def keep_hosted_sandbox(
+    environ: Mapping[str, str],
+    needed: Callable[[], bool],
+    run: Callable[[str], object],
+    lock: Path,
+) -> bool:
+    """GitHub's Ubuntu runners limit user namespaces; their passwordless sudo adds the profile."""
+    if environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
+        return False
+    with lock.open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        if not needed():
+            return False
+        import browser
+
+        run(browser.root_step())
+    return True
+
+
+def run_as_shell(step: str) -> None:
+    subprocess.run(["sh", "-c", step], check=True)
 
 
 def page(tmp_path: Path, name: str, body: str) -> None:
@@ -235,7 +278,6 @@ def test_installs_like_other_tools(
 def test_each_tool_path_installs_chrome_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
 ) -> None:
-    import tool_setup
 
     log = tmp_path / "log"
     tools = []
@@ -245,13 +287,7 @@ def test_each_tool_path_installs_chrome_once(
             fake_tool(tmp_path / checkout, monkeypatch, f"echo {checkout} >> {log}\n")
         )
 
-    def provision(
-        batch: list[str], timeout: float, offline: bool | None = None
-    ) -> None:
-        del batch, timeout, offline
-
-    monkeypatch.setattr(tool_setup, "provision_batch", provision)
-    monkeypatch.setattr(tool_setup, "shared_tool_folder", lambda: tmp_path / "shared")
+    no_provision(monkeypatch, tmp_path / "shared")
     for tool in [*tools, *tools, *tools]:
         monkeypatch.setattr(shutil, "which", functools.partial(found_at, tool))
         assert browser.ensure_tool() == str(tool)
@@ -266,7 +302,6 @@ def test_each_tool_path_installs_chrome_once(
 def test_parallel_first_runs_install_chrome_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
 ) -> None:
-    import tool_setup
 
     log, busy = tmp_path / "log", tmp_path / "busy"
     fake_tool(
@@ -275,13 +310,7 @@ def test_parallel_first_runs_install_chrome_once(
         f"mkdir {busy} || exit 3\nsleep 0.3\necho install >> {log}\nrmdir {busy}\n",
     )
 
-    def provision(
-        batch: list[str], timeout: float, offline: bool | None = None
-    ) -> None:
-        del batch, timeout, offline
-
-    monkeypatch.setattr(tool_setup, "provision_batch", provision)
-    monkeypatch.setattr(tool_setup, "shared_tool_folder", lambda: tmp_path / "shared")
+    no_provision(monkeypatch, tmp_path / "shared")
     failures: list[BaseException] = []
 
     def run() -> None:
@@ -739,3 +768,37 @@ def test_skills_point_to_the_command() -> None:
         assert not re.search(r"\b(390|1280)\b", text), name
     assert "WIDTHS = (390, 1280)" in command
     assert "3px solid red" in command
+
+
+@pytest.mark.parametrize(
+    ("runner", "needed", "runs"),
+    [
+        ("github-hosted", True, 1),
+        ("github-hosted", False, 0),
+        ("self-hosted", True, 0),
+        (None, True, 0),
+    ],
+)
+def test_only_a_hosted_runner_adds_the_sandbox_profile(
+    tmp_path: Path, browser: ModuleType, runner: str | None, needed: bool, runs: int
+) -> None:
+    steps: list[str] = []
+    environ = {} if runner is None else {"RUNNER_ENVIRONMENT": runner}
+    added = keep_hosted_sandbox(
+        environ, lambda: needed, steps.append, tmp_path / "lock"
+    )
+    assert steps == [browser.root_step()] * runs
+    assert added == bool(runs)
+
+
+def test_a_failed_profile_step_stops_the_tests(tmp_path: Path) -> None:
+    def fail(step: str) -> None:
+        raise subprocess.CalledProcessError(1, step)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        keep_hosted_sandbox(
+            {"RUNNER_ENVIRONMENT": "github-hosted"},
+            lambda: True,
+            fail,
+            tmp_path / "lock",
+        )
