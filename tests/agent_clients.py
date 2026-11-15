@@ -163,10 +163,11 @@ def codex_access(root: Path, access: Access) -> list[str]:
     """Agents get a writable .git and unreviewed project hooks; graders read nothing."""
     if access == "grader":
         return ["--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"]
-    flags = ["--sandbox", "workspace-write", "--add-dir", str(root / ".git")]
-    flags.append("--dangerously-bypass-hook-trust")
-    # No sandbox starts Chrome; an automatic reviewer stands in for the user's approval.
-    return [*flags, "--approve-for-me"] if access == "approved" else flags
+    flags = ["--add-dir", str(root / ".git"), "--dangerously-bypass-hook-trust"]
+    if access == "approved":
+        # No sandbox starts Chrome; --approve-for-me sets workspace-write and refuses --sandbox.
+        return [*flags, "--approve-for-me"]
+    return ["--sandbox", "workspace-write", *flags]
 
 
 def claude_access(access: Access) -> tuple[str, str]:
