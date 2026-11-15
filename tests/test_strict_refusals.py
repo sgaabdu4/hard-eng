@@ -178,3 +178,21 @@ def test_a_named_markdown_file_passes(tmp_path: Path) -> None:
     }
     others = dict.fromkeys(NO_LINK_NEEDED, "text\n")
     validate_whole_project(project(tmp_path, {**named, **others}))
+
+
+OLD_BLOCK = "# written long ago\n# across two lines\nx = 1\n"
+
+
+def test_old_comment_blocks_in_untouched_files_fail(tmp_path: Path) -> None:
+    """HE-COMMENT-LINES: the full check fails a comment block in a file that no change touched."""
+    exempt = {
+        ".gitattributes": "*.g.py linguist-generated=true\n",
+        "made.g.py": OLD_BLOCK,
+        ".agents/skills/a/run.py": OLD_BLOCK,
+    }
+    validate_whole_project(project(tmp_path / "exempt", exempt))
+    for name in ("old.py", "lib/old.dart", "src/old.ts", "old.sh", ".hooks/old.py"):
+        text = OLD_BLOCK.replace("x = 1", "x") if name.endswith(".sh") else OLD_BLOCK
+        text = text.replace("#", "//") if name.endswith((".dart", ".ts")) else text
+        message = refusal(project(tmp_path / name.replace("/", "-"), {name: text}))
+        assert f"{name}:1 holds a 2-line comment block" in message
