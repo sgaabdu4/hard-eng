@@ -207,12 +207,15 @@ CALLS = [
     "cd /tmp && /tmp/tools/bin/agent-browser open http://127.0.0.1:8123",
     "/opt/homebrew/bin/bash -lc 'screencapture -x page.png'",
     "chromium --headless --screenshot=page.png http://127.0.0.1:8123",
+    "python3 -m playwright screenshot http://127.0.0.1:8123 page.png",
+    "python3 - <<'PY'\nimport json\nfrom playwright.sync_api import sync_playwright\nPY",
 ]
 SEARCHES = [
     "/opt/homebrew/bin/bash -lc \"git status --short && git show --stat --oneline HEAD && git show HEAD -- && rg --files -g 'AGENTS.md' -g 'package.json' -g '*playwright*' -g '*README*' -g '*hard-eng*' -g '\"'!node_modules'\"' -g '\"'!.git'\"'\"",
     "/opt/homebrew/bin/bash -lc \"git status --short; git show --stat --oneline -1; rg --files -g 'AGENTS.md' -g 'package.json' -g '*playwright*' -g 'README*' -g '*requirements*' -g '*test*'\"",
     "pgrep -fl agent-browser",
     "ls ~/.agent-browser",
+    "rg -n \"import playwright|require\\('puppeteer'\" src tests",
 ]
 
 
