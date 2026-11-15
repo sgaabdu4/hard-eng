@@ -8,14 +8,8 @@ import sys
 from itertools import takewhile
 from pathlib import Path, PurePosixPath
 
-from gate_config import (
-    JSONC,
-    Group,
-    JsonObject,
-    JsonValue,
-    biome_formatters,
-    json_file,
-)
+from gate_config import Group, JsonObject, JsonValue, json_file
+from project_files import JSONC, biome_formatters
 
 OPENING_BRACE = re.compile(r"\{(\s*)")
 TRAILING_COMMA = re.compile(r",(\s*[}\]])")

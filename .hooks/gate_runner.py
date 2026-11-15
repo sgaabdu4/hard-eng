@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
 import swift_setup
+from browser import add_browser_command
 from ci_jobs import (
     NO_LANGUAGES,
     LanguageFilter,
@@ -899,6 +900,7 @@ def main() -> int:
         help="List known slow patterns in the named files, else the whole repository",
     ).add_argument("paths", nargs="*")
     add_walls_command(commands.add_parser)
+    add_browser_command(commands.add_parser)
     mutating = commands.add_parser(
         "mutation",
         help="Report changed lines whose tests miss small deliberate bugs",

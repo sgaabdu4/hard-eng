@@ -25,7 +25,6 @@ which Git ignores and setup never installs. pytest and CI do not run agents.
 """
 
 import argparse
-import ast
 import json
 import os
 import re
@@ -46,8 +45,10 @@ from agent_actions import (
     Action,
     claude_actions,
     codex_actions,
+    event_usage,
     loaded_skills,
 )
+from agent_browser import PROMPT, judge_browser, prepare_browser_app
 from agent_fixtures import (
     CALC,
     CONTROLS,
@@ -56,8 +57,10 @@ from agent_fixtures import (
     PRODUCT,
     RUBRIC,
     TESTS,
+    changed_names,
     install_hard_eng,
     installed_source,
+    parse_sites,
     prepare_defective_commit,
     prepare_escaped_bug,
     prepare_failed_baseline,
@@ -114,9 +117,7 @@ def run(fixture: Run, *command: str) -> int:
 
 def changed(fixture: Run) -> set[str]:
     """Committed, staged, unstaged and untracked changes since the case base."""
-    tracked = git(fixture.root, "diff", "--name-only", fixture.base)
-    untracked = git(fixture.root, "ls-files", "--others", "--exclude-standard")
-    return {name for name in (tracked + "\n" + untracked).splitlines() if name}
+    return changed_names(fixture.root, fixture.base)
 
 
 def ready_feature_plans(fixture: Run, feature: str) -> list[str]:
@@ -436,28 +437,6 @@ def judge_escaped_bug(fixture: Run) -> list[str]:
     return failures + loads_skill("he-learn")(fixture)
 
 
-PARSERS = {"split", "partition", "findall", "finditer", "splitlines", "int"}
-
-
-def called(node: ast.AST) -> str:
-    function = node.func if isinstance(node, ast.Call) else None
-    if isinstance(function, ast.Attribute):
-        return function.attr
-    return function.id if isinstance(function, ast.Name) else ""
-
-
-def parse_sites(root: Path) -> int:
-    """Functions that take the input text apart or convert it, in the project's source files that are not tests."""
-    listed = git(root, "ls-files", "--cached", "--others", "--exclude-standard", "*.py")
-    return sum(
-        any(called(node) in PARSERS for node in ast.walk(function))
-        for name in listed.splitlines()
-        if not name.startswith(".") and not Path(name).name.startswith("test_")
-        for function in ast.walk(ast.parse((root / name).read_text()))
-        if isinstance(function, ast.FunctionDef)
-    )
-
-
 def judge_repeated_block(fixture: Run) -> list[str]:
     behaviour = (
         "from report import max_line, mean_line, total_line; "
@@ -576,6 +555,7 @@ CASES = [
         prepare_repeated_block,
         judge_repeated_block,
     ),
+    Case("browser-proof", PROMPT, prepare_browser_app, judge_browser),
 ]
 
 
@@ -885,6 +865,7 @@ def execute(
         root = Path(temporary).resolve() / "project"
         base = fixture(root, case, options.installed, bare=options.bare)
         agent = client.run(root, evidence, options, case.prompt, True)
+        agent.settings["usage"] = event_usage(evidence / "events.jsonl")
         (evidence / "actions.json").write_text(
             json.dumps([action._asdict() for action in agent.actions], indent=2) + "\n"
         )
@@ -895,9 +876,9 @@ def execute(
         if isinstance(used, str) and options.model not in used:
             reason = f"ran model {used}, not the requested {options.model}"
             return Outcome("blocked", [reason], agent.settings)
-        grade = None
-        if options.judge:
-            grade = partial(judge_grade, client, options, evidence)
+        grade = (
+            partial(judge_grade, client, options, evidence) if options.judge else None
+        )
         result = Run(root, base, agent.message, [], agent.actions, grade)
         try:
             failures = case.judge(result)
