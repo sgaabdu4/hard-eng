@@ -1,6 +1,6 @@
 # Agents drive a real browser through one Hard Eng command
 
-Status: Complete
+Status: Draft
 
 ## Outcome + scope
 
@@ -86,7 +86,7 @@ Single source: red ring rule → stays in Ship checks; how to draw it moves to `
 
 ## Decisions + authorization
 
-Blockers: None
+Blockers: the Complete check on 2c0da6ec failed `freshness` (types-pyyaml 6.0.12.20261113, a base fault; repair PR from `chore/types-pyyaml-20261113` must merge into develop first), `duplicates` (two copied blocks in `tests/test_browser.py`) and `tests` (`tests/test_shard_workflow.py::test_own_workflow_is_the_generated_shard_form`: the Linux CI step made Hard Eng's own workflow differ from the template).
 Authority: Human-loop. The user said "yes pls" to a plan for agent-browser with the shared helper, and asked for the talk, AGENTS.md updates and evals after install. On 2026-11-15 the user approved the plan with all its proposals ("Approve all") and asked to start the build. That approval is void: the plan was presented as checked against the talk, but several skip reasons (timers first) were not checked against real code. The user asked on 2026-11-15 for every talk point to be checked. After the check of each talk point, the user approved the repaired plan on 2026-11-15, chose to refuse old timer calls too, and chose whole-project scope for the other new checks. On 2026-11-15 the user approved the split into three plans and PRs (merge each into develop, one release PR to main, then the other repos) and approved PRs in the installed projects and the user's own packages. On 2026-11-15 the user approved the 12 open proposals of the split plan.
 
 ## Acceptance + steps
