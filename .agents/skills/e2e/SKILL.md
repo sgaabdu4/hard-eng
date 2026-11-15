@@ -29,13 +29,10 @@ OS-owned dialogs → platform control beyond the app tree. Browser exploration �
 
 ## Drive a browser
 
-- Any browser step or capture without a project runner → `python3 .hooks/hard-eng.py browser`; it installs the tool, so run no other browser tool. Each agent passes its own `--session NAME` and never `close --all`.
-- `browser --session S <step>` runs one agent-browser step (`open`, `click`, `eval`, `console`, `errors`, `close`, ...); `agent-browser --help` lists them. Output files land in `.hard-eng/browser/`.
-- `browser capture <url> --session S [--state FILE] [--ring SELECTOR] [--name NAME]` → whole-page images at 390 and 1280 px, red boxes on each `--ring` element, emails and phone numbers hidden (a pattern match: it misses names). A `--ring` that matches nothing fails.
-- `browser signin <role> --session S` → session file `.hard-eng/browser/state/<role>.json` for `--state`; roles come from `browser.roles` in `hard-eng.gates.json` (`url`, `username_env`, `password_env`, optional `env_file`).
-- Codex in a workspace-write sandbox cannot start Chrome → run browser steps outside the sandbox, with approval.
-- Never pass `--no-sandbox`; the command refuses it. On a Linux that limits user namespaces, the command prints a one-time root step → give it to the user.
-- Close each session when done.
+- A browser step or capture that is not part of the project's own browser tests → `python3 .hooks/hard-eng.py browser`. It installs agent-browser itself, so install or run no other browser tool.
+- `browser --session S <step>` runs one plain step. `browser capture` writes whole-page images at 390 and 1280 px, with red boxes and hidden emails and phone numbers. `browser signin` saves a sign-in for `--state`.
+- Every `browser` call needs `--session NAME`. Use one name for all the plain steps of one agent, and a separate name for each `capture` or `signin`. Never `close --all`. Close each session that you opened with plain steps.
+- Before the first call, read [the browser command](references/browser.md): capture limits, sign-in roles, and Codex and Linux setup.
 
 ## Prove the journey
 

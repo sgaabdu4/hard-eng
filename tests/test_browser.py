@@ -228,6 +228,10 @@ def test_installs_like_other_tools(
     ]
     assert log.read_text().splitlines() == ["install"]
     assert sorted(path.name for path in project.iterdir()) == before
+
+    stamp.write_text("/another/checkout/agent-browser")
+    browser.ensure_tool()
+    assert log.read_text().splitlines() == ["install", "install"]
     assert capfd.readouterr().out == ""
 
 
@@ -414,7 +418,11 @@ def test_capture_places_fixed_bars_once_at_their_edge(
         "#top{top:0;height:40px;background:#00c800}"
         "#bottom{bottom:0;height:60px;background:#0000c8}"
         "#label{position:absolute;left:20px;top:1200px;width:100px;height:30px}"
-        "#side{top:0;bottom:0;right:auto;width:30px;background:#c8c800}</style>"
+        "#side{top:0;bottom:0;right:auto;width:30px;background:#c8c800}"
+        ".blob{width:300px;height:300px;border-radius:50%;background:#c800c8}"
+        "#high{top:-100px;left:auto;right:-150px}"
+        "#low{bottom:-100px;left:-150px;right:auto}</style>"
+        "<div class=blob id=high></div><div class=blob id=low></div>"
         "<div id=top></div><div id=bottom></div><div id=side></div>"
         "<p id=label>middle</p>",
     )
@@ -435,7 +443,10 @@ def test_capture_places_fixed_bars_once_at_their_edge(
     )
     assert code == 0
     for width in (390, 1280):
-        _, height, rows, step = decode(tmp_path / f".hard-eng/browser/bars-{width}.png")
+        wide, height, rows, step = decode(
+            tmp_path / f".hard-eng/browser/bars-{width}.png"
+        )
+        assert (wide, height) == (width, 2400)
         inside_ring = range(height - 57, height - 3)
         for colour, wanted in ((1, range(40)), (2, inside_ring)):
             seen = {
@@ -505,6 +516,55 @@ def test_capture_hides_emails_and_phones(
     assert "$1,234.56 on 2026-11-14" in text
 
 
+def test_capture_hides_inside_shadow_roots_and_frames(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(tmp_path, "inner.html", "<p>other frame bob@example.com</p>")
+    page(
+        tmp_path,
+        "nested.html",
+        "<div id=host></div><iframe id=same srcdoc='<p>frame 07700 900111</p>'></iframe>"
+        f"<iframe id=other src='{site.replace('127.0.0.1', 'localhost')}/inner.html'"
+        " style='width:200px;height:100px'></iframe>"
+        "<script>document.querySelector('#host').attachShadow({mode: 'open'})"
+        ".innerHTML = '<p>shadow eve@example.com</p>';</script>",
+    )
+    tool, name = browser.ensure_tool(), session()
+
+    def step(*arguments: str, text: str | None = None) -> str:
+        return browser.require(
+            browser.run_tool(tool, tmp_path, name, *arguments, text=text)
+        )
+
+    try:
+        step("open", f"{site}/nested.html")
+        step("wait", "--load", "networkidle")
+        step("eval", "--stdin", text=browser.PAGE_SCRIPT.replace("RINGS", "[]"))
+        shown = step(
+            "eval",
+            "--stdin",
+            text="(async () => {"
+            "const frame = document.querySelector('#other').getBoundingClientRect();"
+            "const cover = document.querySelector('[data-hard-eng-cover]');"
+            "const box = cover ? cover.getBoundingClientRect() : frame;"
+            "const shadow = document.querySelector('#host').shadowRoot;"
+            "shadow.append(Object.assign(document.createElement('p'),"
+            "{textContent: 'late zed@example.com'}));"
+            "await Promise.resolve();"
+            "return JSON.stringify([shadow.textContent,"
+            "document.querySelector('#same').contentDocument.body.textContent,"
+            "[frame.left, frame.top, frame.width, frame.height],"
+            "cover ? [box.left, box.top, box.width, box.height] : []]);})()",
+        )
+    finally:
+        step("close")
+    shadow, same, frame, cover = json.loads(json.loads(shown))
+    assert shadow.count("[hidden]") == 2
+    assert "@" not in shadow
+    assert "frame [hidden]" in same
+    assert cover == frame
+
+
 def test_signin_keeps_password_off_command_line(
     tmp_path: Path,
     site: str,
@@ -567,9 +627,10 @@ def test_skills_point_to_the_command() -> None:
         ),
     }
     assert "hard-eng.py browser" in e2e
+    assert "(references/browser.md)" in e2e
     for name, path in followers.items():
         text = path.read_text()
-        assert "e2e/SKILL.md#drive-a-browser" in text, name
+        assert "e2e/references/browser.md#capture" in text, name
         assert not re.search(r"\b(390|1280)\b", text), name
     assert "WIDTHS = (390, 1280)" in command
     assert "3px solid red" in command

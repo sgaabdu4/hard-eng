@@ -126,6 +126,8 @@ class Finished(Protocol):
     def log(self) -> list[str]: ...
     @property
     def actions(self) -> list[Action]: ...
+    @property
+    def events(self) -> Path | None: ...
 
 
 def browser_processes() -> set[str]:
@@ -260,7 +262,8 @@ def secret_failures(fixture: Finished) -> list[str]:
     password = entries.get("APP_PASSWORD", "")
     if not password:
         return ["the sign-in file holds no password to look for"]
-    seen = [fixture.message] + [
+    events = fixture.events.read_text() if fixture.events else ""
+    seen = [fixture.message, events] + [
         part for action in fixture.actions for part in (action.detail, action.output)
     ]
     if any(password in text for text in seen):

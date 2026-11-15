@@ -884,7 +884,9 @@ def browser_run(tmp_path: Path) -> Run:
     for width in agent_browser.WIDTHS:
         for version, name in enumerate(("before", "after")):
             (folder / f"{name}-{width}.png").write_bytes(label_image(width, version))
-    return Run(root, base, "Done.", [], list(BROWSER_ACTIONS))
+    events = tmp_path / "events.jsonl"
+    events.write_text("")
+    return Run(root, base, "Done.", [], list(BROWSER_ACTIONS), None, events)
 
 
 def remove_390(run: Run) -> None:
@@ -912,6 +914,13 @@ def leak_password(run: Run) -> None:
     password = (run.root / ".env.test").read_text().split("APP_PASSWORD=")[1].split()[0]
     leak = Action("command", "cat .env.test", True, f"APP_PASSWORD={password}")
     run.actions.append(leak)
+
+
+def leak_password_early(run: Run) -> None:
+    password = (run.root / ".env.test").read_text().split("APP_PASSWORD=")[1].split()[0]
+    assert run.events is not None
+    with run.events.open("a") as events:
+        events.write(f"APP_PASSWORD={password}\n" + "x" * 3000)
 
 
 def add_file(run: Run) -> None:
@@ -951,6 +960,7 @@ RUNNING: set[str] = set()
         (repaint("after-390", leaks=(240,)), "phone line"),
         (only_one_1280, "fewer than two different images at width 1280"),
         (leak_password, "password appears"),
+        (leak_password_early, "password appears"),
         (add_file, "changed or added proof.md"),
         (leave_a_process, "browser process from the run"),
     ],

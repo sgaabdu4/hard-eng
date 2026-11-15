@@ -51,27 +51,41 @@ const hideText = (node) => {
   const text = hide(node.nodeValue);
   if (text !== node.nodeValue) node.nodeValue = text;
 };
-const hideAll = (root) => {
-  if (root.nodeType === Node.TEXT_NODE) return hideText(root);
-  if (root.nodeType !== Node.ELEMENT_NODE) return;
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) hideText(node);
-  for (const field of [root, ...root.querySelectorAll("input,textarea")]) {
-    if (field.matches("input,textarea") && field.type !== "password") field.value = hide(field.value);
-  }
-};
-hideAll(document.body);
-new MutationObserver((changes) => {
+const unreadable = new Set();
+const observer = new MutationObserver((changes) => {
   for (const change of changes) {
     if (change.type === "characterData") hideText(change.target);
     else change.addedNodes.forEach(hideAll);
   }
-}).observe(document.body, { subtree: true, childList: true, characterData: true });
+});
+const watch = (root) => {
+  hideAll(root);
+  observer.observe(root, { subtree: true, childList: true, characterData: true });
+};
+const watchFrame = (frame) => {
+  let inner = null;
+  try { inner = frame.contentDocument; } catch (error) { inner = null; }
+  if (inner?.body) watch(inner.body);
+  else unreadable.add(frame);
+};
+const hideAll = (root) => {
+  if (root.nodeType === Node.TEXT_NODE) return hideText(root);
+  if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+  const walker = (root.ownerDocument || document).createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) hideText(node);
+  for (const element of [root, ...root.querySelectorAll("*")]) {
+    if (element.matches?.("input,textarea") && element.type !== "password") element.value = hide(element.value);
+    if (element.shadowRoot) watch(element.shadowRoot);
+    if (element.matches?.("iframe,frame")) watchFrame(element);
+  }
+};
+watch(document.body);
 const pageHeight = document.documentElement.scrollHeight;
 const fixed = [...document.body.querySelectorAll("*")].flatMap((element) => {
   const style = getComputedStyle(element);
   const box = element.getBoundingClientRect();
-  return style.position === "fixed" && box.width && box.height ? [{ element, style, box }] : [];
+  const inside = box.left >= -1 && box.top >= -1 && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1;
+  return style.position === "fixed" && box.width && box.height && inside ? [{ element, style, box }] : [];
 });
 for (const { element, style, box } of fixed) {
   const atBottom = style.top === "auto" || box.top + box.height / 2 > innerHeight / 2;
@@ -82,6 +96,30 @@ for (const { element, style, box } of fixed) {
   const now = element.getBoundingClientRect();
   element.style.top = (atBottom ? pageHeight - innerHeight : 0) + box.top - now.top - scrollY + "px";
   element.style.left = box.left - now.left + "px";
+}
+const pageWidth = document.documentElement.scrollWidth;
+for (const frame of unreadable) {
+  const box = frame.getBoundingClientRect();
+  if (!box.width || !box.height || !frame.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+  let left = box.left + scrollX, top = box.top + scrollY;
+  for (let view = frame.ownerDocument.defaultView; view.frameElement; view = view.parent) {
+    const outer = view.frameElement.getBoundingClientRect();
+    left += outer.left;
+    top += outer.top;
+  }
+  const right = Math.min(left + box.width, pageWidth), bottom = Math.min(top + box.height, pageHeight);
+  left = Math.max(left, 0);
+  top = Math.max(top, 0);
+  if (right <= left || bottom <= top) continue;
+  const cover = document.createElement("div");
+  cover.dataset.hardEngCover = "";
+  cover.textContent = "[frame hidden]";
+  Object.assign(cover.style, {
+    position: "absolute", left: left + "px", top: top + "px", width: right - left + "px",
+    height: bottom - top + "px", background: "#888", color: "#fff", font: "12px sans-serif",
+    zIndex: "2147483646", pointerEvents: "none",
+  });
+  document.documentElement.appendChild(cover);
 }
 const missing = [];
 for (const selector of RINGS) {
@@ -162,7 +200,7 @@ def ensure_tool() -> str:
             tool = shutil.which(TOOL)
             if tool is None:
                 raise ValueError(f"{TOOL} is not on PATH after its install")
-            if due:
+            if due or not stamp.is_file() or stamp.read_text() != tool:
                 done = subprocess.run(
                     [tool, "install"],
                     stdout=subprocess.PIPE,
@@ -173,7 +211,7 @@ def ensure_tool() -> str:
                 print(done.stdout, end="")
                 if done.returncode:
                     raise ValueError(f"`{TOOL} install` failed; its messages are above")
-                stamp.touch()
+                stamp.write_text(tool)
     return tool
 
 
