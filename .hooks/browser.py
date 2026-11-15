@@ -52,22 +52,34 @@ const hideText = (node) => {
   if (text !== node.nodeValue) node.nodeValue = text;
 };
 const unreadable = new Set();
+const guard = (page) => {
+  if (page.querySelector("style[data-hard-eng-guard]")) return;
+  const rule = page.createElement("style");
+  rule.dataset.hardEngGuard = "";
+  rule.textContent = "iframe:not([data-hard-eng-read]),frame:not([data-hard-eng-read]){visibility:hidden!important}";
+  page.documentElement.appendChild(rule);
+};
+guard(document);
 const observer = new MutationObserver((changes) => {
   for (const change of changes) {
     if (change.type === "characterData") hideText(change.target);
+    else if (change.type === "attributes") delete change.target.dataset.hardEngRead;
     else change.addedNodes.forEach(hideAll);
   }
 });
 const watch = (root) => {
   hideAll(root);
-  observer.observe(root, { subtree: true, childList: true, characterData: true });
+  observer.observe(root, {
+    subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["src", "srcdoc"],
+  });
 };
 let ready = false;
+const covers = new Map();
 const coverFrame = (frame) => {
+  covers.get(frame)?.remove();
+  covers.delete(frame);
   const box = frame.getBoundingClientRect();
-  const shown = box.width && box.height && frame.checkVisibility({ opacityProperty: true, visibilityProperty: true });
-  frame.style.setProperty("visibility", "hidden", "important");
-  if (!shown) return;
+  if (!box.width || !box.height || !frame.checkVisibility({ opacityProperty: true })) return;
   let left = box.left + scrollX, top = box.top + scrollY;
   for (let view = frame.ownerDocument.defaultView; view.frameElement; view = view.parent) {
     const outer = view.frameElement.getBoundingClientRect();
@@ -88,6 +100,7 @@ const coverFrame = (frame) => {
     zIndex: "2147483646", pointerEvents: "none",
   });
   page.appendChild(cover);
+  covers.set(frame, cover);
 };
 const watchFrame = (frame) => {
   if (!frame.hardEngWatched) {
@@ -96,9 +109,15 @@ const watchFrame = (frame) => {
   }
   let inner = null;
   try { inner = frame.contentDocument; } catch (error) { inner = null; }
-  if (inner?.body) watch(inner.body);
-  else if (ready) coverFrame(frame);
-  else unreadable.add(frame);
+  if (inner?.body && !(inner.URL === "about:blank" && frame.getAttribute("src"))) {
+    frame.dataset.hardEngRead = "";
+    guard(inner);
+    watch(inner.body);
+  } else {
+    delete frame.dataset.hardEngRead;
+    if (ready) coverFrame(frame);
+    else unreadable.add(frame);
+  }
 };
 const hideAll = (root) => {
   if (root.nodeType === Node.TEXT_NODE) return hideText(root);
