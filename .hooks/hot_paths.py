@@ -117,6 +117,9 @@ def call_arguments(text: str, start: int) -> list[str] | None:
             index += 2 if char == "\\" else 1
             quote = "" if char == quote else quote
             continue
+        if comment := COMMENT.match(text, index):
+            index = comment.end()
+            continue
         if char in "'\"`":
             quote = char
         elif char in CLOSERS:
