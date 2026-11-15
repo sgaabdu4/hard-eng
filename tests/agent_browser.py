@@ -116,7 +116,10 @@ OTHER_TOOL = re.compile(
     r"|\b(?:npx|bunx|uvx|pnpm\s+(?:dlx|exec|add)|yarn\s+(?:dlx|add)|bun\s+add"
     r"|npm\s+(?:exec|i|install|add)|pip3?\s+install|uv\s+(?:add|pip\s+install)"
     rf"|brew\s+install)\s+(?:-\S+\s+)*{TOOL}"
-    rf"|\b(?:import|from)\s+[\"']?{TOOL}|\brequire\(\s*[\"']{TOOL}"
+    rf"|\bpython3?\s+(?:-\S+\s+)*-m\s+{TOOL}"
+    r"|\b(?:python3?|node|bun|deno)\b(?:(?![;&|]).)*?"
+    rf"(?:\b(?:import|from)\s+[\"']?|\brequire\(\s*[\"']){TOOL}",
+    re.DOTALL,
 )
 ENTRY = re.compile(r"^(\w+)=(.*)$", re.MULTILINE)
 
