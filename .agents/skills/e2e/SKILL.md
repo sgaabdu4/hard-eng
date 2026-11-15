@@ -30,7 +30,7 @@ OS-owned dialogs → platform control beyond the app tree. Browser exploration �
 ## Drive a browser
 
 - A browser step or capture that is not part of the project's own browser tests → `python3 .hooks/hard-eng.py browser`. It installs agent-browser itself, so install or run no other browser tool.
-- `browser --session S <step>` runs one plain step. `browser capture` writes whole-page images at 390 and 1280 px, with red boxes and hidden emails and phone numbers. `browser signin` saves a sign-in for `--state`.
+- `browser --session S <step>` runs one plain step. `browser capture` writes whole-page images at 390 and 1280 px, with red boxes and hidden emails and phone numbers. `browser signin` saves a sign-in for `--state`; it reads the password from the role's env file itself, so never open, print or copy that file.
 - Every `browser` call needs `--session NAME`. Use one name for all the plain steps of one agent, and a separate name for each `capture` or `signin`. Never `close --all`. Close each session that you opened with plain steps.
 - Before the first call, read [the browser command](references/browser.md): capture limits, sign-in roles, and Codex and Linux setup.
 

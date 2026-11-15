@@ -16,6 +16,7 @@ import pytest
 from agent_actions import Action, claude_actions, codex_actions, loaded_skills
 from agent_checks import (
     CASES,
+    Access,
     Agent,
     Client,
     Ready,
@@ -483,9 +484,9 @@ def test_a_grader_that_used_tools_gives_no_verdict(tmp_path: Path) -> None:
 
     def client(actions: list[Action]) -> Client:
         def run(
-            root: Path, evidence: Path, options: Namespace, prompt: str, tools: bool
+            root: Path, evidence: Path, options: Namespace, prompt: str, access: Access
         ) -> Agent:
-            del root, evidence, options, prompt, tools
+            del root, evidence, options, prompt, access
             return Agent(True, verdict, {}, [], actions)
 
         return Client("model", lambda: Ready("1", None), run, "none")
@@ -569,9 +570,33 @@ def test_a_codex_review_keeps_the_answer_before_its_closing_line(
     (tmp_path / "evidence").mkdir()
     options = Namespace(model="m", effort="high", timeout=60)
     agent = codex_run(
-        tmp_path / "project", tmp_path / "evidence", options, "review", True
+        tmp_path / "project", tmp_path / "evidence", options, "review", "sandboxed"
     )
     assert CORRECT in agent.message
+
+
+def test_only_the_browser_case_may_leave_the_sandbox(tmp_path: Path) -> None:
+    assert {case.name for case in CASES if case.access == "approved"} == {
+        "browser-proof"
+    }
+    sandboxed = agent_checks.codex_access(tmp_path, "sandboxed")
+    assert sandboxed[:2] == ["--sandbox", "workspace-write"]
+    assert "--approve-for-me" not in sandboxed
+    assert agent_checks.codex_access(tmp_path, "approved") == [
+        *sandboxed,
+        "--approve-for-me",
+    ]
+    for access, escape, mode in (
+        ("sandboxed", False, "acceptEdits"),
+        ("approved", True, "auto"),
+    ):
+        settings, permission = agent_checks.claude_access(access)
+        assert json.loads(settings)["sandbox"] == {
+            "enabled": True,
+            "autoAllowBashIfSandboxed": True,
+            "allowUnsandboxedCommands": escape,
+        }
+        assert permission == mode
 
 
 @pytest.mark.parametrize("count", ["0", "-1"])
