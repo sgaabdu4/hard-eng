@@ -269,3 +269,29 @@ def test_one_run_reports_every_kind_and_every_hit(tmp_path: Path) -> None:
         ["c.py:1"],
         ["notes/extra.md:1"],
     ]
+
+
+FIXED_NAME_FILES = [
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SUPPORT.md",
+    "GOVERNANCE.md",
+    "MAINTAINERS.md",
+    "CODEOWNERS.md",
+    "LICENSE.md",
+    "NOTICE.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/ISSUE_TEMPLATE/bug_report.md",
+    ".github/SECURITY.md",
+    "pkg/contributing.md",
+]
+
+
+def test_files_that_a_tool_opens_by_its_fixed_name_or_path_pass(
+    tmp_path: Path,
+) -> None:
+    """HE-NAMED-MARKDOWN: a contributing guide and a pull request template need no link."""
+    files = dict.fromkeys(FIXED_NAME_FILES, "text\n")
+    validate_whole_project(project(tmp_path, files))
+    message = refusal(project(tmp_path / "other", {"docs/guide.md": "text\n"}))
+    assert "docs/guide.md:1 is named by no other tracked file" in message
