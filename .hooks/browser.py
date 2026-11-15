@@ -51,19 +51,26 @@ const hideText = (node) => {
   const text = hide(node.nodeValue);
   if (text !== node.nodeValue) node.nodeValue = text;
 };
-const unreadable = new Set();
-const guard = (page) => {
-  if (page.querySelector("style[data-hard-eng-guard]")) return;
-  const rule = page.createElement("style");
-  rule.dataset.hardEngGuard = "";
-  rule.textContent = "iframe:not([data-hard-eng-read]),frame:not([data-hard-eng-read]){visibility:hidden!important}";
-  page.documentElement.appendChild(rule);
+const replaceFrame = (frame) => {
+  if (!frame.isConnected) return;
+  const box = frame.getBoundingClientRect();
+  const holder = frame.ownerDocument.createElement("div");
+  for (const name of ["id", "class", "style"]) {
+    const value = frame.getAttribute(name);
+    if (value !== null) holder.setAttribute(name, value);
+  }
+  holder.dataset.hardEngFrame = "";
+  holder.textContent = "[frame hidden]";
+  Object.assign(holder.style, {
+    boxSizing: "border-box", overflow: "hidden", background: "#888", color: "#fff", font: "12px sans-serif",
+  });
+  if (box.width && box.height) Object.assign(holder.style, { width: box.width + "px", height: box.height + "px" });
+  frame.replaceWith(holder);
 };
-guard(document);
 const observer = new MutationObserver((changes) => {
   for (const change of changes) {
     if (change.type === "characterData") hideText(change.target);
-    else if (change.type === "attributes") delete change.target.dataset.hardEngRead;
+    else if (change.type === "attributes" && change.target.matches("iframe,frame")) replaceFrame(change.target);
     else change.addedNodes.forEach(hideAll);
   }
 });
@@ -73,51 +80,16 @@ const watch = (root) => {
     subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["src", "srcdoc"],
   });
 };
-let ready = false;
-const covers = new Map();
-const coverFrame = (frame) => {
-  covers.get(frame)?.remove();
-  covers.delete(frame);
-  const box = frame.getBoundingClientRect();
-  if (!box.width || !box.height || !frame.checkVisibility({ opacityProperty: true })) return;
-  let left = box.left + scrollX, top = box.top + scrollY;
-  for (let view = frame.ownerDocument.defaultView; view.frameElement; view = view.parent) {
-    const outer = view.frameElement.getBoundingClientRect();
-    left += outer.left;
-    top += outer.top;
-  }
-  const page = document.documentElement;
-  const right = Math.min(left + box.width, page.scrollWidth), bottom = Math.min(top + box.height, page.scrollHeight);
-  left = Math.max(left, 0);
-  top = Math.max(top, 0);
-  if (right <= left || bottom <= top) return;
-  const cover = document.createElement("div");
-  cover.dataset.hardEngCover = "";
-  cover.textContent = "[frame hidden]";
-  Object.assign(cover.style, {
-    position: "absolute", left: left + "px", top: top + "px", width: right - left + "px",
-    height: bottom - top + "px", background: "#888", color: "#fff", font: "12px sans-serif",
-    zIndex: "2147483646", pointerEvents: "none",
-  });
-  page.appendChild(cover);
-  covers.set(frame, cover);
-};
 const watchFrame = (frame) => {
+  let inner = null;
+  try { inner = frame.contentDocument; } catch (error) { inner = null; }
+  if (!inner?.body || (inner.URL === "about:blank" && frame.getAttribute("src"))) return replaceFrame(frame);
+  frame.dataset.hardEngRead = "";
   if (!frame.hardEngWatched) {
     frame.hardEngWatched = true;
     frame.addEventListener("load", () => watchFrame(frame));
   }
-  let inner = null;
-  try { inner = frame.contentDocument; } catch (error) { inner = null; }
-  if (inner?.body && !(inner.URL === "about:blank" && frame.getAttribute("src"))) {
-    frame.dataset.hardEngRead = "";
-    guard(inner);
-    watch(inner.body);
-  } else {
-    delete frame.dataset.hardEngRead;
-    if (ready) coverFrame(frame);
-    else unreadable.add(frame);
-  }
+  watch(inner.body);
 };
 const hideAll = (root) => {
   if (root.nodeType === Node.TEXT_NODE) return hideText(root);
@@ -128,6 +100,7 @@ const hideAll = (root) => {
     if (element.matches?.("input,textarea") && element.type !== "password") element.value = hide(element.value);
     if (element.shadowRoot) watch(element.shadowRoot);
     if (element.matches?.("iframe,frame")) watchFrame(element);
+    else if (element.matches?.("object,embed")) replaceFrame(element);
   }
 };
 watch(document.body);
@@ -148,8 +121,6 @@ for (const { element, style, box } of fixed) {
   element.style.top = (atBottom ? pageHeight - innerHeight : 0) + box.top - now.top - scrollY + "px";
   element.style.left = box.left - now.left + "px";
 }
-ready = true;
-unreadable.forEach(coverFrame);
 const missing = [];
 for (const selector of RINGS) {
   let found = [];
@@ -171,6 +142,18 @@ for (const selector of RINGS) {
   }
 }
 return JSON.stringify(missing);
+})()"""
+
+
+FRAME_CHECK = """(() => {
+const unread = (root) => [...root.querySelectorAll("*")].reduce((count, element) => {
+  if (element.matches("object,embed")) return count + 1;
+  if (element.shadowRoot) count += unread(element.shadowRoot);
+  if (!element.matches("iframe,frame")) return count;
+  if (!("hardEngRead" in element.dataset)) return count + 1;
+  try { return count + unread(element.contentDocument); } catch (error) { return count + 1; }
+}, 0);
+return unread(document);
 })()"""
 
 
@@ -335,6 +318,13 @@ def capture_page(tool: str, folder: Path, args: argparse.Namespace, width: int) 
         )
     image = folder / f"{args.name}-{width}.png"
     require(run_tool(tool, folder, args.session, "screenshot", "--full", str(image)))
+    unread = require(run_tool(tool, folder, args.session, "eval", FRAME_CHECK))
+    if json.loads(unread):
+        image.unlink(missing_ok=True)
+        raise ValueError(
+            f"a frame or embed that the capture could not read was on the page at width {width}, "
+            "so it could show personal data; no image was kept"
+        )
     return image
 
 
@@ -349,8 +339,14 @@ def capture(root: Path, argv: list[str]) -> int:
     if args.state:
         args.state = str(Path(args.state).resolve())
     tool, folder = ensure_tool(), output_folder(root)
+    images: list[Path] = []
     try:
-        images = [capture_page(tool, folder, args, width) for width in WIDTHS]
+        for width in WIDTHS:
+            images.append(capture_page(tool, folder, args, width))
+    except ValueError:
+        for image in images:
+            image.unlink(missing_ok=True)
+        raise
     finally:
         run_tool(tool, folder, args.session, "close")
     print("\n".join(str(image) for image in images))

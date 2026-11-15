@@ -10,12 +10,14 @@
 - `browser capture <url> --session S [--state FILE] [--ring SELECTOR] [--name NAME]` writes whole-page images at the standard widths, 390 and 1280 px, to `.hard-eng/browser/<name>-<width>.png` and prints their paths. Without `--name` the name is `capture`, so a second capture replaces the first: pass a name for each, such as `--name before` and `--name after`.
 - `capture` loads `<url>` fresh at each width and closes its session at the end. It cannot show a state reached by clicks: use a URL that opens the state, or plain steps. A plain `screenshot` step hides nothing and draws no rings; add `--full` for the whole page, use fake data, and look at the image before you share it. Give `capture` and `signin` their own session name, not the one you click in.
 - Red boxes go on each element that a `--ring` selector matches in the main page. Rings do not reach into shadow roots or frames. A `--ring` with no visible match at 390 or 1280 px stops the capture with an error, so ring only elements that show at both widths.
-- Emails and phone numbers are hidden, also inside open shadow roots and same-origin frames. A frame that the command cannot read, such as an embed from another site, is hidden and marked with a grey box. Hiding is a pattern match: it misses names and other personal data, so look at each image and use fake data before you share it.
+- Emails and phone numbers are hidden, also inside open shadow roots and same-origin frames.
+- A frame, `object` or `embed` that the command cannot read, such as a frame from another site, becomes a grey box of the same size. If one still shows when the screenshot is taken, for example because it loaded late, the capture deletes all its images, prints no paths and fails. Do not take a plain `screenshot` instead: capture a page or state without that frame, or report the gap.
+- Hiding is a pattern match over page text. It misses names and other personal data, and text in closed shadow roots, canvas, images and video. Look at each image, and use fake data before you share it.
 
 ## Sign in
 
 - `browser signin <role> --session S` saves a sign-in to `.hard-eng/browser/state/<role>.json` and prints that path. Pass the printed path to `capture --state`, or to `--state` on the first plain step of a session.
-- Roles come from `browser.roles` in `hard-eng.gates.json`: `url` (the login page), `username_env`, `password_env` and an optional `env_file`. The password goes to the tool on standard input only.
+- Roles come from `browser.roles` in `hard-eng.gates.json`: `url` (the login page), `username_env`, `password_env` and an optional `env_file`. The command reads each name from the environment first, then from `env_file`. The password goes to the tool on standard input only.
 
 ## Setup limits
 

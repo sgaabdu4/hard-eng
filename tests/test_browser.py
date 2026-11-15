@@ -544,31 +544,27 @@ def test_capture_hides_emails_and_phones(
     assert "$1,234.56 on 2026-11-14" in text
 
 
-LATE_FRAMES = (
+FRAME_CHANGES = (
     "(async () => {"
+    "const shadow = document.querySelector('#host').shadowRoot;"
+    "shadow.append(Object.assign(document.createElement('p'),"
+    "{textContent: 'late zed@example.com'}));"
     "const same = document.querySelector('#same');"
-    "const moved = new Promise((done) => same.addEventListener('load', done, {once: true}));"
+    "const sameText = same.contentDocument.body.textContent;"
     "same.src = OTHER + '/inner.html';"
-    "await moved;"
-    "const late = Object.assign(document.createElement('iframe'), {src: OTHER + '/inner.html'});"
-    "late.style.cssText = 'width:120px;height:80px';"
-    "document.body.append(late);"
+    "document.body.append(Object.assign(document.createElement('iframe'),"
+    "{id: 'late', src: OTHER + '/inner.html'}));"
     "await Promise.resolve();"
-    "await new Promise((done) => late.addEventListener('load', done, {once: true}));"
-    "const box = (element) => { const r = element.getBoundingClientRect();"
-    "return [r.left + scrollX, r.top + scrollY, r.width, r.height]; };"
-    "const frames = ['#other', '#same'].map((id) => box(document.querySelector(id)));"
-    "frames.push(box(late));"
-    "const covers = [...document.querySelectorAll('[data-hard-eng-cover]')].map(box);"
-    "document.querySelector('#hidden').setAttribute('style', 'display:block');"
-    "document.querySelector('#other').setAttribute('style', 'width:200px;height:100px');"
-    "const shown = ['#other', '#same', '#hidden'].map((id) => document.querySelector(id))"
-    ".concat(late).map((frame) => getComputedStyle(frame).visibility);"
-    "return JSON.stringify([covers, frames, shown]);})()"
+    "const kind = (root, id) => { const found = root.querySelector('#' + id);"
+    "return found ? found.tagName + ('hardEngFrame' in found.dataset ? ':held' : '') : 'gone'; };"
+    "const forced = document.querySelector('#forced').getBoundingClientRect();"
+    "return JSON.stringify([shadow.textContent, sameText,"
+    "['same', 'hidden', 'forced', 'thing', 'late'].map((id) => kind(document, id))"
+    ".concat(kind(shadow, 'deep')), [forced.width, forced.height]]);})()"
 )
 
 
-def test_capture_hides_inside_shadow_roots_and_frames(
+def test_capture_replaces_frames_it_cannot_read(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     other = site.replace("127.0.0.1", "localhost")
@@ -579,10 +575,12 @@ def test_capture_hides_inside_shadow_roots_and_frames(
         "nested.html",
         "<div id=host></div><iframe id=same src='/same.html'></iframe>"
         f"<iframe id=hidden style='display:none' src='{other}/inner.html'></iframe>"
-        f"<iframe id=other src='{other}/inner.html'"
-        " style='width:200px;height:100px'></iframe>"
-        "<script>document.querySelector('#host').attachShadow({mode: 'open'})"
-        ".innerHTML = '<p>shadow eve@example.com</p>';</script>",
+        "<iframe id=forced style='visibility:visible !important;width:200px;"
+        f"height:100px' src='{other}/inner.html'></iframe>"
+        f"<object id=thing data='{other}/inner.html' style='width:50px;height:50px'>"
+        "</object><script>document.querySelector('#host').attachShadow({mode: 'open'})"
+        ".innerHTML = '<p>shadow eve@example.com</p>"
+        f'<iframe id=deep src="{other}/inner.html"></iframe>\';</script>',
     )
     tool, name = browser.ensure_tool(), session()
 
@@ -595,37 +593,41 @@ def test_capture_hides_inside_shadow_roots_and_frames(
         step("open", f"{site}/nested.html")
         step("wait", "--load", "networkidle")
         step("eval", "--stdin", text=browser.PAGE_SCRIPT.replace("RINGS", "[]"))
-        shown = step(
-            "eval",
-            "--stdin",
-            text="(async () => {"
-            "const frame = document.querySelector('#other').getBoundingClientRect();"
-            "const cover = document.querySelector('[data-hard-eng-cover]');"
-            "const box = cover ? cover.getBoundingClientRect() : frame;"
-            "const shadow = document.querySelector('#host').shadowRoot;"
-            "shadow.append(Object.assign(document.createElement('p'),"
-            "{textContent: 'late zed@example.com'}));"
-            "await Promise.resolve();"
-            "return JSON.stringify([shadow.textContent,"
-            "document.querySelector('#same').contentDocument.body.textContent,"
-            "[frame.left, frame.top, frame.width, frame.height],"
-            "cover ? [box.left, box.top, box.width, box.height] : []]);})()",
-        )
-        later = step(
-            "eval", "--stdin", text=LATE_FRAMES.replace("OTHER", json.dumps(other))
-        )
+        changes = FRAME_CHANGES.replace("OTHER", json.dumps(other))
+        shown = step("eval", "--stdin", text=changes)
+        unread = step("eval", browser.FRAME_CHECK)
     finally:
         step("close")
-    shadow, same, frame, cover = json.loads(json.loads(shown))
+    shadow, same, kinds, forced = json.loads(json.loads(shown))
     assert shadow.count("[hidden]") == 2
     assert "@" not in shadow
     assert "frame [hidden]" in same
-    assert cover == frame
-    covers, frames, shown = json.loads(json.loads(later))
-    assert shown == ["hidden"] * 4
-    assert len(covers) == 3
-    assert frames[1] in covers
-    assert frames[2] in covers
+    assert kinds == ["DIV:held"] * 6
+    assert forced == [204, 104]
+    assert json.loads(unread) == 0
+
+
+def test_capture_fails_with_no_image_when_a_frame_slips_past(
+    tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = site.replace("127.0.0.1", "localhost")
+    page(tmp_path, "inner.html", "<p>other frame bob@example.com</p>")
+    page(
+        tmp_path,
+        "slip.html",
+        "<p id=a>a</p><div id=spot style='width:10px;height:10px'></div><script>"
+        "let done = false; new MutationObserver(() => { if (done) return; done = true;"
+        "document.querySelector('#spot').attachShadow({mode: 'open'}).innerHTML ="
+        f" \"<iframe src='{other}/inner.html'></iframe>\"; }})"
+        ".observe(document.documentElement, {childList: true});</script>",
+    )
+    code = browser.browser_command(
+        tmp_path,
+        ["capture", f"{site}/slip.html", "--session", session(), "--ring", "#a"],
+    )
+    assert code == 1
+    assert "no image was kept" in capsys.readouterr().err
+    assert not list((tmp_path / ".hard-eng/browser").glob("*.png"))
 
 
 def test_signin_keeps_password_off_command_line(
