@@ -65,7 +65,9 @@ const watch = (root) => {
 let ready = false;
 const coverFrame = (frame) => {
   const box = frame.getBoundingClientRect();
-  if (!box.width || !box.height || !frame.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return;
+  const shown = box.width && box.height && frame.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+  frame.style.setProperty("visibility", "hidden", "important");
+  if (!shown) return;
   let left = box.left + scrollX, top = box.top + scrollY;
   for (let view = frame.ownerDocument.defaultView; view.frameElement; view = view.parent) {
     const outer = view.frameElement.getBoundingClientRect();
