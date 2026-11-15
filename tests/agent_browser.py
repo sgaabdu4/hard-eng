@@ -30,6 +30,7 @@ HIDDEN_MOST = 110
 INK = 140
 OUTPUT = ".hard-eng/browser"
 BASELINE = "browsers-before.txt"
+LINKED = re.compile(r"(/[^\s()\[\]`'\"]+\.png)")
 README = """# Plan page
 
 A small dashboard. Start it with `python3 app.py`; it listens on http://127.0.0.1:PORT.
@@ -184,7 +185,7 @@ def ink_extent(rows: list[bytes], step: int, width: int, top: int, height: int) 
     return widest
 
 
-def image_failures(root: Path) -> list[str]:
+def image_failures(root: Path, message: str) -> list[str]:
     tracked = set(git(root, "ls-files").splitlines())
     images = [
         path
@@ -192,16 +193,22 @@ def image_failures(root: Path) -> list[str]:
         if ".git" not in path.relative_to(root).parts
         and str(path.relative_to(root)) not in tracked
     ]
+    # The task names no place for the images, so the answer may link ones it moved out.
+    linked = {Path(link) for link in LINKED.findall(message)}
+    images += sorted(
+        path for path in linked if path.is_file() and not path.is_relative_to(root)
+    )
     failures: list[str] = []
     by_width: dict[int, list[Path]] = {width: [] for width in WIDTHS}
     for path in images:
-        name = str(path.relative_to(root))
+        name = str(path.relative_to(root) if path.is_relative_to(root) else path)
         try:
             width, _, rows, step = decode(path)
         except (KeyError, ValueError, IndexError, zlib.error):
             failures.append(f"{name} is not a readable image")
             continue
-        if not name.startswith(f"{OUTPUT}/") or not name.endswith(f"-{width}.png"):
+        inside = name.startswith(f"{OUTPUT}/") or path in linked
+        if not inside or not name.endswith(f"-{width}.png"):
             failures.append(f"{name} was not written by the capture command")
         if width not in by_width:
             continue
@@ -283,7 +290,7 @@ def leftover_failures(root: Path) -> list[str]:
 def judge_browser(fixture: Finished) -> list[str]:
     root = fixture.root
     failures = command_failures(fixture.actions)
-    failures += image_failures(root)
+    failures += image_failures(root, fixture.message)
     failures += secret_failures(fixture)
     failures += [
         f"changed or added {name}" for name in sorted(changed_names(root, fixture.base))

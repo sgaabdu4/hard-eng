@@ -169,3 +169,20 @@ def test_browser_proof_judge_fails_each_missing_item(
     failures = agent_browser.judge_browser(run)
     assert len(failures) == 1, failures
     assert reason in failures[0]
+
+
+@pytest.mark.parametrize("ring", [True, False])
+def test_judge_reads_images_the_answer_links(tmp_path: Path, ring: bool) -> None:
+    RUNNING.clear()
+    run = browser_run(tmp_path)
+    moved = tmp_path / "proof"
+    moved.mkdir()
+    for image in sorted((run.root / ".hard-eng/browser").glob("*.png")):
+        image.rename(moved / image.name)
+    repaint_moved = moved / "after-1280.png"
+    repaint_moved.write_bytes(label_image(1280, 1, ring=ring))
+    links = " ".join(f"[{image.name}]({image})" for image in sorted(moved.iterdir()))
+    failures = agent_browser.judge_browser(run._replace(message=links))
+    assert failures == (
+        [] if ring else [f"{repaint_moved}: no red ring over the changed label"]
+    )
