@@ -1,6 +1,6 @@
 # Agents drive a real browser through one Hard Eng command
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -86,7 +86,7 @@ Single source: red ring rule → stays in Ship checks; how to draw it moves to `
 
 ## Decisions + authorization
 
-Blockers: None. The Complete check on 2c0da6ec failed three gates; the build repairs them: `freshness` through the repair PR 637, merged into develop, and this branch rebased on it; `duplicates` and the workflow test in this branch.
+Blockers: None. The Complete check on 2c0da6ec failed three gates; the build repaired them: `freshness` through the repair PR 637, merged into develop, and this branch rebased on it; `duplicates` and the workflow test in this branch, after a failing run of each.
 Authority: Human-loop. The user said "yes pls" to a plan for agent-browser with the shared helper, and asked for the talk, AGENTS.md updates and evals after install. On 2026-11-15 the user approved the plan with all its proposals ("Approve all") and asked to start the build. That approval is void: the plan was presented as checked against the talk, but several skip reasons (timers first) were not checked against real code. The user asked on 2026-11-15 for every talk point to be checked. After the check of each talk point, the user approved the repaired plan on 2026-11-15, chose to refuse old timer calls too, and chose whole-project scope for the other new checks. On 2026-11-15 the user approved the split into three plans and PRs (merge each into develop, one release PR to main, then the other repos) and approved PRs in the installed projects and the user's own packages. On 2026-11-15 the user approved the 12 open proposals of the split plan.
 
 ## Acceptance + steps
@@ -147,7 +147,7 @@ N/A — no product screen changes; the images the command makes are evidence for
 
 ## Verification
 
-Result: Pending
+Result: Passed
 Evidence: 2026-11-15, one line each; no host names.
 - Agent checks, `browser-proof --repeat 3` at 134fd91e. New source: Claude 3 of 3 pass (median 533,780 tokens, 13 steps), Codex 3 of 3 pass (median 730,601 tokens, 19 steps). Old source (origin/develop 33e40da3): Claude 0 of 3 (median 705,059 tokens, 18 steps), Codex 0 of 3 (median 522,641 tokens, 18 steps). Tokens = every input, cache and output count once; Codex's input count already holds its cached count. New Codex used more tokens than old Codex, because old runs stopped without the proof; agents looked for Playwright, made images with no ring or hiding, and in some Claude runs the password reached the events. No new source run put the password in the events; Claude named the sign-in file in 2 of 3 runs with masked values, and Codex copied it into a temporary copy of the old app in 1 of 3. An earlier full arm at f571faf5 had 3 harness faults (a search counted as another tool, twice; the auto mode check refused a sandbox exit, once); each was fixed after a failing test and both arms ran again in full.
 - macOS: `tests/test_browser.py` 16 passed with 4 workers at 819a2ab9.
@@ -159,7 +159,7 @@ Evidence: 2026-11-15, one line each; no host names.
 - Two checkouts with the same `--session` name: the first run showed the other checkout's page; fixed with a namespace per checkout.
 - Windows 11 VM: setup stops at `import fcntl`, and so does the browser command; the same on develop. Native Windows is not supported; no Windows code added.
 - Step time, one warm `get url`, 2 runs each way: raw 0.015 s and 0.011 s; through the command 0.068 s and 0.066 s; about 0.05 s added per step.
-- Independent review: 18 rounds through `hard-eng.py challenge` before this record; 25 findings, each fixed after a failing test or declined on a `Review declined:` line; round 18 at d401375c clean.
+- Independent review: 20 rounds through `hard-eng.py challenge`; 25 findings in the first 19, each fixed after a failing test or declined on a `Review declined:` line; round 20 runs on the commit that records this, and its result is in the PR.
 - Not checked: the browser tests on the hosted Linux job of this PR, until its log is read; a Linux with no Chrome system libraries and no root (the tool's own error names the missing library); cloud agent sandboxes, Chrome as root in a container, WSL.
 E2E: Passed — the `browser-proof` agent check case through real Claude and Codex sessions at 134fd91e, 3 of 3 runs each with the pass list above; plus `tests/test_browser.py` through a real browser, 16 passed (details in Evidence).
 Real service: Passed — a private project's live site with its test admin account, read only, at 819a2ab9: `signin` exit 0; `capture --ring` exit 0 at 390 and 1280 px; ring on the named heading at both widths; the fixed bottom bar once at its edge; no false frame failure; a ring that matched nothing was refused. Signed out through the app (logout 200, old sign-in then 401); images and state deleted; no browser left running. Two faults found on the way, each fixed after a failing test: a fixed bottom bar placed mid-page, and fixed decorations off the screen that grew the page.
