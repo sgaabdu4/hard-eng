@@ -196,3 +196,22 @@ def test_old_comment_blocks_in_untouched_files_fail(tmp_path: Path) -> None:
         text = text.replace("#", "//") if name.endswith((".dart", ".ts")) else text
         message = refusal(project(tmp_path / name.replace("/", "-"), {name: text}))
         assert f"{name}:1 holds a 2-line comment block" in message
+
+
+def test_each_refusal_names_the_fix_at_the_cause(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: every whole-project refusal tells the agent to fix the cause, never to suppress."""
+    cases = {
+        "switch-off": {"app.py": HIDDEN},
+        "dart-decimate": {
+            "lib/a.dart": "// dart-decimate-ignore-next-line\nint a() => 1;\n"
+        },
+        "gitleaks": {".gitleaks.toml": "[allowlist]\npaths = ['''a''']\n"},
+        "marker": {"app.py": "x = 1  # TO" + "DO later\n"},
+        "comment block": {"app.py": OLD_BLOCK},
+        "markdown": {"notes/extra.md": "text\n"},
+    }
+    for kind, files in cases.items():
+        message = refusal(project(tmp_path / kind.replace(" ", "-"), files))
+        assert "fix" in message.lower(), kind
+        assert "suppress" in message.lower(), kind
+        assert "never" in message.lower() or "instead of" in message.lower(), kind
