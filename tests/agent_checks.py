@@ -587,10 +587,10 @@ def fixture(
     commit(root, "Project baseline")
     install_hard_eng(root, source, bare=bare)
     commit(root, "Install Hard Eng")
-    case.prepare(root)
     if feature_map and case.feature_map:
+        # The case's first commit takes the map in, so its last commit stays the change.
         (root / "FEATURES.md").write_text(case.feature_map)
-        commit(root, "Add the feature map")
+    case.prepare(root)
     return git(root, "rev-parse", "HEAD")
 
 

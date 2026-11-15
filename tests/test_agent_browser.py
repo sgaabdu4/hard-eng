@@ -1,6 +1,7 @@
 """The browser-proof judge on controlled outcomes, without running an agent."""
 
 import os
+import re
 import struct
 import zlib
 from collections.abc import Callable
@@ -244,6 +245,12 @@ def test_a_map_run_adds_only_the_committed_feature_map(
     assert (root / "FEATURES.md").exists() == feature_map
     assert git(root, "rev-parse", "HEAD") == base
     assert git(root, "status", "--porcelain") == ""
+    assert git(root, "show", "--name-only", "--format=", "HEAD") == "app.py"
+    commands = re.findall(
+        r"`(python3 \.hooks/hard-eng\.py browser [^`]+)`", case.feature_map
+    )
+    assert len(commands) == 2
+    assert all("--session " in command for command in commands)
     assert all(
         not other.feature_map for other in CASES if other.name != "browser-proof"
     )
