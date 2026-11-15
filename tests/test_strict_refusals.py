@@ -6,9 +6,10 @@ from types import ModuleType
 
 import pytest
 from comments import validate_suppressions
-from conftest import commit, configure, gate, init
+from conftest import SOURCE, commit, configure, gate, init
+from requirement_registry import registry_entries
 from switch_off_forms import RETRY_FORMS, SWITCHES
-from whole_project import validate_whole_project
+from whole_project import NEEDS_NO_LINK, NEEDS_NO_LINK_FOLDERS, validate_whole_project
 
 OFF = "A change must not switch a check off"
 HIDDEN = "ok = 1\nx = 1  # no" + "qa\n"
@@ -295,3 +296,17 @@ def test_files_that_a_tool_opens_by_its_fixed_name_or_path_pass(
     validate_whole_project(project(tmp_path, files))
     message = refusal(project(tmp_path / "other", {"docs/guide.md": "text\n"}))
     assert "docs/guide.md:1 is named by no other tracked file" in message
+
+
+def test_the_markdown_entry_points_to_the_list_and_does_not_copy_it() -> None:
+    """HE-NAMED-MARKDOWN: the skipped names live in one constant; the entry names it and copies none."""
+    entry = registry_entries(SOURCE)[0]["HE-NAMED-MARKDOWN"][1]
+    assert "NEEDS_NO_LINK" in entry
+    assert ".hooks/whole_project.py" in entry
+    prose = entry.replace(".hooks/whole_project.py", "").lower()
+    copied = [
+        word
+        for word in (*NEEDS_NO_LINK, *NEEDS_NO_LINK_FOLDERS)
+        if word.lower() in prose
+    ]
+    assert copied == []
