@@ -344,7 +344,7 @@ def capture_page(tool: str, folder: Path, args: argparse.Namespace, width: int) 
             run_tool(tool, folder, args.session, "screenshot", "--full", str(image))
         )
         unread_frames(tool, folder, args.session, width)
-    except (ValueError, subprocess.SubprocessError):
+    except BaseException:
         image.unlink(missing_ok=True)
         raise
     return image
@@ -365,7 +365,7 @@ def capture(root: Path, argv: list[str]) -> int:
     try:
         for width in WIDTHS:
             images.append(capture_page(tool, folder, args, width))
-    except (ValueError, subprocess.SubprocessError):
+    except BaseException:
         for image in images:
             image.unlink(missing_ok=True)
         raise

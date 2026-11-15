@@ -633,11 +633,13 @@ def test_capture_fails_with_no_image_when_a_frame_slips_past(
     assert not list((tmp_path / ".hard-eng/browser").glob("*.png"))
 
 
+@pytest.mark.parametrize("start_fails", [False, True])
 def test_capture_keeps_no_image_when_the_frame_check_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     browser: ModuleType,
     capsys: pytest.CaptureFixture[str],
+    start_fails: bool,
 ) -> None:
     checks: list[tuple[str, ...]] = []
 
@@ -649,6 +651,8 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
             (folder / arguments[-1]).write_bytes(b"image")
         if arguments[:2] == ("eval", browser.FRAME_CHECK):
             checks.append(arguments)
+            if len(checks) == 2 and start_fails:
+                raise OSError("session closed")
             if len(checks) == 2:
                 return subprocess.CompletedProcess(arguments, 1, "", "session closed")
             return subprocess.CompletedProcess(arguments, 0, "0", "")
