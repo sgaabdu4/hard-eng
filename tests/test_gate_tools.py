@@ -345,6 +345,30 @@ def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
         validate_scanner_command(skipped, report)
 
 
+@pytest.mark.parametrize(
+    "key", ["max_cyclomatic_threshold", "max_cognitive_threshold", "max_crap_threshold"]
+)
+def test_a_fallow_audit_with_a_raised_health_limit_fails(
+    tmp_path: Path, key: str
+) -> None:
+    """An audit gate is held to the same health limits as a health scan."""
+    combined = clean_typescript_report(None)
+    audit: JsonObject = {"kind": "audit", "command": "audit", "verdict": "pass"}
+    audit |= {"dead_code": combined["check"], "duplication": combined["dupes"]}
+    audit["complexity"] = combined["health"]
+    path = tmp_path / "audit.json"
+    path.write_text(json.dumps(audit))
+    reports.validate_fallow(path)
+    health = combined["health"]
+    assert isinstance(health, dict)
+    summary = health["summary"]
+    assert isinstance(summary, dict)
+    summary[key] = 1000
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match=rf"{key} is above"):
+        reports.validate_fallow(path)
+
+
 def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
