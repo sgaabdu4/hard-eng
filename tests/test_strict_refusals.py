@@ -5,8 +5,8 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from comments import validate_suppressions
-from conftest import SOURCE, commit, configure, gate, init
+from comments import validate_rules, validate_suppressions
+from conftest import SOURCE, commit, configure, gate, git, init
 from requirement_registry import registry_entries
 from switch_off_forms import RETRY_FORMS, SWITCHES
 from whole_project import NEEDS_NO_LINK, NEEDS_NO_LINK_FOLDERS, validate_whole_project
@@ -269,6 +269,24 @@ def test_one_run_reports_every_kind_and_every_hit(tmp_path: Path) -> None:
         ["b.py:1"],
         ["c.py:1"],
         ["notes/extra.md:1"],
+    ]
+
+
+def test_new_findings_and_old_findings_fail_in_one_run(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a new block and a new switch-off in changed files fail in the same run as the old hits."""
+    root = project(tmp_path, {"old.py": "x = 1  # TO" + "DO later\n"})
+    base = git(root, "rev-parse", "HEAD")
+    (root / "new.py").write_text(OLD_BLOCK + "y = 1  # no" + "qa\n")
+    with pytest.raises(ValueError) as error:
+        validate_rules(root, base, True, True)
+    message = str(error.value)
+    assert "new.py:1 holds a 2-line comment block" in message
+    assert "new.py:4 " in message
+    assert "old.py:1 holds a TODO marker" in message
+    assert [line.split(":")[0] for line in message.splitlines() if line[0] != " "] == [
+        "HE-NO-SWITCH-OFF",
+        "HE-COMMENT-LINES",
+        "HE-COMMENT-LINES",
     ]
 
 
