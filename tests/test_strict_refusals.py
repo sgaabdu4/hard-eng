@@ -59,6 +59,17 @@ def test_switch_offs_in_generated_output_pass(tmp_path: Path) -> None:
     assert "app.py:2 holds" in refusal(project(tmp_path / "own", {"app.py": HIDDEN}))
 
 
+def test_binary_files_are_not_read_and_crlf_lines_keep_their_numbers(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: a file Git counts as binary holds no code that a scanner reads."""
+    root = project(tmp_path, {})
+    (root / "logo.png").write_bytes(b"\x89PNG\0\nx = 1  # no" + b"semgrep\n")
+    validate_whole_project(root)
+    (root / "app.py").write_bytes(HIDDEN.replace("\n", "\r\n").encode())
+    assert "app.py:2 holds" in refusal(root)
+
+
 ALLOWLIST_FORMS = {
     "[allowlist]": "[allowlist]\npaths = ['''a''']\n",
     "[[allowlists]]": "[[allowlists]]\npaths = ['''a''']\n",
