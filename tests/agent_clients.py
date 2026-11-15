@@ -171,12 +171,14 @@ def codex_access(root: Path, access: Access) -> list[str]:
 
 
 def claude_access(access: Access) -> tuple[str, str]:
-    """The settings and permission mode; an approved case may ask auto mode to leave the sandbox."""
+    """The settings and permission mode; an approved case runs unsandboxed in auto mode."""
     approved = access == "approved"
-    return claude_isolation(escape=approved), "auto" if approved else "acceptEdits"
+    return claude_isolation(
+        sandboxed=not approved
+    ), "auto" if approved else "acceptEdits"
 
 
-def claude_isolation(*, escape: bool) -> str:
+def claude_isolation(*, sandboxed: bool) -> str:
     """Turn off the user's plugins and keep Bash in a sandbox without network."""
     user = Path.home() / ".claude/settings.json"
     plugins = (
@@ -187,11 +189,14 @@ def claude_isolation(*, escape: bool) -> str:
             "enabledPlugins": dict.fromkeys(plugins, False)
             if isinstance(plugins, dict)
             else {},
+            # The auto mode check refused some sandbox exits the case needs.
             "sandbox": {
                 "enabled": True,
                 "autoAllowBashIfSandboxed": True,
-                "allowUnsandboxedCommands": escape,
-            },
+                "allowUnsandboxedCommands": False,
+            }
+            if sandboxed
+            else {"enabled": False},
         }
     )
 
@@ -281,6 +286,6 @@ CLIENTS = {
         "claude-opus-5-5",
         claude_preflight,
         claude_run,
-        "claude --print; project and local settings only; user plugins off; no MCP; acceptEdits with sandboxed, network-less Bash; an approved case runs in auto mode and may ask to leave the sandbox",
+        "claude --print; project and local settings only; user plugins off; no MCP; acceptEdits with sandboxed, network-less Bash; an approved case runs in auto mode with no sandbox",
     ),
 }

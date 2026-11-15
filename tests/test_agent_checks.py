@@ -582,16 +582,17 @@ def test_only_the_browser_case_may_leave_the_sandbox(tmp_path: Path) -> None:
         *sandboxed[2:],
         "--approve-for-me",
     ]
-    for access, escape, mode in (
-        ("sandboxed", False, "acceptEdits"),
-        ("approved", True, "auto"),
+    sandbox = {
+        "enabled": True,
+        "autoAllowBashIfSandboxed": True,
+        "allowUnsandboxedCommands": False,
+    }
+    for access, kept, mode in (
+        ("sandboxed", sandbox, "acceptEdits"),
+        ("approved", {"enabled": False}, "auto"),
     ):
         settings, permission = agent_clients.claude_access(access)
-        assert json.loads(settings)["sandbox"] == {
-            "enabled": True,
-            "autoAllowBashIfSandboxed": True,
-            "allowUnsandboxedCommands": escape,
-        }
+        assert json.loads(settings)["sandbox"] == kept
         assert permission == mode
 
 
