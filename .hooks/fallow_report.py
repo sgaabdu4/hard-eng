@@ -146,6 +146,24 @@ def option(invocation: list[str], flag: str) -> str | None:
     return None
 
 
+def add_health(command: list[str]) -> list[str]:
+    """A Fallow scan that names its analyses gets the health analysis too."""
+    for index, part in enumerate(command):
+        key, equals, value = part.partition("=")
+        if key != "--only" or "health" in value.split(","):
+            continue
+        if equals:
+            return [*command[:index], f"{part},health", *command[index + 1 :]]
+        following = command[index + 1 : index + 2]
+        if following and "health" not in following[0].split(","):
+            return [
+                *command[: index + 1],
+                f"{following[0]},health",
+                *command[index + 2 :],
+            ]
+    return command
+
+
 def fallow_failure(invocation: list[str], report: Report) -> str | None:
     crap = option(invocation, "--max-crap")
     if crap is not None and (not math.isfinite(float(crap)) or float(crap) <= 0):
@@ -153,6 +171,9 @@ def fallow_failure(invocation: list[str], report: Report) -> str | None:
     if "audit" not in invocation:
         if "--fail-on-issues" not in invocation:
             return "Fallow scans must fail on every finding; add --fail-on-issues"
+        only = option(invocation, "--only")
+        if only is not None and "health" not in only.split(","):
+            return "Fallow scans must check health, so complex and untested code fails; add health to --only"
         return None
     if report.get("type") != "fallow":
         return "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
@@ -211,7 +232,15 @@ def fallow_report_path(arguments: list[str]) -> str | None:
 def validate_fallow_audit(report: JsonObject) -> None:
     if report["command"] != "audit" or report["verdict"] != "pass":
         raise ValueError("Fallow requires a passing native audit")
-    complexity = report["complexity"]
+    validate_complexity(report["complexity"])
+
+
+def validate_health(report: JsonObject) -> None:
+    if "health" in report:
+        validate_complexity(report["health"])
+
+
+def validate_complexity(complexity: object) -> None:
     if not isinstance(complexity, dict) or complexity["findings"] != []:
         raise ValueError("Fallow audit reports missing complexity analysis or findings")
     summary = complexity["summary"]
@@ -411,6 +440,8 @@ def installed_above(directory: Path | None) -> bool:
 
 def optional_notes(directory: Path | None) -> set[str]:
     notes = {"boundaries-not-configured", "rule-packs-not-configured"}
+    notes |= {"coverage-auto-detected", "shallow-clone"}
+    notes |= {"change-coupling-skipped", "hotspots-skipped"}
     return notes | {"node-modules-missing"} if installed_above(directory) else notes
 
 
@@ -435,6 +466,7 @@ def validate_fallow(
                 "workspace_diagnostics": dead_code.pop("workspace_diagnostics", []),
             }
         check, dupes = report["check"], report["dupes"]
+        validate_health(report)
         stats = dupes["stats"]
         counts = [check["total_issues"], check["summary"]["total_issues"]]
         counts += [stats["clone_groups"], stats["duplication_percentage"]]
