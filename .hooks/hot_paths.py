@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
-from comments import code_without_comments
+from comments import code_without_comments, string_at, string_end
 from gate_config import (
     SOURCE_FILE,
     Gate,
@@ -105,20 +105,19 @@ def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, o
     return report["results"]
 
 
-def call_arguments(text: str, start: int) -> list[str] | None:
+def call_arguments(text: str, start: int, suffix: str) -> list[str] | None:
     """The top-level arguments of the call whose text begins after its open bracket, or None when the text ends first."""
     arguments: list[str] = []
-    depth, begin, quote = 0, start, ""
-    index = start
+    depth, begin, index = 0, start, start
     while index < len(text):
         char = text[index]
-        if quote:
-            index += 2 if char == "\\" else 1
-            quote = "" if char == quote else quote
+        if char == "`":
+            index = string_end(text, index + 1, "`", False)
             continue
-        if char in "'\"`":
-            quote = char
-        elif char in CLOSERS:
+        if (end := string_at(text, index, suffix)) is not None:
+            index = end
+            continue
+        if char in CLOSERS:
             depth += 1
         elif char in CLOSERS.values():
             if depth == 0:
@@ -152,7 +151,7 @@ def hidden_deferral(text: str, suffix: str) -> str | None:
     if found := forms.search(text):
         return " ".join(found[0].split())
     for call in calls.finditer(text):
-        if short(call_arguments(text, call.end())):
+        if short(call_arguments(text, call.end(), suffix)):
             return " ".join(call[0].split())
     return None
 

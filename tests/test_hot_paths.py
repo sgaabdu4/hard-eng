@@ -489,6 +489,8 @@ TIMER_FORMS = {
         "setTimeout(work, // now\n  0)",
         "setTimeout(work, /* wait, now */ 0)",
         "setTimeout(() => /[//]/.test(path), /* a */ 0)",
+        "setTimeout(() => /[//],/.test(path), 0)",
+        "setTimeout(() => log('a,b'), 0)",
         "new Promise((resolve) => setTimeout(resolve))",
     ],
     ".dart": [
@@ -508,6 +510,7 @@ TIMER_FORMS = {
         "Timer(/* now */ Duration.zero, work)",
         "Timer(/* wait, now */ Duration.zero, work)",
         "Timer(/* outer /* inner */ wait, now */ Duration.zero, work)",
+        "Timer(Duration.zero, () => log('a,b'))",
         "Future.delayed(Duration(/* now */ milliseconds: 0), work)",
     ],
 }
