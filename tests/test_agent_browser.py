@@ -210,6 +210,7 @@ CALLS = [
     "python3 -m playwright screenshot http://127.0.0.1:8123 page.png",
     "python3 - <<'PY'\nimport json\nfrom playwright.sync_api import sync_playwright\nPY",
     'python3 -c "import asyncio; from playwright.sync_api import sync_playwright"',
+    r'python3 -c "print(\"starting\"); import playwright"',
 ]
 SEARCHES = [
     "/opt/homebrew/bin/bash -lc \"git status --short && git show --stat --oneline HEAD && git show HEAD -- && rg --files -g 'AGENTS.md' -g 'package.json' -g '*playwright*' -g '*README*' -g '*hard-eng*' -g '\"'!node_modules'\"' -g '\"'!.git'\"'\"",
