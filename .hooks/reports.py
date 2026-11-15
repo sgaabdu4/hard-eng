@@ -22,7 +22,7 @@ from coverage_sources import (
 from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
 from fallow_report import finding_lines as fallow_findings
-from fallow_report import sdk_binaries, validate_fallow, write_istanbul
+from fallow_report import reads_coverage, sdk_binaries, validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
 from gate_schedule import QUICK_ROLES
 from project_setup import (
@@ -108,10 +108,10 @@ def related_test_flags(
     """Native related-test flags for a pre-push JavaScript test gate, else none."""
     if gate.get("report", {}).get("type") != "lcov-tests":
         return []
-    # A Fallow gate run through a package script may read this run's coverage.
+    # A Fallow gate that may read this run's coverage needs the whole test run.
     if any(
         other.get("report", {}).get("type") == "fallow"
-        and other["command"][:2] == ["bun", "run"]
+        and reads_coverage(other["command"])
         for selected in groups
         for other in selected["checks"]
     ):

@@ -108,6 +108,11 @@ def _chain_commands(commands: list[list[str]]) -> list[str]:
     ]
 
 
+HEALTH_LIMITS = {
+    "max_cyclomatic_threshold": 20,
+    "max_cognitive_threshold": 15,
+    "max_crap_threshold": 30,
+}
 SCANNERS = {"fallow", "dart-decimate", "react-doctor"}
 TOLERANCE_FLAGS = {
     "--baseline",
@@ -146,6 +151,11 @@ def option(invocation: list[str], flag: str) -> str | None:
     return None
 
 
+def reads_coverage(command: list[str]) -> bool:
+    only = option(native_scanner_command(command) or [], "--only") or ""
+    return command[:2] == ["bun", "run"] or "health" in only.split(",")
+
+
 def add_health(command: list[str]) -> list[str]:
     """A Fallow scan that names its analyses gets the health analysis too."""
     for index, part in enumerate(command):
@@ -174,6 +184,8 @@ def fallow_failure(invocation: list[str], report: Report) -> str | None:
         only = option(invocation, "--only")
         if only is not None and "health" not in only.split(","):
             return "Fallow scans must check health, so complex and untested code fails; add health to --only"
+        if "health" in (option(invocation, "--skip") or "").split(","):
+            return "Fallow scans must check health, so complex and untested code fails; remove health from --skip"
         return None
     if report.get("type") != "fallow":
         return "Fallow audit gates require a native fallow report; exit status alone cannot prove enabled metrics"
@@ -236,8 +248,23 @@ def validate_fallow_audit(report: JsonObject) -> None:
 
 
 def validate_health(report: JsonObject) -> None:
-    if "health" in report:
-        validate_complexity(report["health"])
+    if "health" not in report:
+        return
+    health = report["health"]
+    validate_complexity(health)
+    summary = health["summary"] if isinstance(health, dict) else {}
+    if not isinstance(summary, dict):
+        raise TypeError("Fallow health summary must be an object")
+    for key, limit in HEALTH_LIMITS.items():
+        value = summary[key]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value > limit
+        ):
+            raise ValueError(
+                f"Fallow {key} is above {limit}; remove the raised health limit from the Fallow settings"
+            )
 
 
 def validate_complexity(complexity: object) -> None:
