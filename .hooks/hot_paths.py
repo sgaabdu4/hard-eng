@@ -10,7 +10,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
-from comments import code_without_comments, string_at, string_end
+from comments import code_step, code_without_comments
 from gate_config import (
     SOURCE_FILE,
     Gate,
@@ -109,22 +109,20 @@ def call_arguments(text: str, start: int, suffix: str) -> list[str] | None:
     """The top-level arguments of the call whose text begins after its open bracket, or None when the text ends first."""
     arguments: list[str] = []
     depth, begin, index = 0, start, start
+    templates: list[int] = []
     while index < len(text):
         char = text[index]
-        if char == "`":
-            index = string_end(text, index + 1, "`", False)
-            continue
-        if (end := string_at(text, index, suffix)) is not None:
+        if (end := code_step(text, index, suffix, templates)) is not None:
             index = end
             continue
         if char in CLOSERS:
             depth += 1
         elif char in CLOSERS.values():
-            if depth == 0:
+            if depth == 0 and not templates:
                 arguments.append(text[begin:index])
                 return arguments
             depth -= 1
-        elif char == "," and depth == 0:
+        elif char == "," and depth == 0 and not templates:
             arguments.append(text[begin:index])
             begin = index + 1
         index += 1
