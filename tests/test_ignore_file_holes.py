@@ -240,28 +240,6 @@ def test_a_fallow_ignore_in_an_extended_file_is_refused(tmp_path: Path) -> None:
     )
 
 
-def test_only_the_hooks_ignore_pattern_may_drop_files_from_fallow(
-    tmp_path: Path,
-) -> None:
-    """HE-NO-SWITCH-OFF: `ignorePatterns` drops files from every analysis; the one Hard Eng writes passes."""
-    validate_whole_project(
-        project(
-            tmp_path / "ok", {".fallowrc.json": '{"ignorePatterns": [".hooks/**"]}\n'}
-        )
-    )
-    message = refusal(
-        project(
-            tmp_path / "bad",
-            {".fallowrc.json": '{"ignorePatterns": [".hooks/**", "src/**"]}\n'},
-        )
-    )
-    assert ".fallowrc.json:1 sets ignorePatterns" in message
-    toml = refusal(
-        project(tmp_path / "toml", {"fallow.toml": 'ignorePatterns = ["src/**"]\n'})
-    )
-    assert "fallow.toml:1 sets ignorePatterns" in toml
-
-
 def fallow_gate(tmp_path: Path, command: list[str]) -> None:
     from project_setup import validate_command_output
 

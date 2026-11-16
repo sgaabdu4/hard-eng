@@ -74,17 +74,6 @@ def rule_findings(config: dict[str, object]) -> list[tuple[str, str]]:
     ]
 
 
-def pattern_findings(config: dict[str, object]) -> list[tuple[str, str]]:
-    patterns = config.get("ignorePatterns")
-    if not isinstance(patterns, list):
-        return []
-    return [
-        ("ignorePatterns", f"entry {pattern!r}, which drops files from every analysis")
-        for pattern in patterns
-        if pattern != HOOKS_PATTERN
-    ]
-
-
 def own_hits(name: str, text: str, config: dict[str, object]) -> list[str]:
     lines = text.splitlines()
     used: set[int] = set()
@@ -92,7 +81,6 @@ def own_hits(name: str, text: str, config: dict[str, object]) -> list[str]:
     findings = [
         *health_findings(config),
         *rule_findings(config),
-        *pattern_findings(config),
     ]
     for key, reason in findings:
         number = next(

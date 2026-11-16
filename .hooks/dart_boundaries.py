@@ -149,12 +149,14 @@ def dart_options(path: Path) -> DartOptions:
     return cast(DartOptions, options)
 
 
-def nested_package_patterns(group: "Group", groups: "list[Group]") -> frozenset[str]:
+def nested_package_patterns(
+    group: "Group", groups: "list[Group]", role: str = "types"
+) -> frozenset[str]:
     from dependency_graph import child_groups
 
     return frozenset(
         f"{PurePosixPath(child['path']).relative_to(group['path'])}/**"
-        for child in child_groups(group, "types", groups)
+        for child in child_groups(group, role, groups)
     )
 
 
