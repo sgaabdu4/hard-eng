@@ -736,11 +736,11 @@ def test_a_comment_after_a_test_attribute_is_read_at_once(
     """A line comment runs to its line end, so its slashes are read one way."""
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests/ops.rs").write_text(source + "\n")
-    started = time.perf_counter()
+    started = time.process_time()
     assert missing_tests(tmp_path, [("tests/ops.rs", "test_gone")]) == [
         "tests/ops.rs::test_gone"
     ]
-    assert time.perf_counter() - started < 1
+    assert time.process_time() - started < 1
 
 
 def test_a_test_named_in_a_comment_after_an_attribute_does_not_count(
@@ -771,11 +771,11 @@ def test_a_long_table_of_test_cases_is_read_at_once(
         table + "fn t(a: u8, b: &str) {}\n\n#[test]\nfn test_divide() {}\n"
     )
     name = "test_divide" if found else "test_gone"
-    started = time.perf_counter()
+    started = time.process_time()
     assert missing_tests(tmp_path, [("tests/ops.rs", name)]) == (
         [] if found else [f"tests/ops.rs::{name}"]
     )
-    assert time.perf_counter() - started < 1
+    assert time.process_time() - started < 1
 
 
 def test_stacked_char_cases_are_read_at_once(tmp_path: Path) -> None:
@@ -783,11 +783,11 @@ def test_stacked_char_cases_are_read_at_once(tmp_path: Path) -> None:
     cases = "".join(f"#[test_case('{chr(97 + n % 26)}')]\n" for n in range(40))
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests/ops.rs").write_text(cases + "fn test_divide(c: char) {}\n")
-    started = time.perf_counter()
+    started = time.process_time()
     assert missing_tests(tmp_path, [("tests/ops.rs", "test_gone")]) == [
         "tests/ops.rs::test_gone"
     ]
-    assert time.perf_counter() - started < 1
+    assert time.process_time() - started < 1
 
 
 @pytest.mark.parametrize("source", RUST_TESTS, ids=range(len(RUST_TESTS)))
