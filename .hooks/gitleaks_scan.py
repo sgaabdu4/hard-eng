@@ -130,7 +130,7 @@ def narrowing_flags(command: list[str]) -> list[str]:
         elif not equals and index + 1 < len(command):
             value = command[index + 1]
         if name in NARROWING_FLAGS or (
-            name in {"-c", "--config"} and value != ".gitleaks.toml"
+            name in {"-c", "--config"} and os.path.normpath(value) != ".gitleaks.toml"
         ):
             found.append(argument)
     return found
