@@ -14,7 +14,7 @@ NESTED_BLOCKS = {".dart", ".rs", ".swift"}
 NOT_NEWLINE = re.compile(r"[^\n]")
 NOT_LINE_BREAK = re.compile(r"[^\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
 RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
-INTERPOLATION_STOP = re.compile(r"[{}'\"]")
+INTERPOLATION_STOP = re.compile(r"[{}'\"]|/[/*]")
 SCAN_STOP = re.compile(r"[\n/'\"`{}]|b?r#*['\"]")
 QUOTE = re.compile(r"'''|\"\"\"|['\"]")
 KEYWORD_BEFORE = r"(?<![.$])\b(return|typeof|case|default|do|else|in|of|new|delete|void|throw|yield|await)"
@@ -25,13 +25,21 @@ PREFIX_NOT = re.compile(rf"{KEYWORD_BEFORE}!$")
 REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
 
 
-def interpolation_end(text: str, index: int) -> int:
-    """Index just past the `${...}` expression of a Dart string, whose body starts at index; nested strings and braces count."""
+def interpolation_end(text: str, index: int, found: list[tuple[int, int]]) -> int:
+    """Index just past the `${...}` expression of a Dart string, whose body starts at index; nested strings and braces count, and each comment in it joins found."""
     depth = 1
     while depth and (stop := INTERPOLATION_STOP.search(text, index)):
         at = stop.start()
-        raw = string_at(text, at - 1, ".dart") if text[at - 1 : at] == "r" else None
-        if (close := raw or string_at(text, at, ".dart")) is not None:
+        if text[at] == "/":
+            index = comment_end(text, at, ".dart")
+            found.append((at, index))
+            continue
+        raw = (
+            string_at(text, at - 1, ".dart", found)
+            if text[at - 1 : at] == "r"
+            else None
+        )
+        if (close := raw or string_at(text, at, ".dart", found)) is not None:
             index = close
         else:
             depth += (text[at] == "{") - (text[at] == "}")
@@ -45,14 +53,14 @@ def string_end(
     quote: str,
     raw: bool,
     line: bool = False,
-    interpolated: bool = False,
+    found: list[tuple[int, int]] | None = None,
 ) -> int:
     """Index just past the string that opens at index with quote; a line string stops at a newline, and an interpolated Dart string skips its `${...}` expressions."""
     while index < len(text):
         if text[index] == "\\" and not raw:
             index += 2
-        elif interpolated and text.startswith("${", index):
-            index = interpolation_end(text, index + 2)
+        elif found is not None and text.startswith("${", index):
+            index = interpolation_end(text, index + 2, found)
         elif text.startswith(quote, index):
             return index + len(quote)
         elif line and text[index] == "\n":
@@ -62,8 +70,10 @@ def string_end(
     return len(text)
 
 
-def string_at(text: str, index: int, suffix: str) -> int | None:
-    """Index just past a string or regex literal starting at index, else None."""
+def string_at(
+    text: str, index: int, suffix: str, found: list[tuple[int, int]] | None = None
+) -> int | None:
+    """Index just past a string or regex literal starting at index, else None; comments inside a Dart `${...}` join found."""
     previous = text[index - 1 : index]
     raw = None if previous.isalnum() or previous == "_" else RAW.get(suffix)
     opened = raw.match(text, index) if raw is not None else None
@@ -73,9 +83,8 @@ def string_at(text: str, index: int, suffix: str) -> int | None:
     quote = QUOTE.match(text, index)
     if quote is not None and (quote.group(0) != "'" or suffix != ".rs"):
         line = len(quote.group(0)) == 1 and suffix != ".rs"
-        return string_end(
-            text, quote.end(), quote.group(0), False, line, suffix == ".dart"
-        )
+        interpolated = ([] if found is None else found) if suffix == ".dart" else None
+        return string_end(text, quote.end(), quote.group(0), False, line, interpolated)
     regex = REGEX.match(text, index) if suffix in JAVASCRIPT else None
     return regex.end() if regex and regex_allowed(text, index) else None
 
@@ -113,8 +122,14 @@ def template_end(text: str, index: int) -> tuple[int, bool]:
     return len(text), False
 
 
-def code_step(text: str, index: int, suffix: str, depths: list[int]) -> int | None:
-    """Index past a template segment, interpolation brace or literal at index, else None."""
+def code_step(
+    text: str,
+    index: int,
+    suffix: str,
+    depths: list[int],
+    found: list[tuple[int, int]] | None = None,
+) -> int | None:
+    """Index past a template segment, interpolation brace or literal at index, else None; comments inside a Dart `${...}` join found."""
     character = text[index]
     if suffix in JAVASCRIPT and (
         character == "`" or (character == "}" and depths[-1:] == [0])
@@ -127,7 +142,7 @@ def code_step(text: str, index: int, suffix: str, depths: list[int]) -> int | No
     if depths and character in "{}":
         depths[-1] += 1 if character == "{" else -1
         return index + 1
-    return string_at(text, index, suffix)
+    return string_at(text, index, suffix, found)
 
 
 def comment_end(text: str, index: int, suffix: str) -> int:
@@ -170,9 +185,10 @@ def scan(text: str, suffix: str) -> Iterator[tuple[bool, int, int, bool]]:
             close = comment_end(text, index, suffix)
             yield True, index, close, blank
             index, blank = close, False
-        elif (close := code_step(text, index, suffix, depths)) is not None:
+        elif (close := code_step(text, index, suffix, depths, found := [])) is not None:
             if character not in "{}" or close > index + 1:
                 yield False, index, close, blank
+            yield from ((True, start, end, False) for start, end in found)
             index, blank = close, False
         else:
             literal = CHARACTER.match(text, index) if character == "'" else None
@@ -207,6 +223,17 @@ def code_without_comments(text: str, suffix: str) -> str:
     )
 
 
+def outside(
+    start: int, close: int, comments: list[tuple[int, int]]
+) -> Iterator[tuple[int, int]]:
+    """Parts of the literal from start to close that no comment inside a Dart `${...}` covers."""
+    for begin, end in comments:
+        if start < begin and end < close:
+            yield start, begin
+            start = end
+    yield start, close
+
+
 def python_literal_spans(text: str) -> list[tuple[int, int]]:
     starts = [0]
     for line in text.split("\n"):
@@ -230,10 +257,13 @@ def without_literals(name: str, text: str) -> str:
     """The text with the inside of each string and regex literal turned to spaces, its first and last character and every line break kept, so a form that names the opening quote still matches."""
     suffix = PurePosixPath(name).suffix
     if suffix in SLASH:
+        scanned = scanned_spans(text, suffix)
+        comments = [(start, close) for comment, start, close, _ in scanned if comment]
         spans = [
-            (start, close)
-            for comment, start, close, _ in scanned_spans(text, suffix)
+            piece
+            for comment, start, close, _ in scanned
             if not comment
+            for piece in outside(start, close, comments)
         ]
     elif suffix in {".py", ".pyi"}:
         spans = python_literal_spans(text)

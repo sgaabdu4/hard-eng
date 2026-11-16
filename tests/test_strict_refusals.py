@@ -280,6 +280,11 @@ QUOTED_NEAR_MISSES = [
         "const C = () => <p>Don't</p>; // eslint-" + "disable-line\n",
         "eslint-" + "disable",
     ),
+    (
+        "lib/a.dart",
+        "final t = '${f('b' // ig" + "nore: argument_type_not_assignable\n)}';\n",
+        "// ig" + "nore:",
+    ),
     ("tool/scan.py", "X = '# pyre-" + "fixme[9]'\n", "# pyre-" + "fixme"),
     ("tool/scan.py", "X = '# type:" + " ignore'\n", "# type:" + " ignore"),
     *(
@@ -304,6 +309,19 @@ def test_a_division_after_a_non_null_mark_hides_no_later_line(tmp_path: Path) ->
     )
     assert "src/k1.ts:2 holds '@ts-" + "ignore'" in refusal(
         project(tmp_path, {"src/k1.ts": text})
+    )
+
+
+def test_a_comment_inside_a_dart_interpolation_hides_no_later_line(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: a quote inside a comment in a Dart `${...}` does not open a string, so a later switch-off still fails."""
+    text = (
+        "final s = '${f(1 /* don't */)}';\nint y = 'a'; // ig"
+        + "nore: invalid_assignment\n"
+    )
+    assert "lib/k1.dart:2 holds '// ig" + "nore:'" in refusal(
+        project(tmp_path, {"lib/k1.dart": text})
     )
 
 

@@ -223,3 +223,20 @@ def test_an_inherited_pattern_is_judged_from_the_folder_of_the_analyzed_options_
     nested.write_text("include: ../../analysis_options.yaml\n")
     with pytest.raises(ValueError, match="remove '\\*_test.dart' from exclude"):
         validate_dart_includes(nested, package)
+
+
+def test_an_inherited_pattern_that_hides_no_file_of_the_analyzed_folder_passes(
+    tmp_path: Path,
+) -> None:
+    """A root exclude of lib/a.dart, read from pkg/test/, hides nothing there, so the source check does not match the package's lib/a.dart."""
+    (tmp_path / "analysis_options.yaml").write_text(
+        'analyzer:\n  exclude:\n    - "lib/a.dart"\n'
+    )
+    package = tmp_path / "pkg"
+    (package / "test").mkdir(parents=True)
+    (package / "lib").mkdir()
+    (package / "pubspec.yaml").write_text("name: pkg\n")
+    (package / "lib/a.dart").write_text("int a = 1;\n")
+    nested = package / "test/analysis_options.yaml"
+    nested.write_text("include: ../../analysis_options.yaml\n")
+    validate_dart_includes(nested, package)
