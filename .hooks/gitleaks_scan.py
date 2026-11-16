@@ -1,14 +1,51 @@
 """Run current-files scans without ignored build output."""
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import IO
 
+from command_words import segments
 from process_group import run_in_group
 from project_files import GIT_LISTING
+
+CONFIG_VARIABLES = ("GITLEAKS_CONFIG", "GITLEAKS_CONFIG_TOML")
+CONFIG_ASSIGNMENT = re.compile(r"\bGITLEAKS_CONFIG(?:_TOML)?[\"']?\s*[:=]")
+
+
+def scan_environment(base: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment of a Gitleaks run, without the variables that replace its config."""
+    return {
+        key: value
+        for key, value in (os.environ if base is None else base).items()
+        if key not in CONFIG_VARIABLES
+    }
+
+
+def config_variable_hits(name: str, text: str) -> list[str]:
+    return [
+        f"{name}:{number} sets {match[0].rstrip(':= "\'')}, which swaps the Gitleaks config"
+        for number, line in enumerate(text.splitlines(), 1)
+        if not line.lstrip().startswith("#")
+        and (match := CONFIG_ASSIGNMENT.search(line))
+    ]
+
+
+def validate_config_variables(command: list[str], directory: Path) -> None:
+    found = [
+        word
+        for segment in segments(command, directory)
+        for word in segment
+        if CONFIG_ASSIGNMENT.match(word)
+    ]
+    if found:
+        raise ValueError(
+            "HE-NO-SWITCH-OFF: A gate must not set the Gitleaks config variables, which swap its config: "
+            + ", ".join(found)
+        )
 
 
 def scan_paths(repository: Path) -> list[Path]:
@@ -257,6 +294,7 @@ def run_current_files(
         return subprocess.run(
             rewritten,
             cwd=snapshot,
+            env=scan_environment(),
             check=False,
             timeout=timeout,
             stdout=stdout,
@@ -313,7 +351,7 @@ def run_gate_command(
     """Run ordinary gates directly and point current-file scans at a snapshot."""
     if role == "secrets-files":
         return run_current_files(command, directory, timeout, stdout, stderr)
-    environment = {**os.environ, "PNPM_CONFIG_DLX_CACHE_MAX_AGE": "0"}
+    environment = {**scan_environment(), "PNPM_CONFIG_DLX_CACHE_MAX_AGE": "0"}
     if role == "freshness":
         environment["POETRY_SOLVER_MIN_RELEASE_AGE"] = "2"
     with tempfile.TemporaryDirectory(prefix="hard-eng-gate-") as temporary:

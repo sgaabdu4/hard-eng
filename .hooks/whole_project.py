@@ -6,6 +6,7 @@ import tomllib
 from itertools import pairwise
 from pathlib import Path, PurePosixPath
 
+from command_words import assigns_variables
 from comments import (
     COMMENT_HEADER,
     HASH,
@@ -24,16 +25,11 @@ from comments import (
 from fallow_settings import SETTINGS_FILES, settings_switch_offs
 from gate_config import generated_sources
 from gitleaks_rules import DEFAULT_RULE_IDS
+from gitleaks_scan import config_variable_hits
 from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
-from rust_settings import (
-    CLIPPY_FILES,
-    cargo_config_hits,
-    clippy_hits,
-    flag_hits,
-    sets_flags,
-)
+from rust_settings import CLIPPY_FILES, rust_file_hits
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 TEXT_SUFFIXES = {
@@ -241,18 +237,13 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         found += pattern_switch_offs(root, name, lines, "holds")
         if base == ".gitleaks.toml":
             found += gitleaks_switch_offs(name, texts[name])
+        if assigns_variables(name):
+            found += config_variable_hits(name, text)
         if base == "Cargo.toml":
             found += cargo_switch_offs(name, text)
         if base in SETTINGS_FILES:
             found += settings_switch_offs(root, name, text)
-        if sets_flags(name) and not name.endswith(
-            (".cargo/config", ".cargo/config.toml")
-        ):
-            found += flag_hits(name, text)
-        if name.endswith((".cargo/config", ".cargo/config.toml")):
-            found += cargo_config_hits(name, text)
-        if base in CLIPPY_FILES:
-            found += clippy_hits(name, text)
+        found += rust_file_hits(name, text)
         if base in RUFF_FILES:
             found += ruff_switch_offs(root, name, text)
     return found
