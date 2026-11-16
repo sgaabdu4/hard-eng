@@ -1,6 +1,5 @@
 """Judge the settings that Ruff and Fallow print for each gate, so no spelling of a setting can hide a narrowed rule set."""
 
-import re
 import subprocess
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -10,20 +9,12 @@ from pathlib import Path
 from command_words import unwrapped
 from dart_boundaries import nested_package_patterns
 from fallow_report import named_config, native_fallow_command
-from fallow_resolved import default_rules, fallow_hits
+from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
 from ruff_settings import ruff_invocations
-from scope_check import left_out, refusal
+from ruff_table import ruff_hits
+from scope_check import left_out, nested_configs, refusal
 from tool_setup import managed_command
-
-COMPLEXITY_LIMITS = {
-    "linter.mccabe.max_complexity": 10,
-    "linter.pylint.max_branches": 12,
-    "linter.pylint.max_statements": 50,
-}
-COMPLEXITY_CODES = {"C901", "PLR0912", "PLR0915"}
-EMPTY_KEYS = ("linter.per_file_ignores", "linter.exclude")
-CODE = re.compile(r"\((\w+)\)")
 
 
 def printed(
@@ -68,69 +59,6 @@ def shown(
     }
 
 
-def assignment(text: str, key: str) -> list[str]:
-    """The entries of one printed setting, or none when it is empty or missing."""
-    lines = text.splitlines()
-    for number, line in enumerate(lines):
-        if line.startswith(f"{key} = "):
-            rest = line.removeprefix(f"{key} = ")
-            if rest in ("[]", "{}"):
-                return []
-            if rest not in ("[", "{"):
-                return [rest]
-            body = []
-            for inner in lines[number + 1 :]:
-                if inner in ("]", "}"):
-                    break
-                body.append(inner.strip().rstrip(","))
-            return body
-    return []
-
-
-def enabled(text: str) -> set[str]:
-    return {
-        found[1]
-        for line in assignment(text, "linter.rules.enabled")
-        if (found := CODE.search(line))
-    }
-
-
-def limit_hits(settings: str) -> list[str]:
-    hits = []
-    for key, limit in COMPLEXITY_LIMITS.items():
-        value = assignment(settings, key)
-        if not value or not value[0].isdigit() or int(value[0]) > limit:
-            hits.append(
-                f"the resolved {key} is {value[0] if value else 'missing'}, above the limit {limit}"
-            )
-    return hits
-
-
-def lacking(lost: set[str], what: str) -> str:
-    names = sorted(lost)
-    more = f" and {len(names) - 3} more" if len(names) > 3 else ""
-    return (
-        f"the resolved rule set lacks {len(names)} {what}: {', '.join(names[:3])}{more}"
-    )
-
-
-def ruff_hits(settings: str, defaults: str, role: object) -> list[str]:
-    """What the resolved settings of one gate drop, compared with Ruff's own defaults."""
-    hits = [
-        f"the resolved {key} is not empty"
-        for key in EMPTY_KEYS
-        if assignment(settings, key)
-    ]
-    codes = enabled(settings)
-    if role == "lint" and (lost := enabled(defaults) - codes):
-        hits.append(lacking(lost, "of Ruff's default rules"))
-    if role == "complexity":
-        if lost := COMPLEXITY_CODES - codes:
-            hits.append(lacking(lost, "of the complexity rules"))
-        hits += limit_hits(settings)
-    return hits
-
-
 Task = Callable[[], list[str]]
 
 
@@ -151,8 +79,12 @@ class Defaults:
 
     def fallow(self) -> Future[dict[str, object]]:
         if self.fallow_run is None:
-            self.fallow_run = self.pool.submit(default_rules, self.timeout)
+            self.fallow_run = self.pool.submit(default_config, self.timeout)
         return self.fallow_run
+
+
+def group_roots(root: Path, every: list[Group]) -> frozenset[Path]:
+    return frozenset((root / group["path"]).resolve() for group in every)
 
 
 def ruff_tasks(
@@ -166,11 +98,12 @@ def ruff_tasks(
     directory = root / group["path"]
     command = managed_command(gate["command"], directory)
     children = nested_package_patterns(group, every, gate.get("role", ""))
+    roots = group_roots(root, every)
     return [
         partial(
             ruff_gate_hits,
             (tuple(prefix), arguments[1:], directory, gate, timeout),
-            children,
+            (children, roots),
             defaults.ruff(tuple(prefix)),
         )
         for prefix, arguments in ruff_invocations(command, directory)
@@ -180,20 +113,22 @@ def ruff_tasks(
 
 def ruff_gate_hits(
     run: tuple[tuple[str, ...], list[str], Path, Gate, float],
-    children: frozenset[str],
+    scope: tuple[frozenset[str], frozenset[Path]],
     baseline: Future[str],
 ) -> list[str]:
+    children, roots = scope
     prefix, arguments, directory, gate, timeout = run
     settings = printed(list(prefix), arguments, directory, timeout)
     checked = shown(list(prefix), arguments, directory, timeout)
     hits = ruff_hits(settings, baseline.result(), gate.get("role"))
     left = left_out(directory, (".py", ".pyi"), checked, children)
-    return [f"gate {gate['name']}: {hit}" for hit in [*hits, *refusal(left)]]
+    nested = nested_configs(directory, "ruff", roots)
+    return [f"gate {gate['name']}: {hit}" for hit in [*hits, *refusal(left), *nested]]
 
 
 def fallow_tasks(
     root: Path,
-    groups: list[Group],
+    every: list[Group],
     group: Group,
     gate: Gate,
     defaults: Defaults,
@@ -204,11 +139,12 @@ def fallow_tasks(
     invocation = native_fallow_command(command)
     if invocation is None:
         return []
-    children = nested_package_patterns(group, groups, gate.get("role", ""))
+    children = nested_package_patterns(group, every, gate.get("role", ""))
     return [
         partial(
             fallow_gate_hits,
             (directory, named_config(invocation), children, gate, timeout),
+            group_roots(root, every),
             defaults.fallow(),
         )
     ]
@@ -216,12 +152,14 @@ def fallow_tasks(
 
 def fallow_gate_hits(
     run: tuple[Path, str | None, frozenset[str], Gate, float],
+    roots: frozenset[Path],
     defaults: Future[dict[str, object]],
 ) -> list[str]:
     directory, config, children, gate, timeout = run
+    hits = fallow_hits(directory, config, children, defaults.result(), timeout)
     return [
         f"gate {gate['name']} ({directory.name}): {hit}"
-        for hit in fallow_hits(directory, config, children, defaults.result(), timeout)
+        for hit in [*hits, *nested_configs(directory, "fallow", roots)]
     ]
 
 

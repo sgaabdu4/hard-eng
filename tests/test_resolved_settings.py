@@ -46,7 +46,10 @@ def project(tmp_path: Path, settings: str) -> Path:
         ('[tool.ruff.lint]\nselect = ["E"]\n', r"lacks \d+ of Ruff's default rules"),
         ('[tool.ruff]\nextend-exclude = ["src"]\n', r"does not check src/a\.py"),
         ('[tool.ruff.lint]\nper-file-ignores = {"a.py" = ["F"]}\n', "per_file_ignores"),
-        ('[tool.ruff.lint]\nexclude = ["src"]\n', "linter.exclude is not empty"),
+        (
+            '[tool.ruff.lint]\nexclude = ["src"]\n',
+            "linter.exclude differs from Ruff's default",
+        ),
         ('[tool.ruff]\nexclude = ["src"]\n', r"does not check src/a\.py"),
     ],
 )
@@ -81,7 +84,9 @@ def test_a_complexity_gate_keeps_the_limits_of_the_template(tmp_path: Path) -> N
     """HE-NO-SWITCH-OFF: a raised limit in the settings file shows in the printed settings unless the gate sets it."""
     root = project(tmp_path, "[tool.ruff.lint.mccabe]\nmax-complexity = 99\n")
     open_gate = ["uvx", "ruff@latest", "check", ".", "--select", "C901,PLR0912,PLR0915"]
-    with pytest.raises(ValueError, match=r"max_complexity is 99, above the limit 10"):
+    with pytest.raises(
+        ValueError, match=r"linter.mccabe.max_complexity is \['99'\], above the limit"
+    ):
         validate_resolved(root, groups(open_gate, "complexity"), 900)
     validate_resolved(root, groups(COMPLEXITY, "complexity"), 900)
 

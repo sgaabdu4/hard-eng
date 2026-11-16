@@ -423,6 +423,8 @@ def rust_cfg_attr_hits(
         raw = (root / name).read_text(errors="replace")
     except OSError:
         return []
+    if "cfg_attr" not in raw:
+        return []
     masked = without_literals(name, code_without_comments(raw, ".rs"))
     wanted = {number for number, _ in lines}
     found = []

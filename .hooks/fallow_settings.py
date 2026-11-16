@@ -8,7 +8,6 @@ from pathlib import Path, PurePosixPath
 from fallow_report import HEALTH_LIMITS
 from project_files import GIT_LISTING
 
-HOOKS_PATTERN = ".hooks/**"
 SETTINGS_FILES = {".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"}
 LIMIT_KEYS = {
     "maxCyclomatic": "max_cyclomatic_threshold",
