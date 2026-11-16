@@ -119,9 +119,26 @@ def test_removing_shared_security_fails(
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     with pytest.raises(ValueError, match=role):
         load_groups(tmp_path)
-    if role == "secrets-history":
-        config["scan_git_history"] = False
-        (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+
+
+@pytest.mark.parametrize("value", [False, "false", 0, None])
+def test_turning_off_the_history_scan_is_refused(
+    runner: ModuleType, installer: ModuleType, tmp_path: Path, value: object
+) -> None:
+    """HE-NO-SWITCH-OFF: `scan_git_history` is refused in any value but true, and the refusal names the entry route."""
+    config = native_gate_fixture(tmp_path, installer, "python")
+    config["scan_git_history"] = value
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    with pytest.raises(
+        ValueError, match=r"HE-NO-SWITCH-OFF.*scan_git_history"
+    ) as error:
+        load_groups(tmp_path)
+    assert ".gitleaksignore" in str(error.value)
+    config["shared"] = [
+        g for g in config["shared"] if g.get("role") != "secrets-history"
+    ]
+    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    with pytest.raises(ValueError, match="scan_git_history"):
         load_groups(tmp_path)
 
 
@@ -242,20 +259,6 @@ def test_workspace_cannot_cover_unrelated_packages_or_child_security(
     (child / "bun.lock").touch()
     with pytest.raises(ValueError, match="lockfiles"):
         load_groups(tmp_path)
-
-
-def test_history_exception_keeps_current_file_scanning(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    checks = [
-        gate("history", "raise SystemExit(1)", role="secrets-history"),
-        gate("current", "from pathlib import Path;Path('scanned').touch()"),
-    ]
-    (tmp_path / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [], "shared": checks, "scan_git_history": False})
-    )
-    assert runner.check() == 0
-    assert (tmp_path / "scanned").is_file()
 
 
 @pytest.mark.parametrize(("ci", "budget"), [("true", 2700.0), ("", 900.0)])

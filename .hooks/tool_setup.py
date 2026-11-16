@@ -148,9 +148,7 @@ def require_shared_roles(
     root: Path, config: GateConfig, files: list[Path], secrets: bool
 ) -> set[str]:
     """Files decide the mandatory shared roles; a gate that names a role's tool fills it."""
-    required = {"secrets-files"} if secrets else set()
-    if secrets and config.get("scan_git_history", True):
-        required.add("secrets-history")
+    required = {"secrets-files", "secrets-history"} if secrets else set()
     if has_workflows(root, files):
         required.update({"workflows", "ci-security"})
     if next(project_shell_scripts(root, files), None) is not None:
