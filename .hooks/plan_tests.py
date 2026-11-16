@@ -3,17 +3,17 @@
 import re
 from pathlib import Path, PurePosixPath
 
-from comments import SLASH, code_without_comments
+from comments import code_without_comments
 from plans import _is_test
 
 HASH_COMMENT_SUFFIXES = {".py", ".rb", ".sh", ".bash", ".zsh", ".pl", ".ex", ".exs"}
 
 
 def uncommented(file: Path) -> str:
-    """The file's text without comments, which cannot define a test."""
+    """The file's text without comments, which cannot define a test; Rust strings hold no interpolation, so every Rust comment is found."""
     text = file.read_text()
-    if file.suffix in SLASH:
-        return code_without_comments(text, file.suffix)
+    if file.suffix == ".rs":
+        return code_without_comments(text, ".rs")
     marker = "#" if file.suffix in HASH_COMMENT_SUFFIXES else "//"
     return "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith(marker)
@@ -51,6 +51,7 @@ def names_tests(path: PurePosixPath) -> bool:
 
 def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
     missing = []
+    texts: dict[Path, str] = {}
     for path, name in references:
         file = (root / path).resolve()
         quoted = rf"[\"'`]{re.escape(name)}[\"'`]"
@@ -63,7 +64,12 @@ def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
             file.is_relative_to(root.resolve())
             and names_tests(PurePosixPath(path))
             and file.is_file()
-            and re.search(definition, uncommented(file))
+            and re.search(
+                definition,
+                texts[file]
+                if file in texts
+                else texts.setdefault(file, uncommented(file)),
+            )
         ):
             missing.append(f"{path}::{name}")
     return missing
