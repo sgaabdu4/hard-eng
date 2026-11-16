@@ -23,7 +23,7 @@ from gate_config import (
     dart_scan_includes_boundaries,
     generated_sources,
 )
-from project_setup import adapt_package, dependency_command, validate_dart_exclusions
+from project_setup import adapt_package, dependency_command
 from test_setup import repository, run_setup, write_fixture_pubspec
 
 
@@ -334,133 +334,6 @@ def test_dart_setup_fills_sections_that_hold_only_comments(
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
     path.write_text(changes["analysis_options.yaml"])
     runner.validate_typing(tmp_path, "dart")
-
-
-@pytest.mark.parametrize("pattern", ["lib/**", "**/*.dart", "../**"])
-def test_dart_exclusions_reject_project_patterns(tmp_path: Path, pattern: str) -> None:
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, [pattern])
-
-
-def test_dart_exclusions_require_generated_evidence(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    source = tmp_path / "handwritten.g.dart"
-    source.write_text("void important() {}\n")
-    with pytest.raises(ValueError, match="handwritten source"):
-        validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-    attributes = tmp_path / ".gitattributes"
-    attributes.write_text("handwritten.g.dart linguist-generated=true\n")
-    validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-    attributes.unlink()
-    source.write_text("// GENERATED CODE - DO NOT MODIFY BY HAND\nconst value = 1;\n")
-    validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-
-
-@pytest.mark.parametrize("kind", ["directory", "symlink"])
-def test_dart_exclusions_reject_nonfile_matches(tmp_path: Path, kind: str) -> None:
-    path = tmp_path / "hidden.g.dart"
-    if kind == "directory":
-        path.mkdir()
-        (path / "real.dart").write_text("void important() {}\n")
-    else:
-        target = tmp_path / "real.dart"
-        target.write_text("void important() {}\n")
-        path.symlink_to(target)
-    with pytest.raises(ValueError, match="unsafe path"):
-        validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-
-
-@pytest.mark.parametrize(
-    "kind", ["empty", "generated", "ignored", "handwritten", "tracked", "symlink"]
-)
-def test_flutter_build_exclusion_preserves_source_checks(
-    runner: ModuleType, tmp_path: Path, kind: str
-) -> None:
-    (tmp_path / "pubspec.yaml").write_text(
-        "name: native_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
-    )
-    excludes = ["build/**", "**/*.g.dart"]
-    if kind != "empty":
-        relative = (
-            "build/source.g.dart"
-            if kind in {"ignored", "tracked"}
-            else "build/source.dart"
-        )
-        source = tmp_path / relative
-        source.parent.mkdir()
-        header = (
-            "// GENERATED CODE - DO NOT MODIFY BY HAND\n" if kind == "generated" else ""
-        )
-        source.write_text(header + "void important() {}\n")
-        if kind in {"ignored", "tracked"}:
-            (tmp_path / ".gitignore").write_text("build/\n")
-        if kind == "tracked":
-            git(tmp_path, "add", "-f", relative)
-        if kind == "symlink":
-            source.unlink()
-            target = tmp_path / "outside.dart"
-            target.write_text("void important() {}\n")
-            source.symlink_to(target)
-    if kind in {"handwritten", "tracked", "symlink"}:
-        with pytest.raises(ValueError, match="handwritten source|unsafe path"):
-            validate_dart_exclusions(tmp_path, excludes)
-    else:
-        validate_dart_exclusions(tmp_path, excludes)
-
-
-def test_pure_dart_platform_sources_remain_required(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    (tmp_path / "pubspec.yaml").write_text("name: plain_dart\n")
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, ["web/**"])
-
-
-@pytest.mark.parametrize(
-    "kind",
-    [
-        "empty",
-        "generated",
-        "vendored",
-        "handwritten-untracked",
-        "handwritten-tracked",
-        "handwritten-test-untracked",
-        "handwritten-test-tracked",
-    ],
-)
-def test_flutter_platform_exclusions_require_no_authored_dart(
-    runner: ModuleType, tmp_path: Path, kind: str
-) -> None:
-    (tmp_path / "pubspec.yaml").write_text(
-        "name: platform_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
-    )
-    android = tmp_path / "android"
-    android.mkdir()
-    if kind != "empty":
-        relative = (
-            "android/test/fixture_test.dart"
-            if kind.startswith("handwritten-test")
-            else "android/main.dart"
-        )
-        source = tmp_path / relative
-        source.parent.mkdir(exist_ok=True)
-        source.write_text("void important() {}\n")
-        if kind == "generated":
-            source.write_text("// GENERATED CODE - DO NOT MODIFY BY HAND\n")
-        if kind == "vendored":
-            (tmp_path / ".gitattributes").write_text(
-                "android/main.dart linguist-vendored=true\n"
-            )
-        if kind in {"handwritten-tracked", "handwritten-test-tracked"}:
-            git(tmp_path, "add", relative)
-    if kind.startswith("handwritten"):
-        with pytest.raises(ValueError, match="handwritten source"):
-            validate_dart_exclusions(tmp_path, ["android/**"])
-    else:
-        validate_dart_exclusions(tmp_path, ["android/**"])
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, ["ios/**"])
 
 
 def test_dart_format_discovers_authored_files_and_skips_deleted_or_generated_output(
@@ -788,36 +661,6 @@ NESTED_ROOT: Group = {"path": ".", "language": "dart", "checks": []}
 def nested_group(path: str, language: str = "dart", role: str = "types") -> Group:
     check: Gate = {"name": role, "role": role, "command": ["dart", "analyze", "."]}
     return {"path": path, "language": language, "checks": [check]}
-
-
-def nested_project(root: Path) -> None:
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
-    (root / "pubspec.yaml").write_text("name: outer\n")
-    for name in ("packages/inner", "test/support"):
-        (root / name / "lib").mkdir(parents=True)
-        (root / name / "pubspec.yaml").write_text("name: inner\n")
-        (root / name / "lib/b.dart").write_text("void b() {}\n")
-    git(root, "add", ".")
-
-
-@pytest.mark.parametrize(
-    "pattern,children,accepted",
-    [
-        ("packages/inner/**", {"packages/inner/**"}, True),
-        ("packages/**", {"packages/inner/**"}, False),
-        ("test/support/**", {"packages/inner/**"}, False),
-        ("packages/inner/**", set(), False),
-    ],
-)
-def test_dart_exclusions_accept_only_nested_packages_with_own_types_check(
-    tmp_path: Path, pattern: str, children: set[str], accepted: bool
-) -> None:
-    nested_project(tmp_path)
-    if accepted:
-        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
-        return
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
 
 
 def test_nested_package_exclusions_follow_child_types_checks() -> None:

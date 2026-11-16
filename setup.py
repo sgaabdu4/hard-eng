@@ -254,8 +254,7 @@ def apply_dart_typing(
     directory: Path,
     children: frozenset[str] = frozenset(),
 ) -> None:
-    from dart_boundaries import dart_rule_settings
-    from project_setup import validate_dart_exclusions
+    from dart_boundaries import dart_rule_settings, validate_dart_exclusions
     from settings_merge import merge
 
     for section, groups in required.items():

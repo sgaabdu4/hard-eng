@@ -27,7 +27,6 @@ from gate_config import (
 )
 from hook_chain import is_own
 from project_files import (
-    GIT_LISTING,
     INSTALL_LOCKS,
     dependency_free,
     missing_lock_error,
@@ -74,75 +73,6 @@ def migrate_dart_plugins(options: JsonObject, source: Path) -> None:
             plugins[name] = (
                 {**entry, "version": current} if isinstance(entry, dict) else current
             )
-
-
-def validate_dart_exclusions(
-    directory: Path, values: object, children: frozenset[str] = frozenset()
-) -> None:
-    allowed = {
-        ".dart_tool/**",
-        "**/*.g.dart",
-        "**/*.freezed.dart",
-        "**/*.gr.dart",
-        "**/*.arb",
-    }
-    flutter = (directory / "pubspec.yaml").is_file() and dependency_command(
-        directory, "dart"
-    )[0] == "flutter"
-    native = {"build/**"} if flutter else set()
-    native.update(
-        f"{root}/**"
-        for root in FLUTTER_PLATFORM_ROOTS
-        if flutter and (directory / root).is_dir()
-    )
-    options = directory / "analysis_options.yaml"
-    if not isinstance(values, list):
-        raise TypeError(f"exclude in {options} must be a list of patterns")
-    known = allowed | native | children
-    if not known.issuperset(value for value in values if isinstance(value, str)):
-        from dart_boundaries import localization_exclusions
-
-        known |= localization_exclusions(directory)
-    refused = [
-        value for value in values if not isinstance(value, str) or value not in known
-    ]
-    if refused:
-        raise ValueError(
-            "Dart strict analysis cannot exclude project files: remove "
-            f"{', '.join(repr(value) for value in refused)} from exclude in {options}"
-        )
-    roots = {pattern.split("/", 1)[0] for pattern in set(values) & native}
-    matches = {
-        path
-        for pattern in set(values) - native - children - {".dart_tool/**"}
-        for path in directory.glob(pattern)
-        if path.relative_to(directory).parts[0] not in roots
-    }
-    if roots:
-        listing = [*GIT_LISTING, "ls-files", "-zco", "--exclude-standard", "--"]
-        names = subprocess.check_output(
-            [*listing, *sorted(roots)], cwd=directory, text=True
-        ).split("\0")
-        matches.update(
-            directory / name
-            for name in names
-            if name
-            and (Path(name).suffix == ".dart" or (directory / name).is_symlink())
-        )
-    names = [str(path.relative_to(directory)) for path in matches]
-    generated = generated_sources(directory, names)
-    for path in matches:
-        relative = path.relative_to(directory)
-        if ".dart_tool/**" in values and relative.parts[0] == ".dart_tool":
-            continue
-        if path.is_symlink() or not path.is_file():
-            raise ValueError(f"Dart generated exclusion matches an unsafe path: {path}")
-        if path.suffix != ".dart" or str(relative) in generated:
-            continue
-        with path.open("rb") as source:
-            header = source.read(2048).splitlines()[:10]
-        if b"// GENERATED CODE - DO NOT MODIFY BY HAND" not in header:
-            raise ValueError(f"Dart exclusion matches handwritten source: {path}")
 
 
 def validate_command_output(

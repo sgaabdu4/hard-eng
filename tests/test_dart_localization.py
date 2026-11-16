@@ -5,8 +5,8 @@ from types import ModuleType
 
 import pytest
 import yaml
+from dart_boundaries import validate_dart_exclusions
 from gate_config import Group
-from project_setup import validate_dart_exclusions
 
 CUSTOM_L10N = "output-dir: lib/gen\noutput-localization-file: texts.dart\n"
 
