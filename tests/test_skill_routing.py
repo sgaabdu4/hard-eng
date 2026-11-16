@@ -49,6 +49,7 @@ ROUTES = [
         "Check the working tree changes for concrete defects before I merge",
         "code-review",
     ),
+    ("Review this diff before I merge it", "code-review"),
     ("Prove the checkout journey works end to end in the browser", "e2e"),
     (
         "Run end-to-end verification of the signup flow across the mobile app and API",
