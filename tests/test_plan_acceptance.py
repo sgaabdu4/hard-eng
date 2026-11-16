@@ -663,6 +663,27 @@ COMMENTED_TESTS = [
         "#[cfg(test)]\nmod tests {\n    // #[test]\n    // fn test_divide() {}\n}",
         "#[cfg(test)]\nmod tests {\n    #[test]\n    fn test_divide() {}\n}",
     ),
+    (
+        "tests/ops.rs",
+        "/*\n#[test]\nfn test_divide() {}\n*/",
+        "#[test]\nfn test_divide() {}",
+    ),
+    (
+        "src/ops.rs",
+        "fn a() { x(); // old; #[test] fn test_divide() {}\n}",
+        "fn a() {}\n#[test]\nfn test_divide() {}",
+    ),
+    ("tests/OpsTests.swift", "/* func test_divide() {} */", "func test_divide() {}"),
+    (
+        "tests/ops.test.ts",
+        "/*\ntest('test_divide', () => {});\n*/",
+        "test('test_divide', () => {});",
+    ),
+    (
+        "test/ops_test.dart",
+        "/* test('test_divide', () {}); */",
+        "test('test_divide', () {});",
+    ),
 ]
 
 
@@ -692,6 +713,11 @@ RUST_TESTS = [
     "use super::*;\n#[test]\nfn test_divide() {}",
     "mod tests {\n    #[test]\n    fn test_divide() {}\n}",
     "#[test]\nunsafe fn test_divide() {}",
+    "fn helper() {}\n/* Integration cases */\n#[test]\nfn test_divide() {}",
+    "use super::*;\n/* Old cases */\n#[test]\nfn test_divide() {}",
+    "#[test] /* slow */\nfn test_divide() {}",
+    "#[test]\n/** Divides. */\nfn test_divide() {}",
+    "#[test]\n/// Divides.\nfn test_divide() {}",
 ]
 
 
@@ -730,11 +756,16 @@ def test_a_test_named_in_a_comment_after_an_attribute_does_not_count(
 
 
 @pytest.mark.parametrize("found", [True, False], ids=["real", "gone"])
+@pytest.mark.parametrize(
+    "note", ["", " // => Point { x: 1 };"], ids=["plain", "braced"]
+)
 def test_a_long_table_of_test_cases_is_read_at_once(
-    tmp_path: Path, found: bool
+    tmp_path: Path, found: bool, note: str
 ) -> None:
-    """A search starts only where an item can start, so a table of 3000 cases is read once."""
-    table = "".join(f'#[test_case({n}, "x{n}" ; "case {n}")]\n' for n in range(3000))
+    """A search starts only where an item can start in code, so a table of 3000 cases is read once."""
+    table = "".join(
+        f'#[test_case({n}, "x{n}" ; "case {n}")]{note}\n' for n in range(3000)
+    )
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests/ops.rs").write_text(
         table + "fn t(a: u8, b: &str) {}\n\n#[test]\nfn test_divide() {}\n"
