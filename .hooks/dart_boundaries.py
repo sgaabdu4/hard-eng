@@ -205,7 +205,10 @@ def validate_dart_exclusions(
         value
         for value in values
         if not isinstance(value, str)
-        or (value not in known and (not inherited or excludes_here(origin or directory, value)))
+        or (
+            value not in known
+            and (not inherited or excludes_here(origin or directory, value))
+        )
     ]
     if refused:
         raise ValueError(

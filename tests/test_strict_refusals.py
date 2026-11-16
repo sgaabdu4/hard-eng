@@ -189,7 +189,7 @@ QUOTED_SWITCHES = [
     ),
     ("src/rule.test.ts", "const sample = `\n// eslint-" + "disable-next-line\n`;\n"),
     ("src/a.ts", "const t = `${f('// @ts-" + "ignore')}`;\n"),
-    ("scripts/scan.mjs", "const banned = /(?<!dart-)x|fallow-" + "ignore/;\n"),
+    ("scripts/scan.mjs", "const banned = /(?<!dart-)x|eslint-" + "disable/;\n"),
     ("tool/scan.py", "MARK = '# no" + "qa'\nRULE = f'{x} # no" + "qa'\n"),
     *(
         [("tool/tpl.py", "TPL = t'{x} # no" + "qa'\n")]
@@ -215,7 +215,7 @@ QUOTED_NEAR_MISSES = [
     ("lib/a.dart", "final s = r'''x'''; // ig" + "nore: y\n", "// ig" + "nore:"),
     (
         "lib/a.dart",
-        "final a = '${b ? \"'\" : \"\"}'; // ig" + "nore: avoid_print\n",
+        'final a = \'${b ? "\'" : ""}\'; // ig' + "nore: avoid_print\n",
         "// ig" + "nore:",
     ),
     (
@@ -225,6 +225,41 @@ QUOTED_NEAR_MISSES = [
     ),
     ("src/a.ts", "const k = 'x gitleaks" + ":allow';\n", "gitleaks" + ":allow"),
     ("tool/scan.py", "x = '#'  # no" + "qa\n", "# no" + "qa"),
+    (
+        "scripts/scan.mjs",
+        "const banned = /(?<!dart-)x|fallow-" + "ignore/;\n",
+        "fallow-" + "ignore",
+    ),
+    ("tool/scan.py", "RULE = f'{x} # no" + "semgrep'\n", "no" + "semgrep"),
+    ("tool/scan.py", "x = '# pragma: no " + "cover'\n", "# pragma: no " + "cover"),
+    ("lib/a.dart", "const s = 'no" + "sem';\n", "no" + "sem"),
+    ("lib/a.dart", "const s = 'coverage:" + "ignore-file';\n", "coverage:" + "ignore-"),
+    (
+        "lib/a.dart",
+        "const s = '// dart-decimate-" + "ignore-file';\n",
+        "// dart-decimate-" + "ignore-file",
+    ),
+    ("src/a.ts", "const s = '/* c8 " + "ignore next */';\n", "/* c8 " + "ignore"),
+    (
+        "src/a.ts",
+        "const s = `v8 " + "ignore`; // v8 " + "ignore\n",
+        "// v8 " + "ignore",
+    ),
+    (
+        "src/a.jsx",
+        "const a = <p>Don't {/* eslint-" + "disable-line x */}</p>;\n",
+        "eslint-" + "disable",
+    ),
+    (
+        "src/a.tsx",
+        "const a = <p>`</p>; // eslint-" + "disable-line\n",
+        "eslint-" + "disable",
+    ),
+    (
+        "app/a.swift",
+        'let a = #"a"b"# // swift-format-' + "ignore\n",
+        "swift-format-" + "ignore",
+    ),
 ]
 
 

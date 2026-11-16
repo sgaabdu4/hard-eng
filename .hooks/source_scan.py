@@ -229,20 +229,39 @@ def without_literals(name: str, text: str) -> str:
     return blank_spans(text, inside, NOT_LINE_BREAK)
 
 
-def literal_free_lines(root: Path, name: str) -> Callable[[int, str], str]:
-    """Each line of the file with its literals blanked; a line that differs on disk stays as given."""
-    read: list[tuple[list[str], list[str]]] = []
+UNMASKED = {".jsx", ".tsx", ".swift"}
+LITERAL_HINT = re.compile(r"['\"`/]")
+MULTI_LINE_OPENERS = {
+    ".py": ("'''", '"""', "\\\n"),
+    ".pyi": ("'''", '"""', "\\\n"),
+    ".dart": ("'''", '"""', "\\\n"),
+    **dict.fromkeys(JAVASCRIPT, ("`", "\\\n")),
+}
 
-    def line(number: int, text: str) -> str:
+
+def literal_free_lines(root: Path, name: str) -> Callable[[int, str, str | None], str]:
+    """Each line of the file with its literals blanked; a line that differs on disk stays as given. Tools that read JSX text or Swift raw strings are not read by the scanner, so those files keep the line as given. Given the text before a hit, a line with no quote or slash there and a file with no multi-line opener stays as given without a scan."""
+    suffix = PurePosixPath(name).suffix
+    openers = MULTI_LINE_OPENERS.get(suffix)
+    read: list[tuple[str, list[str], bool]] = []
+    blanked: list[list[str]] = []
+
+    def line(number: int, text: str, before: str | None = None) -> str:
+        if openers is None or suffix in UNMASKED:
+            return text
         if not read:
             try:
                 raw = (root / name).read_text(errors="replace")
             except OSError:
                 raw = ""
             raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-            read.append((raw.splitlines(), without_literals(name, raw).splitlines()))
-        lines, blanked = read[0]
-        same = len(blanked) == len(lines) and lines[number - 1 : number] == [text]
-        return blanked[number - 1] if same else text
+            read.append((raw, raw.splitlines(), any(o in raw for o in openers)))
+        raw, lines, multi = read[0]
+        if before is not None and not multi and not LITERAL_HINT.search(before):
+            return text
+        if not blanked:
+            blanked.append(without_literals(name, raw).splitlines())
+        same = len(blanked[0]) == len(lines) and lines[number - 1 : number] == [text]
+        return blanked[0][number - 1] if same else text
 
     return line
