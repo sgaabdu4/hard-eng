@@ -325,6 +325,33 @@ def test_a_comment_inside_a_dart_interpolation_hides_no_later_line(
     )
 
 
+@pytest.mark.parametrize(
+    ("text", "line"),
+    [
+        (
+            "String f(int a) {\n  return '''${a ~//*c*/ 2}''';\n}\n"
+            + "int y = 'a'; // ig"
+            + "nore: invalid_assignment\nconst n = '''x''';\n",
+            4,
+        ),
+        (
+            "const a = 7;\nfinal b = a ~//*c*/ 2; final t = '''\nit's\n''';\n"
+            + "int y = 'a'; // ig"
+            + "nore: invalid_assignment\n",
+            5,
+        ),
+    ],
+    ids=["interpolation", "code"],
+)
+def test_a_dart_integer_division_before_a_block_comment_hides_no_later_line(
+    tmp_path: Path, text: str, line: int
+) -> None:
+    """HE-NO-SWITCH-OFF: Dart reads `~//*` as `~/` then a block comment, so a later switch-off still fails."""
+    assert f"lib/k1.dart:{line} holds '// ig" + "nore:'" in refusal(
+        project(tmp_path, {"lib/k1.dart": text})
+    )
+
+
 @pytest.mark.parametrize(("name", "text", "shown"), QUOTED_NEAR_MISSES)
 def test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails(
     tmp_path: Path, name: str, text: str, shown: str

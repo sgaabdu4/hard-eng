@@ -3,6 +3,7 @@
 import io
 import re
 import tokenize
+from bisect import bisect_right
 from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path, PurePosixPath
 
@@ -30,6 +31,9 @@ def interpolation_end(text: str, index: int, found: list[tuple[int, int]]) -> in
     depth = 1
     while depth and (stop := INTERPOLATION_STOP.search(text, index)):
         at = stop.start()
+        if text[at] == "/" and text[at - 1 : at] == "~":
+            index = at + 1
+            continue
         if text[at] == "/":
             index = comment_end(text, at, ".dart")
             found.append((at, index))
@@ -181,7 +185,9 @@ def scan(text: str, suffix: str) -> Iterator[tuple[bool, int, int, bool]]:
             index, blank = index + 1, True
         elif character in " \t\r":
             index += 1
-        elif text.startswith(("//", "/*"), index):
+        elif text.startswith(("//", "/*"), index) and not (
+            suffix == ".dart" and text[index - 1 : index] == "~"
+        ):
             close = comment_end(text, index, suffix)
             yield True, index, close, blank
             index, blank = close, False
@@ -226,11 +232,14 @@ def code_without_comments(text: str, suffix: str) -> str:
 def outside(
     start: int, close: int, comments: list[tuple[int, int]]
 ) -> Iterator[tuple[int, int]]:
-    """Parts of the literal from start to close that no comment inside a Dart `${...}` covers."""
-    for begin, end in comments:
-        if start < begin and end < close:
+    """Parts of the literal from start to close that no comment inside a Dart `${...}` covers; comments are in file order."""
+    at = bisect_right(comments, start, key=lambda comment: comment[0])
+    while at < len(comments) and comments[at][0] < close:
+        begin, end = comments[at]
+        if end < close:
             yield start, begin
             start = end
+        at += 1
     yield start, close
 
 
