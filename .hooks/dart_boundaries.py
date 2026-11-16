@@ -6,6 +6,9 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
+from gate_config import generated_sources
+from project_files import GIT_LISTING
+
 if TYPE_CHECKING:
     from gate_config import Group, JsonObject
 
@@ -153,6 +156,91 @@ def add_exclusions(options: "JsonObject", patterns: frozenset[str]) -> None:
         exclude.extend(sorted(patterns - set(exclude)))
 
 
+def excludes_here(directory: Path, pattern: str) -> bool:
+    """Whether a pattern from an included file matches a path here; the analyzer applies it from this folder."""
+    try:
+        return next(directory.glob(pattern), None) is not None
+    except (ValueError, NotImplementedError):
+        return True
+
+
+def validate_dart_exclusions(
+    directory: Path,
+    values: object,
+    children: frozenset[str] = frozenset(),
+    holder: Path | None = None,
+) -> None:
+    """Refuse excludes of project files; holder is the file that writes them, and a holder in a parent folder is that folder's own options, included here."""
+    from project_setup import FLUTTER_PLATFORM_ROOTS, dependency_command
+
+    allowed = {
+        ".dart_tool/**",
+        "**/*.g.dart",
+        "**/*.freezed.dart",
+        "**/*.gr.dart",
+        "**/*.arb",
+    }
+    flutter = (directory / "pubspec.yaml").is_file() and dependency_command(
+        directory, "dart"
+    )[0] == "flutter"
+    native = {"build/**"} if flutter else set()
+    native.update(
+        f"{root}/**"
+        for root in FLUTTER_PLATFORM_ROOTS
+        if flutter and (directory / root).is_dir()
+    )
+    options = holder or directory / "analysis_options.yaml"
+    inherited = options.resolve().parent in directory.resolve().parents
+    if not isinstance(values, list):
+        raise TypeError(f"exclude in {options} must be a list of patterns")
+    known = allowed | native | children
+    if not known.issuperset(value for value in values if isinstance(value, str)):
+        known |= localization_exclusions(directory)
+    refused = [
+        value
+        for value in values
+        if not isinstance(value, str)
+        or (value not in known and (not inherited or excludes_here(directory, value)))
+    ]
+    if refused:
+        raise ValueError(
+            "Dart strict analysis cannot exclude project files: remove "
+            f"{', '.join(repr(value) for value in refused)} from exclude in {options}"
+        )
+    roots = {pattern.split("/", 1)[0] for pattern in set(values) & native}
+    matches = {
+        path
+        for pattern in set(values) - native - children - {".dart_tool/**"}
+        for path in directory.glob(pattern)
+        if path.relative_to(directory).parts[0] not in roots
+    }
+    if roots:
+        listing = [*GIT_LISTING, "ls-files", "-zco", "--exclude-standard", "--"]
+        names = subprocess.check_output(
+            [*listing, *sorted(roots)], cwd=directory, text=True
+        ).split("\0")
+        matches.update(
+            directory / name
+            for name in names
+            if name
+            and (Path(name).suffix == ".dart" or (directory / name).is_symlink())
+        )
+    names = [str(path.relative_to(directory)) for path in matches]
+    generated = generated_sources(directory, names)
+    for path in matches:
+        relative = path.relative_to(directory)
+        if ".dart_tool/**" in values and relative.parts[0] == ".dart_tool":
+            continue
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"Dart generated exclusion matches an unsafe path: {path}")
+        if path.suffix != ".dart" or str(relative) in generated:
+            continue
+        with path.open("rb") as source:
+            header = source.read(2048).splitlines()[:10]
+        if b"// GENERATED CODE - DO NOT MODIFY BY HAND" not in header:
+            raise ValueError(f"Dart exclusion matches handwritten source: {path}")
+
+
 def validate_dart_includes(
     path: Path,
     directory: Path,
@@ -166,7 +254,6 @@ def validate_dart_includes(
         raise ValueError(f"Recursive Dart analysis include: {path}")
     seen.add(path)
     from gate_config import JsonObject
-    from project_setup import validate_dart_exclusions
 
     options = dart_options(path)
 
@@ -176,7 +263,12 @@ def validate_dart_includes(
         raise ValueError(
             f"Remove obsolete Dart language flags; use no_dynamic_casts and no_raw_types: {path}"
         )
-    validate_dart_exclusions(directory, analyzer.get("exclude", []), children)
+    validate_dart_exclusions(
+        directory,
+        analyzer.get("exclude", []),
+        children,
+        path,
+    )
     if any(value == "ignore" for value in analyzer.get("errors", {}).values()):
         raise ValueError(
             f"Dart strict analysis cannot exclude files or ignore diagnostics: {path}"
@@ -331,7 +423,6 @@ def validate_dart_typing(
     children: frozenset[str] = frozenset(),
 ) -> None:
     from gate_config import JsonObject
-    from project_setup import validate_dart_exclusions
 
     path = directory / "analysis_options.yaml"
     options = dart_options(path)

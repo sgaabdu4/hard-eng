@@ -6,10 +6,10 @@ from pathlib import Path
 import gate_config
 import pytest
 from conftest import SOURCE, commit, configure, gate, git, init
+from dart_boundaries import validate_dart_exclusions
 from gate_config import GateConfig, validate_file_sizes
 from project_setup import (
     adapt_packages,
-    validate_dart_exclusions,
 )
 
 
