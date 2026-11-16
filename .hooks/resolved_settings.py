@@ -3,15 +3,16 @@
 import re
 import subprocess
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 
+from command_words import unwrapped
 from dart_boundaries import nested_package_patterns
 from fallow_report import named_config, native_fallow_command
-from fallow_resolved import fallow_hits
+from fallow_resolved import default_rules, fallow_hits
 from gate_config import Gate, Group
-from ruff_settings import ruff_invocations, unwrapped
+from ruff_settings import ruff_invocations
 from tool_setup import managed_command
 
 COMPLEXITY_LIMITS = {
@@ -115,12 +116,37 @@ def ruff_hits(settings: str, defaults: str, role: object) -> list[str]:
 Task = Callable[[], list[str]]
 
 
-def ruff_tasks(root: Path, group: Group, gate: Gate, timeout: float) -> list[Task]:
+class Defaults:
+    """Each tool's own default settings, printed once and shared by every gate that needs them."""
+
+    def __init__(self, pool: ThreadPoolExecutor, root: Path, timeout: float) -> None:
+        self.pool, self.root, self.timeout = pool, root, timeout
+        self.ruff_runs: dict[tuple[str, ...], Future[str]] = {}
+        self.fallow_run: Future[dict[str, object]] | None = None
+
+    def ruff(self, prefix: tuple[str, ...]) -> Future[str]:
+        if prefix not in self.ruff_runs:
+            self.ruff_runs[prefix] = self.pool.submit(
+                printed, list(prefix), ["--isolated"], self.root, self.timeout
+            )
+        return self.ruff_runs[prefix]
+
+    def fallow(self) -> Future[dict[str, object]]:
+        if self.fallow_run is None:
+            self.fallow_run = self.pool.submit(default_rules, self.timeout)
+        return self.fallow_run
+
+
+def ruff_tasks(
+    root: Path, group: Group, gate: Gate, defaults: Defaults, timeout: float
+) -> list[Task]:
     directory = root / group["path"]
     command = managed_command(gate["command"], directory)
     return [
         partial(
-            ruff_gate_hits, tuple(prefix), arguments[1:], directory, gate, root, timeout
+            ruff_gate_hits,
+            (tuple(prefix), arguments[1:], directory, gate, timeout),
+            defaults.ruff(tuple(prefix)),
         )
         for prefix, arguments in ruff_invocations(command, directory)
         if arguments[:1] == ["check"]
@@ -128,23 +154,23 @@ def ruff_tasks(root: Path, group: Group, gate: Gate, timeout: float) -> list[Tas
 
 
 def ruff_gate_hits(
-    prefix: tuple[str, ...],
-    arguments: list[str],
-    directory: Path,
-    gate: Gate,
-    root: Path,
-    timeout: float,
+    run: tuple[tuple[str, ...], list[str], Path, Gate, float], baseline: Future[str]
 ) -> list[str]:
+    prefix, arguments, directory, gate, timeout = run
     settings = printed(list(prefix), arguments, directory, timeout)
-    defaults = printed(list(prefix), ["--isolated"], root, timeout)
     return [
         f"gate {gate['name']}: {hit}"
-        for hit in ruff_hits(settings, defaults, gate.get("role"))
+        for hit in ruff_hits(settings, baseline.result(), gate.get("role"))
     ]
 
 
 def fallow_tasks(
-    root: Path, groups: list[Group], group: Group, gate: Gate, timeout: float
+    root: Path,
+    groups: list[Group],
+    group: Group,
+    gate: Gate,
+    defaults: Defaults,
+    timeout: float,
 ) -> list[Task]:
     directory = root / group["path"]
     command = unwrapped(managed_command(gate["command"], directory), directory)
@@ -155,25 +181,20 @@ def fallow_tasks(
     return [
         partial(
             fallow_gate_hits,
-            directory,
-            named_config(invocation),
-            children,
-            gate,
-            timeout,
+            (directory, named_config(invocation), children, gate, timeout),
+            defaults.fallow(),
         )
     ]
 
 
 def fallow_gate_hits(
-    directory: Path,
-    config: str | None,
-    children: frozenset[str],
-    gate: Gate,
-    timeout: float,
+    run: tuple[Path, str | None, frozenset[str], Gate, float],
+    defaults: Future[dict[str, object]],
 ) -> list[str]:
+    directory, config, children, gate, timeout = run
     return [
         f"gate {gate['name']} ({directory.name}): {hit}"
-        for hit in fallow_hits(directory, config, children, timeout)
+        for hit in fallow_hits(directory, config, children, defaults.result(), timeout)
     ]
 
 
@@ -183,16 +204,17 @@ def run_task(task: Task) -> list[str]:
 
 def validate_resolved(root: Path, groups: list[Group], timeout: float) -> None:
     """Run in the full check after the tools are installed; the Stop hook never runs it."""
-    tasks = [
-        task
-        for group in groups
-        for gate in group["checks"]
-        for task in (
-            *ruff_tasks(root, group, gate, timeout),
-            *fallow_tasks(root, groups, group, gate, timeout),
-        )
-    ]
     with ThreadPoolExecutor(max_workers=8) as pool:
+        defaults = Defaults(pool, root, timeout)
+        tasks = [
+            task
+            for group in groups
+            for gate in group["checks"]
+            for task in (
+                *ruff_tasks(root, group, gate, defaults, timeout),
+                *fallow_tasks(root, groups, group, gate, defaults, timeout),
+            )
+        ]
         refused = [hit for found in pool.map(run_task, tasks) for hit in found]
     if refused:
         raise ValueError(

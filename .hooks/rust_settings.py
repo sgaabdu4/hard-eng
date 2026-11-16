@@ -2,7 +2,9 @@
 
 import re
 import tomllib
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+
+from command_words import segments
 
 CLIPPY_FILES = {"clippy.toml", ".clippy.toml"}
 CLIPPY_DEFAULTS = {
@@ -32,6 +34,7 @@ CLIPPY_DEFAULTS = {
     "vec-box-size-threshold": 4096,
     "verbose-bit-mask-threshold": 1,
 }
+FLAG_SPLIT = re.compile(r"[\s,=:'\"\[\]]+")
 ASSIGNMENT = re.compile(r"rustflags[\"']?\s*[:=]", re.IGNORECASE)
 FLAG_SUFFIXES = (".yml", ".yaml", ".sh", ".bash", ".toml", ".json", ".mk")
 FLAG_NAMES = {
@@ -52,7 +55,7 @@ def sets_flags(name: str) -> bool:
 
 def allows(flags: str) -> str | None:
     """The flag that allows lints or caps them below a warning, or None."""
-    tokens = [token for token in re.split(r"[\s,=:'\"\[\]]+", flags) if token]
+    tokens = [token for token in FLAG_SPLIT.split(flags) if token]
     for index, token in enumerate(tokens):
         if token.startswith(("-A", "--allow")):
             return token
@@ -121,3 +124,28 @@ def clippy_hits(name: str, text: str) -> list[str]:
                 f"{name}:{number} sets {key} to {value}, above Clippy's default {default}"
             )
     return found
+
+
+def command_hits(command: list[str], directory: Path) -> list[str]:
+    """Words of a cargo command that allow lints: a flag after `--`, a Rust flags config value or a variable."""
+    found: list[str] = []
+    for segment in segments(command, directory):
+        names = [Path(word).name for word in segment]
+        if "cargo" in names:
+            rest = segment[segment.index("--") + 1 :] if "--" in segment else []
+            if flag := allows(" ".join(rest)):
+                found.append(flag)
+        found += [
+            word
+            for word in segment
+            if (match := ASSIGNMENT.search(word)) and allows(word[match.end() :])
+        ]
+    return found
+
+
+def validate_rust_command(command: list[str], directory: Path) -> None:
+    if found := command_hits(command, directory):
+        raise ValueError(
+            "HE-NO-SWITCH-OFF: A Rust gate must not allow lints: fix each finding at its cause "
+            f"instead; the gate holds {', '.join(found)}"
+        )
