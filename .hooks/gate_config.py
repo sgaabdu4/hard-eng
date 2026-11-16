@@ -373,6 +373,9 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     from gitleaks_scan import validate_config_variables
 
     validate_config_variables(command, directory)
+    from command_words import segments
+
+    segments(command, directory)
     from ruff_settings import validate_ruff_command
 
     validate_ruff_command(command, directory, gate.get("role"))

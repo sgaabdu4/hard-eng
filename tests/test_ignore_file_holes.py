@@ -374,7 +374,9 @@ def test_a_fallow_option_value_is_not_a_scan_path(
     tmp_path: Path, extra: list[str]
 ) -> None:
     """The words that Fallow's own options take are values, so they never read as a path that narrows the scan."""
-    fallow_gate(tmp_path, [*SCAN, *extra])
+    from fallow_report import narrowing
+
+    assert narrowing([*SCAN, *extra]) == []
 
 
 @pytest.mark.parametrize(
