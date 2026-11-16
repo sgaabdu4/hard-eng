@@ -4,7 +4,6 @@ import io
 import re
 import tokenize
 from collections.abc import Callable, Iterable, Iterator
-from functools import cache
 from pathlib import Path, PurePosixPath
 
 CONTROL_KEYWORD_BEFORE = re.compile(r"(?<![.$])\b(if|while|for|with)\s*$")
@@ -147,9 +146,8 @@ def comment_end(text: str, index: int, suffix: str) -> int:
     return at if not depth else len(text)
 
 
-@cache
 def scanned_spans(text: str, suffix: str) -> tuple[tuple[bool, int, int, bool], ...]:
-    """(whether a comment, start, end, whether only blanks precede it on its line) of each comment and literal; one scan serves every check of a file."""
+    """(whether a comment, start, end, whether only blanks precede it on its line) of each comment and literal."""
     return tuple(scan(text, suffix))
 
 
