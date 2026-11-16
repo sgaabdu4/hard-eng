@@ -11,9 +11,9 @@ import pytest
 from change_size import plan_tests
 from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from gate_config import repository_files
+from plan_tests import missing_tests
 from plans import (
     is_plan_path,
-    missing_tests,
     plan_files,
     validate_plan,
     validate_plans,

@@ -14,7 +14,7 @@ Sources: N/A — found by a CI run: an installed Rust project's Complete plan na
 
 Owners: `missing_tests` in `.hooks/plans.py` holds one definition pattern per file kind; `.rs` had none, so it fell back to a quoted name, which a Rust test never has. `_is_test` accepts a path in a test folder or with a test file name; Rust unit tests live in `src/` files, so `.rs` files are accepted by the test attribute instead.
 Same cause: `claimed_tests` (Same cause and Retro lines) used the same path rule, so it skipped a Rust `src/` name with no check. Retro lines now use `names_tests`; Same cause lines name code, so they keep `_is_test`, as for every other language. Searched `missing_tests` and `_is_test` for other file kinds that define tests by a function header: Python and Swift have patterns; JavaScript, Dart and Ruby name tests in quotes, which the fallback reads.
-Single source: the Rust form lives once in `RUST_TEST`; the path rule for named tests lives once in `names_tests`.
+Single source: the Rust form lives once in `RUST_TEST`; the path rule for named tests lives once in `names_tests`. Reading named tests moved from `.hooks/plans.py` to its owner `.hooks/plan_tests.py`, because `plans.py` passed 1000 lines.
 
 ## Decisions + authorization
 
