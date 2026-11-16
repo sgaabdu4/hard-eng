@@ -6,6 +6,8 @@ import pytest
 from test_strict_refusals import project, refusal
 from whole_project import validate_whole_project
 
+RF = "rust" + "flags"
+UPPER = RF.upper()
 ALLOW = "al" + "low"
 EXPECT = "ex" + "pect"
 
@@ -57,14 +59,18 @@ def test_ordinary_rust_attributes_pass(tmp_path: Path) -> None:
     validate_whole_project(project(tmp_path, {"src/lib.rs": passing}))
 
 
+def fill(text: str) -> str:
+    return text.replace("@LOW@", RF).replace("@UP@", UPPER)
+
+
 CARGO_CONFIGS = [
-    ('[build]\nrustflags = ["-A", "warnings"]\n', 2),
-    ('[build]\nrustflags = ["-Awarnings"]\n', 2),
-    ('[build]\nrustflags = ["--allow", "dead_code"]\n', 2),
-    ('[build]\nrustflags = ["--cap-lints", "allow"]\n', 2),
-    ('[build]\nrustflags = "-A dead_code"\n', 2),
-    ('[target.x86_64-unknown-linux-gnu]\nrustflags = ["-Aunused"]\n', 2),
-    ('[env]\nRUSTFLAGS = "--cap-lints allow"\n', 2),
+    ('[build]\n@LOW@ = ["-A", "warnings"]\n', 2),
+    ('[build]\n@LOW@ = ["-Awarnings"]\n', 2),
+    ('[build]\n@LOW@ = ["--allow", "dead_code"]\n', 2),
+    ('[build]\n@LOW@ = ["--cap-lints", "allow"]\n', 2),
+    ('[build]\n@LOW@ = "-A dead_code"\n', 2),
+    ('[target.x86_64-unknown-linux-gnu]\n@LOW@ = ["-Aunused"]\n', 2),
+    ('[env]\n@UP@ = "--cap-lints allow"\n', 2),
 ]
 
 
@@ -73,33 +79,35 @@ CARGO_CONFIGS = [
 def test_cargo_rust_flags_that_allow_lints_are_switch_offs(
     tmp_path: Path, name: str, text: str, line: int
 ) -> None:
-    assert f"{name}:{line} sets rustflags" in refusal(project(tmp_path, {name: text}))
+    message = refusal(project(tmp_path, {name: fill(text)}))
+    assert f"{name}:{line} sets {RF}" in message
 
 
 def test_cargo_rust_flags_that_deny_or_set_codegen_pass(tmp_path: Path) -> None:
-    kept = '[build]\nrustflags = ["-D", "warnings", "-C", "target-cpu=native"]\n'
-    validate_whole_project(project(tmp_path, {".cargo/config.toml": kept}))
+    kept = '[build]\n@LOW@ = ["-D", "warnings", "-C", "target-cpu=native"]\n'
+    validate_whole_project(project(tmp_path, {".cargo/config.toml": fill(kept)}))
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        'env:\n  RUSTFLAGS: "-A warnings"\n',
-        "env:\n  RUSTFLAGS: --cap-lints allow\n",
-        "export RUSTFLAGS='-Adead_code'\n",
-        "RUSTFLAGS=--allow=unused cargo build\n",
+        'env:\n  @UP@: "-A warnings"\n',
+        "env:\n  @UP@: --cap-lints allow\n",
+        "export @UP@='-Adead_code'\n",
+        "@UP@=--allow=unused cargo build\n",
     ],
 )
-def test_a_rustflags_variable_that_allows_lints_is_refused(
+def test_a_rust_flags_variable_that_allows_lints_is_refused(
     tmp_path: Path, text: str
 ) -> None:
     name = ".github/workflows/rust.yml" if "env:" in text else "build.sh"
-    assert f"{name}:" in refusal(project(tmp_path, {name: text}))
+    assert f"{name}:" in refusal(project(tmp_path, {name: fill(text)}))
     validate_whole_project(
         project(
             tmp_path / "ok",
             {
-                name: text.replace("-A", "-D")
+                name: fill(text)
+                .replace("-A", "-D")
                 .replace("--allow", "--deny")
                 .replace("--cap-lints allow", "--cap-lints forbid")
             },
@@ -120,7 +128,7 @@ CLIPPY = [
 def test_a_raised_clippy_threshold_is_a_switch_off(
     tmp_path: Path, name: str, text: str, key: str
 ) -> None:
-    assert f"{name}:1 sets {key}" in refusal(project(tmp_path, {name: text}))
+    assert f"{name}:1 sets {key}" in refusal(project(tmp_path, {name: fill(text)}))
 
 
 def test_clippy_thresholds_at_or_below_the_default_pass(tmp_path: Path) -> None:
