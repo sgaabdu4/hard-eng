@@ -1,13 +1,17 @@
 """Anything the judge does not recognise is refused: each row is an input a review found passing."""
 
+import json
+import subprocess
 from pathlib import Path
 
 import pytest
 from gate_config import Gate, Group, validate_gate
+from resolved_settings import validate_resolved
+from test_fallow_resolved import need_fallow
+from test_strict_refusals import project
 
 LINT = ["uvx", "ruff@latest", "check", "."]
 DEAD = ["fallow", "--only", "dead-code,dupes,health", "--fail-on-issues"]
-LINT_ROLE = "lint"
 
 
 def gate(command: list[str], role: str = "lint") -> Gate:
@@ -74,6 +78,120 @@ def test_the_listed_forms_still_pass(tmp_path: Path, command: list[str]) -> None
 def test_the_ruff_format_gate_may_extend_exclude(tmp_path: Path) -> None:
     command = ["ruff", "format", "--check", ".", "--extend-exclude", ".agents/skills"]
     validate_gate(gate(command, "format"), tmp_path, set())
+
+
+def test_loading_a_gate_runs_no_git_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate loader stays cheap: file scope is judged in the full check."""
+
+    def refuse(*_arguments: object, **_options: object) -> None:
+        raise AssertionError("gate load started a process")
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    monkeypatch.setattr(subprocess, "run", refuse)
+    validate_gate(gate(["ruff", "check", "src", "tests"]), tmp_path, set())
+
+
+NO_FILES: dict[str, str] = {}
+SCOPE = {
+    "include setting": (
+        {"pyproject.toml": '[tool.ruff]\ninclude = ["main.py"]\n'},
+        LINT,
+    ),
+    "include flag": (NO_FILES, [*LINT, "--config", "include=['main.py']"]),
+    ".ignore file": ({".ignore": "sub/\n"}, LINT),
+    "exclude flag": (NO_FILES, [*LINT, "--exclude", "sub"]),
+}
+
+
+@pytest.mark.parametrize("name", SCOPE)
+def test_a_lint_gate_that_checks_fewer_files_than_git_tracks_is_refused(
+    tmp_path: Path, name: str
+) -> None:
+    """HE-NO-SWITCH-OFF: ruff is asked which files it checks, and each tracked Python file that it skips fails."""
+    files, command = SCOPE[name]
+    root = project(
+        tmp_path, {"main.py": "import os\n", "sub/a.py": "import os\n", **files}
+    )
+    with pytest.raises(ValueError, match=r"sub/a\.py|main\.py"):
+        validate_resolved(root, lint_groups((".", command)), 900)
+
+
+def test_generated_files_may_be_left_out(tmp_path: Path) -> None:
+    files = {
+        "main.py": "x = 1\n",
+        "proto/a_pb2.py": "import os\n",
+        ".gitattributes": "proto/** linguist-generated\n",
+    }
+    root = project(tmp_path, files)
+    validate_resolved(
+        root, lint_groups((".", [*LINT, "--extend-exclude", "proto"])), 900
+    )
+    validate_resolved(root, lint_groups((".", [*LINT[:3], "main.py"])), 900)
+    other = project(tmp_path / "plain", {**files, ".gitattributes": ""})
+    with pytest.raises(ValueError, match=r"proto/a_pb2\.py"):
+        validate_resolved(
+            other, lint_groups((".", [*LINT, "--extend-exclude", "proto"])), 900
+        )
+
+
+def test_files_that_hard_eng_installs_are_left_out_of_a_project_only(
+    tmp_path: Path,
+) -> None:
+    """An installed project does not check the files Hard Eng writes; Hard Eng's own source does."""
+    files = {
+        "main.py": "x = 1\n",
+        ".hooks/tool.py": "x = 1\n",
+        ".agents/skills/he/run.py": "x = 1\n",
+    }
+    installed = project(
+        tmp_path / "installed", {**files, ".hooks/hard-eng-source.json": "{}"}
+    )
+    validate_resolved(installed, lint_groups((".", [*LINT[:3], "main.py"])), 900)
+    own = project(tmp_path / "own", files)
+    with pytest.raises(ValueError, match=r"\.agents/skills/he/run\.py"):
+        validate_resolved(own, lint_groups((".", [*LINT[:3], "main.py"])), 900)
+
+
+def test_a_child_group_owns_its_files(tmp_path: Path) -> None:
+    """A parent that names `src tests` does not own a child package that has its own lint gate."""
+    files = {
+        "src/a.py": "x = 1\n",
+        "tests/t.py": "x = 1\n",
+        "packages/child/src/c.py": "x = 1\n",
+    }
+    root = project(tmp_path, files)
+    parent = [*LINT[:3], "src", "tests"]
+    validate_resolved(root, lint_groups((".", parent), ("packages/child", LINT)), 900)
+    with pytest.raises(ValueError, match=r"packages/child/src/c\.py"):
+        validate_resolved(root, lint_groups((".", parent)), 900)
+
+
+def test_the_run_judges_a_parent_against_every_group_not_only_the_changed_ones(
+    tmp_path: Path,
+) -> None:
+    need_fallow()
+    config = json.dumps({"ignorePatterns": ["packages/child/**"]})
+    files = {
+        ".fallowrc.json": config,
+        "src/a.ts": "export const a = 1;\n",
+        "packages/child/.fallowrc.json": "{}",
+        "packages/child/src/b.ts": "export const b = 1;\n",
+    }
+    root = project(tmp_path, files)
+    every: list[Group] = [
+        *fallow_groups(),
+        {
+            "path": "packages/child",
+            "language": "javascript",
+            "checks": [gate(DEAD, "dead-code-duplicates")],
+        },
+    ]
+    validate_resolved(root, every[:1], 900, every)
+    with pytest.raises(ValueError, match=r"packages/child/src/b\.ts"):
+        validate_resolved(root, every[:1], 900)
 
 
 @pytest.mark.parametrize(

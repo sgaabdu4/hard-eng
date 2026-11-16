@@ -48,7 +48,7 @@ SWITCHED_OFF = [
     ({"ignoreFindings": ["anything"]}, "ignoreFindings"),
     ({"entry": ["src/**/*.ts"]}, "entry 'src/\\*\\*/\\*.ts'"),
     ({"duplicates": {"enabled": False}}, "duplicates.enabled is false"),
-    ({"ignorePatterns": ["src/**"]}, "ignorePatterns entry 'src/\\*\\*'"),
+    ({"ignorePatterns": ["src/**"]}, r"does not check src/a\.ts"),
 ]
 
 
@@ -110,7 +110,7 @@ def test_generated_output_may_be_ignored_when_the_attributes_name_it(
     (root / "gen/plain.txt").write_text("x\n")
     (root / ".gitattributes").write_text("gen/a.ts linguist-generated\n")
     git(root, "add", "-A")
-    with pytest.raises(ValueError, match=r"ignorePatterns entry 'gen/\*\*'"):
+    with pytest.raises(ValueError, match=r"does not check gen/b/c\.ts"):
         validate_resolved(root, groups("."), 900)
 
 
@@ -143,7 +143,7 @@ def test_a_root_ignore_that_covers_a_file_no_nested_gate_covers_is_refused(
     with pytest.raises(ValueError, match=r"apps/shared/c\.ts"):
         validate_resolved(root, groups(".", "apps/web", "apps/api"), 900)
     root = monorepo(tmp_path / "other", "apps/**")
-    with pytest.raises(ValueError, match=r"ignorePatterns entry 'apps/\*\*'"):
+    with pytest.raises(ValueError, match=r"does not check apps/api/src/b\.ts"):
         validate_resolved(root, groups(".", "apps/web"), 900)
 
 

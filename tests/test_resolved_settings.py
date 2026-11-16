@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from conftest import commit, init
 from gate_config import Gate, Group
 from resolved_settings import validate_resolved
 
@@ -28,19 +29,25 @@ def groups(command: list[str], role: str) -> list[Group]:
 
 
 def project(tmp_path: Path, settings: str) -> Path:
-    (tmp_path / "pyproject.toml").write_text(settings)
-    (tmp_path / "main.py").write_text("x = 1\n")
-    return tmp_path
+    root = tmp_path / "repo"
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    init(root)
+    (root / "pyproject.toml").write_text(settings)
+    (root / "main.py").write_text("x = 1\n")
+    (root / "src").mkdir()
+    (root / "src/a.py").write_text("x = 1\n")
+    commit(root, "baseline")
+    return root
 
 
 @pytest.mark.parametrize(
     ("settings", "reason"),
     [
         ('[tool.ruff.lint]\nselect = ["E"]\n', r"lacks \d+ of Ruff's default rules"),
-        ('[tool.ruff]\nextend-exclude = ["src"]\n', "extend_exclude is not empty"),
+        ('[tool.ruff]\nextend-exclude = ["src"]\n', r"does not check src/a\.py"),
         ('[tool.ruff.lint]\nper-file-ignores = {"a.py" = ["F"]}\n', "per_file_ignores"),
-        ('[tool.ruff.lint]\nexclude = ["a.py"]\n', "linter.exclude is not empty"),
-        ('[tool.ruff]\nexclude = ["anything"]\n', "skips more than"),
+        ('[tool.ruff.lint]\nexclude = ["src"]\n', "linter.exclude is not empty"),
+        ('[tool.ruff]\nexclude = ["src"]\n', r"does not check src/a\.py"),
     ],
 )
 def test_a_lint_gate_whose_resolved_settings_narrow_the_rules_is_refused(
