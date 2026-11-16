@@ -115,6 +115,47 @@ HEALTH_LIMITS = {
     "max_unit_size_threshold": 60,
 }
 ANALYSIS_COMMANDS = {"dead-code", "dupes", "flags", "security", "similar-code"}
+SUBCOMMANDS = ANALYSIS_COMMANDS | {
+    "health",
+    "audit",
+    "watch",
+    "fix",
+    "list",
+    "inspect",
+    "trace",
+    "trace-error",
+    "guard",
+    "decision-surface",
+    "workspaces",
+    "explain",
+    "suppressions",
+    "impact",
+    "viz",
+    "doctor",
+    "init",
+    "agent",
+    "audit-cache",
+    "recommend",
+    "migrate",
+    "config",
+    "config-schema",
+    "plugin-schema",
+    "plugin-check",
+    "rule-pack",
+    "rule-pack-schema",
+    "type-aware",
+    "ci",
+    "ci-template",
+    "report",
+    "hooks",
+    "setup-hooks",
+    "coverage",
+    "license",
+    "telemetry",
+    "schema",
+    "help",
+    "review",
+}
 VALUE_FLAGS = {
     "-r",
     "--root",
@@ -156,6 +197,7 @@ VALUE_FLAGS = {
     "--max-crap",
     "--type-aware-project",
     "--type-aware-require",
+    "--gate",
 }
 SCANNERS = {"fallow", "dart-decimate", "react-doctor"}
 TOLERANCE_FLAGS = {
@@ -218,8 +260,9 @@ def add_health(command: list[str]) -> list[str]:
     return command
 
 
-def subcommand(invocation: list[str]) -> str | None:
-    """The first word after the global options of a Fallow command."""
+def positionals(invocation: list[str]) -> list[str]:
+    """The words after the global options of a Fallow command."""
+    words: list[str] = []
     skip = False
     for argument in invocation[1:]:
         if skip:
@@ -227,14 +270,39 @@ def subcommand(invocation: list[str]) -> str | None:
         elif argument.startswith("-"):
             skip = "=" not in argument and argument in VALUE_FLAGS
         else:
-            return argument
-    return None
+            words.append(argument)
+    return words
+
+
+def subcommand(invocation: list[str]) -> str | None:
+    """The first word after the global options of a Fallow command."""
+    return next(iter(positionals(invocation)), None)
+
+
+def narrowing(invocation: list[str]) -> list[str]:
+    """Words and flags that cut files out of a scan; an audit may name its base."""
+    words = positionals(invocation)
+    found = words[1:] if words[:1] and words[0] in SUBCOMMANDS else words
+    flags = {"-w", "--workspace", "-r", "--root"}
+    if "audit" not in invocation:
+        flags |= {"--changed-since", "--base", "--changed-workspaces"}
+    return [*found, *(a for a in invocation if a.partition("=")[0] in flags)]
+
+
+def named_config(invocation: list[str]) -> str | None:
+    return option(invocation, "--config") or option(invocation, "-c")
 
 
 def fallow_failure(invocation: list[str], report: Report) -> str | None:
     crap = option(invocation, "--max-crap")
     if crap is not None and (not math.isfinite(float(crap)) or float(crap) <= 0):
         return "Fallow CRAP enforcement cannot be disabled; repair its coverage input"
+    if left := narrowing(invocation):
+        return (
+            "Fallow scans must cover the whole project; remove "
+            + ", ".join(left)
+            + " from the gate command"
+        )
     if "audit" not in invocation:
         if "--fail-on-issues" not in invocation:
             return "Fallow scans must fail on every finding; add --fail-on-issues"
@@ -269,7 +337,9 @@ def scanner_failure(invocation: list[str], report: Report) -> str | None:
     return None
 
 
-def validate_scanner_command(arguments: list[str], report: Report) -> None:
+def validate_scanner_command(
+    arguments: list[str], report: Report, directory: Path | None = None
+) -> None:
     """Every finding fails; none may be baselined, tolerated or suppressed."""
     invocation = native_scanner_command(arguments)
     if invocation is None:
@@ -282,6 +352,15 @@ def validate_scanner_command(arguments: list[str], report: Report) -> None:
     failure = scanner_failure(invocation, report)
     if failure is not None:
         raise ValueError(failure)
+    path = named_config(invocation) if invocation[0] == "fallow" else None
+    if path and directory is not None:
+        from fallow_settings import named_config_hits
+
+        if hits := named_config_hits(directory, path):
+            raise ValueError(
+                "HE-NO-SWITCH-OFF: A Fallow gate must not name a config that raises a limit or skips files: "
+                + "; ".join(hits)
+            )
 
 
 def fallow_report_path(arguments: list[str]) -> str | None:

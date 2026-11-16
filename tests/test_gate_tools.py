@@ -424,7 +424,7 @@ def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
         ["fallow", "security", "--fail-on-issues"],
         ["fallow", "similar-code", "--fail-on-issues"],
         ["fallow", "--fail-on-issues", "dead-code"],
-        ["fallow", "--root", ".", "dead-code", "--fail-on-issues"],
+        ["fallow", "--quiet", "dead-code", "--fail-on-issues"],
         ["bunx", "fallow@latest", "dead-code", "--fail-on-issues"],
     ],
 )
@@ -437,7 +437,6 @@ def test_a_fallow_subcommand_without_health_fails(command: list[str]) -> None:
         ["fallow", "--fail-on-issues"],
         ["fallow", "health", "--fail-on-issues"],
         ["fallow", "--only", "dead-code,health", "--fail-on-issues"],
-        ["fallow", "--root", "dead-code", "--fail-on-issues"],
-        ["fallow", "architecture", "--fail-on-issues"],
+        ["fallow", "--quiet", "--fail-on-issues"],
     ):
         validate_scanner_command(passing, report)
