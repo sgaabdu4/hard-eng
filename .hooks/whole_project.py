@@ -207,7 +207,7 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         if base in SETTINGS_FILES:
             found += settings_switch_offs(name, text)
         if base in RUFF_FILES:
-            found += ruff_switch_offs(name, text)
+            found += ruff_switch_offs(root, name, text)
     return found
 
 

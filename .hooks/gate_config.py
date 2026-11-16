@@ -372,7 +372,7 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     validate_current_files_gate(gate.get("role"), command)
     from ruff_settings import validate_ruff_command
 
-    validate_ruff_command(command)
+    validate_ruff_command(command, directory, gate.get("role"))
     validate_named_output(gate, command, directory, report)
 
 
