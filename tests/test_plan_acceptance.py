@@ -1,6 +1,7 @@
 """Each plan acceptance line names a test that exists and was not skipped."""
 
 import json
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -556,23 +557,23 @@ def test_a_missing_retro_test_is_reported_for_the_retro_line(
 
 
 @pytest.mark.parametrize(
-    ("named", "refusal"),
+    "named",
     [
-        ("`src/gate_schedule.rs::run_checks`", None),
-        ("`src/parse.rs::Parser::header`", None),
-        (
-            "`src/parse.rs::gone`",
-            "Same cause names tests that do not exist: src/parse.rs::gone",
-        ),
+        "`src/gate_schedule.rs::run_checks`",
+        "`src/parse.rs::Parser::header`",
+        "`src/parse.rs::Config`",
+        "`src/parse.rs::MAX`",
+        "`parse.rs::header`",
     ],
 )
-def test_a_same_cause_line_may_name_rust_source_code_that_exists(
-    repository: Path, completed_plan: str, named: str, refusal: str | None
+def test_a_same_cause_line_may_name_rust_source_code(
+    repository: Path, completed_plan: str, named: str
 ) -> None:
+    """Same cause names the code that shares a cause, so a Rust source name is never read as a test."""
     (repository / "src").mkdir()
     (repository / "src/gate_schedule.rs").write_text("pub fn run_checks() {}\n")
     (repository / "src/parse.rs").write_text(
-        "impl Parser {\n    pub fn header(&self) {}\n}\n"
+        "pub struct Config;\npub const MAX: u8 = 1;\nimpl Parser {\n    pub fn header(&self) {}\n}\n"
     )
     (repository / "PLAN.md").write_text(
         completed_plan.replace(
@@ -580,11 +581,7 @@ def test_a_same_cause_line_may_name_rust_source_code_that_exists(
             f"Same cause: {named} grew past its limit.",
         )
     )
-    if refusal is None:
-        assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
-        return
-    with pytest.raises(ValueError, match=refusal):
-        validate_plans(repository, "0" * 40, "Complete")
+    assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
 
 
 def test_a_missing_rust_unit_test_in_a_retro_line_is_reported(
@@ -684,7 +681,25 @@ RUST_TESTS = [
     "#[rstest]\n#[case(&[1][..])]\nfn test_divide(#[case] v: &[u8]) {}",
     "#[test_case('\"')]\nfn test_divide(c: char) {}",
     "#[test_case(']')]\nfn test_divide(c: char) {}",
+    "#[test_case(&'static str)]\nfn test_divide(s: &str) {}",
+    "#[wasm_bindgen_test]\nfn test_divide() {}",
+    "#[test_matrix([1, 2], [3])]\nfn test_divide(a: u8, b: u8) {}",
+    "#[quickcheck]\nfn test_divide(a: u8) -> bool { true }",
+    "#[gtest]\nfn test_divide() {}",
+    "#[test]\nunsafe fn test_divide() {}",
 ]
+
+
+def test_stacked_char_cases_are_read_at_once(tmp_path: Path) -> None:
+    """Each attribute argument reads one way, so a long stack of char cases cannot slow the check."""
+    cases = "".join(f"#[test_case('{chr(97 + n % 26)}')]\n" for n in range(40))
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(cases + "fn test_divide(c: char) {}\n")
+    started = time.perf_counter()
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_gone")]) == [
+        "tests/ops.rs::test_gone"
+    ]
+    assert time.perf_counter() - started < 1
 
 
 @pytest.mark.parametrize("source", RUST_TESTS, ids=range(len(RUST_TESTS)))
