@@ -116,6 +116,40 @@ def gitleaks_switch_offs(name: str, text: str) -> list[str]:
     return found
 
 
+def cargo_switch_offs(name: str, text: str) -> list[str]:
+    """Lint levels of allow in a Cargo manifest: `[lints]` and `[workspace.lints]` tables, by string or by `level`."""
+    try:
+        config = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return []
+    tables = [config.get("lints"), config.get("workspace", {}).get("lints")]
+    off: list[str] = []
+
+    def walk(table: object, path: str) -> None:
+        if not isinstance(table, dict):
+            return
+        for key, value in table.items():
+            if value == "allow" or (key == "level" and value == "allow"):
+                off.append(path if key == "level" else f"{path}.{key}")
+            else:
+                walk(value, f"{path}.{key}")
+
+    for table in tables:
+        walk(table, "lints")
+    lines = text.splitlines()
+    return [
+        f"{name}:{_line(lines, hit.rsplit('.', 1)[-1])} sets the lint {hit.removeprefix('lints.')} to 'allow'"
+        for hit in off
+    ]
+
+
+def _line(lines: list[str], key: str) -> int:
+    pattern = re.compile(
+        rf"^\s*(?:\[.*\b{re.escape(key)}\b.*\]|\"?{re.escape(key)}\"?\s*=)"
+    )
+    return next((n for n, line in enumerate(lines, 1) if pattern.match(line)), 1)
+
+
 def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
     owned = [name for name in texts if not name.startswith(UNOWNED)]
     skipped = generated_sources(root, owned)
@@ -130,6 +164,8 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         found += pattern_switch_offs(root, name, lines, "holds")
         if base == ".gitleaks.toml":
             found += gitleaks_switch_offs(name, texts[name])
+        if base == "Cargo.toml":
+            found += cargo_switch_offs(name, text)
     return found
 
 
