@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import pytest
+from comments import validate_suppressions
+from conftest import change
 from test_strict_refusals import project, refusal
 from whole_project import validate_whole_project
 
@@ -165,3 +167,79 @@ def test_prose_that_names_rust_flags_is_not_an_assignment(
 ) -> None:
     """Only a workflow, script or config line that assigns the flags counts; prose and notes pass."""
     validate_whole_project(project(tmp_path, {name: fill(text)}))
+
+
+RUST_GATES = [
+    ["cargo", "clippy", "--", "-A", "clippy::all"],
+    ["cargo", "clippy", "--", "-Aclippy::all"],
+    ["cargo", "clippy", "--", "--allow", "warnings"],
+    ["cargo", "clippy", "--config", "build.@LOW@=['-Awarnings']"],
+    ["cargo", "clippy", "--config=build.@LOW@=['-A', 'warnings']"],
+    ["cargo", "clippy", "--", "--cap-lints", "allow"],
+    ["env", "@UP@=-Awarnings", "cargo", "clippy"],
+    ["sh", "-c", "cargo clippy -- -A clippy::all"],
+    ["sh", "-c", "@UP@='-A unused' cargo build"],
+]
+
+
+@pytest.mark.parametrize("command", RUST_GATES)
+def test_a_cargo_gate_that_allows_lints_fails(
+    tmp_path: Path, command: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: a gate command can allow lints as a flag, a config value or a variable."""
+    from gate_config import Gate, validate_gate
+
+    gate: Gate = {
+        "name": "clippy",
+        "role": "lint",
+        "command": [fill(word) for word in command],
+    }
+    with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+        validate_gate(gate, tmp_path, set())
+    kept: Gate = {
+        "name": "clippy",
+        "role": "lint",
+        "command": ["cargo", "clippy", "--", "-D", "warnings"],
+    }
+    validate_gate(kept, tmp_path, set())
+
+
+WRAPPED = [
+    f"#[cfg_attr(\n    test,\n    {ALLOW}(dead_code)\n)]\nfn a() {{}}\n",
+    f"#[cfg_attr(\n    test,\n    {EXPECT}(unused),\n)]\nfn a() {{}}\n",
+    "#[cfg_attr(all(), ignore)]\nfn a() {}\n",
+    "#[cfg_attr(\n    test,\n    ignore\n)]\nfn a() {}\n",
+    f"#![cfg_attr(\n    test,\n    {ALLOW}(unused)\n)]\n",
+    f"#[cfg_attr(test, derive(Debug), {ALLOW}(dead_code))]\nfn a() {{}}\n",
+]
+
+
+@pytest.mark.parametrize("text", WRAPPED)
+def test_a_wrapped_or_ignoring_cfg_attr_is_a_switch_off(
+    tmp_path: Path, text: str
+) -> None:
+    """HE-NO-SWITCH-OFF: an attribute that Rust reads across lines is judged as one, and `ignore` inside `cfg_attr` counts like `allow`."""
+    assert "src/lib.rs:1 holds" in refusal(project(tmp_path, {"src/lib.rs": text}))
+
+
+WRAPPED_PASSING = [
+    "#[cfg_attr(\n    test,\n    derive(Debug)\n)]\nstruct A;\n",
+    '#[cfg_attr(feature = "ignore", derive(Debug))]\nstruct A;\n',
+    f'const A: &str = "#[cfg_attr(\n    test,\n    {ALLOW}(dead_code)\n)]";\n',
+    "#[cfg_attr(test, derive(Debug))]\nstruct ignored;\n",
+]
+
+
+@pytest.mark.parametrize("text", WRAPPED_PASSING)
+def test_a_cfg_attr_without_a_switch_off_passes(tmp_path: Path, text: str) -> None:
+    validate_whole_project(project(tmp_path, {"src/lib.rs": text}))
+
+
+def test_a_line_added_inside_a_wrapped_cfg_attr_is_a_switch_off(
+    tmp_path: Path,
+) -> None:
+    before = "#[cfg_attr(\n    test,\n    derive(Debug)\n)]\nstruct A;\n"
+    after = f"#[cfg_attr(\n    test,\n    derive(Debug),\n    {ALLOW}(dead_code)\n)]\nstruct A;\n"
+    root = change(tmp_path, "src/lib.rs", before, after)
+    with pytest.raises(ValueError, match=r"src/lib.rs:\d adds"):
+        validate_suppressions(root, "HEAD")

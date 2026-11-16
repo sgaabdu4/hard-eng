@@ -23,9 +23,11 @@ from project_files import GIT_LISTING
 from source_scan import (
     JAVASCRIPT,
     SLASH,
+    code_without_comments,
     comment_spans,
     literal_free_lines,
     string_end,
+    without_literals,
 )
 
 DISABLED_CALL = re.compile(r"\.disabled\(")
@@ -259,8 +261,10 @@ SWIFT_OFF = re.compile(
 )
 RUST_OFF = re.compile(
     r"#\s*!?\s*\[\s*(?:allow|expect)\s*\(|#\s*!?\s*\[\s*ignore\b"
-    r"|#\s*!?\s*\[\s*cfg_attr\s*\([^\]]*?\b(?:allow|expect)\s*\("
     r"|\brustfmt\s*::\s*skip\b"
+)
+RUST_CFG_ATTR = re.compile(
+    r"#\s*!?\s*\[\s*cfg_attr\s*\([^\]]*?\b(?:(?:allow|expect)\s*\(|ignore\b)"
 )
 TEST_OFF = {
     ".dart": r"\b(skip|solo):(?=\s*(?!false\b)\S)",
@@ -396,6 +400,9 @@ def pattern_switch_offs(
 
     raw = RAW_OFF.get(Path(name).suffix)
     code = literal_free_lines(root, name)
+    wrapped = (
+        rust_cfg_attr_hits(root, name, lines, verb) if name.endswith(".rs") else []
+    )
     found = []
 
     def masked(number: int, text: str) -> re.Match[str] | None:
@@ -405,7 +412,26 @@ def pattern_switch_offs(
     for number, text in lines:
         if hit := (raw.search(text) if raw else None) or masked(number, text):
             found.append(f"{name}:{number} {verb} {hit[0].strip()!r}")
-    return found + marks_in_file(root, name, lines)
+    return found + wrapped + marks_in_file(root, name, lines)
+
+
+def rust_cfg_attr_hits(
+    root: Path, name: str, lines: list[tuple[int, str]], verb: str
+) -> list[str]:
+    """A `cfg_attr` that allows or ignores, read as Rust reads it: across lines, outside comments and strings."""
+    try:
+        raw = (root / name).read_text(errors="replace")
+    except OSError:
+        return []
+    masked = without_literals(name, code_without_comments(raw, ".rs"))
+    wanted = {number for number, _ in lines}
+    found = []
+    for hit in RUST_CFG_ATTR.finditer(masked):
+        first = masked.count("\n", 0, hit.start()) + 1
+        last = first + hit[0].count("\n")
+        if wanted.intersection(range(first, last + 1)):
+            found.append(f"{name}:{first} {verb} {' '.join(hit[0].split())!r}")
+    return found
 
 
 SWITCH_OFF_HEADER = (

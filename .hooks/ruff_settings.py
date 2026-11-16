@@ -1,11 +1,11 @@
 """Refuse ruff settings, extended settings files and gate flags that ignore lint rules."""
 
 import re
-import shlex
 import subprocess
 import tomllib
 from pathlib import Path, PurePosixPath
 
+from command_words import segments
 from project_files import GIT_LISTING
 
 SETTINGS_FILES = {"pyproject.toml", "ruff.toml", ".ruff.toml"}
@@ -13,8 +13,6 @@ IGNORE_KEYS = ("ignore", "extend-ignore", "per-file-ignores", "extend-per-file-i
 IGNORE_FLAGS = {f"--{key}" for key in IGNORE_KEYS}
 HIDING_FLAGS = {"--exit-zero", "--isolated"}
 EXCLUDE_FLAGS = {"--exclude", "--extend-exclude"}
-SEPARATORS = {"&&", "||", ";", "|"}
-SHELLS = {"sh", "bash", "zsh"}
 RUFF_SKIPS = frozenset(
     {
         ".bzr",
@@ -131,35 +129,13 @@ def settings_switch_offs(root: Path, name: str, text: str) -> list[str]:
     return file_hits(root, name, text, frozenset({(root / name).resolve()}))
 
 
-def unwrapped(command: list[str], directory: Path) -> list[str]:
-    """The words a gate really runs: a package script or an `sh -c` string is expanded, as `check:fallow` is."""
-    arguments = list(command)
-    if Path(arguments[0]).name in {"npm", "pnpm", "yarn", "bun"}:
-        from project_setup import package_script_invocation
-
-        try:
-            arguments = package_script_invocation(arguments, directory)[0]
-        except (ValueError, TypeError, OSError):
-            return arguments
-    if Path(arguments[0]).name in SHELLS and "-c" in arguments[1:-1]:
-        return shlex.split(arguments[arguments.index("-c") + 1])
-    return arguments
-
-
 def ruff_invocations(
     command: list[str], directory: Path
 ) -> list[tuple[list[str], list[str]]]:
     """Each ruff run of a command as its launcher words and its arguments, one for each chained command."""
-    words = unwrapped(command, directory)
-    segments: list[list[str]] = [[]]
-    for word in words:
-        if word in SEPARATORS:
-            segments.append([])
-        else:
-            segments[-1].append(word)
     return [
         (segment[: len(segment) - len(found)], found)
-        for segment in segments
+        for segment in segments(command, directory)
         if (found := ruff_command(segment))
     ]
 

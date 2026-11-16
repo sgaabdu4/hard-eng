@@ -4,7 +4,6 @@ import json
 import re
 import subprocess
 import tempfile
-from functools import cache
 from pathlib import Path
 
 from fallow_settings import HOOKS_PATTERN
@@ -30,7 +29,6 @@ def printed_config(
     return json.loads(done.stdout)
 
 
-@cache
 def default_rules(timeout: float) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="hard-eng-fallow-") as empty:
         rules = printed_config(Path(empty), None, timeout).get("rules")
@@ -80,8 +78,7 @@ def rule_sets(config: dict[str, object]) -> list[dict[str, object]]:
     return [rules for rules in sets if isinstance(rules, dict)]
 
 
-def switched_off(config: dict[str, object], timeout: float) -> list[str]:
-    defaults = default_rules(timeout)
+def switched_off(config: dict[str, object], defaults: dict[str, object]) -> list[str]:
     hits = [
         f"rule {name} is off"
         for rules in rule_sets(config)
@@ -138,7 +135,11 @@ def dropped(
 
 
 def fallow_hits(
-    directory: Path, config: str | None, children: frozenset[str], timeout: float
+    directory: Path,
+    config: str | None,
+    children: frozenset[str],
+    defaults: dict[str, object],
+    timeout: float,
 ) -> list[str]:
     printed = printed_config(directory, config, timeout)
-    return [*switched_off(printed, timeout), *dropped(printed, directory, children)]
+    return [*switched_off(printed, defaults), *dropped(printed, directory, children)]

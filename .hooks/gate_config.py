@@ -373,6 +373,9 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     from ruff_settings import validate_ruff_command
 
     validate_ruff_command(command, directory, gate.get("role"))
+    from rust_settings import validate_rust_command
+
+    validate_rust_command(command, directory)
     validate_named_output(gate, command, directory, report)
 
 
