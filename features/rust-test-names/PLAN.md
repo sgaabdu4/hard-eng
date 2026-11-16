@@ -1,6 +1,6 @@
 # Read Rust test names in plan acceptance lines
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,8 +24,8 @@ Authority: Autonomous. AGENTS.md line 10 covers Hard Eng design calls; the user 
 
 ## Acceptance + steps
 
-- [ ] A Rust test in `tests/` and a Rust unit test in a `src/` test module count, and the same lines commented out do not → `tests/test_plan_acceptance.py::test_a_test_named_only_on_a_comment_line_does_not_count`.
-- [ ] A Rust function with no test attribute does not count → `tests/test_plan_acceptance.py::test_a_rust_function_without_a_test_attribute_is_not_a_test`.
+- [x] A Rust test in `tests/` and a Rust unit test in a `src/` test module count, and the same lines commented out do not → `tests/test_plan_acceptance.py::test_a_test_named_only_on_a_comment_line_does_not_count`.
+- [x] A Rust function with no test attribute does not count → `tests/test_plan_acceptance.py::test_a_rust_function_without_a_test_attribute_is_not_a_test`.
 
 ## Baseline + execution
 
@@ -43,11 +43,11 @@ N/A — a check message only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-Review: Pending
+Result: Passed
+Evidence: `uv run --frozen pytest -q tests/test_plan_acceptance.py`: 86 passed; before the fix the two Rust cases failed. On the installed Rust project's real file, `missing_tests` finds `strict_check_checks_the_members_of_classes_declared_in_entry_files` and still reports a made-up name and a plain function. `python3 .hooks/hard-eng.py check --base origin/develop --plan-stage Ready`: exit 0, 20 gates PASS.
+Review: Pending — a fresh review of the final head before merge.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
-Retro: Pending
+Retro: (1) CI of an installed Rust project refused a plan that named a real Rust test → `tests/test_plan_acceptance.py::test_a_test_named_only_on_a_comment_line_does_not_count` now holds Rust cases; (2) the push refused the change without a plan, because `.hooks/plans.py` always needs one → None — the refusal named the step.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
