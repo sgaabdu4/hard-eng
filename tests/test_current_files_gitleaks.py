@@ -794,3 +794,34 @@ def test_a_timed_out_gate_leaves_no_process_behind(tmp_path: Path) -> None:
     with (tmp_path / "log").open("w") as log, pytest.raises(subprocess.TimeoutExpired):
         run_gate_command("tests", spawner(pid_file), tmp_path, 2, log, log)
     assert gone(pid_file)
+
+
+@pytest.mark.parametrize("role", SCAN_FORMS)
+def test_the_project_config_passes_in_any_spelling_of_its_path(
+    tmp_path: Path, role: str
+) -> None:
+    """HE-NO-SWITCH-OFF: `./.gitleaks.toml` and `--config=.gitleaks.toml` name the project config; another file does not."""
+    base = SCAN_FORMS[role]
+    report = {"type": "gitleaks", "path": "r.sarif"}
+
+    def checked(extra: list[str]) -> None:
+        validate_gate(
+            {"name": role, "role": role, "command": [*base, *extra], "report": report},
+            tmp_path,
+            set(),
+        )
+
+    for extra in (
+        ["--config", "./.gitleaks.toml"],
+        ["--config=./.gitleaks.toml"],
+        ["-c", "./.gitleaks.toml"],
+        ["--config", "sub/../.gitleaks.toml"],
+    ):
+        checked(extra)
+    for extra in (
+        ["--config", "../.gitleaks.toml"],
+        ["--config", "sub/.gitleaks.toml"],
+        ["--config", "/tmp/.gitleaks.toml"],
+    ):
+        with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+            checked(extra)

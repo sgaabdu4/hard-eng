@@ -1,0 +1,98 @@
+"""Refuse Rust settings that allow lints: compiler flags and Clippy limits above their defaults."""
+
+import re
+import tomllib
+
+CLIPPY_FILES = {"clippy.toml", ".clippy.toml"}
+CLIPPY_DEFAULTS = {
+    "cognitive-complexity-threshold": 25,
+    "too-many-arguments-threshold": 7,
+    "too-many-lines-threshold": 100,
+    "type-complexity-threshold": 250,
+    "large-error-threshold": 128,
+    "enum-variant-size-threshold": 200,
+    "struct-excessive-bools": 3,
+    "fn-params-excessive-bools": 3,
+    "single-char-binding-names-threshold": 4,
+    "pass-by-value-size-limit": 256,
+    "vec-box-size-threshold": 4096,
+    "array-size-threshold": 16384,
+    "stack-size-threshold": 512000,
+    "literal-representation-threshold": 16384,
+    "max-suggested-slice-pattern-length": 3,
+    "enum-variant-name-threshold": 3,
+}
+QUOTES = "\"',[]"
+
+
+def allows(flags: str) -> str | None:
+    """The flag that allows lints or caps them below a warning, or None."""
+    tokens = [token for token in re.split(r"[\s,=:'\"\[\]]+", flags) if token]
+    for index, token in enumerate(tokens):
+        if token.startswith(("-A", "--allow")):
+            return token
+        value = "".join(tokens[index + 1 : index + 2])
+        if token == "--cap-lints" and value in {"allow", "warn"}:
+            return f"--cap-lints {value}"
+    return None
+
+
+def flag_hits(name: str, text: str) -> list[str]:
+    """Each line that sets RUSTFLAGS or rustflags with a flag that allows lints."""
+    found = []
+    for number, line in enumerate(text.splitlines(), 1):
+        match = re.search(r"rustflags", line, re.IGNORECASE)
+        flag = allows(line[match.end() :]) if match else None
+        if flag and not line.lstrip().startswith("#"):
+            found.append(
+                f"{name}:{number} sets rustflags to {flag}, which allows lints"
+            )
+    return found
+
+
+def cargo_config_hits(name: str, text: str) -> list[str]:
+    """Rust flags of a Cargo config, also when the list runs over several lines."""
+    found = flag_hits(name, text)
+    if found:
+        return found
+    try:
+        config = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return []
+    lines = text.splitlines()
+
+    def walk(table: object) -> list[str]:
+        hits: list[str] = []
+        if isinstance(table, dict):
+            for key, value in table.items():
+                joined = " ".join(value) if isinstance(value, list) else str(value)
+                if key.lower() == "rustflags" and (flag := allows(joined)):
+                    number = next(
+                        (n for n, line in enumerate(lines, 1) if key in line), 1
+                    )
+                    hits.append(
+                        f"{name}:{number} sets rustflags to {flag}, which allows lints"
+                    )
+                hits += walk(value)
+        return hits
+
+    return walk(config)
+
+
+def clippy_hits(name: str, text: str) -> list[str]:
+    try:
+        config = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return []
+    lines = text.splitlines()
+    found = []
+    for key, default in CLIPPY_DEFAULTS.items():
+        value = config.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if value > default:
+            number = next((n for n, line in enumerate(lines, 1) if key in line), 1)
+            found.append(
+                f"{name}:{number} sets {key} to {value}, above Clippy's default {default}"
+            )
+    return found

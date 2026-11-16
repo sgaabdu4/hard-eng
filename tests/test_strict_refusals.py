@@ -653,13 +653,20 @@ def test_the_full_check_judges_root_gitleaks_entries(
 
 
 def test_rust_lint_attributes_are_switch_offs(tmp_path: Path) -> None:
-    """HE-NO-SWITCH-OFF: ordinary Rust attributes pass; only the lint switch-offs fail."""
-    passing = (
-        "#[derive(Debug)]\n#[cfg(test)]\n#[ignored_name]\n#[test]\n"
-        '#[cfg_attr(feature = "x", derive(Debug))]\nstruct A;\n'
-        "fn allow(x: u8) -> u8 { x }\n"
-    )
-    validate_whole_project(project(tmp_path, {"src/lib.rs": passing}))
+    """HE-NO-SWITCH-OFF: each Rust attribute that allows or expects a lint, ignores a test or caps a lint fails, named by file and line."""
+    attributes = [
+        "#[al" + "low(dead_code)]",
+        "#![al" + "low(unused)]",
+        "#[ex" + "pect(dead_code)]",
+        "#![ex" + "pect(unused)]",
+        "#[cfg_attr(test, al" + "low(dead_code))]",
+        "#[ig" + "nore]",
+    ]
+    for number, attribute in enumerate(attributes):
+        root = project(
+            tmp_path / str(number), {"src/lib.rs": f"{attribute}\nfn a() {{}}\n"}
+        )
+        assert "src/lib.rs:1 holds" in refusal(root), attribute
 
 
 CARGO_LEVELS = {

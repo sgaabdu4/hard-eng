@@ -291,6 +291,7 @@ MULTI_LINE_OPENERS = {
     ".pyi": ("'''", '"""', "\\\n"),
     ".dart": ("'''", '"""', "\\\n"),
     **dict.fromkeys(JAVASCRIPT, ("`", "\\\n")),
+    ".rs": ('"', "/*"),
 }
 
 
@@ -315,7 +316,8 @@ def literal_free_lines(root: Path, name: str) -> Callable[[int, str, str | None]
         if before is not None and not multi and not LITERAL_HINT.search(before):
             return text
         if not blanked:
-            blanked.append(without_literals(name, raw).splitlines())
+            code = code_without_comments(raw, suffix) if suffix == ".rs" else raw
+            blanked.append(without_literals(name, code).splitlines())
         same = len(blanked[0]) == len(lines) and lines[number - 1 : number] == [text]
         return blanked[0][number - 1] if same else text
 

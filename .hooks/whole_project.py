@@ -27,6 +27,7 @@ from gitleaks_rules import DEFAULT_RULE_IDS
 from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
+from rust_settings import CLIPPY_FILES, cargo_config_hits, clippy_hits, flag_hits
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 TEXT_SUFFIXES = {
@@ -46,6 +47,7 @@ LINKED_NAMES = {
     *SETTINGS_FILES,
     *RUFF_FILES,
     "Cargo.toml",
+    *CLIPPY_FILES,
 }
 MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 ALLOWLIST_LINE = re.compile(r"\s*(\[\[?[\w.-]*allowlists?\]\]?|[\w.-]*allowlists?\s*=)")
@@ -105,7 +107,10 @@ def linked_settings(root: Path, names: list[str]) -> list[str]:
     return [
         f"{name}:1 is a link, which hides the lines of this file from every check; make it a regular file"
         for name in names
-        if PurePosixPath(name).name in LINKED_NAMES
+        if (
+            PurePosixPath(name).name in LINKED_NAMES
+            or name.endswith((".cargo/config", ".cargo/config.toml"))
+        )
         and not name.startswith(UNOWNED)
         and (root / name).is_symlink()
     ]
@@ -206,6 +211,14 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
             found += cargo_switch_offs(name, text)
         if base in SETTINGS_FILES:
             found += settings_switch_offs(root, name, text)
+        if "RUSTFLAGS" in text and not name.endswith(
+            (".cargo/config", ".cargo/config.toml")
+        ):
+            found += flag_hits(name, text)
+        if name.endswith((".cargo/config", ".cargo/config.toml")):
+            found += cargo_config_hits(name, text)
+        if base in CLIPPY_FILES:
+            found += clippy_hits(name, text)
         if base in RUFF_FILES:
             found += ruff_switch_offs(root, name, text)
     return found

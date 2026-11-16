@@ -258,8 +258,9 @@ SWIFT_OFF = re.compile(
     r'|"(skipped|selected)Tests"|\bskipped\s*=\s*"YES"|\.enabled\(if:\s*false\)'
 )
 RUST_OFF = re.compile(
-    r"#!?\[\s*(?:allow|expect)\s*\(|#!?\[\s*ignore\b"
-    r"|#!?\[\s*cfg_attr\([^\]]*?\b(?:allow|expect)\s*\("
+    r"#\s*!?\s*\[\s*(?:allow|expect)\s*\(|#\s*!?\s*\[\s*ignore\b"
+    r"|#\s*!?\s*\[\s*cfg_attr\s*\([^\]]*?\b(?:allow|expect)\s*\("
+    r"|\brustfmt\s*::\s*skip\b"
 )
 TEST_OFF = {
     ".dart": r"\b(skip|solo):(?=\s*(?!false\b)\S)",
