@@ -74,15 +74,23 @@ def past_findings(
     return {item["Fingerprint"] for item in found}
 
 
+def named_path(entry: str) -> str:
+    """The path that an entry names, or an empty string."""
+    if commit := COMMIT_ENTRY.fullmatch(entry):
+        return commit[2]
+    if current := CURRENT_ENTRY.fullmatch(entry):
+        return current[1]
+    return ""
+
+
+def outside(entry: str) -> bool:
+    path = Path(named_path(entry))
+    return path.is_absolute() or ".." in path.parts
+
+
 def entry_paths(entries: list[tuple[int, str]]) -> list[str]:
     """The files that the entries name; a finding of one file does not depend on another file."""
-    named: set[str] = set()
-    for _, entry in entries:
-        if commit := COMMIT_ENTRY.fullmatch(entry):
-            named.add(commit[2])
-        elif current := CURRENT_ENTRY.fullmatch(entry):
-            named.add(current[1])
-    return sorted(named)
+    return sorted({named_path(entry) for _, entry in entries} - {""})
 
 
 def current_findings(
@@ -117,15 +125,31 @@ def validate_entries(root: Path, timeout: float = 900.0) -> None:
         raise ValueError(
             f"{SWITCH_OFF_HEADER}\n  .gitleaksignore:1 is a link, which Gitleaks reads and no check can judge; make it a regular file"
         )
-    entries = entry_lines(root)
-    if not entries:
-        return
+    all_entries = entry_lines(root)
+    refused = [
+        f".gitleaksignore:{number} holds {entry!r}: the path is outside the repository; remove the entry"
+        for number, entry in all_entries
+        if outside(entry)
+    ]
+    entries = [item for item in all_entries if not outside(item[1])]
+    if entries:
+        refused += judged_entries(root, entries, timeout)
+    if refused:
+        from comments import SWITCH_OFF_HEADER
+
+        raise ValueError(
+            "\n".join([SWITCH_OFF_HEADER, *(f"  {line}" for line in refused)])
+        )
+
+
+def judged_entries(
+    root: Path, entries: list[tuple[int, str]], timeout: float
+) -> list[str]:
     ensure_gitleaks(timeout)
     config = [".gitleaks.toml"] if (root / ".gitleaks.toml").is_file() else []
     config = ["--config", str((root / config[0]).resolve())] if config else []
     commits = sorted({m[1] for _, e in entries if (m := COMMIT_ENTRY.fullmatch(e))})
     present = [commit for commit in commits if known(root, commit)]
-    refused: list[str] = []
     with tempfile.TemporaryDirectory(prefix="hard-eng-entries-") as temporary:
         work = Path(temporary)
         past = past_findings(root, work, present, config, timeout) if present else set()
@@ -139,16 +163,11 @@ def validate_entries(root: Path, timeout: float = 900.0) -> None:
         )
     now = {item["Fingerprint"] for item in current}
     in_tree = {(item["File"], item["RuleID"]) for item in current}
-    for number, entry in entries:
-        reason = entry_reason(entry, present, past, now, in_tree, generated)
-        if reason:
-            refused.append(f".gitleaksignore:{number} holds {entry!r}: {reason}")
-    if refused:
-        from comments import SWITCH_OFF_HEADER
-
-        raise ValueError(
-            "\n".join([SWITCH_OFF_HEADER, *(f"  {line}" for line in refused)])
-        )
+    return [
+        f".gitleaksignore:{number} holds {entry!r}: {reason}"
+        for number, entry in entries
+        if (reason := entry_reason(entry, present, past, now, in_tree, generated))
+    ]
 
 
 def entry_reason(

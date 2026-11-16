@@ -434,3 +434,21 @@ def test_a_fallow_ignore_in_an_npm_extended_package_is_refused(tmp_path: Path) -
 def test_a_remote_fallow_extends_is_refused(tmp_path: Path, url: str) -> None:
     files = {".fallowrc.json": '{"extends": ["' + url + '"]}\n'}
     assert ".fallowrc.json:1 extends a remote file" in refusal(project(tmp_path, files))
+
+
+@pytest.mark.parametrize(
+    "path", ["/etc/hosts", "../outside.txt", "docs/../../outside.txt"]
+)
+@pytest.mark.parametrize("past", [False, True])
+def test_an_entry_path_outside_the_repository_is_a_clear_refusal(
+    tmp_path: Path, path: str, past: bool
+) -> None:
+    """HE-NO-SWITCH-OFF: an entry that names a path outside the repository is refused with its line, never a crash."""
+    root = project(tmp_path, {"README.md": "fixture\n"})
+    sha = git(root, "rev-parse", "HEAD")
+    prefix = f"{sha}:" if past else ""
+    (root / ".gitleaksignore").write_text(f"{prefix}{path}:{RULE}:1\n")
+    with pytest.raises(
+        ValueError, match=r"\.gitleaksignore:1 .*outside the repository"
+    ):
+        validate_entries(root, 900)
