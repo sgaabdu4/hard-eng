@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 from typing import IO
 
-from command_words import segments
 from process_group import run_in_group
 from project_files import GIT_LISTING
 
@@ -34,12 +33,9 @@ def config_variable_hits(name: str, text: str) -> list[str]:
     ]
 
 
-def validate_config_variables(command: list[str], directory: Path) -> None:
+def validate_config_variables(parts: list[list[str]]) -> None:
     found = [
-        word
-        for segment in segments(command, directory)
-        for word in segment
-        if CONFIG_ASSIGNMENT.match(word)
+        word for segment in parts for word in segment if CONFIG_ASSIGNMENT.match(word)
     ]
     if found:
         raise ValueError(
