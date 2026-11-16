@@ -612,7 +612,26 @@ COMMENTED_TESTS = [
     ("tests/OpsTests.swift", "// func test_divide() {}", "func test_divide() {}"),
     ("tests/OpsTests.swift", '// @Test("test_divide")', '@Test("test_divide")'),
     ("tests/ops_spec.rb", '# it "test_divide" do', 'it "test_divide" do'),
+    (
+        "tests/ops.rs",
+        "// #[test]\n// fn test_divide() {}",
+        "#[test]\nfn test_divide()\n-> Result<(), String> {\n    Ok(())\n}",
+    ),
+    (
+        "src/ops.rs",
+        "#[cfg(test)]\nmod tests {\n    // #[test]\n    // fn test_divide() {}\n}",
+        "#[cfg(test)]\nmod tests {\n    #[test]\n    fn test_divide() {}\n}",
+    ),
 ]
+
+
+def test_a_rust_function_without_a_test_attribute_is_not_a_test(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/ops.rs").write_text("pub fn test_divide() {}\n")
+    reference = [("src/ops.rs", "test_divide")]
+    assert missing_tests(tmp_path, reference) == ["src/ops.rs::test_divide"]
 
 
 @pytest.mark.parametrize(
