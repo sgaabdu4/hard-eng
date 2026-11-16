@@ -453,6 +453,8 @@ def test_each_refusal_names_the_fix_at_the_cause(tmp_path: Path) -> None:
         assert "fix" in message.lower(), kind
         assert "suppress" in message.lower(), kind
         assert "never" in message.lower() or "instead of" in message.lower(), kind
+        if kind in {"switch-off", "dart-decimate", "gitleaks", "comment block"}:
+            assert "linguist-generated" in message, kind
 
 
 def test_quick_check_skips_the_whole_project_pass(

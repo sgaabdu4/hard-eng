@@ -200,6 +200,7 @@ COMMENT_HEADER = (
     "HE-COMMENT-LINES: Code comments are none by default: fix each block below at its cause, "
     "so that naming, types, structure or a test carry the meaning, then delete the block; "
     "keep one terse line of why only where they cannot carry a needed non-obvious constraint. "
+    "A file that a tool writes passes when .gitattributes marks it linguist-generated. "
     "Never suppress it."
 )
 
@@ -407,7 +408,8 @@ def pattern_switch_offs(
 
 SWITCH_OFF_HEADER = (
     "HE-NO-SWITCH-OFF: A change must not switch a check off: fix the cause instead of "
-    "suppressing, skipping, retrying or deleting the check."
+    "suppressing, skipping, retrying or deleting the check. A file that a tool writes "
+    "passes when .gitattributes marks it linguist-generated."
 )
 
 
