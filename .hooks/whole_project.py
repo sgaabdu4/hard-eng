@@ -23,6 +23,7 @@ from comments import (
 )
 from fallow_settings import SETTINGS_FILES, settings_switch_offs
 from gate_config import generated_sources
+from gitleaks_rules import DEFAULT_RULE_IDS
 from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
@@ -129,6 +130,20 @@ def gitleaks_switch_offs(name: str, text: str) -> list[str]:
     found = found if allowlisted else []
     if "paths" in config:
         found += [f"{name}:{n} holds a list of paths" for n in at(PATHS_LINE)]
+    for rule in config.get("rules", []):
+        rule_id = rule.get("id") if isinstance(rule, dict) else None
+        if rule_id in DEFAULT_RULE_IDS:
+            number = next(
+                (
+                    n
+                    for n, line in enumerate(lines, 1)
+                    if re.match(rf"\s*id\s*=\s*['\"]{re.escape(rule_id)}['\"]", line)
+                ),
+                1,
+            )
+            found.append(
+                f"{name}:{number} overrides the default rule {rule_id}; give a new rule its own id"
+            )
     extend = config.get("extend")
     if not isinstance(extend, dict) or extend.get("useDefault") is not True:
         found.append(
