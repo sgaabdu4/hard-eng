@@ -384,12 +384,14 @@ def pattern_switch_offs(
     raw = RAW_OFF.get(Path(name).suffix)
     code = literal_free_lines(root, name)
     found = []
+
+    def masked(number: int, text: str) -> re.Match[str] | None:
+        first = off(text)
+        return first and off(code(number, text, text[: first.start()]))
+
     for number, text in lines:
-        if hit := (raw.search(text) if raw else None):
+        if hit := (raw.search(text) if raw else None) or masked(number, text):
             found.append(f"{name}:{number} {verb} {hit[0].strip()!r}")
-        elif first := off(text):
-            if hit := off(code(number, text, text[: first.start()])):
-                found.append(f"{name}:{number} {verb} {hit[0].strip()!r}")
     return found + marks_in_file(root, name, lines)
 
 
