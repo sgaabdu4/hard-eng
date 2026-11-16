@@ -5,6 +5,7 @@ Installed agent skills under .agents/ are vendored tooling and are not checked.
 
 import codecs
 import io
+import os
 import re
 import subprocess
 import tokenize
@@ -495,7 +496,9 @@ def diff_lines(
         text=True,
     )
     for other in filter(None, untracked.split("\0")):
-        if (root / other).is_file() and not (root / other).is_symlink():
+        if (root / other).is_symlink():
+            added[other] = [(1, os.readlink(root / other))]
+        elif (root / other).is_file():
             text = (root / other).read_text(errors="replace")
             added[other] = list(enumerate(text.splitlines(), 1))
     return added, removed
@@ -661,9 +664,11 @@ def lost_assertions(
     return lost
 
 
-def entry_file(name: str, names: set[str]) -> bool:
-    """A file of ignore entries that every line refuses; the root .gitleaksignore is judged by the full check's scan instead."""
-    return PurePosixPath(name).name in names and name != ".gitleaksignore"
+def entry_file(root: Path, name: str, names: set[str]) -> bool:
+    """A file of ignore entries that every line refuses; a regular root .gitleaksignore is judged by the full check's scan instead."""
+    return PurePosixPath(name).name in names and (
+        name != ".gitleaksignore" or (root / name).is_symlink()
+    )
 
 
 def security_hits(
@@ -699,7 +704,7 @@ def security_switch_offs(
         for name in names
         if name not in skipped
         for hit in security_hits(
-            root, name, added[name], "adds", entry_file(name, SCAN_IGNORES)
+            root, name, added[name], "adds", entry_file(root, name, SCAN_IGNORES)
         )
     ]
 

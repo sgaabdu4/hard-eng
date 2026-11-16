@@ -39,6 +39,13 @@ TEXT_SUFFIXES = {
     ".xcscheme",
     ".xctestplan",
 }
+LINKED_NAMES = {
+    *LINE_IGNORES,
+    ".gitleaks.toml",
+    *SETTINGS_FILES,
+    *RUFF_FILES,
+    "Cargo.toml",
+}
 MARKER = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 ALLOWLIST_LINE = re.compile(r"\s*(\[\[?[\w.-]*allowlists?\]\]?|[\w.-]*allowlists?\s*=)")
 PATHS_LINE = re.compile(r"\s*paths\s*=")
@@ -75,19 +82,32 @@ NEEDS_NO_LINK = {
 NEEDS_NO_LINK_FOLDERS = ("docs/adr/", "docs/requirements.md", ".github/", *UNOWNED)
 
 
-def tracked_files(root: Path) -> list[str]:
+def listed_names(root: Path) -> list[str]:
     listed = subprocess.check_output(
         [*GIT_LISTING, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=root,
         text=True,
     )
-    return sorted(
-        {
-            name
-            for name in listed.split("\0")
-            if name and (root / name).is_file() and not (root / name).is_symlink()
-        }
-    )
+    return sorted({name for name in listed.split("\0") if name})
+
+
+def tracked_files(root: Path, names: list[str] | None = None) -> list[str]:
+    return [
+        name
+        for name in (listed_names(root) if names is None else names)
+        if (root / name).is_file() and not (root / name).is_symlink()
+    ]
+
+
+def linked_settings(root: Path, names: list[str]) -> list[str]:
+    """Ignore and settings files that no check reads through a link, so a link hides their lines."""
+    return [
+        f"{name}:1 is a link, which hides the lines of this file from every check; make it a regular file"
+        for name in names
+        if PurePosixPath(name).name in LINKED_NAMES
+        and not name.startswith(UNOWNED)
+        and (root / name).is_symlink()
+    ]
 
 
 def gitleaks_switch_offs(name: str, text: str) -> list[str]:
@@ -161,7 +181,7 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         text = texts[name]
         lines = list(enumerate(text.splitlines(), 1))
         base = PurePosixPath(name).name
-        entries = entry_file(name, LINE_IGNORES)
+        entries = entry_file(root, name, LINE_IGNORES)
         if entries or SECURITY_OFF.search(text) or any(w in text for w in RETRY_WORDS):
             found += security_hits(root, name, lines, "holds", entries)
         found += pattern_switch_offs(root, name, lines, "holds")
@@ -233,10 +253,10 @@ def binary(name: str, data: bytes) -> bool:
     return False
 
 
-def text_files(root: Path) -> dict[str, str]:
+def text_files(root: Path, names: list[str] | None = None) -> dict[str, str]:
     """Tracked and new text files; a NUL byte cannot hide code or settings from the pass."""
     texts: dict[str, str] = {}
-    for name in tracked_files(root):
+    for name in tracked_files(root, names):
         data = (root / name).read_bytes()
         if not binary(name, data):
             text = data.decode(errors="replace")
@@ -245,10 +265,11 @@ def text_files(root: Path) -> dict[str, str]:
 
 
 def validate_whole_project(root: Path) -> None:
-    texts = text_files(root)
+    names = listed_names(root)
+    texts = text_files(root, names)
     sources = source_names(root, texts)
     kinds = [
-        (SWITCH_OFF_HEADER, switch_offs(root, texts)),
+        (SWITCH_OFF_HEADER, [*switch_offs(root, texts), *linked_settings(root, names)]),
         (MARKER_HEADER, excuse_markers(root, texts, sources)),
         (
             COMMENT_HEADER,

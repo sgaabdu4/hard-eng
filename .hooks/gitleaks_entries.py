@@ -87,6 +87,12 @@ def current_findings(
 
 def validate_entries(root: Path, timeout: float = 900.0) -> None:
     """Refuse each root entry that hides a finding a scan run now would not hide; the full check runs it after the tools are installed."""
+    if (root / ".gitleaksignore").is_symlink():
+        from comments import SWITCH_OFF_HEADER
+
+        raise ValueError(
+            f"{SWITCH_OFF_HEADER}\n  .gitleaksignore:1 is a link, which Gitleaks reads and no check can judge; make it a regular file"
+        )
     entries = entry_lines(root)
     if not entries:
         return
