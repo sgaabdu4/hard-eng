@@ -267,6 +267,7 @@ SECURITY_OFF = re.compile(
 RAW_OFF = {
     ".py": re.compile(
         r"#\s*(?:pragma:\s*no cover|(?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)"
+        r"|pyre-(?:ignore|fixme)|type:\s*ignore"
         r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b)"
     ),
     ".dart": re.compile(r"//\s*dart-decimate-ignore-(?:next-line(?![\w-])|file\b)"),

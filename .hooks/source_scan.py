@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable, Iterator
 from functools import cache
 from pathlib import Path, PurePosixPath
 
-CONTROL_KEYWORD_BEFORE = re.compile(r"\b(if|while|for|with)\s*$")
+CONTROL_KEYWORD_BEFORE = re.compile(r"(?<![.$])\b(if|while|for|with)\s*$")
 JAVASCRIPT = {".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
 SLASH = {".dart", ".rs", ".swift", *JAVASCRIPT}
 CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
@@ -18,10 +18,11 @@ RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")"
 INTERPOLATION_STOP = re.compile(r"[{}'\"]")
 SCAN_STOP = re.compile(r"[\n/'\"`{}]|b?r#*['\"]")
 QUOTE = re.compile(r"'''|\"\"\"|['\"]")
+KEYWORD_BEFORE = r"(?<![.$])\b(return|typeof|case|default|do|else|in|of|new|delete|void|throw|yield|await)"
 REGEX_BEFORE = re.compile(
-    r"(^|[(,=:\[!&|?{};+\-*%<>~^]"
-    r"|\b(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await))\s*$"
+    rf"(^|[(,=:\[!&|?{{}};+\-*%<>~^]|\.\.\.|{KEYWORD_BEFORE})\s*$"
 )
+PREFIX_NOT = re.compile(rf"{KEYWORD_BEFORE}!$")
 REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
 
 
@@ -84,7 +85,9 @@ def regex_allowed(text: str, index: int) -> bool:
     """Whether `/` at index starts a regex: after an operator, keyword or control condition; a postfix `++`, `--` or non-null `!` ends a value, so `/` there divides."""
     before = text[max(0, index - 200) : index].rstrip()
     if before.endswith(("++", "--")) or (
-        before.endswith("!") and (before[-2:-1].isalnum() or before[-2:-1] in "_$)]")
+        before.endswith("!")
+        and (before[-2:-1].isalnum() or before[-2:-1] in "_$)]")
+        and not PREFIX_NOT.search(before[-16:])
     ):
         return False
     if not before.endswith(")"):

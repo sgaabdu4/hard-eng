@@ -280,6 +280,19 @@ QUOTED_NEAR_MISSES = [
         "const C = () => <p>Don't</p>; // eslint-" + "disable-line\n",
         "eslint-" + "disable",
     ),
+    ("tool/scan.py", "X = '# pyre-" + "fixme[9]'\n", "# pyre-" + "fixme"),
+    ("tool/scan.py", "X = '# type:" + " ignore'\n", "# type:" + " ignore"),
+    *(
+        ("src/a.ts", line + " // eslint-" + "disable-line\n", "eslint-" + "disable")
+        for line in [
+            "const a = o.in / 2 + `/`;",
+            "const a = $in / 2 + `/`;",
+            "const a = d.with(1) / 2 + `/`;",
+            "const a = [.../'/.exec(s) ?? []];",
+            "export default /'/.source;",
+            "function f(s){return!/`/.test(s)}",
+        ]
+    ),
 ]
 
 
