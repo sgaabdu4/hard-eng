@@ -173,6 +173,19 @@ def size_failures(root: Path) -> list[str]:
     return failures
 
 
+SCRIPT_CALL = re.compile(r"\b(?:bun|node|python3|bash|sh)\s+(?:\./)?scripts/[\w./-]*")
+
+
+def script_call_failures(root: Path) -> list[str]:
+    """Codex starts each shell call in the project root, so a call relative to the skill folder fails."""
+    return [
+        f"{source}:{number} {call.group()}: name the script by its path from the skill"
+        for source in sorted(n for n in skill_paths(root) if n.endswith(".md"))
+        for number, line, _ in lines((root / source).read_text())
+        for call in SCRIPT_CALL.finditer(line)
+    ]
+
+
 COMMAND = re.compile(r"hard-eng\.py ([a-z][a-z-]*)([^`\n|]*)")
 
 
@@ -290,6 +303,28 @@ def test_broken_links_fail_and_valid_equivalents_pass(tmp_path: Path) -> None:
             ".agents/skills/canonical/SKILL.md:17 ../local/references/guide.md#lost: "
             "missing section"
         ),
+    ]
+
+
+def test_distributed_skills_call_scripts_by_path_from_any_folder() -> None:
+    assert script_call_failures(SOURCE) == []
+
+
+def test_a_script_call_relative_to_the_skill_folder_fails(tmp_path: Path) -> None:
+    skill(
+        tmp_path / ".agents/skills",
+        "video",
+        "# Video\n\n"
+        "```bash\nbun scripts/record.mjs --out /tmp/x\n```\n\n"
+        "Then `python3 ./scripts/review.py`.\n\n"
+        "```bash\nbun <skill>/scripts/record.mjs\n"
+        "python3 .agents/skills/video/scripts/review.py\n"
+        "ls scripts/\n```\n",
+    )
+
+    assert script_call_failures(tmp_path) == [
+        ".agents/skills/video/SKILL.md:4 bun scripts/record.mjs: name the script by its path from the skill",
+        ".agents/skills/video/SKILL.md:7 python3 ./scripts/review.py: name the script by its path from the skill",
     ]
 
 
