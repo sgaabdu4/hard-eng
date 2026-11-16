@@ -26,7 +26,7 @@ Authority: Autonomous — the scheduled reference repository watch asks for each
 
 - [x] A script call relative to the skill folder in shipped skill text fails, and the path forms pass → `tests/test_skill_links.py::test_a_script_call_relative_to_the_skill_folder_fails` passes.
 - [x] No shipped skill holds such a call → `tests/test_skill_links.py::test_distributed_skills_call_scripts_by_path_from_any_folder` failed on the six README lines before the edit and passes after it.
-- [x] The scripts run by path from another folder → N/A — no test starts Bun; each of the four scripts that the README calls (`scaffold`, `run-walkthrough`, `review-video`, `convert-mp4`), started by absolute path from another folder, loaded its imports and reached its own argument check. No full recording ran.
+- [x] The scripts start by path from another folder → N/A — no test starts Bun; each of the four scripts that the README calls (`scaffold`, `run-walkthrough`, `review-video`, `convert-mp4`), started by absolute path from another folder, loaded its imports and reached its own argument check, and `scaffold` ran to the end there and wrote its config and README. No recording, review or conversion ran.
 
 ## Baseline + execution
 
@@ -48,6 +48,7 @@ Result: Passed
 Evidence: `tests/test_skill_links.py` and `tests/test_skill_routing.py`: 17 passed. The four scripts started by path from another folder, as the third acceptance line says. The Complete check passed on this branch.
 Reader: a reader that did not write the text compared the old and new skill text. It quoted the README sentence on `<skill>` (unclear "it") and the SKILL.md sentence (no meaning for `<skill>`); both were reworded.
 Review: the Codex adversarial review approved cacc191a. The independent review at cacc191a had two findings: no Reader record, and only two of four scripts started by path. Both are repaired above.
+Review declined: a full recording, review and conversion from another folder did not run :: the change edits no script; no script reads the current folder (`process.cwd` has no match in `scripts/`), each finds the skill folder from its own file location, and the README passes each input and output as an absolute path.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
 Retro: (1) The independent review found no Reader check on changed skill text → `.agents/skills/code-review/references/review.md` "Skill text" rule caught it; None — the existing review rule worked. (2) The same review found the third acceptance line checked with two of four scripts run → None — a judgement the existing review found; the line now names all four.
