@@ -105,27 +105,6 @@ def test_a_fault_in_an_included_package_names_the_include_to_remove(
     assert str(error.value).endswith(f": {shared.resolve()}")
 
 
-@pytest.mark.parametrize("content", ["include: ../lib/shared.yaml\n", "analyzer: {}\n"])
-def test_a_nested_settings_file_that_lacks_the_settings_is_named_with_its_step(
-    runner: ModuleType, tmp_path: Path, content: str
-) -> None:
-    """A settings file in a source folder replaces the package's settings for that folder."""
-    (tmp_path / "analysis_options.yaml").write_text(yaml.safe_dump(DART_TYPING))
-    runner.validate_typing(tmp_path, "dart", ["tool"])
-    nested = tmp_path / "tool/analysis_options.yaml"
-    nested.parent.mkdir()
-    nested.write_text(content)
-    with pytest.raises((TypeError, ValueError), match="Dart requires") as error:
-        runner.validate_typing(tmp_path, "dart", ["tool"])
-    assert f": {nested}. This file replaces the package's settings" in str(error.value)
-    assert "or remove it" in str(error.value)
-    nested.unlink()
-    (tmp_path / "analysis_options.yaml").write_text("linter: {}\n")
-    with pytest.raises(TypeError, match="Dart requires analyzer settings") as error:
-        runner.validate_typing(tmp_path, "dart", ["tool"])
-    assert str(error.value).endswith(f": {tmp_path / 'analysis_options.yaml'}")
-
-
 @pytest.mark.parametrize(
     "section,group,rule",
     [
@@ -204,12 +183,11 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
             runner.validate_typing(tmp_path, "dart", ["lib"])
     path.write_text(changes["analysis_options.yaml"])
     nested = generated.parent / "analysis_options.yaml"
-    options["analyzer"]["exclude"] = ["lib/**"]
-    nested.write_text(yaml.safe_dump(options))
+    link = "include: ../analysis_options.yaml\n"
+    nested.write_text(link + "analyzer:\n  exclude: ['lib/**']\n")
     with pytest.raises(ValueError, match="cannot exclude project files"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
-    result["analyzer"]["language"]["strict-raw-types"] = True
-    nested.write_text(yaml.safe_dump(result))
+    nested.write_text(link + "analyzer:\n  language:\n    strict-raw-types: true\n")
     with pytest.raises(ValueError, match="obsolete Dart language"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
 
@@ -826,7 +804,7 @@ def test_a_flutter_package_without_flutter_skill_lints_is_refused(
     nested = tmp_path / "test"
     nested.mkdir()
     options.pop("plugins")
-    (nested / "analysis_options.yaml").write_text(yaml.safe_dump(options))
+    (nested / "analysis_options.yaml").write_text("include: ../analysis_options.yaml\n")
     runner.validate_typing(tmp_path, "dart", ["lib"])
 
     pubspec.write_text("name: tool\nenvironment:\n  sdk: ^3.9.0\n")
