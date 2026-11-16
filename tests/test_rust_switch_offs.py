@@ -148,3 +148,20 @@ def test_every_clippy_limit_is_a_key_that_clippy_reads() -> None:
     assert "fn-params-excessive-bools" not in CLIPPY_DEFAULTS
     assert CLIPPY_DEFAULTS["max-struct-bools"] == 3
     assert len(CLIPPY_DEFAULTS) >= 20
+
+
+PROSE = [
+    ("README.md", "Set @UP@='-A warnings' only on your own machine.\n"),
+    ("CONTRIBUTING.md", "```\n@UP@=-Adead_code cargo build\n```\n"),
+    ("notes.txt", "@UP@ = -A unused\n"),
+    (".github/workflows/rust.yml", "# Never set @UP@ to -A warnings here.\n"),
+    ("build.sh", 'echo "the @UP@ variable must not hold -A warnings"\n'),
+]
+
+
+@pytest.mark.parametrize(("name", "text"), PROSE)
+def test_prose_that_names_rust_flags_is_not_an_assignment(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    """Only a workflow, script or config line that assigns the flags counts; prose and notes pass."""
+    validate_whole_project(project(tmp_path, {name: fill(text)}))

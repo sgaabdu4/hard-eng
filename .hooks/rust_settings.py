@@ -2,6 +2,7 @@
 
 import re
 import tomllib
+from pathlib import PurePosixPath
 
 CLIPPY_FILES = {"clippy.toml", ".clippy.toml"}
 CLIPPY_DEFAULTS = {
@@ -31,7 +32,22 @@ CLIPPY_DEFAULTS = {
     "vec-box-size-threshold": 4096,
     "verbose-bit-mask-threshold": 1,
 }
-QUOTES = "\"',[]"
+ASSIGNMENT = re.compile(r"rustflags[\"']?\s*[:=]", re.IGNORECASE)
+FLAG_SUFFIXES = (".yml", ".yaml", ".sh", ".bash", ".toml", ".json", ".mk")
+FLAG_NAMES = {
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+    "Dockerfile",
+    "justfile",
+    ".envrc",
+    ".env",
+}
+
+
+def sets_flags(name: str) -> bool:
+    """A workflow, script or config file; prose and notes can name the flags without setting them."""
+    return name.endswith(FLAG_SUFFIXES) or PurePosixPath(name).name in FLAG_NAMES
 
 
 def allows(flags: str) -> str | None:
@@ -47,10 +63,10 @@ def allows(flags: str) -> str | None:
 
 
 def flag_hits(name: str, text: str) -> list[str]:
-    """Each line that sets RUSTFLAGS or rustflags with a flag that allows lints."""
+    """Each line that assigns RUSTFLAGS or rustflags a flag that allows lints."""
     found = []
     for number, line in enumerate(text.splitlines(), 1):
-        match = re.search(r"rustflags", line, re.IGNORECASE)
+        match = ASSIGNMENT.search(line)
         flag = allows(line[match.end() :]) if match else None
         if flag and not line.lstrip().startswith("#"):
             found.append(
