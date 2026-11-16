@@ -200,6 +200,16 @@ def test_a_ruff_lint_gate_that_narrows_the_rule_set_fails(
         "command": ["ruff", "check", ".", "--extend-select", "C901"],
     }
     validate_gate(extended, tmp_path, set())
+    for everything in (["--select", "ALL"], ["--select=ALL"], ["--select", "E9,ALL"]):
+        validate_gate(
+            {
+                "name": "lint",
+                "role": "lint",
+                "command": ["ruff", "check", ".", *everything],
+            },
+            tmp_path,
+            set(),
+        )
     selecting = {
         "name": "complexity",
         "role": "complexity",
