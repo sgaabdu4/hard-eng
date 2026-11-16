@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-HE-NO-SWITCH-OFF counts a switch-off only where a tool reads it: text inside a string, template or regex literal in Dart, JavaScript, TypeScript, Swift or Python is not a switch-off, in added lines and in the whole-project pass alike. A comment after a literal on the same line still fails, and a Gitleaks allow mark still fails inside a string, because Gitleaks reads the raw line. A Dart exclude written in a parent folder's own `analysis_options.yaml` and included by a child package is judged from the child folder, where the analyzer applies it: a pattern that matches nothing there passes, and one that hides a child file fails and names the parent file that holds it. Non-goals: Markdown prose that names a marker and unchanged Flutter starter comments; both have a project fix (reword the sentence; delete the two template comment lines).
+HE-NO-SWITCH-OFF counts a switch-off only where a tool reads it: text inside a string, template or regex literal in Dart, JavaScript, TypeScript, Swift or Python is not a switch-off, in added lines and in the whole-project pass alike. A comment after a literal on the same line still fails, and a mark that its tool reads on the raw line still fails inside a string: Semgrep (`nosemgrep`, `nosem`), coverage.py (`pragma: no cover`), c8, v8 and istanbul ignore, Dart coverage (`coverage:ignore-`), Gitleaks, and the forms of tools whose reading is unknown (`jscpd:ignore`, `fallow-ignore`, `dart-decimate-ignore`, `shellcheck disable=`, `zizmor: ignore`). Only forms whose tool parses comments or code are masked in literals. `.jsx`, `.tsx` and `.swift` files are not masked, because the scanner misreads JSX text and Swift raw strings. A Dart `${...}` expression inside a string is skipped, and a Python t-string counts as a string. A Dart exclude written in a parent folder's own `analysis_options.yaml` and included by a child package is judged from the folder of the options file the analyzer reads, where it applies it (a pattern with braces or a partial `**` fails, because Python glob cannot expand it): a pattern that matches nothing there passes, and one that hides a child file fails and names the parent file that holds it. Non-goals: Markdown prose that names a marker and unchanged Flutter starter comments; both have a project fix (reword the sentence; delete the two template comment lines).
 
 ## Sources + coverage
 
@@ -25,9 +25,11 @@ Authority: Autonomous. AGENTS.md line 10 covers Hard Eng design calls; the user 
 ## Acceptance + steps
 
 - [ ] Switch-off text inside a Dart raw string, a Dart string, a template, a template expression's string, a JavaScript regex and Python strings passes in added and old lines → `tests/test_strict_refusals.py::test_switch_off_text_inside_a_literal_passes`.
-- [ ] A switch-off comment after a literal still fails, and a Gitleaks allow mark inside a string still fails → `tests/test_strict_refusals.py::test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails`.
+- [ ] A switch-off comment after a literal still fails, a Dart string with a `${...}` expression holding a quote does not hide a later comment, and every raw-read mark (Semgrep, coverage, c8, v8, Gitleaks, fallow, Dart Decimate) inside a string, in Dart, JavaScript and Python, still fails; JSX and Swift raw-string lines keep the strict reading → `tests/test_strict_refusals.py::test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails`.
 - [ ] Every earlier switch-off form still fails → `tests/test_strict_refusals.py::test_old_switch_offs_anywhere_in_the_project_fail`.
 - [ ] A parent folder's exclude that matches nothing in the child passes; one that hides a child file fails and names the parent file; the child's own file keeps the strict rule → `tests/test_dart_exclusions.py::test_an_included_parent_exclude_is_judged_where_it_applies`.
+- [ ] A parent exclude with braces or a partial `**` fails → `tests/test_dart_exclusions.py::test_an_inherited_pattern_with_braces_or_a_partial_double_star_is_refused`; a nested `test/analysis_options.yaml` that includes a file above the package is judged from `test/` → `tests/test_dart_exclusions.py::test_an_inherited_pattern_is_judged_from_the_folder_of_the_analyzed_options_file`.
+- [ ] A Python t-string's text passes where its tool reads no comment (needs Python 3.14 or later) → `tests/test_strict_refusals.py::test_switch_off_text_inside_a_literal_passes`.
 
 ## Baseline + execution
 
@@ -37,7 +39,7 @@ Execution: One builder, this session.
 
 ## Risks + recovery
 
-A hit inside a literal that the scanner reads wrongly (an unclosed quote) would hide a real switch-off on later lines; the scanner is the one the comment rule already trusts. The literal check runs only on a line that already matches, and one cached scan per file serves the comment checks too. Recovery: revert the commits.
+A hit inside a literal that the scanner reads wrongly (an unclosed quote) would hide a real switch-off on later lines; the scanner is the one the comment rule already trusts. The literal check runs only on a line that already matches, and one cached scan per file serves the comment checks too. A tool that reads a mark raw is a closed list in `RAW_OFF` and `SECURITY_OFF`; a new tool that parses comments needs a masked form added deliberately, and an unknown tool stays raw. Speed: the scan skips a hit line with no quote, slash or backtick before the hit when the file has no multi-line string opener, and the scanner jumps to the next quote, slash, brace or raw prefix. The scan gives identical output on 91,428 source files. CPU time of `validate_whole_project` (3 runs each, alternating, seconds; old = develop, which has no literal masking): fsl 1.19, 1.11, 1.11 old against 1.12, 1.10, 1.12 new; P30 0.79, 0.74, 0.72 old against 0.70, 0.75, 0.69 new; `validate_suppressions` 0.10 to 0.14 on both sides. Before the jump change the new side was about 0.2 s slower on fsl. Recovery: revert the commits.
 
 ## ux_reference
 
