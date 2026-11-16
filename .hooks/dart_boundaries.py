@@ -222,7 +222,7 @@ def validate_dart_exclusions(
     matches = {
         path
         for pattern in set(values) - native - children - {".dart_tool/**"}
-        for path in directory.glob(pattern)
+        for path in (origin or directory if inherited else directory).glob(pattern)
         if path.relative_to(directory).parts[0] not in roots
     }
     if roots:
