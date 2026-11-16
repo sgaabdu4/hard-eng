@@ -693,7 +693,7 @@ def test_history_scan_covers_only_commits_a_known_base_lacks(
         *full[4:],
     ]
     assert base[:7] in capsys.readouterr().out
-    pushable = [*full[:3], "--log-opts=--remotes HEAD", *full[4:]]
+    pushable = [*full[:3], "--log-opts=--remotes --tags HEAD", *full[4:]]
     for unknown in (None, "0" * 40, "missing-reference", "--all"):
         assert gitleaks_scan.new_commits_command(full, repository, unknown) == pushable
     custom = [*full[:3], "--log-opts=main..HEAD"]
@@ -726,8 +726,8 @@ def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
     assert private not in scanned
 
 
-def test_the_history_scan_covers_the_commits_ci_sees(repository: Path) -> None:
-    """A local check and CI agree: CI sees HEAD and the remote branches, never a local-only tag or branch."""
+def test_the_history_scan_covers_remote_branches_and_tags(repository: Path) -> None:
+    """CI fetches HEAD, the remote branches and every tag, so a commit that only a pushed tag reaches is scanned; a local-only branch is not."""
     git_output(repository, "checkout", "-qb", "scratch")
     git_output(repository, "commit", "-q", "--allow-empty", "-m", "local branch")
     branch_only = git_output(repository, "rev-parse", "HEAD")
@@ -743,7 +743,8 @@ def test_the_history_scan_covers_the_commits_ci_sees(repository: Path) -> None:
     head = git_output(repository, "rev-parse", "HEAD")
     scanned = scanned_commits(repository)
     assert {head, remote} <= set(scanned)
-    assert not {branch_only, tag_only} & set(scanned)
+    assert tag_only in scanned
+    assert branch_only not in scanned
 
 
 @pytest.mark.parametrize("visibility", ["PUBLIC", "PRIVATE"])

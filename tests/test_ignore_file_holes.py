@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from comments import validate_suppressions
-from conftest import commit, init
+from conftest import commit, git, init
 from gitleaks_entries import validate_entries
 from test_strict_refusals import project, refusal
 from whole_project import validate_whole_project
@@ -317,3 +317,53 @@ def test_a_fallow_gate_that_narrows_the_scan_fails(
             "coverage/fallow.json",
         ],
     )
+
+
+def test_the_entry_judge_scans_only_the_files_its_entries_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The judge costs no whole-tree copy or scan: a finding of a file does not depend on other files."""
+    import gitleaks_entries
+
+    root = project(tmp_path, {"secret.txt": KEY, "big/a.txt": "x\n"})
+    past = git(root, "rev-parse", "HEAD")
+    (root / "secret.txt").unlink()
+    commit(root, "remove")
+    (root / ".gitleaksignore").write_text(f"{past}:secret.txt:{RULE}:1\n")
+
+    def refuse(*_arguments: object) -> None:
+        raise AssertionError("the judge copied the whole tree")
+
+    monkeypatch.setattr(gitleaks_entries, "copy_scan_tree", refuse, raising=False)
+    copied: list[str] = []
+    real = gitleaks_entries.shutil.copy2
+
+    def spy(source: str | Path, target: str | Path, **options: bool) -> str:
+        copied.append(Path(source).name)
+        return str(real(source, target))
+
+    monkeypatch.setattr(gitleaks_entries.shutil, "copy2", spy)
+    validate_entries(root, 900)
+    assert "a.txt" not in copied
+
+
+def test_every_installed_checkout_fetches_the_whole_history() -> None:
+    """The entry judge needs each commit that an entry names; a shallow checkout would read a good entry as missing."""
+    import yaml
+    from ci_jobs import CHECKOUT
+    from conftest import SOURCE
+
+    for name in (".github/hard-eng.yml", ".github/workflows/hard-eng.yml"):
+        workflow = yaml.safe_load((SOURCE / name).read_text())
+        checkouts = [
+            step
+            for job in workflow["jobs"].values()
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert checkouts, name
+        assert all(step["with"]["fetch-depth"] == 0 for step in checkouts), name
+    template = (SOURCE / ".github/hard-eng.yml").read_text()
+    copied = CHECKOUT.search(template)
+    assert copied is not None
+    assert "fetch-depth: 0" in copied[0]

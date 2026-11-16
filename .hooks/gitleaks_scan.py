@@ -271,7 +271,9 @@ def new_commits_command(
     if "--log-opts=--all" not in command:
         return command
     pushable = [
-        "--log-opts=--remotes HEAD" if argument == "--log-opts=--all" else argument
+        "--log-opts=--remotes --tags HEAD"
+        if argument == "--log-opts=--all"
+        else argument
         for argument in command
     ]
     if base is None:
