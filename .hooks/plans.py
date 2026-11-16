@@ -657,7 +657,9 @@ def uncommented(file: Path) -> str:
     )
 
 
-RUST_ATTRIBUTE_BODY = r'(?:[^\]"]|"(?:\\.|[^"\\])*")*'
+RUST_ATOM = r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])\'|[^\]\["]'
+RUST_NESTED = rf"(?:{RUST_ATOM}|\[(?:{RUST_ATOM})*\])*"
+RUST_ATTRIBUTE_BODY = rf"(?:{RUST_ATOM}|\[{RUST_NESTED}\])*"
 RUST_GAP = r"(?:\s|//[^\n]*)*"
 RUST_TEST = (
     rf"#\[(?:\w+::)*(?:test|rstest|test_case)(?:\({RUST_ATTRIBUTE_BODY}\))?\]{RUST_GAP}"
@@ -671,15 +673,19 @@ def names_tests(path: PurePosixPath) -> bool:
     return _is_test(path) or path.suffix == ".rs"
 
 
-def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
+def missing_tests(
+    root: Path, references: list[tuple[str, str]], code: bool = False
+) -> list[str]:
+    """Named tests that do not exist; with code, a Rust source name may also be plain code."""
     missing = []
     for path, name in references:
         file = (root / path).resolve()
         quoted = rf"[\"'`]{re.escape(name)}[\"'`]"
+        rust = "" if code and not _is_test(PurePosixPath(path)) else RUST_TEST
         definition = {
             ".py": rf"\bdef\s+{re.escape(name)}\s*\(",
             ".swift": rf"\bfunc\s+{re.escape(name)}\s*\(|{quoted}",
-            ".rs": rf"{RUST_TEST}{re.escape(name)}\s*\(",
+            ".rs": rf"{rust or r'\bfn\s+'}{re.escape(name)}\s*[<(]",
         }.get(file.suffix, quoted)
         if not (
             file.is_relative_to(root.resolve())
@@ -710,7 +716,7 @@ def plan_stage(root: Path, path: Path, changed: set[str]) -> str:
             references, requirements = acceptance_tests(sections)
             named = {"acceptance": references, **claimed_tests(sections)}
             for line, found in named.items():
-                if missing := missing_tests(root, found):
+                if missing := missing_tests(root, found, line == "Same cause"):
                     raise ValueError(
                         f"{line} names tests that do not exist: " + ", ".join(missing)
                     )
