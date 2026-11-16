@@ -32,8 +32,12 @@ RUST_ATOM = rf'"(?:\\.|[^"\\])*"|{RUST_CHAR}|\'(?!(?:\\.|[^\'\\])\')|[^\]\["\']'
 RUST_NESTED = rf"(?:{RUST_ATOM}|\[(?:{RUST_ATOM})*\])*"
 RUST_ATTRIBUTE_BODY = rf"(?:{RUST_ATOM}|\[{RUST_NESTED}\])*"
 RUST_GAP = r"(?:\s|//[^\n]*\n)*"
+RUST_TEST_NAME = rf"\s*(?:\w+::)*(?:{'|'.join(RUST_TEST_ATTRIBUTES)})\s*"
+# The match starts only where an item can start and takes the first test attribute, so a stack is read once.
 RUST_TEST = (
-    rf"#\[\s*(?:\w+::)*(?:{'|'.join(RUST_TEST_ATTRIBUTES)})\s*(?:\({RUST_ATTRIBUTE_BODY}\))?\s*\]{RUST_GAP}"
+    rf"(?:\A|[;{{}}]){RUST_GAP}(?:#!\[{RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
+    rf"(?:#\[(?!{RUST_TEST_NAME}[\](]){RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
+    rf"#\[{RUST_TEST_NAME}(?:\({RUST_ATTRIBUTE_BODY}\))?\s*\]{RUST_GAP}"
     rf"(?:#\[{RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
     r"(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+"
 )

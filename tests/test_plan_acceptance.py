@@ -687,6 +687,10 @@ RUST_TESTS = [
     "#[quickcheck]\nfn test_divide(a: u8) -> bool { true }",
     "#[gtest]\nfn test_divide() {}",
     "#[ test ]\nfn test_divide() {}",
+    "#[ignore]\n#[test]\nfn test_divide() {}",
+    "#![cfg(test)]\n#[test]\nfn test_divide() {}",
+    "use super::*;\n#[test]\nfn test_divide() {}",
+    "mod tests {\n    #[test]\n    fn test_divide() {}\n}",
     "#[test]\nunsafe fn test_divide() {}",
 ]
 
@@ -723,6 +727,24 @@ def test_a_test_named_in_a_comment_after_an_attribute_does_not_count(
     assert missing_tests(tmp_path, [("tests/ops.rs", "test_divide")]) == [
         "tests/ops.rs::test_divide"
     ]
+
+
+@pytest.mark.parametrize("found", [True, False], ids=["real", "gone"])
+def test_a_long_table_of_test_cases_is_read_at_once(
+    tmp_path: Path, found: bool
+) -> None:
+    """A search starts only where an item can start, so a table of 3000 cases is read once."""
+    table = "".join(f'#[test_case({n}, "x{n}" ; "case {n}")]\n' for n in range(3000))
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(
+        table + "fn t(a: u8, b: &str) {}\n\n#[test]\nfn test_divide() {}\n"
+    )
+    name = "test_divide" if found else "test_gone"
+    started = time.perf_counter()
+    assert missing_tests(tmp_path, [("tests/ops.rs", name)]) == (
+        [] if found else [f"tests/ops.rs::{name}"]
+    )
+    assert time.perf_counter() - started < 1
 
 
 def test_stacked_char_cases_are_read_at_once(tmp_path: Path) -> None:
