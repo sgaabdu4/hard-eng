@@ -555,6 +555,38 @@ def test_a_missing_retro_test_is_reported_for_the_retro_line(
         validate_plans(repository, "0" * 40, "Complete")
 
 
+@pytest.mark.parametrize(
+    ("named", "refusal"),
+    [
+        ("`src/gate_schedule.rs::run_checks`", None),
+        ("`src/parse.rs::Parser::header`", None),
+        (
+            "`src/parse.rs::gone`",
+            "Same cause names tests that do not exist: src/parse.rs::gone",
+        ),
+    ],
+)
+def test_a_same_cause_line_may_name_rust_source_code_that_exists(
+    repository: Path, completed_plan: str, named: str, refusal: str | None
+) -> None:
+    (repository / "src").mkdir()
+    (repository / "src/gate_schedule.rs").write_text("pub fn run_checks() {}\n")
+    (repository / "src/parse.rs").write_text(
+        "impl Parser {\n    pub fn header(&self) {}\n}\n"
+    )
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            "Same cause: N/A — fixture command, not a fix.",
+            f"Same cause: {named} grew past its limit.",
+        )
+    )
+    if refusal is None:
+        assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+        return
+    with pytest.raises(ValueError, match=refusal):
+        validate_plans(repository, "0" * 40, "Complete")
+
+
 def test_a_missing_rust_unit_test_in_a_retro_line_is_reported(
     repository: Path, completed_plan: str
 ) -> None:
@@ -646,6 +678,12 @@ RUST_TESTS = [
     "#[rstest]\nfn test_divide() {}",
     "#[test_case(1, 2)]\nfn test_divide(a: u8, b: u8) {}",
     "#[test]\npub(crate) fn test_divide() {}",
+    '#[test_case(vec![1, 2] ; "two")]\nfn test_divide(v: Vec<u8>) {}',
+    "#[test_case(&[1, 2])]\nfn test_divide(v: &[u8]) {}",
+    "#[rstest]\n#[case(vec![1])]\nfn test_divide(#[case] v: Vec<u8>) {}",
+    "#[rstest]\n#[case(&[1][..])]\nfn test_divide(#[case] v: &[u8]) {}",
+    "#[test_case('\"')]\nfn test_divide(c: char) {}",
+    "#[test_case(']')]\nfn test_divide(c: char) {}",
 ]
 
 
