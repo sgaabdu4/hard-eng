@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-A Complete plan that names a Rust test as `path::name` passes when that function has a `#[test]` attribute (or a path form such as `#[tokio::test]`), in `tests/` or in a `src/` unit test module. A function with no test attribute, or one only on comment lines, still counts as missing. Non-goals: other languages, other plan checks.
+A Complete plan that names a Rust test as `path::name` passes when that function has a test attribute (`#[test]`, a path form such as `#[tokio::test]`, `#[rstest]` or `#[test_case(...)]`, with or without arguments, with other attributes and line comments between), in `tests/` or in a `src/` unit test module, in Acceptance, Same cause and Retro lines alike. A function with no test attribute, or one only on comment lines, still counts as missing. Non-goals: other languages, other plan checks.
 
 ## Sources + coverage
 
@@ -13,8 +13,8 @@ Sources: N/A — found by a CI run: an installed Rust project's Complete plan na
 ## Repository context
 
 Owners: `missing_tests` in `.hooks/plans.py` holds one definition pattern per file kind; `.rs` had none, so it fell back to a quoted name, which a Rust test never has. `_is_test` accepts a path in a test folder or with a test file name; Rust unit tests live in `src/` files, so `.rs` files are accepted by the test attribute instead.
-Same cause: N/A — searched `missing_tests` and `_is_test` for other file kinds that define tests by a function header: Python and Swift have patterns; JavaScript, Dart and Ruby name tests in quotes, which the fallback reads.
-Single source: N/A — the patterns have one owner, the table in `missing_tests`.
+Same cause: `claimed_tests` (Same cause and Retro lines) used the same path rule, so it skipped a Rust `src/` name with no check; both now use `names_tests`. Searched `missing_tests` and `_is_test` for other file kinds that define tests by a function header: Python and Swift have patterns; JavaScript, Dart and Ruby name tests in quotes, which the fallback reads.
+Single source: the Rust form lives once in `RUST_TEST`; the path rule for named tests lives once in `names_tests`.
 
 ## Decisions + authorization
 
@@ -25,6 +25,8 @@ Authority: Autonomous. AGENTS.md line 10 covers Hard Eng design calls; the user 
 ## Acceptance + steps
 
 - [x] A Rust test in `tests/` and a Rust unit test in a `src/` test module count, and the same lines commented out do not → `tests/test_plan_acceptance.py::test_a_test_named_only_on_a_comment_line_does_not_count`.
+- [x] Each real Rust test form counts: attribute arguments, a line comment after an attribute, a `]` inside a quoted attribute value, `#[rstest]`, `#[test_case(...)]`, `pub(crate) fn` → `tests/test_plan_acceptance.py::test_each_rust_test_form_counts`.
+- [x] A made-up Rust `src/` name in a Retro line is reported → `tests/test_plan_acceptance.py::test_a_missing_rust_unit_test_in_a_retro_line_is_reported`.
 - [x] A Rust function with no test attribute does not count → `tests/test_plan_acceptance.py::test_a_rust_function_without_a_test_attribute_is_not_a_test`.
 
 ## Baseline + execution
@@ -44,8 +46,8 @@ N/A — a check message only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: `uv run --frozen pytest -q tests/test_plan_acceptance.py`: 86 passed; before the fix the two Rust cases failed. On the installed Rust project's real file, `missing_tests` finds `strict_check_checks_the_members_of_classes_declared_in_entry_files` and still reports a made-up name and a plain function. `python3 .hooks/hard-eng.py check --base origin/develop --plan-stage Ready`: exit 0, 20 gates PASS.
-Review: Pending — a fresh review of the final head before merge.
+Evidence: `uv run --frozen pytest -q tests/test_plan_acceptance.py`: 95 passed; before each fix its new cases failed (2, then 9). On the installed Rust project's real file, `missing_tests` finds `strict_check_checks_the_members_of_classes_declared_in_entry_files` and still reports a made-up name and a plain function. `python3 .hooks/hard-eng.py check --base origin/develop --plan-stage Ready`: exit 0, 20 gates PASS.
+Review: a fresh review of 295114b4 found three refused real forms (attribute arguments, a trailing line comment, a `]` in a quoted value) and the Retro path gap; each is fixed with a failing test first. Pending: a fresh review of the final head.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
 Retro: (1) CI of an installed Rust project refused a plan that named a real Rust test → `tests/test_plan_acceptance.py::test_a_test_named_only_on_a_comment_line_does_not_count` now holds Rust cases; (2) the push refused the change without a plan, because `.hooks/plans.py` always needs one → None — the refusal named the step.

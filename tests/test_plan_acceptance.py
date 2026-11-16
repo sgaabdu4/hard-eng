@@ -555,6 +555,18 @@ def test_a_missing_retro_test_is_reported_for_the_retro_line(
         validate_plans(repository, "0" * 40, "Complete")
 
 
+def test_a_missing_rust_unit_test_in_a_retro_line_is_reported(
+    repository: Path, completed_plan: str
+) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(RETRO_LINE, "Retro: Fixed in `src/lib.rs::test_gone`.")
+    )
+    with pytest.raises(
+        ValueError, match="Retro names tests that do not exist: src/lib.rs::test_gone"
+    ):
+        validate_plans(repository, "0" * 40, "Complete")
+
+
 @pytest.mark.parametrize(
     ("report_case", "skipped"), [("<skipped/>", True), ("", False)], ids=["skip", "run"]
 )
@@ -623,6 +635,25 @@ COMMENTED_TESTS = [
         "#[cfg(test)]\nmod tests {\n    #[test]\n    fn test_divide() {}\n}",
     ),
 ]
+
+
+RUST_TESTS = [
+    '#[tokio::test(flavor = "multi_thread")]\nasync fn test_divide() {}',
+    '#[sqlx::test(migrations = "db/migrations")]\nasync fn test_divide() {}',
+    "#[test] // slow\nfn test_divide() {}",
+    "#[test]\n#[ignore] // needs network\nfn test_divide() {}",
+    '#[test]\n#[should_panic(expected = "a]b")]\nfn test_divide() {}',
+    "#[rstest]\nfn test_divide() {}",
+    "#[test_case(1, 2)]\nfn test_divide(a: u8, b: u8) {}",
+    "#[test]\npub(crate) fn test_divide() {}",
+]
+
+
+@pytest.mark.parametrize("source", RUST_TESTS, ids=range(len(RUST_TESTS)))
+def test_each_rust_test_form_counts(tmp_path: Path, source: str) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(source + "\n")
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_divide")]) == []
 
 
 def test_a_rust_function_without_a_test_attribute_is_not_a_test(
