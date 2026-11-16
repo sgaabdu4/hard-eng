@@ -686,8 +686,43 @@ RUST_TESTS = [
     "#[test_matrix([1, 2], [3])]\nfn test_divide(a: u8, b: u8) {}",
     "#[quickcheck]\nfn test_divide(a: u8) -> bool { true }",
     "#[gtest]\nfn test_divide() {}",
+    "#[ test ]\nfn test_divide() {}",
     "#[test]\nunsafe fn test_divide() {}",
 ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "#[test] " + "// " * 40 + "\nfn other() {}",
+        "#[test] // https://a.example/b // https://c.example/d\n" * 20
+        + "fn other() {}",
+    ],
+    ids=["slashes", "links"],
+)
+def test_a_comment_after_a_test_attribute_is_read_at_once(
+    tmp_path: Path, source: str
+) -> None:
+    """A line comment runs to its line end, so its slashes are read one way."""
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(source + "\n")
+    started = time.perf_counter()
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_gone")]) == [
+        "tests/ops.rs::test_gone"
+    ]
+    assert time.perf_counter() - started < 1
+
+
+def test_a_test_named_in_a_comment_after_an_attribute_does_not_count(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(
+        "#[test] // was fn test_divide() before\nfn other() {}\n"
+    )
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_divide")]) == [
+        "tests/ops.rs::test_divide"
+    ]
 
 
 def test_stacked_char_cases_are_read_at_once(tmp_path: Path) -> None:

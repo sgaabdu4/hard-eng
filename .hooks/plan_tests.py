@@ -31,9 +31,9 @@ RUST_CHAR = r"'(?:\\.|[^'\\])'"
 RUST_ATOM = rf'"(?:\\.|[^"\\])*"|{RUST_CHAR}|\'(?!(?:\\.|[^\'\\])\')|[^\]\["\']'
 RUST_NESTED = rf"(?:{RUST_ATOM}|\[(?:{RUST_ATOM})*\])*"
 RUST_ATTRIBUTE_BODY = rf"(?:{RUST_ATOM}|\[{RUST_NESTED}\])*"
-RUST_GAP = r"(?:\s|//[^\n]*)*"
+RUST_GAP = r"(?:\s|//[^\n]*\n)*"
 RUST_TEST = (
-    rf"#\[(?:\w+::)*(?:{'|'.join(RUST_TEST_ATTRIBUTES)})(?:\({RUST_ATTRIBUTE_BODY}\))?\]{RUST_GAP}"
+    rf"#\[\s*(?:\w+::)*(?:{'|'.join(RUST_TEST_ATTRIBUTES)})\s*(?:\({RUST_ATTRIBUTE_BODY}\))?\s*\]{RUST_GAP}"
     rf"(?:#\[{RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
     r"(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+"
 )

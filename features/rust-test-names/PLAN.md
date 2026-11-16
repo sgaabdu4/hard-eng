@@ -34,12 +34,12 @@ Authority: Autonomous. AGENTS.md line 10 covers Hard Eng design calls; the user 
 ## Baseline + execution
 
 Result: Passed
-Evidence: 2026-11-16, develop 80756642 passed CI. On it, the two new Rust cases of `test_a_test_named_only_on_a_comment_line_does_not_count` fail (the real `#[test]` function reads as missing); the other 84 tests in the file pass.
+Evidence: 2026-11-16, develop 80756642 passed CI. On it, the two new Rust cases of `test_a_test_named_only_on_a_comment_line_does_not_count` fail (the real `#[test]` function reads as missing); the other 84 tests in the file pass. With the final tests, develop's code fails 25 and passes 92; the 7 that pass there guard against new wrong refusals and slow reads.
 Execution: One builder, this session.
 
 ## Risks + recovery
 
-A Rust function name that matches only inside a string or a macro could count. The pattern needs the attribute right before `fn`, with only other attributes between. Recovery: revert the commit.
+A Rust function name that matches only inside a string, a macro or a block comment could count, as for the other languages. The pattern needs the attribute right before `fn`, with only other attributes and whole line comments between; each attribute argument and each comment reads one way. Recovery: revert the commit.
 
 ## ux_reference
 
@@ -48,8 +48,8 @@ N/A — a check message only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: `uv run --frozen pytest -q tests/test_plan_acceptance.py`: 113 passed; before each fix its new cases failed (2, then 9, then 8, then 8 plus the time case). A file of 20,000 attributed tests is read in 0.05 s, and 400 stacked char cases in 0.04 s. On the installed Rust project's real file, `missing_tests` finds `strict_check_checks_the_members_of_classes_declared_in_entry_files` and still reports a made-up name and a plain function. `python3 .hooks/hard-eng.py check --base origin/develop --plan-stage Ready`: exit 0, 20 gates PASS.
-Review: a fresh review of 295114b4 found three refused real forms (attribute arguments, a trailing line comment, a `]` in a quoted value) and the Retro path gap. A fresh review of d6df5290 found refused slice, `vec!` and char literal arguments, and Same cause lines that name Rust source code refused. A fresh review of 245839d7 found exponential time on stacked char cases (20 cases took 1.3 s, 22 took 28 s), Same cause lines that name a struct, const or bare file refused, and refused `wasm_bindgen_test`, `test_matrix`, `quickcheck`, `gtest` and `unsafe fn` forms. Each is fixed with a failing test first; each argument now reads one way, so 400 stacked cases take 0.04 s. Pending: a fresh review of the final head.
+Evidence: `uv run --frozen pytest -q tests/test_plan_acceptance.py`: 117 passed; before each fix its new cases failed (2, then 9, then 8, then 8 plus the time case, then 2 plus the comment time case). A file of 20,000 attributed tests is read in 0.05 s, and 400 stacked char cases in 0.04 s. On the installed Rust project's real file, `missing_tests` finds `strict_check_checks_the_members_of_classes_declared_in_entry_files` and still reports a made-up name and a plain function. `python3 .hooks/hard-eng.py check --base origin/develop --plan-stage Ready`: exit 0, 20 gates PASS.
+Review: a fresh review of 295114b4 found three refused real forms (attribute arguments, a trailing line comment, a `]` in a quoted value) and the Retro path gap. A fresh review of d6df5290 found refused slice, `vec!` and char literal arguments, and Same cause lines that name Rust source code refused. A fresh review of 32485aae found that a line comment after an attribute could stop part way, so 16 `//` took 8 s and a name inside the comment counted; a comment now runs to its line end (1000 `//` take 0.001 s). A fresh review of 245839d7 found exponential time on stacked char cases (20 cases took 1.3 s, 22 took 28 s), Same cause lines that name a struct, const or bare file refused, and refused `wasm_bindgen_test`, `test_matrix`, `quickcheck`, `gtest` and `unsafe fn` forms. Each is fixed with a failing test first; each argument now reads one way, so 400 stacked cases take 0.04 s. Pending: a fresh review of the final head.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
 Retro: (0) the pre-push tests gate stopped twice at the 900 s push budget, at 96% with no failure, while builders loaded the Mac; the owner's rule sets a time limit at about 3 times the normal run (489 to 600 s), so `hard-eng.gates.json` `pre_push_seconds` is now 1800 → None — the limit now follows that rule; (1) CI of an installed Rust project refused a plan that named a real Rust test → `tests/test_plan_acceptance.py::test_a_test_named_only_on_a_comment_line_does_not_count` now holds Rust cases; (2) the push refused the change without a plan, because `.hooks/plans.py` always needs one → None — the refusal named the step.
