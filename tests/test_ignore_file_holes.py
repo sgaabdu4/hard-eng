@@ -206,3 +206,114 @@ def test_a_ruff_lint_gate_that_narrows_the_rule_set_fails(
         "command": ["ruff", "check", ".", "--select", "C901"],
     }
     validate_gate(selecting, tmp_path, set())
+
+
+FALLOW_BASE = '{"health": {"ignore": ["src/**"]}}\n'
+
+
+def test_a_fallow_ignore_in_an_extended_file_is_refused(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: Fallow merges `extends`, so a health ignore in a base file drops findings."""
+    files = {
+        ".fallowrc.json": '{"extends": ["./config/base.json"]}\n',
+        "config/base.json": FALLOW_BASE,
+    }
+    message = refusal(project(tmp_path, files))
+    assert "config/base.json:1 sets ignore" in message
+    toml = {
+        "fallow.toml": 'extends = ["config/base.toml"]\n',
+        "config/base.toml": '[health]\nignore = ["a"]\n',
+    }
+    assert "config/base.toml:2 sets ignore" in refusal(project(tmp_path / "toml", toml))
+    outside = {".fallowrc.json": '{"extends": ["../base.json"]}\n'}
+    assert "extends a file outside the repository" in refusal(
+        project(tmp_path / "out", outside)
+    )
+
+
+def test_only_the_hooks_ignore_pattern_may_drop_files_from_fallow(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: `ignorePatterns` drops files from every analysis; the one Hard Eng writes passes."""
+    validate_whole_project(
+        project(
+            tmp_path / "ok", {".fallowrc.json": '{"ignorePatterns": [".hooks/**"]}\n'}
+        )
+    )
+    message = refusal(
+        project(
+            tmp_path / "bad",
+            {".fallowrc.json": '{"ignorePatterns": [".hooks/**", "src/**"]}\n'},
+        )
+    )
+    assert ".fallowrc.json:1 sets ignorePatterns" in message
+    toml = refusal(
+        project(tmp_path / "toml", {"fallow.toml": 'ignorePatterns = ["src/**"]\n'})
+    )
+    assert "fallow.toml:1 sets ignorePatterns" in toml
+
+
+def fallow_gate(tmp_path: Path, command: list[str]) -> None:
+    from project_setup import validate_command_output
+
+    validate_command_output(
+        command, tmp_path, {"type": "fallow", "path": "coverage/fallow.json"}
+    )
+
+
+SCAN = ["fallow", "--only", "dead-code,dupes,health", "--fail-on-issues"]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--config", "config/other.json"],
+        ["-c", "config/other.json"],
+        ["--config=config/other.json"],
+    ],
+)
+def test_a_fallow_gate_reads_the_config_it_names(
+    tmp_path: Path, extra: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: a gate that names another config is judged by that config."""
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/other.json").write_text(FALLOW_BASE)
+    with pytest.raises(ValueError, match="config/other.json:1 sets ignore"):
+        fallow_gate(tmp_path, [*SCAN, *extra])
+    (tmp_path / "config/other.json").write_text('{"health": {"maxCrap": 30}}\n')
+    fallow_gate(tmp_path, [*SCAN, *extra])
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["src"],
+        ["--workspace", "app"],
+        ["-w", "app"],
+        ["--changed-since", "main"],
+        ["--root", "app"],
+        ["-r", "app"],
+        ["--changed-workspaces", "main"],
+    ],
+)
+def test_a_fallow_gate_that_narrows_the_scan_fails(
+    tmp_path: Path, extra: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: the combined scan covers the whole project; a path, workspace, root or changed-since filter leaves files out."""
+    with pytest.raises(ValueError, match="Fallow scans must cover the whole project"):
+        fallow_gate(tmp_path, [*SCAN, *extra])
+    fallow_gate(tmp_path, SCAN)
+    fallow_gate(
+        tmp_path,
+        [
+            "fallow",
+            "audit",
+            "--base",
+            "origin/develop",
+            "--gate",
+            "all",
+            "--format",
+            "json",
+            "--output-file",
+            "coverage/fallow.json",
+        ],
+    )

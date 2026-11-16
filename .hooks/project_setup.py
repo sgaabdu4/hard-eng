@@ -90,7 +90,7 @@ def validate_command_output(
         raise ValueError(
             "Verification cannot suppress all Node warnings; repair the warning owner or use a justified narrow native exception"
         )
-    validate_scanner_command(arguments, report)
+    validate_scanner_command(arguments, report, directory)
 
 
 def is_shell_script(path: Path) -> bool:
