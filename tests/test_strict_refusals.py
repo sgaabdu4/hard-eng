@@ -758,3 +758,40 @@ def test_raised_or_ignored_fallow_health_settings_fail(
     for number, (settings, toml) in enumerate(FALLOW_PASSING):
         text = fallow_text(name, settings, toml)
         validate_whole_project(project(tmp_path / f"passing{number}", {name: text}))
+
+
+RUFF_KEYS = ["ignore", "extend-ignore", "per-file-ignores", "extend-per-file-ignores"]
+
+
+def ruff_text(name: str, table: str, key: str) -> str:
+    value = '{ "a.py" = ["E501"] }' if "per-file" in key else '["E501"]'
+    header = {
+        ("pyproject.toml", ""): "[tool.ruff]\n",
+        ("pyproject.toml", ".lint"): "[tool.ruff.lint]\n",
+    }.get((name, table), "[lint]\n" if table else "")
+    return f"{header}{key} = {value}\n"
+
+
+@pytest.mark.parametrize("name", ["pyproject.toml", "ruff.toml", ".ruff.toml"])
+@pytest.mark.parametrize("table", ["", ".lint"])
+@pytest.mark.parametrize("key", RUFF_KEYS)
+def test_ruff_ignore_settings_are_switch_offs(
+    tmp_path: Path, name: str, table: str, key: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a ruff setting that ignores rules fails, at the top level and under lint."""
+    text = ruff_text(name, table, key)
+    message = refusal(project(tmp_path, {name: text}))
+    line = len(text.splitlines())
+    assert f"{name}:{line} sets the ruff setting {key}" in message
+
+
+def test_ruff_settings_that_are_not_ignores_pass(tmp_path: Path) -> None:
+    kept = (
+        '[tool.ruff.lint]\nselect = ["E", "F"]\n[tool.ruff.lint.flake8-annotations]\n'
+        "ignore-fully-untyped = false\n[tool.other]\nignore = ['x']\n"
+    )
+    validate_whole_project(project(tmp_path, {"pyproject.toml": kept}))
+    table_form = '[tool.ruff.lint.per-file-ignores]\n"a.py" = ["E501"]\n'
+    assert "pyproject.toml:1 sets the ruff setting per-file-ignores" in refusal(
+        project(tmp_path / "table", {"pyproject.toml": table_form})
+    )

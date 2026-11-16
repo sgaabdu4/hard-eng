@@ -24,6 +24,8 @@ from comments import (
 from fallow_settings import SETTINGS_FILES, settings_switch_offs
 from gate_config import generated_sources
 from project_files import GIT_LISTING
+from ruff_settings import SETTINGS_FILES as RUFF_FILES
+from ruff_settings import settings_switch_offs as ruff_switch_offs
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 TEXT_SUFFIXES = {
@@ -169,6 +171,8 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
             found += cargo_switch_offs(name, text)
         if base in SETTINGS_FILES:
             found += settings_switch_offs(name, text)
+        if base in RUFF_FILES:
+            found += ruff_switch_offs(name, text)
     return found
 
 

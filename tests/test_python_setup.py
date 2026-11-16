@@ -7,7 +7,8 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from gate_config import Gate, GateConfig, Group, parse_config
+from conftest import SOURCE
+from gate_config import Gate, GateConfig, Group, parse_config, validate_gate
 from process_group import parallel_hint
 from python_setup import (
     import_configuration,
@@ -382,3 +383,47 @@ def test_the_pyrefly_step_sets_only_the_keys_that_are_wrong(
         text = line + text if native else text.replace(head, head + line, 1)
     fixed = tomllib.loads(text)
     assert pyrefly_gap(file, fixed if native else fixed["tool"]["pyrefly"]) == ""
+
+
+RUFF_IGNORES = [
+    ["--ignore", "E501"],
+    ["--ignore=E501"],
+    ["--extend-ignore", "E501"],
+    ["--per-file-ignores", "a.py:E501"],
+    ["--extend-per-file-ignores=a.py:E501"],
+    ["--config", 'lint.ignore = ["E501"]'],
+    ["--config", "extend-ignore = ['E501']"],
+    ["--config", 'lint.per-file-ignores = {"a.py" = ["E501"]}'],
+    ['--config=lint.extend-per-file-ignores."a.py" = ["E501"]'],
+]
+
+
+@pytest.mark.parametrize("prefix", [["ruff"], ["uvx", "ruff@latest"]])
+@pytest.mark.parametrize("flags", RUFF_IGNORES)
+def test_a_ruff_gate_that_ignores_rules_fails(
+    tmp_path: Path, prefix: list[str], flags: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: a ruff gate that ignores a rule, by flag or by `--config` text, fails at load."""
+    gate: Gate = {
+        "name": "lint",
+        "role": "lint",
+        "command": [*prefix, "check", ".", *flags],
+    }
+    with pytest.raises(ValueError, match=r"HE-NO-SWITCH-OFF.*ruff"):
+        validate_gate(gate, tmp_path, set())
+
+
+def test_the_template_ruff_gates_pass(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: the `annotations` gate's `--config` keys are not ignore settings."""
+    template = json.loads(
+        (SOURCE / ".agents/skills/he/templates/hard-eng.python.json").read_text()
+    )
+    gates = [
+        gate
+        for package in template["packages"]
+        for gate in package["checks"]
+        if gate["command"][0] == "ruff"
+    ]
+    assert len(gates) >= 4
+    for gate in gates:
+        validate_gate(gate, tmp_path, set())
