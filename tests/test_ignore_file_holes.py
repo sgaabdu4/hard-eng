@@ -367,3 +367,70 @@ def test_every_installed_checkout_fetches_the_whole_history() -> None:
     copied = CHECKOUT.search(template)
     assert copied is not None
     assert "fetch-depth: 0" in copied[0]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--save-snapshot", "snap.json"],
+        ["--save-regression-baseline", "base.json"],
+        ["--parent-run", "run-1"],
+        ["--runtime-coverage", "cov.json"],
+        ["--mark-viewed", "a.ts"],
+    ],
+)
+def test_a_fallow_option_value_is_not_a_scan_path(
+    tmp_path: Path, extra: list[str]
+) -> None:
+    """The words that Fallow's own options take are values, so they never read as a path that narrows the scan."""
+    fallow_gate(tmp_path, [*SCAN, *extra])
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [["-cconfig/other.json"], ["-c", "config/other.json"], ["-rapp"], ["-wapp"]],
+)
+def test_fallow_short_options_are_read_the_way_fallow_reads_them(
+    tmp_path: Path, extra: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: `-cFILE` names a config and `-rDIR` or `-wNAME` narrows, exactly as the long forms do."""
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/other.json").write_text(FALLOW_BASE)
+    with pytest.raises(
+        ValueError, match="config/other.json:1 sets ignore|cover the whole project"
+    ):
+        fallow_gate(tmp_path, [*SCAN, *extra])
+
+
+def test_a_fallow_ignore_in_an_npm_extended_package_is_refused(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: Fallow loads `npm:` extends from node_modules or from a workspace package; the real loader merged the ignore."""
+    installed = {
+        ".fallowrc.json": '{"extends": ["npm:mycfg"]}\n',
+        "node_modules/mycfg/package.json": '{"name": "mycfg", "main": "cfg.json"}\n',
+        "node_modules/mycfg/cfg.json": FALLOW_BASE,
+    }
+    assert "node_modules/mycfg/cfg.json:1 sets ignore" in refusal(
+        project(tmp_path / "a", installed)
+    )
+    scoped = {
+        ".fallowrc.json": '{"extends": ["npm:@team/cfg/shared.json"]}\n',
+        "packages/cfg/package.json": '{"name": "@team/cfg"}\n',
+        "packages/cfg/shared.json": FALLOW_BASE,
+    }
+    assert "packages/cfg/shared.json:1 sets ignore" in refusal(
+        project(tmp_path / "b", scoped)
+    )
+    clean = dict(
+        installed, **{"node_modules/mycfg/cfg.json": '{"health": {"maxCrap": 30}}\n'}
+    )
+    validate_whole_project(project(tmp_path / "c", clean))
+    missing = {".fallowrc.json": '{"extends": ["npm:absent"]}\n'}
+    validate_whole_project(project(tmp_path / "d", missing))
+
+
+@pytest.mark.parametrize(
+    "url", ["https://example.org/base.json", "http://example.org/base.json"]
+)
+def test_a_remote_fallow_extends_is_refused(tmp_path: Path, url: str) -> None:
+    files = {".fallowrc.json": '{"extends": ["' + url + '"]}\n'}
+    assert ".fallowrc.json:1 extends a remote file" in refusal(project(tmp_path, files))

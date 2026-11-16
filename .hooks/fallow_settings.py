@@ -1,9 +1,12 @@
 """Refuse a Fallow settings file that raises a health limit, skips files from the complexity analysis or lowers a complexity rule."""
 
+import json
+import subprocess
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from fallow_report import HEALTH_LIMITS
+from project_files import GIT_LISTING
 
 HOOKS_PATTERN = ".hooks/**"
 SETTINGS_FILES = {".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"}
@@ -105,18 +108,85 @@ def extended_names(config: dict[str, object]) -> list[str]:
     items = [extends] if isinstance(extends, str) else extends
     if not isinstance(items, list):
         return []
-    return [item for item in items if isinstance(item, str) and "://" not in item]
+    return [item for item in items if isinstance(item, str)]
+
+
+def package_parts(spec: str) -> tuple[str, str]:
+    """The package name and the file inside it that an `npm:` name asks for."""
+    parts = spec.split("/", 2 if spec.startswith("@") else 1)
+    size = 2 if spec.startswith("@") else 1
+    return "/".join(parts[:size]), "/".join(parts[size:])
+
+
+def workspace_package(root: Path, package: str) -> Path | None:
+    listed = subprocess.run(
+        [*GIT_LISTING, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    for name in listed.split("\0"):
+        if name.endswith("package.json") and PurePosixPath(name).name == "package.json":
+            try:
+                found = json.loads((root / name).read_text())
+            except (OSError, ValueError):
+                continue
+            if isinstance(found, dict) and found.get("name") == package:
+                return (root / name).parent
+    return None
+
+
+def npm_config(root: Path, name: str, spec: str) -> Path | None:
+    """The config file that Fallow loads for `npm:<spec>`, from node_modules above the extending file or from a workspace package."""
+    package, inner = package_parts(spec)
+    here = (root / name).parent.resolve()
+    folders = [
+        folder / "node_modules" / package
+        for folder in (here, *here.parents)
+        if folder == root.resolve() or root.resolve() in folder.parents
+    ]
+    folder = next((f for f in folders if f.is_dir()), None) or workspace_package(
+        root, package
+    )
+    if folder is None:
+        return None
+    if inner:
+        return next(
+            (c for c in (folder / inner, folder / (inner + ".json")) if c.is_file()),
+            None,
+        )
+    try:
+        main = json.loads((folder / "package.json").read_text()).get("main")
+    except (OSError, ValueError, AttributeError):
+        main = None
+    names = [main] if isinstance(main, str) else []
+    names += [".fallowrc.json", ".fallowrc.jsonc", "fallow.json", "index.json"]
+    return next((folder / n for n in names if (folder / n).is_file()), None)
+
+
+def extended_target(root: Path, name: str, extended: str) -> Path | str | None:
+    """The file an `extends` entry names, a refusal text, or None when it cannot be read here."""
+    if "://" in extended:
+        return "extends a remote file, which no check can read"
+    if extended.startswith("npm:"):
+        return npm_config(root, name, extended.removeprefix("npm:"))
+    return ((root / name).parent / extended).resolve()
 
 
 def file_hits(root: Path, name: str, text: str, seen: frozenset[Path]) -> list[str]:
     config = read_settings(name, text)
     found = own_hits(name, text, config)
     for extended in extended_names(config):
-        target = ((root / name).parent / extended).resolve()
-        if not target.is_relative_to(root.resolve()):
+        target = extended_target(root, name, extended)
+        if isinstance(target, str):
+            found.append(f"{name}:1 {target}")
+        elif target is None:
+            continue
+        elif not target.resolve().is_relative_to(root.resolve()):
             found.append(f"{name}:1 extends a file outside the repository")
         elif target.is_file() and target not in seen:
-            relative = target.relative_to(root.resolve()).as_posix()
+            relative = target.resolve().relative_to(root.resolve()).as_posix()
             found += file_hits(
                 root, relative, target.read_text(errors="replace"), seen | {target}
             )

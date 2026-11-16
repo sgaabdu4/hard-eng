@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from fallow_flags import SHORT_VALUE_FLAGS, SUBCOMMANDS, VALUE_FLAGS
 from gate_config import Gate, Group, JsonObject, Report, generated_sources
 from project_files import GIT_LISTING
 
@@ -115,90 +116,6 @@ HEALTH_LIMITS = {
     "max_unit_size_threshold": 60,
 }
 ANALYSIS_COMMANDS = {"dead-code", "dupes", "flags", "security", "similar-code"}
-SUBCOMMANDS = ANALYSIS_COMMANDS | {
-    "health",
-    "audit",
-    "watch",
-    "fix",
-    "list",
-    "inspect",
-    "trace",
-    "trace-error",
-    "guard",
-    "decision-surface",
-    "workspaces",
-    "explain",
-    "suppressions",
-    "impact",
-    "viz",
-    "doctor",
-    "init",
-    "agent",
-    "audit-cache",
-    "recommend",
-    "migrate",
-    "config",
-    "config-schema",
-    "plugin-schema",
-    "plugin-check",
-    "rule-pack",
-    "rule-pack-schema",
-    "type-aware",
-    "ci",
-    "ci-template",
-    "report",
-    "hooks",
-    "setup-hooks",
-    "coverage",
-    "license",
-    "telemetry",
-    "schema",
-    "help",
-    "review",
-}
-VALUE_FLAGS = {
-    "-r",
-    "--root",
-    "-c",
-    "--config",
-    "-f",
-    "--format",
-    "--output",
-    "--threads",
-    "--changed-since",
-    "--base",
-    "--diff-file",
-    "--churn-file",
-    "--max-file-size",
-    "--baseline",
-    "--baseline-mode",
-    "--save-baseline",
-    "-w",
-    "--workspace",
-    "--changed-workspaces",
-    "--group-by",
-    "--sarif-file",
-    "-o",
-    "--output-file",
-    "--report-path-prefix",
-    "--tolerance",
-    "--regression-baseline",
-    "--only",
-    "--skip",
-    "--dupes-mode",
-    "--dupes-threshold",
-    "--dupes-min-tokens",
-    "--dupes-min-lines",
-    "--dupes-min-occurrences",
-    "--coverage",
-    "--coverage-root",
-    "--dupes-baseline",
-    "--health-baseline",
-    "--max-crap",
-    "--type-aware-project",
-    "--type-aware-require",
-    "--gate",
-}
 SCANNERS = {"fallow", "dart-decimate", "react-doctor"}
 TOLERANCE_FLAGS = {
     "--baseline",
@@ -229,11 +146,23 @@ def native_fallow_command(arguments: list[str]) -> list[str] | None:
     return invocation if invocation and invocation[0] == "fallow" else None
 
 
+def split_option(argument: str) -> tuple[str, str | None]:
+    """The flag of an argument and the value attached to it, as Fallow reads `--flag=value`, `-fVALUE` and `-f=VALUE`."""
+    if argument.startswith("--"):
+        flag, equals, value = argument.partition("=")
+        return flag, value if equals else None
+    if len(argument) > 2 and argument[:2] in SHORT_VALUE_FLAGS:
+        return argument[:2], argument[2:].removeprefix("=")
+    return argument, None
+
+
 def option(invocation: list[str], flag: str) -> str | None:
     for index, argument in enumerate(invocation):
-        key, separator, value = argument.partition("=")
+        key, value = split_option(argument)
         if key == flag:
-            return value if separator else next(iter(invocation[index + 1 :]), "")
+            return (
+                value if value is not None else next(iter(invocation[index + 1 :]), "")
+            )
     return None
 
 
@@ -268,7 +197,8 @@ def positionals(invocation: list[str]) -> list[str]:
         if skip:
             skip = False
         elif argument.startswith("-"):
-            skip = "=" not in argument and argument in VALUE_FLAGS
+            flag, value = split_option(argument)
+            skip = value is None and flag in VALUE_FLAGS
         else:
             words.append(argument)
     return words
@@ -286,7 +216,7 @@ def narrowing(invocation: list[str]) -> list[str]:
     flags = {"-w", "--workspace", "-r", "--root"}
     if "audit" not in invocation:
         flags |= {"--changed-since", "--base", "--changed-workspaces"}
-    return [*found, *(a for a in invocation if a.partition("=")[0] in flags)]
+    return [*found, *(a for a in invocation if split_option(a)[0] in flags)]
 
 
 def named_config(invocation: list[str]) -> str | None:
