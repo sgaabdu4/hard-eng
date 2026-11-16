@@ -112,6 +112,50 @@ HEALTH_LIMITS = {
     "max_cyclomatic_threshold": 20,
     "max_cognitive_threshold": 15,
     "max_crap_threshold": 30,
+    "max_unit_size_threshold": 60,
+}
+ANALYSIS_COMMANDS = {"dead-code", "dupes", "flags", "security", "similar-code"}
+VALUE_FLAGS = {
+    "-r",
+    "--root",
+    "-c",
+    "--config",
+    "-f",
+    "--format",
+    "--output",
+    "--threads",
+    "--changed-since",
+    "--base",
+    "--diff-file",
+    "--churn-file",
+    "--max-file-size",
+    "--baseline",
+    "--baseline-mode",
+    "--save-baseline",
+    "-w",
+    "--workspace",
+    "--changed-workspaces",
+    "--group-by",
+    "--sarif-file",
+    "-o",
+    "--output-file",
+    "--report-path-prefix",
+    "--tolerance",
+    "--regression-baseline",
+    "--only",
+    "--skip",
+    "--dupes-mode",
+    "--dupes-threshold",
+    "--dupes-min-tokens",
+    "--dupes-min-lines",
+    "--dupes-min-occurrences",
+    "--coverage",
+    "--coverage-root",
+    "--dupes-baseline",
+    "--health-baseline",
+    "--max-crap",
+    "--type-aware-project",
+    "--type-aware-require",
 }
 SCANNERS = {"fallow", "dart-decimate", "react-doctor"}
 TOLERANCE_FLAGS = {
@@ -174,6 +218,19 @@ def add_health(command: list[str]) -> list[str]:
     return command
 
 
+def subcommand(invocation: list[str]) -> str | None:
+    """The first word after the global options of a Fallow command."""
+    skip = False
+    for argument in invocation[1:]:
+        if skip:
+            skip = False
+        elif argument.startswith("-"):
+            skip = "=" not in argument and argument in VALUE_FLAGS
+        else:
+            return argument
+    return None
+
+
 def fallow_failure(invocation: list[str], report: Report) -> str | None:
     crap = option(invocation, "--max-crap")
     if crap is not None and (not math.isfinite(float(crap)) or float(crap) <= 0):
@@ -182,6 +239,8 @@ def fallow_failure(invocation: list[str], report: Report) -> str | None:
         if "--fail-on-issues" not in invocation:
             return "Fallow scans must fail on every finding; add --fail-on-issues"
         only = option(invocation, "--only")
+        if (word := subcommand(invocation)) in ANALYSIS_COMMANDS:
+            return f"Fallow scans must check health, so complex and untested code fails; drop the {word} subcommand to run the combined scan"
         if only is not None and "health" not in only.split(","):
             return "Fallow scans must check health, so complex and untested code fails; add health to --only"
         if "health" in (option(invocation, "--skip") or "").split(","):

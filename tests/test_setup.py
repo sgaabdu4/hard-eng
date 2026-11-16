@@ -782,7 +782,7 @@ def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -
         ["react-doctor", "src", "--scope", "full", "--blocking", "warning", "--json"],
         ["bun", "x", "react-doctor", "--blocking", "warning"],
         ["dart-decimate", "check", ".", "--boundary-violations"],
-        ["fallow", "dead-code", "--format", "json"],
+        ["fallow", "--format", "json"],
         ["fallow", "audit", "--format", "json"],
     ],
 )

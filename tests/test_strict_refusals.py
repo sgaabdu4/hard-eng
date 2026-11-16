@@ -1,5 +1,6 @@
 """The full check judges every tracked file, old code included."""
 
+import json
 import re
 import tokenize
 from pathlib import Path
@@ -689,3 +690,71 @@ def test_a_rust_test_files_removed_assertions_count_in_the_balance(
     root = change(tmp_path, "tests/it.rs", before, "#[test]\nfn a() {\n}\n")
     with pytest.raises(ValueError, match=r"tests lose 2 assertion lines net"):
         validate_suppressions(root, "HEAD")
+
+
+FALLOW_FILES = [".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"]
+FALLOW_FORMS = [
+    (
+        {"health": {"maxCyclomatic": 21}},
+        "[health]\nmaxCyclomatic = 21\n",
+        "maxCyclomatic",
+    ),
+    ({"health": {"maxCognitive": 16}}, "[health]\nmaxCognitive = 16\n", "maxCognitive"),
+    ({"health": {"maxCrap": 100}}, "[health]\nmaxCrap = 100\n", "maxCrap"),
+    ({"health": {"maxCrap": 0}}, "[health]\nmaxCrap = 0\n", "maxCrap"),
+    ({"health": {"maxUnitSize": 61}}, "[health]\nmaxUnitSize = 61\n", "maxUnitSize"),
+    ({"health": {"ignore": ["src/**"]}}, '[health]\nignore = ["src/**"]\n', "ignore"),
+    (
+        {"health": {"thresholdOverrides": [{"files": ["a.ts"], "maxCrap": 50}]}},
+        '[[health.thresholdOverrides]]\nfiles = ["a.ts"]\nmaxCrap = 50\n',
+        "maxCrap",
+    ),
+    (
+        {"rules": {"complexity-crap": "warn"}},
+        '[rules]\ncomplexity-crap = "warn"\n',
+        "complexity-crap",
+    ),
+    (
+        {"overrides": [{"files": ["a.ts"], "rules": {"complexity-cognitive": "off"}}]},
+        '[[overrides]]\nfiles = ["a.ts"]\n[overrides.rules]\ncomplexity-cognitive = "off"\n',
+        "complexity-cognitive",
+    ),
+]
+FALLOW_PASSING = [
+    (
+        {
+            "health": {
+                "maxCrap": 30,
+                "maxCyclomatic": 10,
+                "maxUnitSize": 40,
+                "ignore": [],
+                "thresholdOverrides": [{"files": ["a.ts"], "maxCrap": 20}],
+            },
+            "rules": {"complexity-crap": "error", "unused-files": "warn"},
+        },
+        '[health]\nmaxCrap = 30\nignore = []\n[[health.thresholdOverrides]]\nfiles = ["a.ts"]\nmaxCrap = 20\n[rules]\ncomplexity-crap = "error"\nunused-files = "warn"\n',
+    )
+]
+
+
+def fallow_text(name: str, settings: object, toml: str) -> str:
+    return toml if name.endswith(".toml") else json.dumps(settings, indent=1) + "\n"
+
+
+@pytest.mark.parametrize("name", FALLOW_FILES)
+def test_raised_or_ignored_fallow_health_settings_fail(
+    tmp_path: Path, name: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a Fallow settings file may not raise a health limit, skip files from the analysis or lower a complexity rule."""
+    for number, (settings, toml, key) in enumerate(FALLOW_FORMS):
+        message = refusal(
+            project(tmp_path / str(number), {name: fallow_text(name, settings, toml)})
+        )
+        assert OFF in message
+        assert re.search(rf"{re.escape(name)}:\d+ sets .*{key}", message), (
+            key,
+            message,
+        )
+    for number, (settings, toml) in enumerate(FALLOW_PASSING):
+        text = fallow_text(name, settings, toml)
+        validate_whole_project(project(tmp_path / f"passing{number}", {name: text}))

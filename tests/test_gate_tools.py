@@ -277,7 +277,11 @@ def test_the_import_order_of_the_coverage_package_does_not_depend_on_the_reports
 
 def clean_typescript_report(health: JsonObject | None) -> JsonObject:
     summary: JsonObject = {"files_analyzed": 4, "functions_analyzed": 3}
-    summary |= {"max_cyclomatic_threshold": 20, "max_cognitive_threshold": 15}
+    summary |= {
+        "max_cyclomatic_threshold": 20,
+        "max_cognitive_threshold": 15,
+        "max_unit_size_threshold": 60,
+    }
     summary |= {"max_crap_threshold": 30.0, "functions_above_threshold": 0}
     summary |= {"severity_critical_count": 0, "severity_high_count": 0}
     summary |= {"severity_moderate_count": 0}
@@ -330,6 +334,7 @@ def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
         "max_cyclomatic_threshold",
         "max_cognitive_threshold",
         "max_crap_threshold",
+        "max_unit_size_threshold",
     ):
         raised = clean_typescript_report(None)
         health = raised["health"]
@@ -346,7 +351,13 @@ def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
 
 
 @pytest.mark.parametrize(
-    "key", ["max_cyclomatic_threshold", "max_cognitive_threshold", "max_crap_threshold"]
+    "key",
+    [
+        "max_cyclomatic_threshold",
+        "max_cognitive_threshold",
+        "max_crap_threshold",
+        "max_unit_size_threshold",
+    ],
 )
 def test_a_fallow_audit_with_a_raised_health_limit_fails(
     tmp_path: Path, key: str
@@ -402,3 +413,31 @@ def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
     assert written["health"] == {"max_crap": 30}
     starter = SOURCE / ".agents/starters/flutter/.dart-decimaterc.json"
     assert json.loads(starter.read_text())["health"] == {"max_crap": 30}
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["fallow", "dead-code", "--fail-on-issues"],
+        ["fallow", "dupes", "--fail-on-issues"],
+        ["fallow", "flags", "--fail-on-issues"],
+        ["fallow", "security", "--fail-on-issues"],
+        ["fallow", "similar-code", "--fail-on-issues"],
+        ["fallow", "--fail-on-issues", "dead-code"],
+        ["fallow", "--root", ".", "dead-code", "--fail-on-issues"],
+        ["bunx", "fallow@latest", "dead-code", "--fail-on-issues"],
+    ],
+)
+def test_a_fallow_subcommand_without_health_fails(command: list[str]) -> None:
+    """HE-NO-SWITCH-OFF: a Fallow analysis subcommand other than health or audit skips the complexity analysis, like `--only dead-code`."""
+    report: Report = {"type": "fallow", "path": "coverage/fallow.json"}
+    with pytest.raises(ValueError, match="Fallow scans must check health"):
+        validate_scanner_command(command, report)
+    for passing in (
+        ["fallow", "--fail-on-issues"],
+        ["fallow", "health", "--fail-on-issues"],
+        ["fallow", "--only", "dead-code,health", "--fail-on-issues"],
+        ["fallow", "--root", "dead-code", "--fail-on-issues"],
+        ["fallow", "architecture", "--fail-on-issues"],
+    ):
+        validate_scanner_command(passing, report)

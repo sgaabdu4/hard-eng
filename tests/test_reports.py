@@ -231,7 +231,8 @@ def test_fallow_unknown_or_malformed_diagnostics_still_fail(
 
 AUDIT_SUMMARY: JsonObject = {"files_analyzed": 1, "functions_analyzed": 1}
 AUDIT_SUMMARY |= {"max_cyclomatic_threshold": 20, "max_cognitive_threshold": 15}
-AUDIT_SUMMARY |= {"max_crap_threshold": 30.0, "functions_above_threshold": 0}
+AUDIT_SUMMARY |= {"max_crap_threshold": 30.0, "max_unit_size_threshold": 60}
+AUDIT_SUMMARY |= {"functions_above_threshold": 0}
 AUDIT_SUMMARY |= {"severity_critical_count": 0, "severity_high_count": 0}
 AUDIT_SUMMARY |= {"severity_moderate_count": 0}
 
