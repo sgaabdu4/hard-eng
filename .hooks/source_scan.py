@@ -23,11 +23,33 @@ REGEX_BEFORE = re.compile(
 REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
 
 
-def string_end(text: str, index: int, quote: str, raw: bool, line: bool = False) -> int:
-    """Index just past the string that opens at index with quote; a line string stops at a newline."""
+def interpolation_end(text: str, index: int) -> int:
+    """Index just past the `${...}` expression of a Dart string, whose body starts at index; nested strings and braces count."""
+    depth = 1
+    while index < len(text) and depth:
+        close = string_at(text, index, ".dart")
+        if close is not None:
+            index = close
+            continue
+        depth += (text[index] == "{") - (text[index] == "}")
+        index += 1
+    return index
+
+
+def string_end(
+    text: str,
+    index: int,
+    quote: str,
+    raw: bool,
+    line: bool = False,
+    interpolated: bool = False,
+) -> int:
+    """Index just past the string that opens at index with quote; a line string stops at a newline, and an interpolated Dart string skips its `${...}` expressions."""
     while index < len(text):
         if text[index] == "\\" and not raw:
             index += 2
+        elif interpolated and text.startswith("${", index):
+            index = interpolation_end(text, index + 2)
         elif text.startswith(quote, index):
             return index + len(quote)
         elif line and text[index] == "\n":
@@ -48,7 +70,9 @@ def string_at(text: str, index: int, suffix: str) -> int | None:
     quote = QUOTE.match(text, index)
     if quote is not None and (quote.group(0) != "'" or suffix != ".rs"):
         line = len(quote.group(0)) == 1 and suffix != ".rs"
-        return string_end(text, quote.end(), quote.group(0), False, line)
+        return string_end(
+            text, quote.end(), quote.group(0), False, line, suffix == ".dart"
+        )
     regex = REGEX.match(text, index) if suffix in JAVASCRIPT else None
     return regex.end() if regex and regex_allowed(text, index) else None
 
@@ -173,7 +197,8 @@ def python_literal_spans(text: str) -> list[tuple[int, int]]:
     starts = [0]
     for line in text.split("\n"):
         starts.append(starts[-1] + len(line) + 1)
-    kinds = {tokenize.STRING, tokenize.FSTRING_MIDDLE}
+    template = getattr(tokenize, "TSTRING_MIDDLE", tokenize.STRING)
+    kinds = {tokenize.STRING, tokenize.FSTRING_MIDDLE, template}
     try:
         return [
             (

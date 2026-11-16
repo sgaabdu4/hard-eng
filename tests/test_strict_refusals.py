@@ -1,6 +1,7 @@
 """The full check judges every tracked file, old code included."""
 
 import re
+import tokenize
 from pathlib import Path
 from types import ModuleType
 
@@ -182,10 +183,19 @@ QUOTED_SWITCHES = [
         "const sample = r'''\n// ig" + "nore_for_file: unused_import\n''';\n",
     ),
     ("test/rule_test.dart", "const s = '// ig" + "nore: x';\n"),
+    (
+        "test/rule_test.dart",
+        "const s = '${a ? {'k': \"'\"} : 1} // ig" + "nore: x';\n",
+    ),
     ("src/rule.test.ts", "const sample = `\n// eslint-" + "disable-next-line\n`;\n"),
     ("src/a.ts", "const t = `${f('// @ts-" + "ignore')}`;\n"),
     ("scripts/scan.mjs", "const banned = /(?<!dart-)x|fallow-" + "ignore/;\n"),
-    ("tool/scan.py", "MARK = '# no" + "qa'\nRULE = f'{x} # no" + "semgrep'\n"),
+    ("tool/scan.py", "MARK = '# no" + "qa'\nRULE = f'{x} # no" + "qa'\n"),
+    *(
+        [("tool/tpl.py", "TPL = t'{x} # no" + "qa'\n")]
+        if hasattr(tokenize, "TSTRING_MIDDLE")
+        else []
+    ),
 ]
 
 
@@ -203,6 +213,11 @@ def test_switch_off_text_inside_a_literal_passes(
 
 QUOTED_NEAR_MISSES = [
     ("lib/a.dart", "final s = r'''x'''; // ig" + "nore: y\n", "// ig" + "nore:"),
+    (
+        "lib/a.dart",
+        "final a = '${b ? \"'\" : \"\"}'; // ig" + "nore: avoid_print\n",
+        "// ig" + "nore:",
+    ),
     (
         "src/a.ts",
         "const t = `${f()}`; // eslint-" + "disable-line\n",
