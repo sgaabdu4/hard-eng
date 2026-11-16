@@ -1,6 +1,6 @@
 # Playwright walkthrough skill
 
-Workflow owner for the bundled recorder, review and MP4 delivery scripts. Scripts run by path from any directory (`<skill>` = this package directory); only Setup runs inside it. Use the existing runtime when available; install missing dependencies only within task authorization.
+Workflow owner for the bundled recorder, review and MP4 delivery scripts. Scripts run by path from any directory. In each command, replace `<skill>` with the path of this package directory. Only Setup runs inside this package directory. Use the existing runtime when available; install missing dependencies only within task authorization.
 
 ## Setup
 
