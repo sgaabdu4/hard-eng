@@ -819,13 +819,13 @@ def test_a_test_named_only_on_a_comment_line_does_not_count(
         (
             "test/http_test.dart",
             "test('sends', () {\n  expect(log, 'A: ${h['accept'] ?? '*/*'}');\n});\n"
-            "test('parses the body', () {});\n",
+            + "test('parses the body', () {});\n",
             "parses the body",
         ),
         (
             "Tests/HttpTests.swift",
             '@Test func sends() {\n    #expect(log == "A: \\(h("A") ?? "*/*")")\n}\n'
-            "@Test func parsesBody() {}\n",
+            + "@Test func parsesBody() {}\n",
             "parsesBody",
         ),
     ],
