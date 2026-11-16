@@ -108,18 +108,46 @@ def tracked_files(root: Path, names: list[str] | None = None) -> list[str]:
     ]
 
 
+def is_settings_name(name: str) -> bool:
+    return PurePosixPath(name).name in LINKED_NAMES or name.endswith(
+        (".cargo/config", ".cargo/config.toml")
+    )
+
+
+def linked_folder_hits(root: Path, name: str, names: list[str]) -> list[str]:
+    """A link to a folder that holds a settings file, or a `.cargo` folder link, since the checks read those files by their path."""
+    try:
+        target = (root / name).resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return []
+    if not (root / name).is_dir():
+        return []
+    held = [
+        other
+        for other in names
+        if other.startswith(target.rstrip("/") + "/") and is_settings_name(other)
+    ]
+    if held or PurePosixPath(name).name == ".cargo":
+        inside = f" that holds {held[0]}" if held else ""
+        return [
+            f"{name}:1 is a link to a folder{inside}, which hides settings lines from every check; make it a real folder"
+        ]
+    return []
+
+
 def linked_settings(root: Path, names: list[str]) -> list[str]:
     """Ignore and settings files that no check reads through a link, so a link hides their lines."""
-    return [
+    found = [
         f"{name}:1 is a link, which hides the lines of this file from every check; make it a regular file"
         for name in names
-        if (
-            PurePosixPath(name).name in LINKED_NAMES
-            or name.endswith((".cargo/config", ".cargo/config.toml"))
-        )
+        if is_settings_name(name)
         and not name.startswith(UNOWNED)
         and (root / name).is_symlink()
     ]
+    for name in names:
+        if (root / name).is_symlink() and not name.startswith(UNOWNED):
+            found += linked_folder_hits(root, name, names)
+    return found
 
 
 def gitleaks_switch_offs(name: str, text: str) -> list[str]:

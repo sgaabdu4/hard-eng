@@ -440,3 +440,41 @@ def test_an_entry_path_outside_the_repository_is_a_clear_refusal(
         ValueError, match=r"\.gitleaksignore:1 .*outside the repository"
     ):
         validate_entries(root, 900)
+
+
+def folder_link(tmp_path: Path, link: str, target: str, files: dict[str, str]) -> Path:
+    root = tmp_path / "repo"
+    init(root)
+    (root / "README.md").write_text("fixture\n")
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    (root / link).parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(os.path.relpath(root / target, (root / link).parent), root / link)
+    commit(root, "baseline")
+    return root
+
+
+@pytest.mark.parametrize(
+    ("link", "target", "name"),
+    [
+        (".cargo", "tools/cargo", "tools/cargo/config.toml"),
+        ("crates/.cargo", "tools/cargo", "tools/cargo/config"),
+        ("lint", "tools/lint", "tools/lint/ruff.toml"),
+        ("lint", "tools/lint", "tools/lint/.fallowrc.json"),
+        ("scan", "tools/scan", "tools/scan/.gitleaks.toml"),
+    ],
+)
+def test_a_linked_folder_that_holds_settings_is_refusal(
+    tmp_path: Path, link: str, target: str, name: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a link to a folder hides the settings files inside it from the checks that read them by path."""
+    root = folder_link(tmp_path, link, target, {name: "x = 1\n"})
+    message = refusal(root)
+    assert f"{link}:1 is a link" in message
+    assert "HE-NO-SWITCH-OFF" in message
+
+
+def test_a_linked_folder_without_settings_passes(tmp_path: Path) -> None:
+    root = folder_link(tmp_path, "docs-link", "docs", {"docs/a.txt": "x\n"})
+    validate_whole_project(root)
