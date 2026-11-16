@@ -431,7 +431,9 @@ def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
 def test_a_fallow_subcommand_without_health_fails(command: list[str]) -> None:
     """HE-NO-SWITCH-OFF: a Fallow analysis subcommand other than health or audit skips the complexity analysis, like `--only dead-code`."""
     report: Report = {"type": "fallow", "path": "coverage/fallow.json"}
-    with pytest.raises(ValueError, match="Fallow scans must check health"):
+    with pytest.raises(
+        ValueError, match=r"Fallow scans must check health[\s\S]*delete this gate"
+    ):
         validate_scanner_command(command, report)
     for passing in (
         ["fallow", "--fail-on-issues"],

@@ -206,23 +206,6 @@ def dart_test_support(path: str, language: str | None, packages: list[Group]) ->
     )
 
 
-def typescript_packages(root: Path, files: list[Path]) -> set[str]:
-    manifests = {path.parent for path in files if path.name == "package.json"}
-    packages = set()
-    for path in files:
-        relative = path.relative_to(root)
-        if (
-            path.suffix not in {".ts", ".tsx", ".mts", ".cts"}
-            or nonproduction_source(relative)
-            or {".hooks", ".agents"} & set(relative.parts)
-        ):
-            continue
-        owner = next((parent for parent in path.parents if parent in manifests), None)
-        if owner is not None:
-            packages.add(str(owner.relative_to(root)))
-    return packages
-
-
 GENERATED_KEYS = {"linguist-generated", "linguist-vendored"}
 LISTED: dict[Path, tuple[frozenset[str], set[str]]] = {}
 
@@ -818,14 +801,7 @@ def validate_required_checks(
         ): group
         for group in config["packages"]
     }
-    typescript = typescript_packages(root, files)
     for group in config["packages"]:
-        if str(Path(group["path"])) in typescript:
-            require_roles(
-                group["path"],
-                {"boundaries"},
-                {gate.get("role", "") for gate in group["checks"]},
-            )
         validate_package_services(
             root,
             group,

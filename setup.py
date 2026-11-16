@@ -801,8 +801,6 @@ def plan_install(
         SOURCE_FILE,
         json_file,
         parse_config,
-        repository_files,
-        typescript_packages,
     )
 
     changes[SOURCE_FILE] = json_file(root, install_record(unused))
@@ -831,11 +829,10 @@ def plan_install(
     )
 
     drop_unanchored_excludes(config)
-    typescript = typescript_packages(root, repository_files(root))
     for package in config.get("packages", []):
         strict_scanner_flags(package)
         add_freshness(root, SOURCE, package)
-        adapt_boundaries(package, typescript)
+        adapt_boundaries(package)
         browser_test_coverage(root / package["path"], package)
         configure_semgrep_ignore(root, package, changes)
         configure_typing_checks(package)

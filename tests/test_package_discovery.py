@@ -235,6 +235,6 @@ def test_a_scanner_refusal_names_the_gate_and_its_command(tmp_path: Path) -> Non
     with pytest.raises(
         ValueError,
         match=r"gate lint:boundaries \(`bun run lint:boundaries`\): "
-        "Fallow scans must fail on every finding",
+        "Fallow scans must cover the whole project; remove architecture from the gate command",
     ):
         validate_gate(gate, tmp_path, set())
