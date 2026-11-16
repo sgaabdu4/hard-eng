@@ -7,7 +7,7 @@ from types import ModuleType
 
 import pytest
 from comments import validate_rules, validate_suppressions
-from conftest import SOURCE, commit, configure, gate, git, init
+from conftest import SOURCE, change, commit, configure, gate, git, init
 from gitleaks_entries import validate_entries
 from requirement_registry import registry_entries
 from switch_off_forms import RETRY_FORMS, SWITCHES
@@ -647,3 +647,45 @@ def test_the_full_check_judges_root_gitleaks_entries(
     assert runner.check(quick=True) == 0
     with pytest.raises(ValueError, match="commit is not in this clone"):
         runner.check(quick=False)
+
+
+def test_rust_lint_attributes_are_switch_offs(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: ordinary Rust attributes pass; only the lint switch-offs fail."""
+    passing = (
+        "#[derive(Debug)]\n#[cfg(test)]\n#[ignored_name]\n#[test]\n"
+        '#[cfg_attr(feature = "x", derive(Debug))]\nstruct A;\n'
+        "fn allow(x: u8) -> u8 { x }\n"
+    )
+    validate_whole_project(project(tmp_path, {"src/lib.rs": passing}))
+
+
+CARGO_LEVELS = {
+    "string": '[lints.rust]\nunused = "allow"\n',
+    "table": '[lints.clippy]\nall = { level = "allow", priority = -1 }\n',
+    "workspace": '[workspace.lints.rust]\nunsafe_code = "allow"\n',
+    "section": '[lints.clippy.pedantic]\nlevel = "allow"\n',
+}
+
+
+@pytest.mark.parametrize("form", CARGO_LEVELS)
+def test_a_cargo_lint_at_allow_is_a_switch_off(tmp_path: Path, form: str) -> None:
+    """HE-NO-SWITCH-OFF: a Cargo lint level of allow turns the lint off from the manifest."""
+    message = refusal(project(tmp_path, {"Cargo.toml": CARGO_LEVELS[form]}))
+    assert OFF in message
+    assert "Cargo.toml:" in message
+    assert "allow" in message
+
+
+def test_cargo_lint_levels_above_allow_pass(tmp_path: Path) -> None:
+    kept = '[lints.rust]\nunused = "deny"\n[lints.clippy]\nall = { level = "warn", priority = -1 }\n[lints]\nworkspace = true\n'
+    validate_whole_project(project(tmp_path, {"Cargo.toml": kept}))
+
+
+def test_a_rust_test_files_removed_assertions_count_in_the_balance(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: deleting assertions from a Rust test file loses them in the balance like any other test file."""
+    before = "#[test]\nfn a() {\n    assert_eq!(1, 1);\n    assert!(true);\n}\n"
+    root = change(tmp_path, "tests/it.rs", before, "#[test]\nfn a() {\n}\n")
+    with pytest.raises(ValueError, match=r"tests lose 2 assertion lines net"):
+        validate_suppressions(root, "HEAD")

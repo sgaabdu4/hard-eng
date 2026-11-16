@@ -255,6 +255,10 @@ SWIFT_OFF = re.compile(
     r"swift-format-ignore|\bXCTSkip|<(Skipped|Selected)Tests>"
     r'|"(skipped|selected)Tests"|\bskipped\s*=\s*"YES"|\.enabled\(if:\s*false\)'
 )
+RUST_OFF = re.compile(
+    r"#!?\[\s*(?:allow|expect)\s*\(|#!?\[\s*ignore\b"
+    r"|#!?\[\s*cfg_attr\([^\]]*?\b(?:allow|expect)\s*\("
+)
 TEST_OFF = {
     ".dart": r"\b(skip|solo):(?=\s*(?!false\b)\S)",
     **dict.fromkeys(JAVASCRIPT, r"\bskip:\s*(true\b|['\"`])|\bonly:\s*true\b"),
@@ -367,6 +371,8 @@ def switch_off_pattern(name: str) -> re.Pattern[str] | None:
         return DART_OFF
     if suffix in {".swift", ".xcscheme", ".xctestplan"}:
         return SWIFT_OFF
+    if suffix == ".rs":
+        return RUST_OFF
     return SCRIPT_OFF if suffix in JAVASCRIPT else None
 
 
