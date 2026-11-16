@@ -15,6 +15,8 @@ NESTED_BLOCKS = {".dart", ".rs", ".swift"}
 NOT_NEWLINE = re.compile(r"[^\n]")
 NOT_LINE_BREAK = re.compile(r"[^\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
 RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
+INTERPOLATION_STOP = re.compile(r"[{}'\"]")
+SCAN_STOP = re.compile(r"[\n/'\"`{}]|b?r#*['\"]")
 QUOTE = re.compile(r"'''|\"\"\"|['\"]")
 REGEX_BEFORE = re.compile(
     r"(^|[(,=:\[!&|?{};+\-*%<>~^]"
@@ -26,14 +28,15 @@ REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
 def interpolation_end(text: str, index: int) -> int:
     """Index just past the `${...}` expression of a Dart string, whose body starts at index; nested strings and braces count."""
     depth = 1
-    while index < len(text) and depth:
-        close = string_at(text, index, ".dart")
-        if close is not None:
+    while depth and (stop := INTERPOLATION_STOP.search(text, index)):
+        at = stop.start()
+        raw = string_at(text, at - 1, ".dart") if text[at - 1 : at] == "r" else None
+        if (close := raw or string_at(text, at, ".dart")) is not None:
             index = close
-            continue
-        depth += (text[index] == "{") - (text[index] == "}")
-        index += 1
-    return index
+        else:
+            depth += (text[at] == "{") - (text[at] == "}")
+            index = at + 1
+    return index if depth == 0 else len(text)
 
 
 def string_end(
@@ -147,6 +150,12 @@ def scan(text: str, suffix: str) -> Iterator[tuple[bool, int, int, bool]]:
     index, blank = 0, True
     depths: list[int] = []
     while index < len(text):
+        stop = SCAN_STOP.search(text, index)
+        if stop is None:
+            break
+        if stop.start() > index:
+            blank = blank and not text[index : stop.start()].strip(" \t\r")
+            index = stop.start()
         character = text[index]
         if character == "\n":
             index, blank = index + 1, True
