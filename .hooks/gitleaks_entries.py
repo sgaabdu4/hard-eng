@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from challenge import known
 from gate_config import generated_sources
 from gitleaks_scan import copy_scan_tree
 
@@ -54,18 +55,6 @@ def scan(
     return json.loads(report.read_text() or "[]") if report.is_file() else []
 
 
-def has_commit(root: Path, commit: str) -> bool:
-    return (
-        subprocess.run(
-            ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
-            cwd=root,
-            capture_output=True,
-            check=False,
-        ).returncode
-        == 0
-    )
-
-
 def past_findings(
     root: Path, work: Path, commits: list[str], config: list[str], timeout: float
 ) -> set[str]:
@@ -108,7 +97,7 @@ def validate_entries(root: Path, timeout: float = 900.0) -> None:
     config = [".gitleaks.toml"] if (root / ".gitleaks.toml").is_file() else []
     config = ["--config", str((root / config[0]).resolve())] if config else []
     commits = sorted({m[1] for _, e in entries if (m := COMMIT_ENTRY.fullmatch(e))})
-    present = [commit for commit in commits if has_commit(root, commit)]
+    present = [commit for commit in commits if known(root, commit)]
     refused: list[str] = []
     with tempfile.TemporaryDirectory(prefix="hard-eng-entries-") as temporary:
         work = Path(temporary)

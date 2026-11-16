@@ -700,6 +700,15 @@ def test_history_scan_covers_only_commits_a_known_base_lacks(
     assert gitleaks_scan.new_commits_command(custom, repository, "HEAD") == custom
 
 
+def scanned_commits(repository: Path) -> list[str]:
+    """The commits that a history scan with no known base reads."""
+    full = ["gitleaks", "git", ".", "--log-opts=--all"]
+    options = gitleaks_scan.new_commits_command(full, repository, None)[3]
+    return git_output(
+        repository, "log", "--format=%H", *options.removeprefix("--log-opts=").split()
+    ).split()
+
+
 def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
     repository: Path,
 ) -> None:
@@ -712,11 +721,7 @@ def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
     git_output(repository, "branch", "-qD", "scratch")
     git_output(repository, "commit", "-q", "--allow-empty", "-m", "detached")
     detached = git_output(repository, "rev-parse", "HEAD")
-    full = ["gitleaks", "git", ".", "--log-opts=--all"]
-    options = gitleaks_scan.new_commits_command(full, repository, None)[3]
-    scanned = git_output(
-        repository, "log", "--format=%H", *options.removeprefix("--log-opts=").split()
-    ).split()
+    scanned = scanned_commits(repository)
     assert detached in scanned
     assert private not in scanned
 
@@ -736,11 +741,7 @@ def test_the_history_scan_covers_the_commits_ci_sees(repository: Path) -> None:
     git_output(repository, "update-ref", "refs/remotes/origin/main", remote)
     git_output(repository, "commit", "-q", "--allow-empty", "-m", "head")
     head = git_output(repository, "rev-parse", "HEAD")
-    full = ["gitleaks", "git", ".", "--log-opts=--all"]
-    options = gitleaks_scan.new_commits_command(full, repository, None)[3]
-    scanned = git_output(
-        repository, "log", "--format=%H", *options.removeprefix("--log-opts=").split()
-    ).split()
+    scanned = scanned_commits(repository)
     assert {head, remote} <= set(scanned)
     assert not {branch_only, tag_only} & set(scanned)
 

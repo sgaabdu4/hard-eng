@@ -127,8 +127,9 @@ def test_turning_off_the_history_scan_is_refused(
 ) -> None:
     """HE-NO-SWITCH-OFF: `scan_git_history` is refused in any value but true, and the refusal names the entry route."""
     config = native_gate_fixture(tmp_path, installer, "python")
-    config["scan_git_history"] = value
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({**config, "scan_git_history": value})
+    )
     with pytest.raises(
         ValueError, match=r"HE-NO-SWITCH-OFF.*scan_git_history"
     ) as error:
@@ -137,7 +138,9 @@ def test_turning_off_the_history_scan_is_refused(
     config["shared"] = [
         g for g in config["shared"] if g.get("role") != "secrets-history"
     ]
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({**config, "scan_git_history": value})
+    )
     with pytest.raises(ValueError, match="scan_git_history"):
         load_groups(tmp_path)
 
