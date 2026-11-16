@@ -673,17 +673,6 @@ COMMENTED_TESTS = [
         "fn a() { x(); // old; #[test] fn test_divide() {}\n}",
         "fn a() {}\n#[test]\nfn test_divide() {}",
     ),
-    ("tests/OpsTests.swift", "/* func test_divide() {} */", "func test_divide() {}"),
-    (
-        "tests/ops.test.ts",
-        "/*\ntest('test_divide', () => {});\n*/",
-        "test('test_divide', () => {});",
-    ),
-    (
-        "test/ops_test.dart",
-        "/* test('test_divide', () {}); */",
-        "test('test_divide', () {});",
-    ),
 ]
 
 
@@ -822,3 +811,30 @@ def test_a_test_named_only_on_a_comment_line_does_not_count(
     assert missing_tests(tmp_path, reference) == []
     (tmp_path / path).write_text(comment + "\n" + real + "\n")
     assert missing_tests(tmp_path, reference) == []
+
+
+@pytest.mark.parametrize(
+    ("path", "source", "name"),
+    [
+        (
+            "test/http_test.dart",
+            "test('sends', () {\n  expect(log, 'A: ${h['accept'] ?? '*/*'}');\n});\n"
+            "test('parses the body', () {});\n",
+            "parses the body",
+        ),
+        (
+            "Tests/HttpTests.swift",
+            '@Test func sends() {\n    #expect(log == "A: \\(h("A") ?? "*/*")")\n}\n'
+            "@Test func parsesBody() {}\n",
+            "parsesBody",
+        ),
+    ],
+    ids=["dart", "swift"],
+)
+def test_a_comment_mark_inside_a_nested_string_hides_no_later_test(
+    tmp_path: Path, path: str, source: str, name: str
+) -> None:
+    """A `/*` inside a string nested in an interpolation opens no comment, so a later test still counts."""
+    (tmp_path / path).parent.mkdir()
+    (tmp_path / path).write_text(source)
+    assert missing_tests(tmp_path, [(path, name)]) == []
