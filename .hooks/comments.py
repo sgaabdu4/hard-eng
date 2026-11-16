@@ -8,7 +8,6 @@ import io
 import re
 import subprocess
 import tokenize
-from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 
 from gate_config import (
@@ -20,6 +19,13 @@ from gate_config import (
 from plans import _is_test as is_test_path
 from plans import default_branch_point
 from project_files import GIT_LISTING
+from source_scan import (
+    JAVASCRIPT,
+    SLASH,
+    comment_spans,
+    literal_free_lines,
+    string_end,
+)
 
 DISABLED_CALL = re.compile(r"\.disabled\(")
 QUOTE_OR_BACKSLASH = re.compile(r"[\\'\"]")
@@ -54,12 +60,9 @@ UI_MARKS = (
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
 DIFF_HUNK_HEADER = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,(\d+))?")
 WALL_SUFFIXES = (".tsx", ".jsx", "hard-eng.gates.json")
-CONTROL_KEYWORD_BEFORE = re.compile(r"\b(if|while|for|with)\s*$")
 STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\\n])*"')
 
 HASH = {".py", ".pyi", ".sh", ".bash", ".zsh"}
-JAVASCRIPT = {".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
-SLASH = {".dart", ".rs", ".swift", *JAVASCRIPT}
 DIRECTIVE = re.compile(
     r"^(#!|#\s*-\*-|//\s*ignore(_for_file)?:|///\s*<reference|//go:|//\s*\+build"
     r"|//\s*#(region|endregion))|(eslint|prettier|biome|jscpd|istanbul|c8|coverage)[-:]"
@@ -90,139 +93,8 @@ def python_comment_lines(text: str, trailing: bool = False) -> dict[int, str] | 
         return None
 
 
-CHARACTER = re.compile(r"'(\\.[^']{0,8}|[^'\\\n])'")
-NESTED_BLOCKS = {".dart", ".rs", ".swift"}
-NOT_NEWLINE = re.compile(r"[^\n]")
 ARITHMETIC = re.compile(r"\$?\(\(.*?\)\)")
 HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*((?:'[^']*'|\"[^\"]*\"|[^\s<>|&;()'\"])+)")
-RAW = {".rs": re.compile(r'b?r(#*)"'), ".dart": re.compile(r"r('''|\"\"\"|'|\")")}
-QUOTE = re.compile(r"'''|\"\"\"|['\"]")
-REGEX_BEFORE = re.compile(
-    r"(^|[(,=:\[!&|?{};+\-*%<>~^]"
-    r"|\b(return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await))\s*$"
-)
-REGEX = re.compile(r"/(?![/*])(\\.|\[(\\.|[^\]\\\n])*\]|[^/\\\[\n])+/")
-
-
-def string_end(text: str, index: int, quote: str, raw: bool, line: bool = False) -> int:
-    """Index just past the string that opens at index with quote; a line string stops at a newline."""
-    while index < len(text):
-        if text[index] == "\\" and not raw:
-            index += 2
-        elif text.startswith(quote, index):
-            return index + len(quote)
-        elif line and text[index] == "\n":
-            return index
-        else:
-            index += 1
-    return len(text)
-
-
-def string_at(text: str, index: int, suffix: str) -> int | None:
-    """Index just past a string or regex literal starting at index, else None."""
-    previous = text[index - 1 : index]
-    raw = None if previous.isalnum() or previous == "_" else RAW.get(suffix)
-    opened = raw.match(text, index) if raw is not None else None
-    if opened is not None:
-        closing = '"' + opened.group(1) if suffix == ".rs" else opened.group(1)
-        return string_end(text, opened.end(), closing, True)
-    quote = QUOTE.match(text, index)
-    if quote is not None and (quote.group(0) != "'" or suffix != ".rs"):
-        line = len(quote.group(0)) == 1 and suffix != ".rs"
-        return string_end(text, quote.end(), quote.group(0), False, line)
-    regex = REGEX.match(text, index) if suffix in JAVASCRIPT else None
-    return regex.end() if regex and regex_allowed(text, index) else None
-
-
-def regex_allowed(text: str, index: int) -> bool:
-    """Whether `/` at index starts a regex: after an operator, keyword or control condition."""
-    before = text[max(0, index - 200) : index].rstrip()
-    if not before.endswith(")"):
-        return REGEX_BEFORE.search(before[-16:]) is not None
-    depth = 0
-    for position in range(len(before) - 1, -1, -1):
-        depth += {")": 1, "(": -1}.get(before[position], 0)
-        if depth == 0:
-            return CONTROL_KEYWORD_BEFORE.search(before[:position]) is not None
-    return False
-
-
-def template_end(text: str, index: int) -> tuple[int, bool]:
-    """Index just past a template's text, and whether a ${ expression opened there."""
-    while index < len(text):
-        if text[index] == "\\":
-            index += 2
-        elif text[index] == "`":
-            return index + 1, False
-        elif text.startswith("${", index):
-            return index + 2, True
-        else:
-            index += 1
-    return len(text), False
-
-
-def code_step(text: str, index: int, suffix: str, depths: list[int]) -> int | None:
-    """Index past a template segment, interpolation brace or literal at index, else None."""
-    character = text[index]
-    if suffix in JAVASCRIPT and (
-        character == "`" or (character == "}" and depths[-1:] == [0])
-    ):
-        if character == "}":
-            depths.pop()
-        close, interpolating = template_end(text, index + 1)
-        depths.extend([0] if interpolating else [])
-        return close
-    if depths and character in "{}":
-        depths[-1] += 1 if character == "{" else -1
-        return index + 1
-    return string_at(text, index, suffix)
-
-
-def comment_end(text: str, index: int, suffix: str) -> int:
-    """Index just past the comment at index; Dart, Rust and Swift block comments nest."""
-    if text[index + 1] == "/":
-        close = text.find("\n", index + 2)
-        return len(text) if close < 0 else close
-    depth, at = 1, index + 2
-    while depth and at < len(text):
-        if text.startswith("*/", at):
-            depth, at = depth - 1, at + 2
-        elif suffix in NESTED_BLOCKS and text.startswith("/*", at):
-            depth, at = depth + 1, at + 2
-        else:
-            at += 1
-    return at if not depth else len(text)
-
-
-def comment_spans(text: str, suffix: str) -> Iterator[tuple[int, int, bool]]:
-    """(start, end, whether only blanks precede it on its line) of each comment outside literals."""
-    index, blank = 0, True
-    depths: list[int] = []
-    while index < len(text):
-        character = text[index]
-        if character == "\n":
-            index, blank = index + 1, True
-        elif character in " \t\r":
-            index += 1
-        elif text.startswith(("//", "/*"), index):
-            close = comment_end(text, index, suffix)
-            yield index, close, blank
-            index, blank = close, False
-        elif (close := code_step(text, index, suffix, depths)) is not None:
-            index, blank = close, False
-        else:
-            literal = CHARACTER.match(text, index) if character == "'" else None
-            index, blank = (literal.end() if literal else index + 1), False
-
-
-def code_without_comments(text: str, suffix: str) -> str:
-    """The text with each comment turned to spaces, line breaks kept."""
-    parts: list[str] = []
-    last = 0
-    for start, close, _ in comment_spans(text, suffix):
-        parts += [text[last:start], NOT_NEWLINE.sub(" ", text[start:close])]
-        last = close
-    return "".join([*parts, text[last:]])
 
 
 def slash_comment_lines(
@@ -395,6 +267,7 @@ SECURITY_OFF = re.compile(
     r"|shellcheck\s+disable=|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
+GITLEAKS_ALLOW = re.compile(r"gitleaks:allow", re.IGNORECASE)
 RETRY_WORDS = ("retry", "Retry", "retries", "rerun", "flaky")
 SCAN_IGNORES = {".gitleaksignore", ".semgrepignore", ".gitleaks.toml"}
 UNOWNED = (".hooks/", ".agents/", ".claude/")
@@ -501,13 +374,17 @@ def pattern_switch_offs(
         return []
     in_test = is_test_path(PurePosixPath(name))
     tested = in_test and TEST_OFF.get(Path(name).suffix)
+
+    def off(text: str) -> re.Match[str] | None:
+        return off_hit(pattern, text, in_test) or (
+            re.search(tested, text) if tested else None
+        )
+
+    code = literal_free_lines(root, name)
     found = [
         f"{name}:{number} {verb} {hit[0].strip()!r}"
         for number, text in lines
-        if (
-            hit := off_hit(pattern, text, in_test)
-            or (tested and re.search(tested, text))
-        )
+        if off(text) and (hit := off(code(number, text)))
     ]
     return found + marks_in_file(root, name, lines)
 
@@ -775,9 +652,13 @@ def security_hits(
 ) -> list[str]:
     """Inline markers, ignore entries and test retries in the lines of one file; entries marks a file of ignore entries."""
     found: list[str] = []
+    code = literal_free_lines(root, name)
     for number, text in lines:
         entry = text.strip()
-        if hit := SECURITY_OFF.search(text):
+        hit = SECURITY_OFF.search(text)
+        if hit:
+            hit = SECURITY_OFF.search(code(number, text)) or GITLEAKS_ALLOW.search(text)
+        if hit:
             found.append(f"{name}:{number} {verb} {hit[0]!r}")
         elif entries and entry and not entry.startswith("#"):
             found.append(f"{name}:{number} {verb} {entry!r}")

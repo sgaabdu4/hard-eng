@@ -176,6 +176,52 @@ def test_marker_words_in_strings_pass(tmp_path: Path, name: str, text: str) -> N
     validate_whole_project(project(tmp_path, {name: text}))
 
 
+QUOTED_SWITCHES = [
+    (
+        "test/rule_test.dart",
+        "const sample = r'''\n// ig" + "nore_for_file: unused_import\n''';\n",
+    ),
+    ("test/rule_test.dart", "const s = '// ig" + "nore: x';\n"),
+    ("src/rule.test.ts", "const sample = `\n// eslint-" + "disable-next-line\n`;\n"),
+    ("src/a.ts", "const t = `${f('// @ts-" + "ignore')}`;\n"),
+    ("scripts/scan.mjs", "const banned = /(?<!dart-)x|fallow-" + "ignore/;\n"),
+    ("tool/scan.py", "MARK = '# no" + "qa'\nRULE = f'{x} # no" + "semgrep'\n"),
+]
+
+
+@pytest.mark.parametrize(("name", "text"), QUOTED_SWITCHES)
+def test_switch_off_text_inside_a_literal_passes(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a tool reads no switch-off in a string or regex, so an old or added one passes."""
+    root = project(tmp_path, {name: "x = 1\n"})
+    (root / name).write_text(text)
+    validate_suppressions(root, "HEAD")
+    commit(root, "old")
+    validate_whole_project(root)
+
+
+QUOTED_NEAR_MISSES = [
+    ("lib/a.dart", "final s = r'''x'''; // ig" + "nore: y\n", "// ig" + "nore:"),
+    (
+        "src/a.ts",
+        "const t = `${f()}`; // eslint-" + "disable-line\n",
+        "eslint-" + "disable",
+    ),
+    ("src/a.ts", "const k = 'x gitleaks" + ":allow';\n", "gitleaks" + ":allow"),
+    ("tool/scan.py", "x = '#'  # no" + "qa\n", "# no" + "qa"),
+]
+
+
+@pytest.mark.parametrize(("name", "text", "shown"), QUOTED_NEAR_MISSES)
+def test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails(
+    tmp_path: Path, name: str, text: str, shown: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a comment after a literal still switches a check off, and Gitleaks reads its mark inside a string."""
+    root = project(tmp_path, {name: text})
+    assert f"{name}:1 holds {shown!r}" in refusal(root)
+
+
 def test_an_unnamed_markdown_file_fails(tmp_path: Path) -> None:
     """HE-NAMED-MARKDOWN: a markdown file that no other tracked file names fails, old ones too."""
     root = project(tmp_path, {"notes/extra.md": "text\n", "app.py": "x = 'y.md'\n"})

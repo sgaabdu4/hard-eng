@@ -10,7 +10,6 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import TypedDict
 
-from comments import code_step, code_without_comments
 from gate_config import (
     SOURCE_FILE,
     Gate,
@@ -19,6 +18,7 @@ from gate_config import (
     nonproduction_source,
     repository_files,
 )
+from source_scan import code_step, code_without_comments
 from tool_setup import managed_command
 
 Place = TypedDict("Place", {"line": int, "col": int})

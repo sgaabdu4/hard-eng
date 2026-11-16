@@ -3,8 +3,8 @@
 import re
 from pathlib import Path, PurePosixPath
 
-from comments import code_without_comments
 from plans import _is_test
+from source_scan import code_without_comments
 
 HASH_COMMENT_SUFFIXES = {".py", ".rb", ".sh", ".bash", ".zsh", ".pl", ".ex", ".exs"}
 
