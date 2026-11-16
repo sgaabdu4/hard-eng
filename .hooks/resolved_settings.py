@@ -13,6 +13,7 @@ from fallow_report import named_config, native_fallow_command
 from fallow_resolved import default_rules, fallow_hits
 from gate_config import Gate, Group
 from ruff_settings import ruff_invocations
+from scope_check import left_out, refusal
 from tool_setup import managed_command
 
 COMPLEXITY_LIMITS = {
@@ -21,11 +22,7 @@ COMPLEXITY_LIMITS = {
     "linter.pylint.max_statements": 50,
 }
 COMPLEXITY_CODES = {"C901", "PLR0912", "PLR0915"}
-EMPTY_KEYS = (
-    "linter.per_file_ignores",
-    "file_resolver.extend_exclude",
-    "linter.exclude",
-)
+EMPTY_KEYS = ("linter.per_file_ignores", "linter.exclude")
 CODE = re.compile(r"\((\w+)\)")
 
 
@@ -41,8 +38,34 @@ def printed(
         check=False,
     )
     if done.returncode:
-        raise RuntimeError(f"ruff could not print its settings: {done.stderr}")
+        raise ValueError(
+            f"HE-NO-SWITCH-OFF: ruff could not print its settings for this gate: {done.stderr.strip()}"
+        )
     return done.stdout
+
+
+def shown(
+    prefix: list[str], arguments: list[str], directory: Path, timeout: float
+) -> set[str]:
+    """The files that ruff checks for this gate, relative to the gate folder."""
+    done = subprocess.run(
+        [*prefix, "check", "--show-files", *arguments],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if done.returncode:
+        raise ValueError(
+            f"HE-NO-SWITCH-OFF: ruff could not list the files of this gate: {done.stderr.strip()}"
+        )
+    base = directory.resolve()
+    return {
+        Path(line).resolve().relative_to(base).as_posix()
+        for line in done.stdout.splitlines()
+        if line.strip() and Path(line).resolve().is_relative_to(base)
+    }
 
 
 def assignment(text: str, key: str) -> list[str]:
@@ -98,11 +121,6 @@ def ruff_hits(settings: str, defaults: str, role: object) -> list[str]:
         for key in EMPTY_KEYS
         if assignment(settings, key)
     ]
-    skipped = set(assignment(settings, "file_resolver.exclude"))
-    if skipped - set(assignment(defaults, "file_resolver.exclude")):
-        hits.append(
-            "the resolved file_resolver.exclude skips more than Ruff's own folders"
-        )
     codes = enabled(settings)
     if role == "lint" and (lost := enabled(defaults) - codes):
         hits.append(lacking(lost, "of Ruff's default rules"))
@@ -138,14 +156,21 @@ class Defaults:
 
 
 def ruff_tasks(
-    root: Path, group: Group, gate: Gate, defaults: Defaults, timeout: float
+    root: Path,
+    every: list[Group],
+    group: Group,
+    gate: Gate,
+    defaults: Defaults,
+    timeout: float,
 ) -> list[Task]:
     directory = root / group["path"]
     command = managed_command(gate["command"], directory)
+    children = nested_package_patterns(group, every, gate.get("role", ""))
     return [
         partial(
             ruff_gate_hits,
             (tuple(prefix), arguments[1:], directory, gate, timeout),
+            children,
             defaults.ruff(tuple(prefix)),
         )
         for prefix, arguments in ruff_invocations(command, directory)
@@ -154,14 +179,16 @@ def ruff_tasks(
 
 
 def ruff_gate_hits(
-    run: tuple[tuple[str, ...], list[str], Path, Gate, float], baseline: Future[str]
+    run: tuple[tuple[str, ...], list[str], Path, Gate, float],
+    children: frozenset[str],
+    baseline: Future[str],
 ) -> list[str]:
     prefix, arguments, directory, gate, timeout = run
     settings = printed(list(prefix), arguments, directory, timeout)
-    return [
-        f"gate {gate['name']}: {hit}"
-        for hit in ruff_hits(settings, baseline.result(), gate.get("role"))
-    ]
+    checked = shown(list(prefix), arguments, directory, timeout)
+    hits = ruff_hits(settings, baseline.result(), gate.get("role"))
+    left = left_out(directory, (".py", ".pyi"), checked, children)
+    return [f"gate {gate['name']}: {hit}" for hit in [*hits, *refusal(left)]]
 
 
 def fallow_tasks(
@@ -202,8 +229,14 @@ def run_task(task: Task) -> list[str]:
     return task()
 
 
-def validate_resolved(root: Path, groups: list[Group], timeout: float) -> None:
-    """Run in the full check after the tools are installed; the Stop hook never runs it."""
+def validate_resolved(
+    root: Path,
+    groups: list[Group],
+    timeout: float,
+    every: list[Group] | None = None,
+) -> None:
+    """Run in the full check after the tools are installed; the Stop hook never runs it. `groups` are judged, `every` names all groups, so a parent knows its children."""
+    every = groups if every is None else every
     with ThreadPoolExecutor(max_workers=8) as pool:
         defaults = Defaults(pool, root, timeout)
         tasks = [
@@ -211,8 +244,8 @@ def validate_resolved(root: Path, groups: list[Group], timeout: float) -> None:
             for group in groups
             for gate in group["checks"]
             for task in (
-                *ruff_tasks(root, group, gate, defaults, timeout),
-                *fallow_tasks(root, groups, group, gate, defaults, timeout),
+                *ruff_tasks(root, every, group, gate, defaults, timeout),
+                *fallow_tasks(root, every, group, gate, defaults, timeout),
             )
         ]
         refused = [hit for found in pool.map(run_task, tasks) for hit in found]

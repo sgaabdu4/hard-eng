@@ -1,44 +1,13 @@
 """Refuse ruff settings, extended settings files and gate flags that ignore lint rules."""
 
 import re
-import subprocess
 import tomllib
 from pathlib import Path, PurePosixPath
 
 from command_words import segments
-from project_files import GIT_LISTING
 
 SETTINGS_FILES = {"pyproject.toml", "ruff.toml", ".ruff.toml"}
 IGNORE_KEYS = ("ignore", "extend-ignore", "per-file-ignores", "extend-per-file-ignores")
-RUFF_SKIPS = frozenset(
-    {
-        ".bzr",
-        ".direnv",
-        ".eggs",
-        ".git",
-        ".git-rewrite",
-        ".hg",
-        ".ipynb_checkpoints",
-        ".mypy_cache",
-        ".nox",
-        ".pants.d",
-        ".pyenv",
-        ".pytest_cache",
-        ".pytype",
-        ".ruff_cache",
-        ".svn",
-        ".tox",
-        ".venv",
-        ".vscode",
-        "__pypackages__",
-        "_build",
-        "buck-out",
-        "dist",
-        "node_modules",
-        "site-packages",
-        "venv",
-    }
-)
 HEADER = re.compile(r"\s*\[+\s*([^\]]+?)\s*\]+")
 OUTSIDE = "extends a file outside the repository"
 
@@ -276,67 +245,10 @@ def offending_flags(arguments: list[str], directory: Path, role: object) -> list
     return found
 
 
-def installed_files(directory: Path) -> set[str]:
-    """The files Hard Eng writes into a project, which the project does not lint; Hard Eng's own source has no such files."""
-    if not (directory / ".hooks/hard-eng-source.json").is_file():
-        return set()
-    from update import scaffold_files
-
-    names = {
-        path.relative_to(directory).as_posix()
-        for path in (directory / ".hooks").rglob("*")
-        if path.is_file()
-    }
-    if (directory / ".agents/skills").is_dir():
-        names |= scaffold_files(directory)
-    return names
-
-
-def uncovered(arguments: list[str], directory: Path) -> list[str]:
-    """Tracked Python files, dot folders included, that the paths of a ruff check leave out; files that Hard Eng installs into a project are skipped."""
-    paths = [
-        (directory / word).resolve()
-        for word in arguments[1:]
-        if not word.startswith("-") and (directory / word).exists()
-    ]
-    if not paths or directory.resolve() in paths:
-        return []
-    listed = subprocess.run(
-        [
-            *GIT_LISTING,
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-            "*.py",
-            "*.pyi",
-        ],
-        cwd=directory,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout.split("\0")
-    installed = installed_files(directory)
-    return [
-        name
-        for name in listed
-        if name
-        and not RUFF_SKIPS & set(PurePosixPath(name).parts)
-        and name not in installed
-        and not any((directory / name).resolve().is_relative_to(path) for path in paths)
-    ]
-
-
 def validate_ruff_command(command: list[str], directory: Path, role: object) -> None:
     found: list[str] = []
     for arguments in ruff_commands(command, directory):
         found += offending_flags(arguments, directory, role)
-        if role == "lint" and arguments[:1] == ["check"]:
-            found += [
-                f"no path covers {name}" for name in uncovered(arguments, directory)
-            ]
     if found:
         raise ValueError(
             "HE-NO-SWITCH-OFF: A ruff gate must not ignore or narrow rules: fix each finding at its cause "
