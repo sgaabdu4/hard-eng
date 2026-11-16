@@ -3,18 +3,20 @@
 import re
 from pathlib import Path, PurePosixPath
 
+from comments import SLASH, code_without_comments
 from plans import _is_test
 
 HASH_COMMENT_SUFFIXES = {".py", ".rb", ".sh", ".bash", ".zsh", ".pl", ".ex", ".exs"}
 
 
 def uncommented(file: Path) -> str:
-    """The file's text without whole-line comments, which cannot define a test."""
+    """The file's text without comments, which cannot define a test."""
+    text = file.read_text()
+    if file.suffix in SLASH:
+        return code_without_comments(text, file.suffix)
     marker = "#" if file.suffix in HASH_COMMENT_SUFFIXES else "//"
     return "\n".join(
-        line
-        for line in file.read_text().splitlines()
-        if not line.lstrip().startswith(marker)
+        line for line in text.splitlines() if not line.lstrip().startswith(marker)
     )
 
 
@@ -31,14 +33,13 @@ RUST_CHAR = r"'(?:\\.|[^'\\])'"
 RUST_ATOM = rf'"(?:\\.|[^"\\])*"|{RUST_CHAR}|\'(?!(?:\\.|[^\'\\])\')|[^\]\["\']'
 RUST_NESTED = rf"(?:{RUST_ATOM}|\[(?:{RUST_ATOM})*\])*"
 RUST_ATTRIBUTE_BODY = rf"(?:{RUST_ATOM}|\[{RUST_NESTED}\])*"
-RUST_GAP = r"(?:\s|//[^\n]*\n)*"
 RUST_TEST_NAME = rf"\s*(?:\w+::)*(?:{'|'.join(RUST_TEST_ATTRIBUTES)})\s*"
 # The match starts only where an item can start and takes the first test attribute, so a stack is read once.
 RUST_TEST = (
-    rf"(?:\A|[;{{}}]){RUST_GAP}(?:#!\[{RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
-    rf"(?:#\[(?!{RUST_TEST_NAME}[\](]){RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
-    rf"#\[{RUST_TEST_NAME}(?:\({RUST_ATTRIBUTE_BODY}\))?\s*\]{RUST_GAP}"
-    rf"(?:#\[{RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
+    rf"(?:\A|[;{{}}])\s*(?:#!\[{RUST_ATTRIBUTE_BODY}\]\s*)*"
+    rf"(?:#\[(?!{RUST_TEST_NAME}[\](]){RUST_ATTRIBUTE_BODY}\]\s*)*"
+    rf"#\[{RUST_TEST_NAME}(?:\({RUST_ATTRIBUTE_BODY}\))?\s*\]\s*"
+    rf"(?:#\[{RUST_ATTRIBUTE_BODY}\]\s*)*"
     r"(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+"
 )
 
