@@ -665,10 +665,12 @@ def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
         definition = {
             ".py": rf"\bdef\s+{re.escape(name)}\s*\(",
             ".swift": rf"\bfunc\s+{re.escape(name)}\s*\(|{quoted}",
+            ".rs": rf"#\[(?:\w+::)*test\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s+)?(?:async\s+)?fn\s+{re.escape(name)}\s*\(",
         }.get(file.suffix, quoted)
+        # Rust unit tests live in src/ files; the #[test] attribute marks them.
         if not (
             file.is_relative_to(root.resolve())
-            and _is_test(PurePosixPath(path))
+            and (_is_test(PurePosixPath(path)) or file.suffix == ".rs")
             and file.is_file()
             and re.search(definition, uncommented(file))
         ):
