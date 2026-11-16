@@ -227,8 +227,24 @@ def offending_flags(arguments: list[str], directory: Path, role: object) -> list
     return found
 
 
+def installed_files(directory: Path) -> set[str]:
+    """The files Hard Eng writes into a project, which the project does not lint; Hard Eng's own source has no such files."""
+    if not (directory / ".hooks/hard-eng-source.json").is_file():
+        return set()
+    from update import scaffold_files
+
+    names = {
+        path.relative_to(directory).as_posix()
+        for path in (directory / ".hooks").rglob("*")
+        if path.is_file()
+    }
+    if (directory / ".agents/skills").is_dir():
+        names |= scaffold_files(directory)
+    return names
+
+
 def uncovered(arguments: list[str], directory: Path) -> list[str]:
-    """Tracked Python files outside the folders that start with a dot that the paths of a ruff check leave out."""
+    """Tracked Python files, dot folders included, that the paths of a ruff check leave out; files that Hard Eng installs into a project are skipped."""
     paths = [
         (directory / word).resolve()
         for word in arguments[1:]
@@ -253,12 +269,13 @@ def uncovered(arguments: list[str], directory: Path) -> list[str]:
         text=True,
         check=False,
     ).stdout.split("\0")
+    installed = installed_files(directory)
     return [
         name
         for name in listed
         if name
         and not RUFF_SKIPS & set(PurePosixPath(name).parts)
-        and not any(part.startswith(".") for part in PurePosixPath(name).parts)
+        and name not in installed
         and not any((directory / name).resolve().is_relative_to(path) for path in paths)
     ]
 
