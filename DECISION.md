@@ -16,7 +16,6 @@ This file holds the scaffold's purpose, its current status and the requirements 
 - Cloud sessions in this repository load the same hooks, skill links and attribution settings that setup writes into a project.
 - Learning: session checkpoints and failed checks request HE Learn; Claude's failure hook warns only on a tool error repeated three times in a session; terse decisions live in `docs/adr/`. Hooks prompt judgment and cannot guarantee that a failure never recurs.
 - Plans: Draft, Ready and Complete checks validate structure and declarations. They do not authenticate approval, evidence truth or delivery order. Each acceptance line names a test, a requirement ID or `N/A — reason`.
-- This repository skips Git-history secret scanning with `scan_git_history: false` (user-approved). Current-file scanning stays required, and project templates keep history scanning on.
 - Mutation runs report surviving mutants and never block.
 - Skill guidance and passing gates do not certify every behavior.
 

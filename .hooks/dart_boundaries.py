@@ -467,6 +467,23 @@ def validate_crap_limit(settings: "JsonObject", where: str) -> None:
         )
 
 
+def typing_options(
+    path: Path, directory: Path, package_root: Path | None
+) -> DartOptions:
+    """A nested file is judged by its settings merged over the package's own file."""
+    if package_root is None or package_root == directory:
+        return dart_options(path)
+    root_file = package_root / "analysis_options.yaml"
+    merged = nested_options(path, root_file)
+    if merged is None:
+        link = os.path.relpath(root_file, directory)
+        raise ValueError(
+            f"A nested Dart settings file must include the package settings: {path}. "
+            f"Add `include: {link}` to it, or remove the file"
+        )
+    return cast(DartOptions, merged)
+
+
 def validate_dart_typing(
     directory: Path,
     sources: list[str] | tuple[str, ...],
@@ -476,17 +493,7 @@ def validate_dart_typing(
     from gate_config import JsonObject
 
     path = directory / "analysis_options.yaml"
-    options = dart_options(path)
-    if package_root not in (None, directory):
-        root_file = package_root / "analysis_options.yaml"
-        merged = nested_options(path, root_file)
-        if merged is None:
-            link = os.path.relpath(root_file, directory)
-            raise ValueError(
-                f"A nested Dart settings file must include the package settings: {path}. "
-                f"Add `include: {link}` to it, or remove the file"
-            )
-        options = cast(DartOptions, merged)
+    options = typing_options(path, directory, package_root)
     where = f": {path}"
     for section, groups in DART_TYPING.items():
         for group, settings in groups.items():

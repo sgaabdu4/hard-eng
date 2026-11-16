@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "scan_git_history": false,
   "shipping": {
     "base": "develop",
     "checks": ["hard-eng", "canary"],
@@ -34,6 +33,7 @@
     {"name": "shipped-format", "role": "shipped-format", "parallel": true, "command": ["biome", "ci", "--config-path", ".agents/biome.json", ".agents/biome.json", ".agents/skills", ".github/hard-eng.yml", ".github/workflows/hard-eng.yml", ".github/workflows/pr-text.yml"]},
     {"name": "shipped-focused-tests", "role": "focused-tests", "parallel": true, "command": ["biome", "lint", "--only=suspicious/noFocusedTests", "--error-on-warnings", ".agents/skills"]},
     {"name": "secrets-files", "role": "secrets-files", "parallel": true, "command": ["gitleaks", "dir", ".", "--redact=100", "--no-banner", "--report-format", "sarif", "--report-path", "coverage/gitleaks-files.sarif"], "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"}},
+    {"name": "secrets-history", "role": "secrets-history", "parallel": true, "command": ["gitleaks", "git", ".", "--redact=100", "--no-banner", "--log-opts=--all", "--report-format", "sarif", "--report-path", "coverage/gitleaks-history.sarif"], "report": {"type": "gitleaks", "path": "coverage/gitleaks-history.sarif"}},
     {"name": "vulnerabilities", "role": "vulnerabilities", "parallel": true, "command": ["osv-scanner", "scan", "source", "--lockfile=uv.lock", "--lockfile=pubspec.lock:.hooks/dart_declarations.pubspec.lock", "--all-packages", "--format=json", "--output-file=coverage/osv.json"], "report": {"type": "osv", "path": "coverage/osv.json"}},
     {"name": "security", "role": "security", "parallel": true, "command": ["uvx", "semgrep@latest", "scan", "--config", "p/python", "--config", "p/javascript", "--jobs", "2", "--error", "--strict", "--time", "--json", "--output", "coverage/semgrep.json", "setup.py", "new_project.py", "release_canary.py", ".hooks", "tests", ".agents/skills"], "report": {"type": "semgrep", "path": "coverage/semgrep.json"}}
   ]

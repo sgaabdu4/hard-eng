@@ -722,6 +722,7 @@ FALLOW_FORMS = [
         "complexity-cognitive",
     ),
 ]
+no_files: list[str] = []
 FALLOW_PASSING = [
     (
         {
@@ -729,7 +730,7 @@ FALLOW_PASSING = [
                 "maxCrap": 30,
                 "maxCyclomatic": 10,
                 "maxUnitSize": 40,
-                "ignore": [],
+                "ignore": no_files,
                 "thresholdOverrides": [{"files": ["a.ts"], "maxCrap": 20}],
             },
             "rules": {"complexity-crap": "error", "unused-files": "warn"},
