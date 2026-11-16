@@ -186,3 +186,37 @@ def test_an_included_parent_exclude_is_judged_where_it_applies(tmp_path: Path) -
     child.write_text("analyzer:\n  exclude:\n    - example/**\n")
     with pytest.raises(ValueError, match="remove 'example/\\*\\*' from exclude"):
         validate_dart_includes(child, example)
+
+
+@pytest.mark.parametrize("pattern", ["{lib,bin}/**", "lib/{a,b}.dart", "li**/a.dart"])
+def test_an_inherited_pattern_with_braces_or_a_partial_double_star_is_refused(
+    tmp_path: Path, pattern: str
+) -> None:
+    """Python glob expands neither braces nor a partial `**`, so such an inherited pattern may hide a child file and fails."""
+    parent = tmp_path / "analysis_options.yaml"
+    parent.write_text(f'analyzer:\n  exclude:\n    - "{pattern}"\n')
+    package = tmp_path / "pkg"
+    (package / "lib").mkdir(parents=True)
+    (package / "pubspec.yaml").write_text("name: pkg\n")
+    (package / "lib/a.dart").write_text("void a() {}\n")
+    child = package / "analysis_options.yaml"
+    child.write_text("include: ../analysis_options.yaml\n")
+    with pytest.raises(ValueError, match="cannot exclude project files"):
+        validate_dart_includes(child, package)
+
+
+def test_an_inherited_pattern_is_judged_from_the_folder_of_the_analyzed_options_file(
+    tmp_path: Path,
+) -> None:
+    """A nested test options file that includes a file above the package applies its pattern from test/, not from the package root."""
+    (tmp_path / "analysis_options.yaml").write_text(
+        'analyzer:\n  exclude:\n    - "*_test.dart"\n'
+    )
+    package = tmp_path / "pkg"
+    (package / "test").mkdir(parents=True)
+    (package / "pubspec.yaml").write_text("name: pkg\n")
+    (package / "test/a_test.dart").write_text("void main() {}\n")
+    nested = package / "test/analysis_options.yaml"
+    nested.write_text("include: ../../analysis_options.yaml\n")
+    with pytest.raises(ValueError, match="remove '\\*_test.dart' from exclude"):
+        validate_dart_includes(nested, package)

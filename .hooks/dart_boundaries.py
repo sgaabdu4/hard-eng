@@ -157,7 +157,11 @@ def add_exclusions(options: "JsonObject", patterns: frozenset[str]) -> None:
 
 
 def excludes_here(directory: Path, pattern: str) -> bool:
-    """Whether a pattern from an included file matches a path here; the analyzer applies it from this folder."""
+    """Whether a pattern from an included file matches a path here; the analyzer applies it from this folder. Python glob expands no braces and no partial `**`, so those count as a match."""
+    if "{" in pattern or "}" in pattern:
+        return True
+    if any("**" in part and part != "**" for part in pattern.split("/")):
+        return True
     try:
         return next(directory.glob(pattern), None) is not None
     except (ValueError, NotImplementedError):
@@ -169,8 +173,9 @@ def validate_dart_exclusions(
     values: object,
     children: frozenset[str] = frozenset(),
     holder: Path | None = None,
+    origin: Path | None = None,
 ) -> None:
-    """Refuse excludes of project files; holder is the file that writes them, and a holder in a parent folder is that folder's own options, included here."""
+    """Refuse excludes of project files; holder is the file that writes them, and a holder in a parent folder is that folder's own options, included here. An inherited pattern is judged from origin, the folder of the options file the analyzer reads."""
     from project_setup import FLUTTER_PLATFORM_ROOTS, dependency_command
 
     allowed = {
@@ -200,7 +205,7 @@ def validate_dart_exclusions(
         value
         for value in values
         if not isinstance(value, str)
-        or (value not in known and (not inherited or excludes_here(directory, value)))
+        or (value not in known and (not inherited or excludes_here(origin or directory, value)))
     ]
     if refused:
         raise ValueError(
@@ -247,9 +252,11 @@ def validate_dart_includes(
     seen: set[Path] | None = None,
     packaged: bool = False,
     children: frozenset[str] = frozenset(),
+    origin: Path | None = None,
 ) -> None:
     seen = set() if seen is None else seen
     path = path.resolve()
+    origin = origin or path.parent
     if path in seen:
         raise ValueError(f"Recursive Dart analysis include: {path}")
     seen.add(path)
@@ -268,6 +275,7 @@ def validate_dart_includes(
         analyzer.get("exclude", []),
         children,
         path,
+        origin,
     )
     if any(value == "ignore" for value in analyzer.get("errors", {}).values()):
         raise ValueError(
@@ -295,7 +303,7 @@ def validate_dart_includes(
         package = include.startswith("package:")
         try:
             validate_dart_includes(
-                included, directory, seen.copy(), packaged or package, children
+                included, directory, seen.copy(), packaged or package, children, origin
             )
         except ValueError as error:
             if packaged or not package:
