@@ -17,6 +17,7 @@ from comments import (
     UNOWNED,
     block_hits,
     comment_map,
+    entry_file,
     pattern_switch_offs,
     security_hits,
 )
@@ -106,6 +107,10 @@ def gitleaks_switch_offs(name: str, text: str) -> list[str]:
     if "paths" in config:
         found += [f"{name}:{n} holds a list of paths" for n in at(PATHS_LINE)]
     extend = config.get("extend")
+    if not isinstance(extend, dict) or extend.get("useDefault") is not True:
+        found.append(
+            f"{name}:1 drops the default rules without [extend] useDefault = true"
+        )
     if isinstance(extend, dict) and (off := extend.get("disabledRules")):
         found += [f"{name}:{n} disables the rules {off!r}" for n in at(DISABLED_LINE)]
     return found
@@ -119,7 +124,7 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         text = texts[name]
         lines = list(enumerate(text.splitlines(), 1))
         base = PurePosixPath(name).name
-        entries = base in LINE_IGNORES
+        entries = entry_file(name, LINE_IGNORES)
         if entries or SECURITY_OFF.search(text) or any(w in text for w in RETRY_WORDS):
             found += security_hits(root, name, lines, "holds", entries)
         found += pattern_switch_offs(root, name, lines, "holds")

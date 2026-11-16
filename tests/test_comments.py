@@ -304,7 +304,7 @@ ROUTE_FILES = (
     "test/a_test.dart",
     "ios/RunnerTests/ATests.swift",
     "config.yml",
-    ".gitleaksignore",
+    "app/.gitleaksignore",
 )
 ROUTES = [next(row for row in SWITCHES if row[0] == name) for name in ROUTE_FILES]
 ROUTES += [row for row in RETRY_FORMS if row[0] == "playwright.config.ts"]

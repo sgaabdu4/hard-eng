@@ -43,7 +43,7 @@ from python_setup import (
     require_import_contract,
     validate_pyrefly,
 )
-from tool_setup import lost_scanner_note, managed_command, provision_tools
+from tool_setup import gate_scanner, lost_scanner_note, managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
     project_command,
@@ -396,27 +396,6 @@ def run_projects(
     return next((result for result in results if result.returncode), results[-1])
 
 
-def gate_scanner(group: Group, gate: Gate, scanner: str | None) -> str | None:
-    scanner = {
-        "secrets-files": "gitleaks",
-        "secrets-history": "gitleaks",
-        "security": "semgrep",
-        "vulnerabilities": "osv",
-        "freshness": "freshness",
-        "container-vulnerabilities": "osv-image",
-        "react": "react-doctor",
-        "deployment": "trivy",
-    }.get(gate.get("role", ""), scanner)
-    return {
-        ("python", "imports"): "import-linter",
-        ("python", "dependencies"): "deptry",
-        ("python", "duplicates"): "jscpd",
-        ("swift", "duplicates"): "jscpd",
-        ("dart", "dead-code-duplicates"): "dart-decimate",
-        ("javascript", "dead-code-duplicates"): "fallow",
-    }.get((group.get("language", ""), gate.get("role", "")), scanner)
-
-
 def shard_command(
     group: Group,
     gate: Gate,
@@ -737,6 +716,10 @@ def check(
         stop_keeping("listings")
         if shard != "merge":
             provision_tools(ROOT, groups, timeout)
+            if not quick:
+                from gitleaks_entries import validate_entries
+
+                validate_entries(ROOT, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         save_installed(lock, installed, ROOT)

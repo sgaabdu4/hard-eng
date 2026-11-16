@@ -100,10 +100,66 @@ def validate_current_files_command(command: list[str]) -> None:
         )
 
 
+NARROWING_FLAGS = {
+    "-b",
+    "--baseline-path",
+    "-i",
+    "--gitleaks-ignore-path",
+    "--enable-rule",
+    "--max-target-megabytes",
+    "--max-decode-depth",
+    "--exit-code",
+    "--pre-commit",
+    "--staged",
+}
+SCAN_REFUSAL = (
+    "HE-NO-SWITCH-OFF: A secret scan must not narrow, baseline or mute itself: "
+    "fix the finding at its cause instead; "
+)
+
+
+def narrowing_flags(command: list[str]) -> list[str]:
+    """Flags that hide findings, and a config path other than `.gitleaks.toml`."""
+    found = []
+    for index, argument in enumerate(command):
+        if not argument.startswith("-") or argument == "-":
+            continue
+        name, equals, value = argument.partition("=")
+        if not argument.startswith("--") and len(argument) > 2:
+            name, value = argument[:2], argument[2:]
+        elif not equals and index + 1 < len(command):
+            value = command[index + 1]
+        if name in NARROWING_FLAGS or (
+            name in {"-c", "--config"} and value != ".gitleaks.toml"
+        ):
+            found.append(argument)
+    return found
+
+
+def validate_history_command(command: list[str]) -> None:
+    """Keep the history gate on every commit, never a range."""
+    if (
+        command[:3] != ["gitleaks", "git", "."]
+        or command.count("--log-opts=--all") != 1
+        or any(a.startswith("--log-opts") and a != "--log-opts=--all" for a in command)
+    ):
+        raise ValueError(
+            "secrets-history requires native `gitleaks git .` over `--log-opts=--all`"
+        )
+
+
 def validate_current_files_gate(role: object, command: list[str]) -> None:
-    """Apply the native scan constraint only to the current-files gate role."""
+    """Apply the native scan constraints to the two secret gate roles."""
+    if role not in {"secrets-files", "secrets-history"}:
+        return
+    if found := narrowing_flags(command):
+        raise ValueError(
+            f"{SCAN_REFUSAL}the {role} gate holds {', '.join(found)}; keep the config `.gitleaks.toml`"
+        )
     if role == "secrets-files":
         validate_current_files_command(command)
+    else:
+        validate_history_command(command)
 
 
 def copy_link_target(
@@ -215,9 +271,7 @@ def new_commits_command(
     if "--log-opts=--all" not in command:
         return command
     pushable = [
-        "--log-opts=--branches --remotes --tags HEAD"
-        if argument == "--log-opts=--all"
-        else argument
+        "--log-opts=--remotes HEAD" if argument == "--log-opts=--all" else argument
         for argument in command
     ]
     if base is None:

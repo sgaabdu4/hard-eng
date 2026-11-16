@@ -653,6 +653,11 @@ def lost_assertions(
     return lost
 
 
+def entry_file(name: str, names: set[str]) -> bool:
+    """A file of ignore entries that every line refuses; the root .gitleaksignore is judged by the full check's scan instead."""
+    return PurePosixPath(name).name in names and name != ".gitleaksignore"
+
+
 def security_hits(
     root: Path,
     name: str,
@@ -686,7 +691,7 @@ def security_switch_offs(
         for name in names
         if name not in skipped
         for hit in security_hits(
-            root, name, added[name], "adds", PurePosixPath(name).name in SCAN_IGNORES
+            root, name, added[name], "adds", entry_file(name, SCAN_IGNORES)
         )
     ]
 
