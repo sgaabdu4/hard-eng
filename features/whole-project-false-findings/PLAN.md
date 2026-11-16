@@ -1,6 +1,6 @@
 # Whole-project pass: no switch-off inside a literal, and parent Dart excludes judged where they apply
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,13 +24,13 @@ Authority: Autonomous. AGENTS.md line 10 covers Hard Eng design calls; the user 
 
 ## Acceptance + steps
 
-- [ ] Switch-off text inside a Dart raw string, a Dart string, a template, a template expression's string, a JavaScript regex and Python strings passes in added and old lines → `tests/test_strict_refusals.py::test_switch_off_text_inside_a_literal_passes`.
-- [ ] A switch-off comment after a literal still fails, a Dart string with a `${...}` expression holding a quote does not hide a later comment, and every raw-read mark (Semgrep, coverage, c8, v8, Gitleaks, fallow, Dart Decimate) inside a string, in Dart, JavaScript and Python, still fails; JSX and Swift raw-string lines keep the strict reading; Pyre marks and JavaScript slashes after a property named like a keyword, `...`, `export default` or `return!` keep it too → `tests/test_strict_refusals.py::test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails`.
-- [ ] A `/` after a TypeScript non-null `!` divides, so a later line's switch-off still fails → `tests/test_strict_refusals.py::test_a_division_after_a_non_null_mark_hides_no_later_line`.
-- [ ] Every earlier switch-off form still fails → `tests/test_strict_refusals.py::test_old_switch_offs_anywhere_in_the_project_fail`.
-- [ ] A parent folder's exclude that matches nothing in the child passes; one that hides a child file fails and names the parent file; the child's own file keeps the strict rule → `tests/test_dart_exclusions.py::test_an_included_parent_exclude_is_judged_where_it_applies`.
-- [ ] A parent exclude with braces or a partial `**` fails → `tests/test_dart_exclusions.py::test_an_inherited_pattern_with_braces_or_a_partial_double_star_is_refused`; a nested `test/analysis_options.yaml` that includes a file above the package is judged from `test/` → `tests/test_dart_exclusions.py::test_an_inherited_pattern_is_judged_from_the_folder_of_the_analyzed_options_file`.
-- [ ] A Python t-string's text passes where its tool reads no comment (needs Python 3.14 or later) → `tests/test_strict_refusals.py::test_switch_off_text_inside_a_literal_passes`.
+- [x] Switch-off text inside a Dart raw string, a Dart string, a template, a template expression's string, a JavaScript regex and Python strings passes in added and old lines → `tests/test_strict_refusals.py::test_switch_off_text_inside_a_literal_passes`.
+- [x] A switch-off comment after a literal still fails, a Dart string with a `${...}` expression holding a quote does not hide a later comment, and every raw-read mark (Semgrep, coverage, c8, v8, Gitleaks, fallow, Dart Decimate) inside a string, in Dart, JavaScript and Python, still fails; JSX and Swift raw-string lines keep the strict reading; Pyre marks and JavaScript slashes after a property named like a keyword, `...`, `export default` or `return!` keep it too → `tests/test_strict_refusals.py::test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails`.
+- [x] A `/` after a TypeScript non-null `!` divides, so a later line's switch-off still fails → `tests/test_strict_refusals.py::test_a_division_after_a_non_null_mark_hides_no_later_line`.
+- [x] Every earlier switch-off form still fails → `tests/test_strict_refusals.py::test_old_switch_offs_anywhere_in_the_project_fail`.
+- [x] A parent folder's exclude that matches nothing in the child passes; one that hides a child file fails and names the parent file; the child's own file keeps the strict rule → `tests/test_dart_exclusions.py::test_an_included_parent_exclude_is_judged_where_it_applies`.
+- [x] A parent exclude with braces or a partial `**` fails → `tests/test_dart_exclusions.py::test_an_inherited_pattern_with_braces_or_a_partial_double_star_is_refused`; a nested `test/analysis_options.yaml` that includes a file above the package is judged from `test/` → `tests/test_dart_exclusions.py::test_an_inherited_pattern_is_judged_from_the_folder_of_the_analyzed_options_file`.
+- [x] A Python t-string's text passes where its tool reads no comment (needs Python 3.14 or later) → `tests/test_strict_refusals.py::test_switch_off_text_inside_a_literal_passes`.
 
 ## Baseline + execution
 
@@ -48,11 +48,11 @@ N/A — check messages only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: `uv run --frozen pytest -q tests/test_strict_refusals.py tests/test_dart_exclusions.py tests/test_comments.py`: 569 passed at 71204636; after the cache removal, `tests/test_strict_refusals.py tests/test_comments.py`: 538 passed. Before each fix its new cases failed (the last 8 near-miss cases on 0d51fefe). Timing is in Risks + recovery.
 Review: a fresh review of 33570c48 found raw-read marks passing inside strings, JSX and Swift misreads, Dart `${...}` strings, brace and nested-folder Dart excludes, and a slower suppression pass; a fresh review of 353d254a found a division after a non-null `!` or postfix `++` opening a false regex, JSX in `.js`, flake8 `noqa` and isort marks read on the raw line, and folder-form Dart excludes. A fresh review of 0d51fefe found Pyre marks hidden inside Python strings (Pyre reads them on the raw line) and JavaScript slashes misread after `o.in`, `$in`, `d.with(1)`, `...`, `export default` and `return!`. Each is fixed with a failing test first. A run of these hooks in an installed project found the in-process cache refused by Hard Eng's own Semgrep rule; it is removed. Not fixed: an `if (` condition longer than 200 characters before a regex, because the back scan has a 200-character window to keep each slash cheap. Pending: a fresh review of the final head.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
-Retro: Pending
+Retro: (1) three fresh reviews found switch-off forms read the wrong way and Dart excludes judged in the wrong folder → `tests/test_strict_refusals.py::test_switch_off_after_a_literal_or_a_gitleaks_mark_in_one_fails` and `tests/test_dart_exclusions.py::test_an_inherited_pattern_with_braces_or_a_partial_double_star_is_refused` hold each case; (2) Hard Eng's Semgrep rule refused the in-process cache in an installed project's run of these hooks → None — the push's security gate holds the same rule; that run only came first; (3) the push refused a Ready plan → None — the refusal named the step.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
