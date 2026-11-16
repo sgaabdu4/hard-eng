@@ -925,8 +925,12 @@ def load_groups(
 
     validate_documents(root)
     config = parse_config((root / "hard-eng.gates.json").read_text())
-    if type(config.get("scan_git_history", True)) is not bool:
-        raise TypeError("scan_git_history must be true or false")
+    if config.get("scan_git_history", True) is not True:
+        raise ValueError(
+            "HE-NO-SWITCH-OFF: The Git-history secret scan must stay on: remove scan_git_history "
+            "from hard-eng.gates.json. Move each history finding to an exact line in the root "
+            ".gitleaksignore (the full check judges each line), or fix it at its cause; never suppress."
+        )
     if "browser" in config:
         from browser import browser_roles
 
@@ -955,10 +959,6 @@ def checked_groups(
     starting: bool,
 ) -> list[Group]:
     validate_file_sizes(root, config.get("file_size_exceptions", {}), listed)
-    if config.get("scan_git_history", True) is False:
-        config["shared"] = [
-            gate for gate in config["shared"] if gate.get("role") != "secrets-history"
-        ]
     groups: list[Group] = [
         *config["packages"],
         {"path": ".", "checks": config["shared"]},
