@@ -12,7 +12,6 @@ from project_files import GIT_LISTING
 if TYPE_CHECKING:
     from gate_config import Group, JsonObject
 
-MAX_CRAP = 30
 SETTINGS_FILES = (
     ".dart-decimaterc",
     ".dart-decimaterc.json",
@@ -420,12 +419,15 @@ def validate_dart_boundaries(
 
 
 def validate_crap_limit(settings: "JsonObject", where: str) -> None:
+    from fallow_report import HEALTH_LIMITS
+
+    max_crap = HEALTH_LIMITS["max_crap_threshold"]
     health = settings.get("health")
     limit = health.get("max_crap") if isinstance(health, dict) else None
-    if type(limit) is not int or not 1 <= limit <= MAX_CRAP:
+    if type(limit) is not int or not 1 <= limit <= max_crap:
         raise ValueError(
             f'{where}: Dart Decimate must fail the CRAP scores that Fallow fails. Set "health": '
-            f'{{"max_crap": {MAX_CRAP}}} in that file: from release 0.0.76 it fails a score equal '
+            f'{{"max_crap": {max_crap}}} in that file: from release 0.0.76 it fails a score equal '
             "to its limit, so 30 matches the limit that Fallow uses"
         )
 

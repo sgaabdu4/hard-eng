@@ -21,6 +21,7 @@ from comments import (
     pattern_switch_offs,
     security_hits,
 )
+from fallow_settings import SETTINGS_FILES, settings_switch_offs
 from gate_config import generated_sources
 from project_files import GIT_LISTING
 
@@ -166,6 +167,8 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
             found += gitleaks_switch_offs(name, texts[name])
         if base == "Cargo.toml":
             found += cargo_switch_offs(name, text)
+        if base in SETTINGS_FILES:
+            found += settings_switch_offs(name, text)
     return found
 
 

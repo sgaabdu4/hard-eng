@@ -414,13 +414,14 @@ def configure_dart_generated(
 def configure_dart_scanner(
     root: Path, directory: Path, changes: dict[str, str]
 ) -> None:
-    from dart_boundaries import MAX_CRAP, SETTINGS_FILES
+    from dart_boundaries import SETTINGS_FILES
+    from fallow_report import HEALTH_LIMITS
     from gate_config import json_file
 
     if not any((directory / name).exists() for name in SETTINGS_FILES):
         scanner = {
             "ignore_patterns": [".agents/**"],
-            "health": {"max_crap": MAX_CRAP},
+            "health": {"max_crap": HEALTH_LIMITS["max_crap_threshold"]},
         }
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json_file(root, scanner)
