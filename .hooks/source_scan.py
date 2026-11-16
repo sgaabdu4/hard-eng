@@ -81,8 +81,12 @@ def string_at(text: str, index: int, suffix: str) -> int | None:
 
 
 def regex_allowed(text: str, index: int) -> bool:
-    """Whether `/` at index starts a regex: after an operator, keyword or control condition."""
+    """Whether `/` at index starts a regex: after an operator, keyword or control condition; a postfix `++`, `--` or non-null `!` ends a value, so `/` there divides."""
     before = text[max(0, index - 200) : index].rstrip()
+    if before.endswith(("++", "--")) or (
+        before.endswith("!") and (before[-2:-1].isalnum() or before[-2:-1] in "_$)]")
+    ):
+        return False
     if not before.endswith(")"):
         return REGEX_BEFORE.search(before[-16:]) is not None
     depth = 0
@@ -238,7 +242,7 @@ def without_literals(name: str, text: str) -> str:
     return blank_spans(text, inside, NOT_LINE_BREAK)
 
 
-UNMASKED = {".jsx", ".tsx", ".swift"}
+UNMASKED = {".js", ".jsx", ".tsx", ".swift"}
 LITERAL_HINT = re.compile(r"['\"`/]")
 MULTI_LINE_OPENERS = {
     ".py": ("'''", '"""', "\\\n"),

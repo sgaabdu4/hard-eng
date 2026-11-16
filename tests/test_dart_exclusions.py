@@ -188,7 +188,10 @@ def test_an_included_parent_exclude_is_judged_where_it_applies(tmp_path: Path) -
         validate_dart_includes(child, example)
 
 
-@pytest.mark.parametrize("pattern", ["{lib,bin}/**", "lib/{a,b}.dart", "li**/a.dart"])
+@pytest.mark.parametrize(
+    "pattern",
+    ["{lib,bin}/**", "lib/{a,b}.dart", "li**/a.dart", "lib/a.dart/**", "lib/a.dart/"],
+)
 def test_an_inherited_pattern_with_braces_or_a_partial_double_star_is_refused(
     tmp_path: Path, pattern: str
 ) -> None:
