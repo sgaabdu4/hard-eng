@@ -238,7 +238,7 @@ def validate_comments(root: Path, base: str | None) -> None:
 
 PYTHON_OFF = re.compile(
     r"#\s*((?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)|type:\s*ignore|pyrefly:\s*ignore"
-    r"|pyright:\s*ignore|pyre-(?:ignore|fixme)|pylint:\s*disable|pragma:\s*no cover"
+    r"|pyright:\s*ignore|pyre-(?:ignore|fixme)|pylint:\s*disable"
     r"|ruff:\s*(?:file-ignore|ignore|disable)\["
     r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b|fmt:\s*(?:off|skip)\b|yapf:\s*disable\b)|\b(pytest\.)?mark\.(skip(if)?|xfail)\b|pytest\.(skip|xfail)\("
     r"|\bunittest\.([Ss]kip\w*|expectedFailure)\b|\bskipTest\(|\bimportorskip\("
@@ -249,11 +249,8 @@ SCRIPT_OFF = re.compile(
     r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
     r"|\b(it|test|describe|suite)(?:\.(?:concurrent|sequential|shuffle))*\.(skip|only|fixme|todo|fail|failing|fails|if|runIf)(If)?(?:[.(]|\b)"
     r"|\b(xit|xtest|xdescribe|fit|fdescribe)\("
-    r"|(/\*|//)\s*(istanbul|c8|v8) ignore"
 )
-DART_OFF = re.compile(
-    r"//\s*ignore(_for_file)?:|@Skip\(|//\s*dart-decimate-ignore-(?:next-line(?![\w-])|file\b)"
-)
+DART_OFF = re.compile(r"//\s*ignore(_for_file)?:|@Skip\(")
 SWIFT_OFF = re.compile(
     r"swift-format-ignore|\bXCTSkip|<(Skipped|Selected)Tests>"
     r'|"(skipped|selected)Tests"|\bskipped\s*=\s*"YES"|\.enabled\(if:\s*false\)'
@@ -267,7 +264,11 @@ SECURITY_OFF = re.compile(
     r"|shellcheck\s+disable=|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
-GITLEAKS_ALLOW = re.compile(r"gitleaks:allow", re.IGNORECASE)
+RAW_OFF = {
+    ".py": re.compile(r"#\s*pragma:\s*no cover"),
+    ".dart": re.compile(r"//\s*dart-decimate-ignore-(?:next-line(?![\w-])|file\b)"),
+    **dict.fromkeys(JAVASCRIPT, re.compile(r"(/\*|//)\s*(istanbul|c8|v8) ignore")),
+}
 RETRY_WORDS = ("retry", "Retry", "retries", "rerun", "flaky")
 SCAN_IGNORES = {".gitleaksignore", ".semgrepignore", ".gitleaks.toml"}
 UNOWNED = (".hooks/", ".agents/", ".claude/")
@@ -380,12 +381,15 @@ def pattern_switch_offs(
             re.search(tested, text) if tested else None
         )
 
+    raw = RAW_OFF.get(Path(name).suffix)
     code = literal_free_lines(root, name)
-    found = [
-        f"{name}:{number} {verb} {hit[0].strip()!r}"
-        for number, text in lines
-        if off(text) and (hit := off(code(number, text)))
-    ]
+    found = []
+    for number, text in lines:
+        if hit := (raw.search(text) if raw else None):
+            found.append(f"{name}:{number} {verb} {hit[0].strip()!r}")
+        elif first := off(text):
+            if hit := off(code(number, text, text[: first.start()])):
+                found.append(f"{name}:{number} {verb} {hit[0].strip()!r}")
     return found + marks_in_file(root, name, lines)
 
 
@@ -652,13 +656,9 @@ def security_hits(
 ) -> list[str]:
     """Inline markers, ignore entries and test retries in the lines of one file; entries marks a file of ignore entries."""
     found: list[str] = []
-    code = literal_free_lines(root, name)
     for number, text in lines:
         entry = text.strip()
-        hit = SECURITY_OFF.search(text)
-        if hit:
-            hit = SECURITY_OFF.search(code(number, text)) or GITLEAKS_ALLOW.search(text)
-        if hit:
+        if hit := SECURITY_OFF.search(text):
             found.append(f"{name}:{number} {verb} {hit[0]!r}")
         elif entries and entry and not entry.startswith("#"):
             found.append(f"{name}:{number} {verb} {entry!r}")
