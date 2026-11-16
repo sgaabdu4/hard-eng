@@ -1,6 +1,7 @@
 """Read a Dart package's Dart Decimate boundary rules and refuse unusable ones."""
 
 import json
+import os
 import subprocess
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict, cast
@@ -53,11 +54,6 @@ DART_TYPING: dict[str, dict[str, dict[str, bool] | list[str]]] = {
     },
 }
 
-NESTED_STEP = (
-    ". This file replaces the package's settings for its folder: give it the `analyzer`"
-    " and `linter` settings of the package's analysis_options.yaml, or remove it"
-)
-
 
 def dart_rule_settings(value: object) -> object:
     if isinstance(value, list):
@@ -72,6 +68,45 @@ def dart_rule_settings(value: object) -> object:
                     "a lint rule of the included set; remove that entry"
                 )
     return value
+
+
+def merge_options(base: object, over: object) -> object:
+    """Later settings win; lint rule lists count as maps so a rule set to false shows."""
+    if not isinstance(base, dict) or not isinstance(over, dict):
+        return over
+    merged = dict(base)
+    for key, value in over.items():
+        if key == "rules" and isinstance(value, (list, dict)):
+            value = {**listed_rules(base.get(key)), **listed_rules(value)}
+        merged[key] = merge_options(base.get(key), value) if key in base else value
+    return merged
+
+
+def listed_rules(value: object) -> dict[str, object]:
+    if isinstance(value, list):
+        return {rule: True for rule in value if isinstance(rule, str)}
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def nested_options(
+    path: Path, root_file: Path, seen: frozenset[Path] = frozenset()
+) -> object | None:
+    """The settings of a nested file merged over what its relative include chain reaches; None when the chain misses the package's own file."""
+    own = dart_options(path)
+    includes = own.get("include", [])
+    for include in [includes] if isinstance(includes, str) else includes:
+        target = (path.parent / include).resolve()
+        if include.startswith("package:") or target in seen | {path.resolve()}:
+            continue
+        if target == root_file.resolve():
+            return merge_options(dart_options(root_file), own)
+        if (
+            target.is_file()
+            and (base := nested_options(target, root_file, seen | {path.resolve()}))
+            is not None
+        ):
+            return merge_options(base, own)
+    return None
 
 
 def validate_dart_plugins(options: "JsonObject") -> None:
@@ -442,7 +477,17 @@ def validate_dart_typing(
 
     path = directory / "analysis_options.yaml"
     options = dart_options(path)
-    where = f": {path}" + ("" if package_root in (None, directory) else NESTED_STEP)
+    if package_root not in (None, directory):
+        root_file = package_root / "analysis_options.yaml"
+        merged = nested_options(path, root_file)
+        if merged is None:
+            link = os.path.relpath(root_file, directory)
+            raise ValueError(
+                f"A nested Dart settings file must include the package settings: {path}. "
+                f"Add `include: {link}` to it, or remove the file"
+            )
+        options = cast(DartOptions, merged)
+    where = f": {path}"
     for section, groups in DART_TYPING.items():
         for group, settings in groups.items():
             section_options = cast(JsonObject, options).get(section)
