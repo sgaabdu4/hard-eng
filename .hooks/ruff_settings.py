@@ -4,8 +4,6 @@ import re
 import tomllib
 from pathlib import Path, PurePosixPath
 
-from command_words import segments
-
 SETTINGS_FILES = {"pyproject.toml", "ruff.toml", ".ruff.toml"}
 IGNORE_KEYS = ("ignore", "extend-ignore", "per-file-ignores", "extend-per-file-ignores")
 HEADER = re.compile(r"\s*\[+\s*([^\]]+?)\s*\]+")
@@ -96,18 +94,18 @@ def settings_switch_offs(root: Path, name: str, text: str) -> list[str]:
 
 
 def ruff_invocations(
-    command: list[str], directory: Path
+    parts: list[list[str]],
 ) -> list[tuple[list[str], list[str]]]:
     """Each ruff run of a command as its launcher words and its arguments, one for each chained command."""
     return [
         (segment[: len(segment) - len(found)], found)
-        for segment in segments(command, directory)
+        for segment in parts
         if (found := ruff_command(segment))
     ]
 
 
-def ruff_commands(command: list[str], directory: Path) -> list[list[str]]:
-    return [arguments for _, arguments in ruff_invocations(command, directory)]
+def ruff_commands(parts: list[list[str]]) -> list[list[str]]:
+    return [arguments for _, arguments in ruff_invocations(parts)]
 
 
 def ruff_command(command: list[str]) -> list[str]:
@@ -245,9 +243,11 @@ def offending_flags(arguments: list[str], directory: Path, role: object) -> list
     return found
 
 
-def validate_ruff_command(command: list[str], directory: Path, role: object) -> None:
+def validate_ruff_command(
+    parts: list[list[str]], directory: Path, role: object
+) -> None:
     found: list[str] = []
-    for arguments in ruff_commands(command, directory):
+    for arguments in ruff_commands(parts):
         found += offending_flags(arguments, directory, role)
     if found:
         raise ValueError(

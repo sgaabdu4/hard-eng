@@ -370,18 +370,18 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     from gitleaks_scan import validate_current_files_gate
 
     validate_current_files_gate(gate.get("role"), command)
-    from gitleaks_scan import validate_config_variables
-
-    validate_config_variables(command, directory)
     from command_words import segments
 
-    segments(command, directory)
+    parts = segments(command, directory)
+    from gitleaks_scan import validate_config_variables
+
+    validate_config_variables(parts)
     from ruff_settings import validate_ruff_command
 
-    validate_ruff_command(command, directory, gate.get("role"))
+    validate_ruff_command(parts, directory, gate.get("role"))
     from rust_settings import validate_rust_command
 
-    validate_rust_command(command, directory)
+    validate_rust_command(parts)
     validate_named_output(gate, command, directory, report)
 
 

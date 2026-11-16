@@ -6,7 +6,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 
-from command_words import unwrapped
+from command_words import segments, unwrapped
 from dart_boundaries import nested_package_patterns
 from fallow_report import named_config, native_fallow_command
 from fallow_resolved import default_config, fallow_hits
@@ -106,7 +106,7 @@ def ruff_tasks(
             (children, roots),
             defaults.ruff(tuple(prefix)),
         )
-        for prefix, arguments in ruff_invocations(command, directory)
+        for prefix, arguments in ruff_invocations(segments(command, directory))
         if arguments[:1] == ["check"]
     ]
 

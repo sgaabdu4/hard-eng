@@ -4,7 +4,7 @@ import re
 import tomllib
 from pathlib import Path, PurePosixPath
 
-from command_words import assigns_variables, segments
+from command_words import assigns_variables
 
 CLIPPY_FILES = {"clippy.toml", ".clippy.toml"}
 CLIPPY_DEFAULTS = {
@@ -130,10 +130,10 @@ def unlisted_lint_flags(rest: list[str]) -> list[str]:
     return found
 
 
-def command_hits(command: list[str], directory: Path) -> list[str]:
+def command_hits(parts: list[list[str]]) -> list[str]:
     """Words of a cargo command that allow lints: a flag after `--`, a Rust flags config value or a variable."""
     found: list[str] = []
-    for segment in segments(command, directory):
+    for segment in parts:
         names = [Path(word).name for word in segment]
         if "cargo" in names:
             rest = segment[segment.index("--") + 1 :] if "--" in segment else []
@@ -149,8 +149,8 @@ def command_hits(command: list[str], directory: Path) -> list[str]:
     return found
 
 
-def validate_rust_command(command: list[str], directory: Path) -> None:
-    if found := command_hits(command, directory):
+def validate_rust_command(parts: list[list[str]]) -> None:
+    if found := command_hits(parts):
         raise ValueError(
             "HE-NO-SWITCH-OFF: A Rust gate must not allow lints: fix each finding at its cause "
             f"instead; the gate holds {', '.join(found)}"
