@@ -173,6 +173,7 @@ def scanned_spans(text: str, suffix: str) -> tuple[tuple[bool, int, int, bool], 
 def scan(text: str, suffix: str) -> Iterator[tuple[bool, int, int, bool]]:
     index, blank = 0, True
     depths: list[int] = []
+    found: list[tuple[int, int]] = []
     while index < len(text):
         stop = SCAN_STOP.search(text, index)
         if stop is None:
@@ -191,10 +192,11 @@ def scan(text: str, suffix: str) -> Iterator[tuple[bool, int, int, bool]]:
             close = comment_end(text, index, suffix)
             yield True, index, close, blank
             index, blank = close, False
-        elif (close := code_step(text, index, suffix, depths, found := [])) is not None:
+        elif (close := code_step(text, index, suffix, depths, found)) is not None:
             if character not in "{}" or close > index + 1:
                 yield False, index, close, blank
             yield from ((True, start, end, False) for start, end in found)
+            found.clear()
             index, blank = close, False
         else:
             literal = CHARACTER.match(text, index) if character == "'" else None
