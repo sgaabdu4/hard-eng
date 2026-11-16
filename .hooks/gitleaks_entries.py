@@ -9,7 +9,6 @@ from pathlib import Path
 
 from challenge import known
 from gate_config import generated_sources
-from gitleaks_scan import copy_scan_tree
 
 COMMIT_ENTRY = re.compile(r"([0-9a-f]{40}|[0-9a-f]{64}):(.+):([\w.-]+):\d+")
 CURRENT_ENTRY = re.compile(r"(.+):([\w.-]+):\d+")
@@ -75,13 +74,31 @@ def past_findings(
     return {item["Fingerprint"] for item in found}
 
 
+def entry_paths(entries: list[tuple[int, str]]) -> list[str]:
+    """The files that the entries name; a finding of one file does not depend on another file."""
+    named: set[str] = set()
+    for _, entry in entries:
+        if commit := COMMIT_ENTRY.fullmatch(entry):
+            named.add(commit[2])
+        elif current := CURRENT_ENTRY.fullmatch(entry):
+            named.add(current[1])
+    return sorted(named)
+
+
 def current_findings(
-    root: Path, work: Path, config: list[str], timeout: float
+    root: Path, work: Path, config: list[str], timeout: float, paths: list[str]
 ) -> list[dict[str, str]]:
     snapshot = work / "snapshot"
     snapshot.mkdir()
-    copy_scan_tree(root, snapshot)
-    (snapshot / ".gitleaksignore").unlink(missing_ok=True)
+    for path in paths:
+        source = root / path
+        if (
+            source.is_file()
+            and not source.is_symlink()
+            and ".." not in Path(path).parts
+        ):
+            (snapshot / path).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, snapshot / path)
     return scan(["dir", "."], snapshot, work / "current.json", config, timeout)
 
 
@@ -112,7 +129,7 @@ def validate_entries(root: Path, timeout: float = 900.0) -> None:
     with tempfile.TemporaryDirectory(prefix="hard-eng-entries-") as temporary:
         work = Path(temporary)
         past = past_findings(root, work, present, config, timeout) if present else set()
-        current = current_findings(root, work, config, timeout)
+        current = current_findings(root, work, config, timeout, entry_paths(entries))
         paths = {item["File"] for item in current} | {
             m[2] for _, e in entries if (m := COMMIT_ENTRY.fullmatch(e))
         }
