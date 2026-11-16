@@ -231,7 +231,7 @@ def fallow_failure(invocation: list[str], report: Report) -> str | None:
         return (
             "Fallow scans must cover the whole project; remove "
             + ", ".join(left)
-            + " from the gate command"
+            + " from the gate command; to scan one package, give it its own gate group in that package's folder, and boundary rules already run in the combined scan"
         )
     if "audit" not in invocation:
         if "--fail-on-issues" not in invocation:
