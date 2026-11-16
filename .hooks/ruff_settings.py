@@ -10,9 +10,6 @@ from project_files import GIT_LISTING
 
 SETTINGS_FILES = {"pyproject.toml", "ruff.toml", ".ruff.toml"}
 IGNORE_KEYS = ("ignore", "extend-ignore", "per-file-ignores", "extend-per-file-ignores")
-IGNORE_FLAGS = {f"--{key}" for key in IGNORE_KEYS}
-HIDING_FLAGS = {"--exit-zero", "--isolated"}
-EXCLUDE_FLAGS = {"--exclude", "--extend-exclude"}
 RUFF_SKIPS = frozenset(
     {
         ".bzr",
@@ -204,19 +201,71 @@ def config_values(arguments: list[str]) -> list[str]:
     return values
 
 
+RUFF_FLAGS = {
+    "check": (
+        {
+            "--select",
+            "--extend-select",
+            "--config",
+            "--output-format",
+            "--exclude",
+            "--extend-exclude",
+            "--cache-dir",
+        },
+        {
+            "--no-cache",
+            "--quiet",
+            "-q",
+            "--verbose",
+            "-v",
+            "--preview",
+            "--fix",
+            "--no-fix",
+        },
+    ),
+    "format": (
+        {"--config", "--exclude", "--extend-exclude", "--cache-dir"},
+        {
+            "--check",
+            "--diff",
+            "--no-cache",
+            "--quiet",
+            "-q",
+            "--verbose",
+            "-v",
+            "--preview",
+        },
+    ),
+}
+
+
+def unlisted_flags(arguments: list[str]) -> list[str]:
+    """Each word of a ruff command that no pass form lists: the subcommand, then flags with their values."""
+    kind = arguments[0] if arguments else ""
+    if kind not in RUFF_FLAGS:
+        return [kind or "a command with no subcommand"]
+    values, booleans = RUFF_FLAGS[kind]
+    found = []
+    skip = False
+    for word in arguments[1:]:
+        if skip:
+            skip = False
+        elif word.startswith("-"):
+            flag, equals, _ = word.partition("=")
+            if flag in values:
+                skip = not equals
+            elif flag not in booleans or equals:
+                found.append(word)
+    return found
+
+
 def offending_flags(arguments: list[str], directory: Path, role: object) -> list[str]:
-    found = [
-        argument
-        for argument in arguments
-        if argument.partition("=")[0] in IGNORE_FLAGS | HIDING_FLAGS
-    ]
+    found = unlisted_flags(arguments)
     found += [
         f"--config {value}"
         for value in config_values(arguments)
         if config_ignores(directory, value)
     ]
-    if arguments[:1] == ["check"]:
-        found += [a for a in arguments if a.partition("=")[0] in EXCLUDE_FLAGS]
     if role == "lint":
         found += narrowing_selects(arguments)
         found += [

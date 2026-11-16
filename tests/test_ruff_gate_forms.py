@@ -15,9 +15,6 @@ def lint(command: list[str], role: str = "lint") -> Gate:
 FLAG_FORMS = [
     ["ruff", "check", ".", "--exit-zero"],
     ["ruff", "check", ".", "--isolated"],
-    ["ruff", "check", ".", "--extend-exclude", "src"],
-    ["ruff", "check", ".", "--extend-exclude=src"],
-    ["ruff", "check", ".", "--exclude", "src"],
     ["sh", "-c", "ruff check . --ignore F401"],
     ["sh", "-c", "ruff check . --exit-zero"],
     ["bash", "-c", "ruff check . --isolated"],

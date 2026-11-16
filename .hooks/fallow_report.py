@@ -223,7 +223,51 @@ def named_config(invocation: list[str]) -> str | None:
     return option(invocation, "--config") or option(invocation, "-c")
 
 
+FALLOW_VALUES = {
+    "--only",
+    "--format",
+    "-f",
+    "--output-file",
+    "--config",
+    "-c",
+    "--max-file-size",
+    "--max-crap",
+    "--gate",
+    "--base",
+}
+FALLOW_SWITCHES = {"--fail-on-issues", "--quiet", "-q", "--no-cache"}
+
+
+def unlisted_fallow(invocation: list[str]) -> list[str]:
+    """Each flag of a Fallow gate that no pass form lists, and a `--max-file-size` other than 0."""
+    found = []
+    skip = False
+    for argument in invocation[1:]:
+        if skip:
+            skip = False
+        elif argument.startswith("-"):
+            flag, value = split_option(argument)
+            if flag in FALLOW_VALUES:
+                skip = value is None
+            elif flag not in FALLOW_SWITCHES:
+                found.append(argument)
+    if option(invocation, "--max-file-size") not in (None, "0"):
+        found.append("--max-file-size other than 0")
+    return found
+
+
 def fallow_failure(invocation: list[str], report: Report) -> str | None:
+    known = fallow_known_failure(invocation, report)
+    if known or not (left := unlisted_fallow(invocation)):
+        return known
+    return (
+        "HE-NO-SWITCH-OFF: A Fallow gate may use only the listed flags (--only, --format, --output-file, "
+        "--config, --max-file-size 0, --max-crap, --gate, --base, --fail-on-issues, --quiet, --no-cache); remove "
+        + ", ".join(left)
+    )
+
+
+def fallow_known_failure(invocation: list[str], report: Report) -> str | None:
     crap = option(invocation, "--max-crap")
     if crap is not None and (not math.isfinite(float(crap)) or float(crap) <= 0):
         return "Fallow CRAP enforcement cannot be disabled; repair its coverage input"

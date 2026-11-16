@@ -111,6 +111,25 @@ def clippy_hits(name: str, text: str) -> list[str]:
     return found
 
 
+LINT_LEVEL_FLAGS = {"-D", "--deny", "-W", "--warn", "-F", "--forbid"}
+
+
+def unlisted_lint_flags(rest: list[str]) -> list[str]:
+    """Words after `--` of a clippy command that are not a deny, warn or forbid level with its lint."""
+    found = []
+    skip = False
+    for word in rest:
+        if skip:
+            skip = False
+            continue
+        flag = word.split("=", 1)[0]
+        if flag in LINT_LEVEL_FLAGS:
+            skip = "=" not in word
+        elif not (len(word) > 2 and word[:2] in LINT_LEVEL_FLAGS):
+            found.append(word)
+    return found
+
+
 def command_hits(command: list[str], directory: Path) -> list[str]:
     """Words of a cargo command that allow lints: a flag after `--`, a Rust flags config value or a variable."""
     found: list[str] = []
@@ -118,7 +137,9 @@ def command_hits(command: list[str], directory: Path) -> list[str]:
         names = [Path(word).name for word in segment]
         if "cargo" in names:
             rest = segment[segment.index("--") + 1 :] if "--" in segment else []
-            if flag := allows(" ".join(rest)):
+            if "clippy" in segment:
+                found += unlisted_lint_flags(rest)
+            elif flag := allows(" ".join(rest)):
                 found.append(flag)
         found += [
             word
