@@ -85,6 +85,13 @@ def current_findings(
     return scan(["dir", "."], snapshot, work / "current.json", config, timeout)
 
 
+def ensure_gitleaks(timeout: float) -> None:
+    if shutil.which("gitleaks") is None:
+        from tool_setup import PACKAGES, provision_batch
+
+        provision_batch([PACKAGES["gitleaks"] + "@latest"], timeout)
+
+
 def validate_entries(root: Path, timeout: float = 900.0) -> None:
     """Refuse each root entry that hides a finding a scan run now would not hide; the full check runs it after the tools are installed."""
     if (root / ".gitleaksignore").is_symlink():
@@ -96,10 +103,7 @@ def validate_entries(root: Path, timeout: float = 900.0) -> None:
     entries = entry_lines(root)
     if not entries:
         return
-    if shutil.which("gitleaks") is None:
-        from tool_setup import PACKAGES, provision_batch
-
-        provision_batch([PACKAGES["gitleaks"] + "@latest"], timeout)
+    ensure_gitleaks(timeout)
     config = [".gitleaks.toml"] if (root / ".gitleaks.toml").is_file() else []
     config = ["--config", str((root / config[0]).resolve())] if config else []
     commits = sorted({m[1] for _, e in entries if (m := COMMIT_ENTRY.fullmatch(e))})
