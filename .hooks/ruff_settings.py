@@ -146,8 +146,10 @@ def unwrapped(command: list[str], directory: Path) -> list[str]:
     return arguments
 
 
-def ruff_commands(command: list[str], directory: Path) -> list[list[str]]:
-    """The arguments after each ruff executable in the command, one list for each chained command."""
+def ruff_invocations(
+    command: list[str], directory: Path
+) -> list[tuple[list[str], list[str]]]:
+    """Each ruff run of a command as its launcher words and its arguments, one for each chained command."""
     words = unwrapped(command, directory)
     segments: list[list[str]] = [[]]
     for word in words:
@@ -155,7 +157,15 @@ def ruff_commands(command: list[str], directory: Path) -> list[list[str]]:
             segments.append([])
         else:
             segments[-1].append(word)
-    return [found for segment in segments if (found := ruff_command(segment))]
+    return [
+        (segment[: len(segment) - len(found)], found)
+        for segment in segments
+        if (found := ruff_command(segment))
+    ]
+
+
+def ruff_commands(command: list[str], directory: Path) -> list[list[str]]:
+    return [arguments for _, arguments in ruff_invocations(command, directory)]
 
 
 def ruff_command(command: list[str]) -> list[str]:
