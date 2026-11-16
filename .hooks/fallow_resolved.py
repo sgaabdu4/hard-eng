@@ -3,9 +3,11 @@
 import json
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
-from scope_check import left_out, refusal
+from fallow_table import judge
+from scope_check import glob_regex, left_out, refusal, tracked
 
 
 def printed_config(
@@ -26,45 +28,28 @@ def printed_config(
     return json.loads(done.stdout)
 
 
-def default_rules(timeout: float) -> dict[str, object]:
+def default_config(timeout: float) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="hard-eng-fallow-") as empty:
-        rules = printed_config(Path(empty), None, timeout).get("rules")
-    return rules if isinstance(rules, dict) else {}
+        return printed_config(Path(empty), None, timeout)
 
 
-def rule_sets(config: dict[str, object]) -> list[dict[str, object]]:
-    overrides = config.get("overrides")
-    sets = (
-        [config.get("rules")]
-        + [item.get("rules") for item in overrides if isinstance(item, dict)]
-        if isinstance(overrides, list)
-        else [config.get("rules")]
-    )
-    return [rules for rules in sets if isinstance(rules, dict)]
+def pattern_hits(
+    directory: Path, children: frozenset[str]
+) -> Callable[[list[str]], list[str]]:
+    """A check for the patterns of one setting: each tracked source file that a pattern drops must be generated or belong to a child group."""
 
+    def drop(patterns: list[str]) -> list[str]:
+        if not patterns:
+            return []
+        names = tracked(directory, FALLOW_SUFFIXES)
+        regexes = [glob_regex(pattern) for pattern in patterns]
+        matched = {name for name in names if any(r.fullmatch(name) for r in regexes)}
+        left = left_out(
+            directory, FALLOW_SUFFIXES, set(names) - matched, children, FALLOW_SKIPPED
+        )
+        return [f"drops {name}" for name in left[:1]] if left else []
 
-def switched_off(config: dict[str, object], defaults: dict[str, object]) -> list[str]:
-    hits = [
-        f"rule {name} is off"
-        for rules in rule_sets(config)
-        for name, level in rules.items()
-        if level == "off" and defaults.get(name) != "off"
-    ]
-    if config.get("ignoreFindings"):
-        hits.append("ignoreFindings hides findings")
-    hits += [
-        f"entry {entry!r} marks every file it matches as used"
-        for entry in as_list(config.get("entry"))
-        if isinstance(entry, str) and "**" in entry
-    ]
-    duplicates = config.get("duplicates")
-    if isinstance(duplicates, dict) and duplicates.get("enabled") is False:
-        hits.append("duplicates.enabled is false")
-    return hits
-
-
-def as_list(value: object) -> list[object]:
-    return value if isinstance(value, list) else []
+    return drop
 
 
 FALLOW_SUFFIXES = (
@@ -118,7 +103,11 @@ def listed_files(directory: Path, config: str | None, timeout: float) -> set[str
             f"HE-NO-SWITCH-OFF: fallow cannot list the files of this gate: {done.stderr.strip()}"
         )
     files = json.loads(done.stdout).get("files")
-    return {name for name in as_list(files) if isinstance(name, str)}
+    return (
+        {name for name in files if isinstance(name, str)}
+        if isinstance(files, list)
+        else set()
+    )
 
 
 def fallow_hits(
@@ -131,4 +120,5 @@ def fallow_hits(
     printed = printed_config(directory, config, timeout)
     checked = listed_files(directory, config, timeout)
     left = left_out(directory, FALLOW_SUFFIXES, checked, children, FALLOW_SKIPPED)
-    return [*switched_off(printed, defaults), *refusal(left)]
+    drop = pattern_hits(directory, children)
+    return [*judge(printed, defaults, drop), *refusal(left)]

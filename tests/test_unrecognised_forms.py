@@ -80,6 +80,56 @@ def test_the_ruff_format_gate_may_extend_exclude(tmp_path: Path) -> None:
     validate_gate(gate(command, "format"), tmp_path, set())
 
 
+NESTED = {
+    "sub/ruff.toml selects": ("sub/ruff.toml", '[lint]\nselect = ["E501"]\n'),
+    "sub/ruff.toml excludes": ("sub/ruff.toml", 'exclude = ["*.py"]\n'),
+    "sub/pyproject.toml selects": (
+        "sub/pyproject.toml",
+        '[tool.ruff.lint]\nselect = ["E501"]\n',
+    ),
+}
+
+
+@pytest.mark.parametrize("name", NESTED)
+def test_a_ruff_config_below_a_gate_root_needs_its_own_gate_group(
+    tmp_path: Path, name: str
+) -> None:
+    """HE-NO-SWITCH-OFF: ruff reads the closest config for each file, so a config below the root must be a gate root itself."""
+    file, text = NESTED[name]
+    root = project(
+        tmp_path, {"main.py": "import os\n", "sub/a.py": "import os\n", file: text}
+    )
+    with pytest.raises(ValueError, match="give it its own gate group"):
+        validate_resolved(root, lint_groups((".", LINT)), 900)
+
+
+FALLOW = {
+    "dynamicallyLoaded": {"dynamicallyLoaded": ["src/**"]},
+    "entry wildcard": {"entry": ["src/*.ts"]},
+    "ignoreExports": {"ignoreExports": [{"file": "src/a.ts", "exports": ["*"]}]},
+    "duplicates.ignore": {"duplicates": {"ignore": ["src/**"]}},
+    "minTokens": {"duplicates": {"minTokens": 100000}},
+    "skipLocal": {"duplicates": {"skipLocal": True}},
+}
+
+
+@pytest.mark.parametrize("name", FALLOW)
+def test_a_fallow_setting_that_hides_findings_is_refused(
+    tmp_path: Path, name: str
+) -> None:
+    """HE-NO-SWITCH-OFF: each key `fallow config` prints is free, equal to its default or proven; the rest fail."""
+    need_fallow()
+    root = project(
+        tmp_path,
+        {
+            ".fallowrc.json": json.dumps(FALLOW[name]),
+            "src/a.ts": "export const a = 1;\n",
+        },
+    )
+    with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+        validate_resolved(root, fallow_groups(), 900)
+
+
 def test_loading_a_gate_runs_no_git_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -202,3 +252,36 @@ def test_a_fallow_gate_flag_that_loosens_the_duplicate_scan_is_refused(
 ) -> None:
     with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
         validate_gate(gate([*DEAD, *flags], "dead-code-duplicates"), tmp_path, set())
+
+
+def test_a_fallow_config_below_a_gate_root_needs_its_own_gate_group(
+    tmp_path: Path,
+) -> None:
+    need_fallow()
+    files = {
+        "src/a.ts": "export const a = 1;\n",
+        "sub/.fallowrc.json": "{}",
+        "sub/b.ts": "export const b = 1;\n",
+    }
+    root = project(tmp_path, files)
+    with pytest.raises(ValueError, match="give it its own gate group"):
+        validate_resolved(root, fallow_groups(), 900)
+    every: list[Group] = [
+        *fallow_groups(),
+        {
+            "path": "sub",
+            "language": "javascript",
+            "checks": [gate(DEAD, "dead-code-duplicates")],
+        },
+    ]
+    validate_resolved(root, every, 900)
+
+
+def test_a_nested_ruff_config_that_sets_only_the_target_version_passes(
+    tmp_path: Path,
+) -> None:
+    root = project(
+        tmp_path,
+        {"main.py": "x = 1\n", ".hooks/ruff.toml": 'target-version = "py312"\n'},
+    )
+    validate_resolved(root, lint_groups((".", LINT)), 900)

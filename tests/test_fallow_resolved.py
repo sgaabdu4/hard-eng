@@ -46,8 +46,8 @@ SWITCHED_OFF = [
         "rule unused-exports is off",
     ),
     ({"ignoreFindings": ["anything"]}, "ignoreFindings"),
-    ({"entry": ["src/**/*.ts"]}, "entry 'src/\\*\\*/\\*.ts'"),
-    ({"duplicates": {"enabled": False}}, "duplicates.enabled is false"),
+    ({"entry": ["src/**/*.ts"]}, "entry lists 'src/\\*\\*/\\*.ts'"),
+    ({"duplicates": {"enabled": False}}, "duplicates.enabled is False"),
     ({"ignorePatterns": ["src/**"]}, r"does not check src/a\.ts"),
 ]
 

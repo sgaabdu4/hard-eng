@@ -243,3 +243,27 @@ def test_a_line_added_inside_a_wrapped_cfg_attr_is_a_switch_off(
     root = change(tmp_path, "src/lib.rs", before, after)
     with pytest.raises(ValueError, match=r"src/lib.rs:\d adds"):
         validate_suppressions(root, "HEAD")
+
+
+def test_a_rust_file_without_cfg_attr_is_not_masked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The quick check tests the text for `cfg_attr` first, so an ordinary Rust file costs no masking."""
+    import comments
+
+    def refuse(*_arguments: object) -> str:
+        raise AssertionError("masked a file that holds no cfg_attr")
+
+    monkeypatch.setattr(comments, "code_without_comments", refuse)
+    monkeypatch.setattr(comments, "without_literals", refuse)
+    source = "fn a() {}\n" * 50
+    root = project(tmp_path, {"src/lib.rs": source})
+    assert (
+        comments.rust_cfg_attr_hits(root, "src/lib.rs", [(1, "fn a() {}")], "adds")
+        == []
+    )
+    wrapped = project(
+        tmp_path / "w", {"src/lib.rs": "#[cfg_attr(test, derive(Debug))]\nstruct A;\n"}
+    )
+    with pytest.raises(AssertionError, match="masked"):
+        comments.rust_cfg_attr_hits(wrapped, "src/lib.rs", [(1, "x")], "adds")

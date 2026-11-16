@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+import tomllib
 from pathlib import Path, PurePosixPath
 
 from gate_config import generated_sources
@@ -124,4 +125,43 @@ def refusal(left: list[str]) -> list[str]:
     more = f" and {len(left) - 1} more" if len(left) > 1 else ""
     return [
         f"the tool does not check {left[0]}{more}, which git tracks; every tracked source file must be checked, or be linguist-generated or belong to a child gate group"
+    ]
+
+
+RUFF_CONFIGS = {"ruff.toml", ".ruff.toml", "pyproject.toml"}
+FALLOW_CONFIGS = {".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"}
+FREE_RUFF_KEYS = {"target-version"}
+
+
+def only_free_keys(name: str, directory: Path) -> bool:
+    """A ruff config that sets nothing but keys that cannot change what is reported."""
+    try:
+        config = tomllib.loads((directory / name).read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    if PurePosixPath(name).name == "pyproject.toml":
+        tool = config.get("tool")
+        config = tool.get("ruff") if isinstance(tool, dict) else None
+        if config is None:
+            return True
+    return isinstance(config, dict) and set(config) <= FREE_RUFF_KEYS
+
+
+def nested_configs(directory: Path, tool: str, roots: frozenset[Path]) -> list[str]:
+    """A tool config below a gate root that is not a gate root itself: the tool would read it for some files and the gate would not judge it."""
+    wanted = RUFF_CONFIGS if tool == "ruff" else FALLOW_CONFIGS
+    own = installed_files(directory)
+    found = []
+    for name in tracked(directory, tuple(wanted)):
+        path = PurePosixPath(name)
+        if path.name not in wanted or not path.parent.parts or name in own:
+            continue
+        if (directory / path.parent).resolve() in roots:
+            continue
+        if tool == "ruff" and only_free_keys(name, directory):
+            continue
+        found.append(name)
+    return [
+        f"{name} configures {tool} below the gate root {directory.name or '.'}; give it its own gate group"
+        for name in found
     ]
