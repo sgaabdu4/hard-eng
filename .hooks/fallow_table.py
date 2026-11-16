@@ -156,8 +156,24 @@ def override_limit_hits(value: object) -> list[str]:
     return hits
 
 
+def named_hit(name: str, text: str, covered: Callable[[str], str]) -> str:
+    """A glob entry is refused; it is told to go when a plugin or a package script already finds every file it names."""
+    if name == "entry" and (found := covered(text)):
+        return (
+            f"{name} lists {text!r}: Fallow's {found} already finds "
+            "these files; remove the entry"
+        )
+    return (
+        f"{name} lists {text!r}, a glob that marks many files; list each file by name"
+    )
+
+
 def judge_key(
-    name: str, value: object, default: object, drop: Callable[[list[str]], list[str]]
+    name: str,
+    value: object,
+    default: object,
+    drop: Callable[[list[str]], list[str]],
+    covered: Callable[[str], str],
 ) -> list[str]:
     kind = FALLOW_KEYS.get(name)
     if kind is None and not any(name.startswith(item) for item in FALLOW_PREFIXES):
@@ -172,7 +188,7 @@ def judge_key(
         return override_limit_hits(value)
     if kind == "named":
         return [
-            f"{name} lists {text!r}, a glob that marks many files; list each file by name"
+            named_hit(name, text, covered)
             for text in strings(value)
             if any(mark in text for mark in GLOB_CHARACTERS)
         ]
@@ -185,11 +201,12 @@ def judge(
     config: dict[str, object],
     defaults: dict[str, object],
     drop: Callable[[list[str]], list[str]],
+    covered: Callable[[str], str],
 ) -> list[str]:
     """What the printed Fallow config does wrong, key by key, compared with Fallow's own defaults."""
     base = flatten(defaults)
     hits = rule_hits(config, defaults)
     for name, value in flatten(config).items():
         if name not in {"rules", "overrides"}:
-            hits += judge_key(name, value, base.get(name), drop)
+            hits += judge_key(name, value, base.get(name), drop, covered)
     return hits

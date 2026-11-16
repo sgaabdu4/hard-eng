@@ -275,14 +275,14 @@ def fallow_known_failure(invocation: list[str], report: Report) -> str | None:
         return (
             "Fallow scans must cover the whole project; remove "
             + ", ".join(left)
-            + " from the gate command; to scan one package, give it its own gate group in that package's folder, and boundary rules already run in the combined scan"
+            + " from the gate command; to scan one package, give it its own gate group in that package's folder; a gate that only checks boundary rules is not needed, so delete this gate and its package script, because the combined scan already checks them"
         )
     if "audit" not in invocation:
         if "--fail-on-issues" not in invocation:
             return "Fallow scans must fail on every finding; add --fail-on-issues"
         only = option(invocation, "--only")
         if (word := subcommand(invocation)) in ANALYSIS_COMMANDS:
-            return f"Fallow scans must check health, so complex and untested code fails; drop the {word} subcommand to run the combined scan"
+            return f"Fallow scans must check health, so complex and untested code fails; drop the {word} subcommand to run the combined scan; a gate that only checks boundary rules is not needed, so delete this gate and its package script, because the combined scan already checks them"
         if only is not None and "health" not in only.split(","):
             return "Fallow scans must check health, so complex and untested code fails; add health to --only"
         if "health" in (option(invocation, "--skip") or "").split(","):

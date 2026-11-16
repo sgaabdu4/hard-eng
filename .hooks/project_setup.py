@@ -23,7 +23,6 @@ from gate_config import (
     dart_scan_includes_boundaries,
     generated_sources,
     repository_files,
-    typescript_packages,
 )
 from hook_chain import is_own
 from project_files import (
@@ -366,14 +365,13 @@ def dependency_command(directory: Path, language: str) -> tuple[str, list[str], 
 def adapt_packages(root: Path, config: GateConfig) -> None:
     files = repository_files(root)
     owned = owned_files(root, config["packages"], files)
-    typescript = typescript_packages(root, files)
     tracked = {str(path.relative_to(root)) for path in files}
     locks: dict[str, Path] = {}
     for package in config["packages"]:
         directory = root / package["path"]
         adapt_sources(root, package, owned[directory])
         locks[package["path"]] = directory / adapt_package(directory, package)
-        adapt_boundaries(package, typescript)
+        adapt_boundaries(package)
         for gate in package["checks"]:
             if gate.get("role") == "security":
                 gate["command"] = [
@@ -387,7 +385,7 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     refuse_ignored_locks(root, own, tracked, ask_git=True)
 
 
-def adapt_boundaries(package: Group, typescript: set[str]) -> None:
+def adapt_boundaries(package: Group) -> None:
     if package.get("language") == "dart" and any(
         dart_scan_includes_boundaries(gate) for gate in package["checks"]
     ):
@@ -409,21 +407,20 @@ def adapt_boundaries(package: Group, typescript: set[str]) -> None:
             gate for gate in package["checks"] if gate not in generated
         ]
         return
-    required = (
-        str(Path(package["path"])) in typescript or package.get("language") == "dart"
-    )
-    if required and not any(
+    if package.get("language") == "dart" and not any(
         gate.get("role") == "boundaries" for gate in package["checks"]
     ):
         package["checks"].append(
             {
                 "name": "lint:boundaries",
                 "role": "boundaries",
-                "command": (
-                    ["dart-decimate", "check", ".", "--boundary-violations", "--strict"]
-                    if package.get("language") == "dart"
-                    else ["bun", "run", "lint:boundaries"]
-                ),
+                "command": [
+                    "dart-decimate",
+                    "check",
+                    ".",
+                    "--boundary-violations",
+                    "--strict",
+                ],
             }
         )
 

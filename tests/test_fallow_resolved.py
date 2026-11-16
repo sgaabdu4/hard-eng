@@ -156,3 +156,40 @@ def test_a_nested_config_that_switches_a_check_off_is_refused(tmp_path: Path) ->
     )
     with pytest.raises(ValueError, match=r"ignoreFindings"):
         validate_resolved(root, groups(".", "apps/web", "apps/api"), 900)
+
+
+PLAYWRIGHT = {
+    "package.json": json.dumps({"devDependencies": {"@playwright/test": "1.0.0"}}),
+    "playwright.config.ts": "export default { testDir: 'e2e', testMatch: '**/*.e2e.ts' };\n",
+    "e2e/a.e2e.ts": "export const a = 1;\n",
+}
+
+
+def test_an_entry_glob_that_a_plugin_already_covers_names_the_plugin(
+    tmp_path: Path,
+) -> None:
+    root = repo(
+        tmp_path,
+        {**PLAYWRIGHT, ".fallowrc.json": settings(entry=["e2e/**/*.e2e.ts"])},
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"entry lists 'e2e/\*\*/\*\.e2e\.ts'[^\n]*playwright[^\n]*remove the entry",
+    ):
+        validate_resolved(root, groups("."), 900)
+
+
+def test_an_entry_glob_for_files_no_plugin_finds_asks_for_names(
+    tmp_path: Path,
+) -> None:
+    root = repo(
+        tmp_path,
+        {
+            **PLAYWRIGHT,
+            "scripts/run.ts": "export const run = 1;\n",
+            ".fallowrc.json": settings(entry=["scripts/*.ts"]),
+        },
+    )
+    with pytest.raises(ValueError, match=r"list each file by name") as refused:
+        validate_resolved(root, groups("."), 900)
+    assert "already finds" not in str(refused.value)

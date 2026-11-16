@@ -110,6 +110,47 @@ def listed_files(directory: Path, config: str | None, timeout: float) -> set[str
     )
 
 
+def entry_sources(
+    directory: Path, printed: dict[str, object], timeout: float
+) -> dict[str, str]:
+    """Each entry point that Fallow finds with no manual `entry` list, with the plugin or package script that finds it."""
+    without = {name: value for name, value in printed.items() if name != "entry"}
+    with tempfile.TemporaryDirectory(prefix="hard-eng-fallow-") as folder:
+        path = Path(folder) / "config.json"
+        path.write_text(json.dumps(without))
+        done = subprocess.run(
+            ["fallow", "list", "--entry-points", "--format", "json", "-c", str(path)],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    if done.returncode:
+        raise ValueError(
+            f"HE-NO-SWITCH-OFF: fallow cannot list the entry points of this gate: {done.stderr.strip()}"
+        )
+    items = json.loads(done.stdout).get("entry_points")
+    return {
+        item["path"]: str(item.get("source", ""))
+        for item in items or []
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    }
+
+
+def covering(checked: set[str], found: dict[str, str]) -> Callable[[str], str]:
+    """For an entry glob, the names of what finds all its files already, or nothing when any file is found only by the glob."""
+
+    def covered(glob: str) -> str:
+        pattern = glob_regex(glob)
+        matched = {name for name in checked if pattern.fullmatch(name)}
+        if not matched or not matched <= found.keys():
+            return ""
+        return ", ".join(sorted({found[name] for name in matched}))
+
+    return covered
+
+
 def fallow_hits(
     directory: Path,
     config: str | None,
@@ -121,4 +162,6 @@ def fallow_hits(
     checked = listed_files(directory, config, timeout)
     left = left_out(directory, FALLOW_SUFFIXES, checked, children, FALLOW_SKIPPED)
     drop = pattern_hits(directory, children)
-    return [*judge(printed, defaults, drop), *refusal(left)]
+    found = entry_sources(directory, printed, timeout) if printed.get("entry") else {}
+    covered = covering(checked, found)
+    return [*judge(printed, defaults, drop, covered), *refusal(left)]

@@ -289,7 +289,7 @@ def test_a_fallow_gate_that_narrows_the_scan_fails(
     """HE-NO-SWITCH-OFF: the combined scan covers the whole project; a path, workspace, root or changed-since filter leaves files out."""
     with pytest.raises(
         ValueError,
-        match=r"Fallow scans must cover the whole project[\s\S]*own gate group[\s\S]*combined scan",
+        match=r"Fallow scans must cover the whole project[\s\S]*own gate group[\s\S]*delete this gate[\s\S]*combined scan",
     ):
         fallow_gate(tmp_path, [*SCAN, *extra])
     fallow_gate(tmp_path, SCAN)

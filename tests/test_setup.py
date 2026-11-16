@@ -174,58 +174,41 @@ def test_react_and_existing_project_scripts_are_gated(
 
 
 @pytest.mark.parametrize(
-    ("source", "required"),
-    [
-        ("src/app.ts", True),
-        ("src/app.tsx", True),
-        ("src/app.mts", True),
-        ("src/app.cts", True),
-        ("src/app.js", False),
-        ("tests/app.test.ts", False),
-        ("src/types.d.ts", False),
-    ],
+    "source",
+    ["src/app.ts", "src/app.tsx", "src/app.mts", "src/app.cts", "src/app.js"],
 )
-def test_typescript_packages_require_boundary_gate(
-    installer: ModuleType, tmp_path: Path, source: str, required: bool
+def test_a_typescript_package_needs_no_separate_boundary_gate(
+    installer: ModuleType, tmp_path: Path, source: str
 ) -> None:
+    """The combined Fallow scan, which every JavaScript package must run, checks the boundary rules."""
     repository(tmp_path)
     target = tmp_path / source
     target.parent.mkdir()
     target.write_text("export const value = 1;\n")
     config = installer.gate_config(tmp_path)
     package = config["packages"][0]
-    boundary = [gate for gate in package["checks"] if gate.get("role") == "boundaries"]
-    assert bool(boundary) == required
+    assert not [gate for gate in package["checks"] if gate.get("role") == "boundaries"]
+    assert any(gate.get("role") == "dead-code-duplicates" for gate in package["checks"])
     validate_required_checks(tmp_path, config)
-    if required:
-        package["checks"].remove(boundary[0])
-        for path in (".", "./"):
-            package["path"] = path
-            with pytest.raises(ValueError, match="boundaries"):
-                validate_required_checks(tmp_path, config)
 
 
-def test_existing_gate_config_gets_boundary_gate_once(
+def test_an_update_adds_no_boundary_gate_and_keeps_a_project_own(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
     (tmp_path / "app.ts").write_text("export const value = 1;\n")
-    command = ["bun", "run", "lint:boundaries"]
     config = installer.gate_config(tmp_path)
-    package = config["packages"][0]
-    package["checks"] = [
-        gate for gate in package["checks"] if gate.get("role") != "boundaries"
-    ]
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     installer.install(tmp_path)
     installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
-    boundary = next(
-        gate
-        for gate in installed["packages"][0]["checks"]
-        if gate.get("role") == "boundaries"
-    )
-    assert boundary["command"] == command
-    boundary["command"] = [command[0], "run", "project-architecture"]
+    checks = installed["packages"][0]["checks"]
+    assert not any(gate.get("role") == "boundaries" for gate in checks)
+    own = {
+        "name": "project-architecture",
+        "role": "boundaries",
+        "command": ["bun", "run", "project-architecture"],
+    }
+    checks.append(own)
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(installed))
     installer.install(tmp_path)
     assert json.loads((tmp_path / "hard-eng.gates.json").read_text()) == installed
@@ -597,7 +580,7 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     validate_required_checks(tmp_path, config)
     assert "language" not in root
     assert not any(gate.get("role") == "boundaries" for gate in root["checks"])
-    assert any(gate.get("role") == "boundaries" for gate in app["checks"])
+    assert not any(gate.get("role") == "boundaries" for gate in app["checks"])
     assert app["sources"] == ["src"]
     assert (
         sum(

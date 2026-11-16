@@ -71,9 +71,8 @@ def test_vite_starter_replaces_oxlint_and_pins_after_the_scaffold(
     manifest = json.loads((tmp_path / "package.json").read_text())
     assert "lint" not in manifest["scripts"]
     assert manifest["scripts"]["build"] == "tsc -b && vite build"
-    assert {"test:coverage", "test:performance", "lint:boundaries"} <= set(
-        manifest["scripts"]
-    )
+    assert {"test:coverage", "test:performance"} <= set(manifest["scripts"])
+    assert "lint:boundaries" not in manifest["scripts"]
     assert "oxlint" not in manifest["devDependencies"]
     assert manifest["devDependencies"]["@types/bun"] == "latest"
     assert manifest["devDependencies"]["fallow"] == "latest"
