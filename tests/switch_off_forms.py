@@ -44,7 +44,7 @@ SWITCHES = [
     ("a.ts", "const k = 'x'; // gitleaks" + ":allow\n", "gitleaks" + ":allow"),
     ("config.yml", "key: x  # gitleaks" + ":allow\n", "gitleaks" + ":allow"),
     (
-        ".gitleaksignore",
+        "app/.gitleaksignore",
         "abc:config.yml:generic-api-key:1\n",
         "abc:config.yml:generic-api-key:1",
     ),

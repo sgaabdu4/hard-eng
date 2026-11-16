@@ -69,7 +69,7 @@ FORMS = [
     ("a.txt", "no" + "semgrep here\n"),
     ("a.py", "# first\n# second\nx = 1\n"),
     ("a.sh", "echo\n# first\n# second\n"),
-    (".gitleaksignore", "abc:config.yml:generic-api-key:1\n"),
+    ("sub/.gitleaksignore", "abc:config.yml:generic-api-key:1\n"),
     (".semgrepignore", "src/\n"),
 ]
 

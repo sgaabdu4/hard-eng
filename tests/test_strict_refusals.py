@@ -8,6 +8,7 @@ from types import ModuleType
 import pytest
 from comments import validate_rules, validate_suppressions
 from conftest import SOURCE, commit, configure, gate, git, init
+from gitleaks_entries import validate_entries
 from requirement_registry import registry_entries
 from switch_off_forms import RETRY_FORMS, SWITCHES
 from whole_project import NEEDS_NO_LINK, NEEDS_NO_LINK_FOLDERS, validate_whole_project
@@ -73,9 +74,10 @@ def test_binary_files_are_not_read_and_crlf_lines_keep_their_numbers(
     (root / "lib.ts").write_bytes(b"// \xff\0\nconst a = 1; // TO" + b"DO later\n")
     assert "lib.ts:2 holds a TODO marker" in refusal(root)
     (root / "lib.ts").unlink()
-    (root / ".gitleaksignore").write_bytes(b"\xff\0\nabc:rule:1\n")
-    assert ".gitleaksignore:2 holds" in refusal(root)
-    (root / ".gitleaksignore").unlink()
+    (root / "sub").mkdir()
+    (root / "sub/.gitleaksignore").write_bytes(b"\xff\0\nabc:rule:1\n")
+    assert "sub/.gitleaksignore:2 holds" in refusal(root)
+    (root / "sub/.gitleaksignore").unlink()
     (root / "app.py").write_bytes(HIDDEN.replace("\n", "\r\n").encode())
     assert "app.py:2 holds" in refusal(root)
 
@@ -112,6 +114,21 @@ def test_gitleaks_disabled_rules_fail(tmp_path: Path) -> None:
     message = refusal(project(tmp_path / "off", {".gitleaks.toml": off}))
     assert ".gitleaks.toml:3 disables the rules ['aws-access-token']" in message
     assert "fix the cause" in message
+
+
+def test_a_gitleaks_config_that_drops_the_default_rules_fails(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a config without `[extend] useDefault = true` scans with its own rules alone, so it fails; the extended form passes."""
+    own = "[[rules]]\nid = 'mine'\nregex = '''AKIA[A-Z0-9]{16}'''\n"
+    for name, text in {
+        "own": own,
+        "empty": "",
+        "false": "[extend]\nuseDefault = false\n",
+    }.items():
+        message = refusal(project(tmp_path / name, {".gitleaks.toml": text}))
+        assert ".gitleaks.toml:1 drops the default rules" in message, name
+    validate_whole_project(
+        project(tmp_path / "kept", {".gitleaks.toml": DETECTION_ONLY})
+    )
 
 
 DART_FORMS = [
@@ -455,7 +472,7 @@ def test_one_run_reports_every_kind_and_every_hit(tmp_path: Path) -> None:
         "b.py": "x = 1  # TO" + "DO later\n",
         "c.py": OLD_BLOCK,
         "notes/extra.md": "text\n",
-        ".gitleaks.toml": "[allowlist]\npaths = ['a']\n[extend]\ndisabledRules = ['x']\n",
+        ".gitleaks.toml": "[allowlist]\npaths = ['a']\n[extend]\nuseDefault = true\ndisabledRules = ['x']\n",
     }
     groups: list[tuple[str, list[str]]] = []
     for line in refusal(project(tmp_path, files)).splitlines():
@@ -470,7 +487,7 @@ def test_one_run_reports_every_kind_and_every_hit(tmp_path: Path) -> None:
         "HE-NAMED-MARKDOWN",
     ]
     assert [[hit.split(" ")[0] for hit in hits] for _, hits in groups] == [
-        [".gitleaks.toml:1", ".gitleaks.toml:4", "a.py:2", "a.py:3"],
+        [".gitleaks.toml:1", ".gitleaks.toml:5", "a.py:2", "a.py:3"],
         ["b.py:1"],
         ["c.py:1"],
         ["notes/extra.md:1"],
@@ -543,3 +560,90 @@ def test_the_markdown_entry_points_to_the_list_and_does_not_copy_it() -> None:
         if word.lower() in prose
     ]
     assert copied == []
+
+
+KEY = 'token = "AKIA' + 'IOSFODNN7EXAMPLQ"\n'
+RULE = "aws-access-token"
+
+
+def leaky_project(tmp_path: Path, removed: bool = True) -> tuple[Path, str]:
+    """A repository whose first commit holds a key that a later commit removes."""
+    root = project(tmp_path, {"secret.txt": KEY})
+    past = git(root, "rev-parse", "HEAD")
+    if removed:
+        (root / "secret.txt").unlink()
+        commit(root, "remove")
+    return root, past
+
+
+def judged(root: Path, entry: str) -> str:
+    (root / ".gitleaksignore").write_text(entry + "\n")
+    try:
+        validate_entries(root, 900)
+    except ValueError as error:
+        return str(error)
+    return ""
+
+
+def test_a_gitleaks_entry_for_a_past_commit_passes(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: an entry passes when today's scan finds it and the key is gone from the current files."""
+    root, past = leaky_project(tmp_path)
+    assert judged(root, f"{past}:secret.txt:{RULE}:1") == ""
+
+
+@pytest.mark.parametrize(
+    ("entry", "removed", "reason"),
+    [
+        (f"{{past}}:secret.txt:{RULE}:9", True, "stale"),
+        (f"{{past}}:secret.txt:{RULE}:1", False, "still in the current tree"),
+        (f"secret.txt:{RULE}:1", False, "is not in a linguist-generated file"),
+        (f"{'a' * 40}:secret.txt:{RULE}:1", True, "commit is not in this clone"),
+        ("not a fingerprint", True, "stale"),
+    ],
+)
+def test_a_stale_or_current_gitleaks_entry_fails(
+    tmp_path: Path, entry: str, removed: bool, reason: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a stale entry, an entry whose finding is still in the files and an entry with no commit all fail."""
+    root, past = leaky_project(tmp_path, removed)
+    message = judged(root, entry.format(past=past))
+    assert OFF in message
+    assert ".gitleaksignore:1 holds" in message
+    assert reason in message
+
+
+def test_a_gitleaks_entry_in_a_generated_file_passes(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a `linguist-generated` file may keep its finding; a `linguist-vendored` file may not."""
+    root, _ = leaky_project(tmp_path, removed=False)
+    entry = f"secret.txt:{RULE}:1"
+    (root / ".gitattributes").write_text("secret.txt linguist-vendored=true\n")
+    assert "is not in a linguist-generated file" in judged(root, entry)
+    (root / ".gitattributes").write_text("secret.txt linguist-generated=true\n")
+    assert judged(root, entry) == ""
+
+
+def test_the_quick_check_leaves_root_gitleaks_entries_to_the_full_check(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: the quick check runs no scan; a root entry waits for the full check and any other entry file stays refused."""
+    root = project(tmp_path, {})
+    base = git(root, "rev-parse", "HEAD")
+    (root / ".gitleaksignore").write_text(f"abc:secret.txt:{RULE}:1\n")
+    validate_suppressions(root, base)
+    validate_whole_project(root)
+    (root / "sub").mkdir()
+    (root / "sub/.gitleaksignore").write_text(f"abc:secret.txt:{RULE}:1\n")
+    with pytest.raises(ValueError, match=OFF):
+        validate_suppressions(root, base)
+    assert "sub/.gitleaksignore:1 holds" in refusal(root)
+
+
+def test_the_full_check_judges_root_gitleaks_entries(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    """HE-NO-SWITCH-OFF: the full check scans for each root entry once the tools are in place; the quick check runs no scan."""
+    configure(tmp_path, [gate("suite", "pass", role="lint", parallel=True)])
+    (tmp_path / ".gitleaksignore").write_text(f"{'a' * 40}:x.txt:{RULE}:1\n")
+    assert runner.check(quick=True) == 0
+    with pytest.raises(ValueError, match="commit is not in this clone"):
+        runner.check(quick=False)

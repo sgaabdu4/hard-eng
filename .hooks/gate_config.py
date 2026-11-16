@@ -223,14 +223,17 @@ def typescript_packages(root: Path, files: list[Path]) -> set[str]:
     return packages
 
 
+GENERATED_KEYS = {"linguist-generated", "linguist-vendored"}
 LISTED: dict[Path, tuple[frozenset[str], set[str]]] = {}
 
 
-def generated_sources(root: Path, names: list[str]) -> set[str]:
+def generated_sources(
+    root: Path, names: list[str], generated_only: bool = False
+) -> set[str]:
     if not names:
         return set()
     listed, generated = LISTED.get(root, (frozenset(), set()))
-    if listed.issuperset(names):
+    if listed.issuperset(names) and not generated_only:
         return generated.intersection(names)
     import tempfile
 
@@ -261,7 +264,7 @@ def generated_sources(root: Path, names: list[str]) -> set[str]:
     return {
         name
         for name, key, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
-        if key in {"linguist-generated", "linguist-vendored"}
+        if key in ({"linguist-generated"} if generated_only else GENERATED_KEYS)
         and value in {"set", "true"}
     }
 
