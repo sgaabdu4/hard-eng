@@ -120,6 +120,10 @@ CLIPPY = [
     ("too-many-arguments-threshold = 8\n", "too-many-arguments-threshold"),
     ("too-many-lines-threshold = 200\n", "too-many-lines-threshold"),
     ("type-complexity-threshold = 500\n", "type-complexity-threshold"),
+    ("max-struct-bools = 4\n", "max-struct-bools"),
+    ("max-fn-params-bools = 4\n", "max-fn-params-bools"),
+    ("large-error-threshold = 256\n", "large-error-threshold"),
+    ("max-trait-bounds = 9\n", "max-trait-bounds"),
 ]
 
 
@@ -134,3 +138,13 @@ def test_a_raised_clippy_threshold_is_a_switch_off(
 def test_clippy_thresholds_at_or_below_the_default_pass(tmp_path: Path) -> None:
     kept = 'cognitive-complexity-threshold = 25\ntoo-many-arguments-threshold = 5\ndisallowed-names = ["foo"]\nmsrv = "1.70"\n'
     validate_whole_project(project(tmp_path, {"clippy.toml": kept}))
+
+
+def test_every_clippy_limit_is_a_key_that_clippy_reads() -> None:
+    """The list is Clippy's own numeric keys; the bool names that Clippy rejects as unknown fields are not in it."""
+    from rust_settings import CLIPPY_DEFAULTS
+
+    assert "struct-excessive-bools" not in CLIPPY_DEFAULTS
+    assert "fn-params-excessive-bools" not in CLIPPY_DEFAULTS
+    assert CLIPPY_DEFAULTS["max-struct-bools"] == 3
+    assert len(CLIPPY_DEFAULTS) >= 20

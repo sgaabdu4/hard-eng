@@ -1,26 +1,35 @@
-"""Refuse Rust settings that allow lints: compiler flags and Clippy limits above their defaults."""
+"""Refuse Rust settings that allow lints: compiler flags and Clippy limits above their defaults (the numeric keys of Clippy 0.1.99 whose raise relaxes a lint, from its lint configuration book)."""
 
 import re
 import tomllib
 
 CLIPPY_FILES = {"clippy.toml", ".clippy.toml"}
 CLIPPY_DEFAULTS = {
+    "absolute-paths-max-segments": 2,
+    "array-size-threshold": 16384,
     "cognitive-complexity-threshold": 25,
+    "const-literal-digits-threshold": 30,
+    "enum-variant-name-threshold": 3,
+    "enum-variant-size-threshold": 200,
+    "future-size-threshold": 16384,
+    "large-error-threshold": 128,
+    "literal-representation-threshold": 16384,
+    "max-fn-params-bools": 3,
+    "max-include-file-size": 1000000,
+    "max-struct-bools": 3,
+    "max-suggested-slice-pattern-length": 3,
+    "max-trait-bounds": 3,
+    "pass-by-value-size-limit": 256,
+    "single-char-binding-names-threshold": 4,
+    "stack-size-threshold": 512000,
+    "struct-field-name-threshold": 3,
+    "too-large-for-stack": 200,
     "too-many-arguments-threshold": 7,
     "too-many-lines-threshold": 100,
     "type-complexity-threshold": 250,
-    "large-error-threshold": 128,
-    "enum-variant-size-threshold": 200,
-    "struct-excessive-bools": 3,
-    "fn-params-excessive-bools": 3,
-    "single-char-binding-names-threshold": 4,
-    "pass-by-value-size-limit": 256,
+    "unnecessary-box-size": 128,
     "vec-box-size-threshold": 4096,
-    "array-size-threshold": 16384,
-    "stack-size-threshold": 512000,
-    "literal-representation-threshold": 16384,
-    "max-suggested-slice-pattern-length": 3,
-    "enum-variant-name-threshold": 3,
+    "verbose-bit-mask-threshold": 1,
 }
 QUOTES = "\"',[]"
 
