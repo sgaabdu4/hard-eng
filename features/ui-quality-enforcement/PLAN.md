@@ -1,0 +1,208 @@
+# Hard Eng refuses a bad screen that nobody looked at
+
+Status: Draft
+
+## Outcome + scope
+
+Hard Eng proves screen quality three ways: measured checks, a fresh image review that must open every after image, and a refusal of `ux_reference` marked not applicable for a visible change. The plan `Rules:` lines stay a record, not proof. Non-goals: no new rule text beyond the gaps, no change to the Stop hook path, no paid service, no new visual testing platform.
+
+## Sources + coverage
+
+Sources: the user's message and 30 rule lines of 2026-11-16, read in full; the coordinator's incident summary of 2026-11-16 (private details removed by the coordinator), read in full; the coordinator's message of 2026-11-16 with the user's yes and the added items, read in full.
+Reviewer: a second reader read only the three sources and this plan, made its own item list first, and gave 9 findings, all repaired: rows now name their owning rule; a label fault joins the red fixture; the gap words get a text test; the look lines are named as the "Visible change" lines; the plan-check gap is stated; Dart helper files count as visible; the Swift row has a proof line; the fixture drops the incident's colour names; plain-language fixes.
+Deliverables: None
+
+- User line 1, idiot-proof (wrong action impossible or obvious, risky choices blocked, right answer filled in, "how could a rushed person get this wrong?"): In scope — Mistake-proof (lines 1 and 9)
+- User line 2, least cognitive load: In scope — No clutter names least cognitive load
+- User line 3, automate as much as possible: In scope — Observe (lines 3 and 4)
+- User line 4, least human intervention: In scope — Observe (lines 3 and 4)
+- User line 5, least clicks: In scope — Least effort (lines 5, 9 and 11)
+- User line 6, least visual fatigue: In scope — text below 14 px, more than 2 accent colours in one block
+- User line 7, clear visual hierarchy: In scope — two filled buttons with different fill colours in one action group
+- User line 8, every error clear and dumbed down: In scope — Messages (lines 8 and 15)
+- User line 9, an impatient user, more clicks than needed, not clear means failure: In scope — Mistake-proof (lines 1 and 9)
+- User line 10, destructive actions get more than one prompt: In scope — Undo (lines 10 and 12)
+- User line 11, the app acts on what it is sure about, with a filled-in suggestion: In scope — Least effort (lines 5, 9 and 11)
+- User line 12, one-tap Undo instead of "Are you sure?": In scope — Undo (lines 10 and 12)
+- User line 13, calm, uncluttered screens, labels with one meaning: In scope — No clutter (line 13)
+- User line 14, messages calm and positive: In scope — Messages says calm and positive
+- User line 15, a confused user means the app is at fault: In scope — Messages (lines 8 and 15)
+- User line 16, never a yes-man: In scope — Lines that rules outside the Usability list already own
+- User line 17, phone, tablet and desktop width: In scope — writes images at 390, 768 and 1280 px
+- User line 18, mockup from the real app before building: In scope — Lines that rules outside the Usability list already own
+- User line 19, performance in every plan: In scope — Performance (line 19)
+- User line 20, times in the user's local time: In scope — Time (lines 20 and 23)
+- User line 21, every staff action writes an audit row: In scope — Audit (line 21)
+- User line 22, a stopped automatic job tells a person at once: In scope — States (lines 22 and 24-26)
+- User line 23, time-zone and clock-change tests: In scope — Time (lines 20 and 23)
+- User line 24, one press saves once: In scope — States (lines 22 and 24-26)
+- User line 25, a slow or failed connection keeps typed input: In scope — States (lines 22 and 24-26)
+- User line 26, empty and first-use screens say what to do next: In scope — States (lines 22 and 24-26)
+- User line 27, tap areas at least 44 px, strong contrast, screen-reader labels: In scope — a button or form control under 44 × 44 px
+- User message, "didn't we agree on this": In scope — Why Hard Eng did not enforce this
+- User line 28, bug fixes start with a failing test, one named outcome per test: In scope — Lines that rules outside the Usability list already own
+- User line 29, one real save against the live system: In scope — Lines that rules outside the Usability list already own
+- User line 30, smallest change at the owner, no extras, no hidden lint errors: In scope — Lines that rules outside the Usability list already own
+- User message, "Hard Eng should enforce it": In scope — Red fixture, web
+- Incident, small grey centred line, accent line under it, two filled buttons pushed right with competing colours: In scope — Red fixture, web
+- Incident, builder report and second-model review wrote Pass and nobody opened the images: In scope — refuses a look run that did not open every image
+- Coordinator item, named rules for layout and alignment, spacing and design-system match: In scope — Alignment, Spacing and Design system
+- Coordinator item, proof that a reviewer or builder opened each screenshot, so a bare Pass cannot pass: In scope — refuses a look run that did not open every image
+- Coordinator item, refuse `ux_reference` marked not applicable when a `ui_paths` change alters what users see, removals included: In scope — refuse a `ux_reference` marked not applicable
+- Coordinator item, the code-review "Visible change" lines required when the PR has before and after pairs: In scope — PR with Before and After pairs and no look lines
+- Coordinator item, say why Hard Eng did not enforce this, and which items the gate enforces: In scope — Why Hard Eng did not enforce this
+- Builder's own limit, text floor 14 px, at most 2 accent colours in one block, controls 44 px and text links 24 px: Proposal — the numbers that make lines 6 and 27 measurable; links follow WCAG 2.5.8 because a well-made public page failed 44 px on every text link; yes — user, AGENTS.md ("This codebase is yours: what it's for and how it's built are your call")
+- Builder's own limit, two filled buttons of the same colour stay judgement: Proposal — a well-made public page uses two equal filled buttons for an equal choice, so only different fill colours are measured; yes — user, AGENTS.md ("This codebase is yours")
+- Builder's own rule, the look review runs the other agent and falls back to a fresh session of the same agent: Proposal — isolation, not model choice, is what the incident lacked, and a project with one agent CLI still needs the review; yes — user, AGENTS.md ("This codebase is yours")
+- Builder's own rule, the Flutter rules for filled buttons and text size go to the Flutter lint plugin that Hard Eng already requires in each Flutter app, through a PR in that plugin's own repository: Proposal — Hard Eng has no Flutter code of its own, and new Flutter rules belong in that owned plugin; yes — user, AGENTS.md ("This codebase is yours") and the owner's standing note that new Flutter best-practice rules belong in that plugin
+- Builder's own limit, SwiftUI and AppKit screens get the look review and the session proof only: In scope — A Swift-only visible change needs a clean look record
+- Builder's own limit, no measured check for SwiftUI and AppKit: Proposal — no measured check for them in this change; yes — user, AGENTS.md ("This codebase is yours")
+
+## Repository context
+
+Owners:
+- Rule text: [ux.md](../../.agents/skills/he-plan/references/ux.md) Usability list (7,889 bytes; Codex cuts a reference at 36,000, [test_skill_links.py](../../tests/test_skill_links.py) `REFERENCE_BYTES`). [review.md](../../.agents/skills/code-review/references/review.md) "Visible change" line. [e2e SKILL.md](../../.agents/skills/e2e/SKILL.md) and [browser.md](../../.agents/skills/e2e/references/browser.md) capture text. [checks.md](../../.agents/skills/he-ship/references/checks.md) "UI evidence in the PR" and "PR text".
+- Plan check: [plans.py](../../.hooks/plans.py) `usability_rules` reads the rule names from ux.md; `ux_rules` checks one line per rule; `ux_proof` accepts any `N/A — reason` for the whole section (`NOT_APPLICABLE_WITH_REASON`), whatever the diff holds.
+- Capture: [browser.py](../../.hooks/browser.py) `WIDTHS = (390, 1280)`, `capture_page` runs `PAGE_SCRIPT` (hides text, moves fixed bars), then a full-page screenshot. agent-browser 0.43.0 has `a11y [--tags] [--json]`, an axe-core 4.12.1 audit.
+- Ship: [ship_evidence.py](../../.hooks/ship_evidence.py) `attachment_urls` checks pair counts and distinct URLs; [shipping.py](../../.hooks/shipping.py) `_ui_evidence` checks each attachment is an image or video with a length. CI: [pr_text.py](../../.hooks/pr_text.py) runs the same pair form when the PR changes a `ui_paths` file.
+- Reviews: [challenge.py](../../.hooks/challenge.py) runs the other agent read-only on the diff and records the result at the Git path `hard-eng/challenge/<rev>.json`; its prompt sends the reviewer to the changed PLAN.md files, which hold the builder's Pass lines.
+- Stop path: [agent_hooks.py](../../.hooks/agent_hooks.py) `run_check` runs `check --quick`, and `gate_runner.run` validates plans on that path (`judged_stage`). So no new plan check goes into `plans.validate_plan`; the new checks live in `ship` and the CI `pr text` job.
+- Source rules: [ui_rules.py](../../.hooks/ui_rules.py) HE-UI-SOURCE (colour literals outside theme files, `is_theme_path`); [flutter_screens.py](../../.hooks/flutter_screens.py) finds each Flutter app folder and the files under its `lib/`.
+Same cause: the incident shows the cause shared by every Usability rule: a typed Pass line is the only record, and no stage checks it against the image. Earlier fix: the 2026-11-11 release added the Usability list and the one-line-per-rule check; it helped the text, and had no effect on the incident, because the builder and the review both typed Pass. Searched every place that takes a typed verdict about a screen: plan `Rules:` (plans.py), plan `ux_reference` marked not applicable (plans.py), the PR `UI appearance: unchanged` note (ship_evidence.py), the code-review "Visible change" line (review.md, no record), the challenge prompt (challenge.py). Each one is in scope below, except the `UI appearance: unchanged` note: it needs a comparison note and cannot stand with a pair, and the new `ux_reference` refusal covers the same visible change from the plan side.
+Single source:
+- Capture widths: `browser.py` `WIDTHS` is the owner; copies in the `USAGE` string, e2e SKILL.md line 33, browser.md lines 10 and 12 ("390 and 1280 px", "at 390 or 1280 px"), and `tests/agent_browser.py` `WIDTHS`. All change in this plan; the text says "the standard widths" and names the numbers once in browser.md.
+- Usability rule names: ux.md is the only owner; plans.py and the new look command read them through `usability_rules`.
+- Measured limits (44 px, 24 px, 14 px, 2 accent colours, AA contrast): one table in a new `.hooks/ui_measure.py`; ux.md states the numbers, and a test compares the ux.md text with the table.
+- Visible-change test: one function in the new `.hooks/ui_proof.py`, used by `ship` and the CI `pr text` job; it reuses `is_theme_path` and `COMMENT_LINE` from ui_rules.py and `_is_test` from plans.py.
+- Searched `.agents`, `.hooks`, `tests` and README for "390", "1280", "Visible change", "44", "Usability"; no other copy found.
+
+### Why Hard Eng did not enforce this
+
+- The plan check validates fields, not truth. The builder typed one Pass line per rule; nothing compared a line with an image.
+- `ux_reference: N/A — <reason>` passed with any reason. The check never looked at the diff, so a removal of two buttons from a screen file passed as nonvisual.
+- The ship check proves an attachment is an image. It does not measure the screen or prove that anyone opened it.
+- The code-review "Visible change" line is skill prose. No command records it, so no gate can ask for it. The independent review gets the diff and the plan with its Pass lines, and no images.
+- `browser capture` only takes pictures, at 2 widths. It measures nothing.
+- Alignment, spacing and design-system match were not named rules.
+
+### What the gate enforces after this change
+
+| Item                                                                 | Kind                                               | Gate check (where)                                                                                                                                     | Why this kind                                                                                                           |
+| -------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Accessibility: contrast, screen-reader labels                        | Measured                                           | web: axe through `browser capture` (`a11y --tags wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa`); Flutter: `textContrastGuideline`, `labeledTapTargetGuideline` in a widget test | WCAG AA is a number; axe and `flutter_test` compute it                                                                  |
+| Accessibility: tap size                                              | Measured                                           | web: box size, buttons and form controls 44 × 44 px, text links 24 × 24 px; Flutter: `iOSTapTargetGuideline`, `androidTapTargetGuideline`              | a box size is a number                                                                                                  |
+| Accessibility and visual fatigue: text size                          | Measured                                           | web: computed `font-size` under 14 px; Flutter: a the Flutter lint plugin rule on a literal `fontSize` under 14                                          | a number                                                                                                                |
+| Hierarchy: competing filled buttons                                  | Measured                                           | web: two or more filled buttons with different fill colours under one parent; Flutter: a the Flutter lint plugin rule on two filled buttons in one `Row` or `Wrap` | geometry and colour are readable; two equal filled buttons stay judgement (a well-made page uses them for an equal choice) |
+| Hierarchy and visual fatigue: accent colours                         | Measured                                           | web: more than 2 saturated colours in one block                                                                                                        | computed colours are readable                                                                                           |
+| Alignment                                                            | Measured on web, judgement on Flutter and Swift    | web: the text and the action group of one block start at more than one edge                                                                            | the web script reads text boxes; no project-free Flutter check exists                                                   |
+| Widths                                                               | Measured                                           | `browser capture` writes 390, 768 and 1280 px; a page wider than the window is a finding                                                               | a capture at each width is a fact                                                                                       |
+| Spacing, Design system                                               | Judgement, plus HE-UI-SOURCE for colour literals   | look review                                                                                                                                            | a spacing scale differs per project; a measured check misfires                                                         |
+| Mistake-proof, Least effort, Observe, Undo, No clutter, Messages     | Judgement, plus HE-NO-TEXT-WALLS for Messages       | look review; the plan keeps the click and element counts                                                                                               | they judge intent and flow, not pixels                                                                                  |
+| States, Time, Audit, Performance                                     | Tests, judged in review                            | existing tests named in the plan                                                                                                                       | an image cannot show them                                                                                               |
+| Each after image opened after it was last written                    | Session record                                     | `look` reads its own reviewer's record (Claude stream, Codex session file); `ship` reads the look record                                               | a script can check an image read; it cannot check a named detail                                                        |
+| Fresh judgement of each after image                                  | Judgement, made hard to skip                       | `ship` refuses a PR with pairs and no clean look record for the head; CI `pr text` refuses the body without the look lines                             | the reviewer gets only the images and the rules                                                                         |
+| `ux_reference` marked not applicable on a visible change                               | Gate                                               | `ship` and CI `pr text`                                                                                                                                | the diff decides, not the builder                                                                                       |
+| Named detail per image                                               | Judgement                                          | `look` checks that each image has a non-empty detail line                                                                                              | a script cannot check that the detail is true                                                                           |
+| Builder opened the images                                            | Not checked by the gate                            | none                                                                                                                                                   | the builder's session can run on another machine; the reviewer proof covers the same image hashes                      |
+| Plan `Rules:` Pass lines and a not-applicable `ux_reference` in the plan | Still accepted by the plan check                | refused later, at `ship` and CI `pr text`                                                                                                              | the plan check runs on the Stop hook path, which takes no new work; the PR cannot ship past the later checks         |
+
+### Coverage of the user's 30 lines
+
+Numbered from "Idiot-proof" (line 1) to "The smallest change" (line 30).
+
+| Lines                         | Owner today                                                        | State after this change                                  |
+| ----------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+| 1, 3-5, 7-13, 15, 19-27       | Usability list: Mistake-proof, Least effort, Observe, Undo, No clutter, Hierarchy, Messages, States, Time, Audit, Accessibility, Performance | covered; now each has a proof kind                       |
+| 16, 18                        | ux.md Grounding; HE-REAL-APP-PREVIEW                               | covered, unchanged                                       |
+| 28, 29, 30                    | AGENTS.md test rule; HE-REAL-SERVICE-RUN; HE-YAGNI and HE-NO-SWITCH-OFF | covered, unchanged                                   |
+| 2 (cognitive load)            | gap                                                                | No clutter names it                                      |
+| 6 (visual fatigue)            | gap                                                                | text size and accent colour limits                       |
+| 14 (calm and positive)        | partial: Messages says calm only                                   | Messages says calm and positive                          |
+| 17 (tablet)                   | partial: Widths says "each width the app supports"; capture has no tablet | Widths names 390, 768 and 1280 px                 |
+| incident: alignment, spacing, design system | gap                                                  | three new rules                                          |
+
+Line 14 is partial, not covered: Messages says calm but not positive. Line 17 is a gap: capture has no tablet width.
+
+## Decisions + authorization
+
+Blockers: None
+Handoff: Approval
+Authority: Human-loop. The user said yes to this plan through the coordinator on 2026-11-16 ("please plan the two Hard Eng UI additions you named"). This is a plan-only run: the build, the the Flutter lint plugin PR and the release wait for the user's approval of this plan.
+Decisions:
+
+1. Measurement runs inside `browser capture`, before its page script changes the page, at each width. It writes `<name>-<width>.json` next to each image, with the image's SHA-256 and the findings. A capture with findings still keeps its images, because a before image of an old screen may fail.
+2. `ship ready` and `ship merge` refuse a PR with Before and After pairs unless each After attachment has the same SHA-256 as a measured capture with no findings, in the checkout's `.hard-eng/browser/`. So a plain screenshot or an image from elsewhere cannot stand as an After image. A Flutter or Swift After image needs no measured record when every visible changed file is in a Flutter or Swift package.
+3. A changed Flutter screen file needs a widget test that imports it and calls `meetsGuideline` with `textContrastGuideline`, `labeledTapTargetGuideline`, `iOSTapTargetGuideline` and `androidTapTargetGuideline`. `ship` and CI `pr text` check this from the files. The test itself runs in the project's tests gate.
+4. A new command `python3 .hooks/hard-eng.py look <image>...` runs the fresh review. It copies the images into an empty temporary folder and gives the reviewer only those images and the Usability rules. It never names the repository, the plan, the diff or the builder's lines. The reviewer gives one `- <rule>: Pass|Fail|N/A — text` line per rule, one `Image <name>: <detail>` line per image and a verdict.
+5. `look` proves the reviewer opened each image. Claude: the `--output-format stream-json` stream holds a `Read` call of each image path with an `image` result. Codex: the `exec --json` stream gives the thread ID on its first line, and the session file `sessions/YYYY/MM/DD/rollout-*-<thread>.jsonl` holds an `ImageView` item for each path. An image with no read is `not done`, and `ship` refuses `not done`.
+6. `look` records at the Git path `hard-eng/look/<head>.json`: image hashes, read times, the rule lines and the verdict. The PR body carries the rule lines in a `Look review:` block. CI `pr text` refuses a PR with pairs and no block with one line per rule and no Fail. `ship` compares the block with the record. These look lines are the code-review "Visible change" lines: review.md tells the reviewer to run `look` and copy its lines, so the required lines are the ones a script can tie to opened images.
+7. Visible change, for the `ux_reference` refusal. The file matches `ui_paths` and is not a test or generated file. It has a changed line, added or removed, that is not blank or a comment. It is one of these kinds: a markup or style file (`.tsx`, `.jsx`, `.vue`, `.svelte`, `.astro`, `.html`, `.css`, `.scss`, `.less`); an image, font or SVG; a string catalog (`.arb`, or `.json` under `l10n`, `locales`, `i18n` or `messages`); a theme or token file; a Dart file under a Flutter `lib/` that names `Widget` anywhere, or whose changed lines hold a string literal (helper functions and extensions that build widgets count); a Swift file that declares a `View`, `UIView`, `NSView` or view controller type; a `.js` or `.ts` file whose changed lines hold a string literal, markup or a DOM write. A deleted file of these kinds counts. Anything else in `ui_paths` is not visible: tests, Dart and TypeScript logic files with no screen text, comment-only changes.
+8. The rule changes stay in ux.md, in place. The 30 lines are not appended.
+9. Nothing joins the Stop hook path: no change to `plans.validate_plan`, `gate_runner`, or any hook. The new checks run in `browser capture`, `look`, `ship` and the CI `pr text` job.
+10. ux.md text, changed in place (each rule stays one short line, per HE-NO-TEXT-WALLS):
+    - No clutter: starts "Least cognitive load:" before "for every element ask …".
+    - Hierarchy: "… everything else is quieter: one filled button per action group, the rest outlined or text. One focus per screen, at most 2 accent colours per block, labels with one meaning."
+    - New Alignment: "the text and controls of one block start on one shared edge; no centred line above left- or right-pushed content."
+    - New Spacing: "gaps come from the design system's spacing scale; like items get equal gaps."
+    - New Design system: "colours, type, spacing and components come from the `DESIGN.md` tokens and theme owners, and match the nearest existing screens."
+    - Messages: "plain, calm and positive words".
+    - Accessibility: adds "text at least 14 px; contrast at least WCAG AA".
+    - Widths: "phone 390, tablet 768 and desktop 1280 px, plus each other width the app supports; nothing scrolls sideways."
+    - The Usability lead line and the last line say that a typed Pass is a record, and name the proof: measured captures, `look` and its session proof.
+11. This ships as its own release. It merges to `develop` only after the wider-switch-offs release is on `main`, so the two never share a release.
+
+## Acceptance + steps
+
+- [ ] Red fixture, web: `tests/fixtures/ui_quality/red.html` is a generic item card with a title line, a small grey centred detail line, a second accent-coloured line under it, an icon button with no screen-reader label, and two filled buttons pushed right with two different saturated fill colours. `browser capture` of it records findings for contrast, screen-reader label, text size, tap size, competing filled buttons, shared edge and accent colours at each of the 3 widths, and `ship ready` with its After image refuses → `tests/test_ui_quality.py::test_red_fixture_fails_measurement_and_ship` (Incident; User message, "Hard Eng should enforce it")
+- [ ] Fixed fixture, web: `fixed.html` keeps one shared left edge, body text at 16 px, a labelled icon button, one filled primary and one outlined button at 44 px, one accent colour; its capture records no finding and `ship ready` passes → `tests/test_ui_quality.py::test_fixed_fixture_passes_measurement_and_ship`
+- [ ] Red and fixed fixture, Flutter: the same card as `RedItemCard` and `FixedItemCard`; the four guideline matchers fail the red card and pass the fixed card at 390, 768 and 1280 logical px, and the new lint rules flag the red card's two filled buttons and 12 px text → the Flutter lint plugin's repository, `test/ui_quality_fixture_test.dart::red card fails and fixed card passes` (Proposal: Flutter rules go to the Flutter lint plugin)
+- [ ] A well-made public page passes the measured checks except for real faults, so they do not misfire: the measurement script is run once on a saved copy of a public government home page; findings are only controls under 44 px and one input under 14 px, and no alignment, accent colour or filled-button finding → `tests/test_ui_quality.py::test_saved_public_page_has_no_layout_findings` (Proposal: two filled buttons of the same colour stay judgement)
+- [ ] `browser capture` writes images at 390, 768 and 1280 px, and a page wider than the window is a finding → `tests/test_browser.py::test_capture_draws_boxes_at_each_width` (User line 17, phone, tablet and desktop width)
+- [ ] text below 14 px, more than 2 accent colours in one block, a button or form control under 44 × 44 px, a text link under 24 × 24 px, and two filled buttons with different fill colours in one action group each give one finding, and the ux.md numbers match the `ui_measure.py` table → `tests/test_ui_quality.py::test_each_measured_limit_finds_one_fault` and `tests/test_ui_quality.py::test_ux_text_states_the_measured_limits` (Proposal: text floor 14 px, 2 accent colours, 44 px and 24 px)
+- [ ] `ship ready` refuses an After attachment whose SHA-256 matches no measured capture, and one whose capture has findings → `tests/test_ui_quality.py::test_ship_refuses_an_unmeasured_after_image`
+- [ ] `look` refuses a look run that did not open every image: a stub reviewer stream that reads 1 of 2 images records `not done`; Claude stream and Codex session file forms both checked → `tests/test_look.py::test_look_refuses_an_unopened_image` and `tests/test_look.py::test_look_reads_codex_image_views_from_the_session_file`
+- [ ] `look` gives the reviewer only the images and the rules: its prompt and folder hold no repository path, plan, diff or Pass line → `tests/test_look.py::test_look_prompt_holds_only_images_and_rules`
+- [ ] `look` uses the other agent, and a fresh session of the same agent when the other CLI is missing → `tests/test_look.py::test_look_falls_back_to_a_fresh_same_agent_session` (Proposal: look review fallback)
+- [ ] A PR with Before and After pairs and no look lines is refused by CI `pr text`, and by `ship ready` when the record is missing, `not done`, holds a Fail, or does not cover each After hash → `tests/test_ui_quality.py::test_pr_with_pairs_needs_clean_look_lines`
+- [ ] `ship` and CI `pr text` refuse a `ux_reference` marked not applicable when the branch makes a visible change in `ui_paths`, removals included, and accepts it for a test-only change, a logic-only TypeScript or Dart change and a comment-only change; a removal inside a Dart helper function that builds widgets counts as visible → `tests/test_ui_quality.py::test_visible_change_refuses_ux_reference_na` and `tests/test_ui_quality.py::test_nonvisual_ui_paths_change_keeps_ux_reference_na`
+- [ ] A Swift-only visible change needs a clean look record and no measured capture → `tests/test_ui_quality.py::test_swift_after_image_needs_look_but_no_measurement` (Proposal: no measured check for SwiftUI and AppKit)
+- [ ] A changed Flutter screen file with no widget test that calls the four guideline matchers is refused → `tests/test_ui_quality.py::test_flutter_screen_needs_guideline_test`
+- [ ] Alignment, Spacing and Design system are Usability rules in ux.md; No clutter names least cognitive load; Messages says calm and positive; Widths names the 3 widths → `tests/test_planning_handoffs.py::test_the_rule_labels_come_from_the_ux_reference` (16 rules, each new name read), `tests/test_ui_quality.py::test_ux_text_names_the_gap_items` (reads the rule text for the gap words) and `tests/test_skill_links.py::test_distributed_skills_fit_the_codex_skill_limit` (ux.md stays under 36,000 bytes) (Coordinator item, named rules; User lines 2, 14)
+- [ ] every Usability rule has one proof kind (measured, session record, test or judgement) in `ui_measure.py`, and a rule with none fails. The existing owners stay: Mistake-proof (lines 1 and 9), Least effort (lines 5, 9 and 11), Observe (lines 3 and 4), Undo (lines 10 and 12), No clutter (line 13), Hierarchy (line 7), Messages (lines 8 and 15), States (lines 22 and 24-26), Time (lines 20 and 23), Audit (line 21), Accessibility (line 27), Performance (line 19) → `tests/test_ui_quality.py::test_every_usability_rule_has_a_proof_kind`
+- [ ] Lines that rules outside the Usability list already own (never a yes-man, mockup from the real app, failing test first, one real save, smallest change) keep their owners → N/A — no code changes; the owners are ux.md Grounding, HE-REAL-APP-PREVIEW, the AGENTS.md test rule, HE-REAL-SERVICE-RUN, HE-YAGNI and HE-NO-SWITCH-OFF
+- [ ] review.md "Visible change" says to run `look` and copy its lines; the challenge prompt no longer judges screens from Pass lines → `tests/test_look.py::test_review_text_names_the_look_command`
+- [ ] The Why Hard Eng did not enforce this section and the gate table are in this plan and match the shipped checks → N/A — plan text; the PR states the same table and the challenge review compares it with the code
+- [ ] No new code runs on the Stop hook path: `check --quick` calls none of the new functions → `tests/test_ui_quality.py::test_quick_check_runs_no_ui_proof`
+- [ ] Writing Great Skills Reader check on the changed skill and reference text, each quoted sentence reworded or moved → N/A — a review record, written in Verification
+- [ ] End to end: an agent changes the red fixture screen in a sealed copy, captures it, runs `look` and `ship ready`; `ship ready` refuses until the screen is fixed → `tests/test_ui_quality.py::test_red_to_fixed_journey_end_to_end`
+
+Steps: (1) web measurement in `browser capture` with the red and fixed fixtures and the saved public page; (2) `look` and its record; (3) `ship` and CI `pr text` checks: hashes, look lines, `ux_reference` marked not applicable, Flutter guideline tests; (4) ux.md, review.md, e2e and checks.md text; (5) the the Flutter lint plugin PR; (6) the release after the wider-switch-offs release.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: `python3 .hooks/hard-eng.py check --plan-stage Draft` on `origin/develop` at `b9824ebc`, 2026-11-16 23:39 to 23:40 UTC: exit 0; the base commit had passed the required CI checks, so only the secret scan ran, and it passed.
+Execution: one Sonnet builder per slice in this worktree, in step order; slice 1 tests the main doubt (the measurement on a real page) first. An Opus reviewer per slice, then `challenge` on the candidate commit, then the full Complete gate once. The the Flutter lint plugin PR is a separate builder in that repository. Spikes already run (scratch only): agent-browser `a11y` and the measurement script on the red, fixed and public pages at 390, 768 and 1280 px; the four Flutter guideline matchers on the red and fixed cards; one Claude and one Codex image read, found in their streams and session files.
+
+## Risks + recovery
+
+- GitHub may change the bytes of an uploaded PNG, so the After hash would not match. Cheapest check, first in slice 3: attach one PNG to a PR in a private test repository and compare its SHA-256 with the file. If it differs: `ship` matches the decoded image size and the record of the local file named in the plan's `ux_reference` instead.
+- The measured limits may misfire on real screens. Recovery: each finding names its element and width; a check that misfires on the saved public page moves to judgement in the same change, and the plan row records it.
+- Reach (sealed copies of the installed projects, ids private): 23 of 33 have UI paths. Web, 12: none run axe today, so each one's next UI PR fails `ship` until its after screen passes; how many current screens fail is not checked (each app must run). Flutter, 11: 9 have no `meetsGuideline` test at all and 2 have a few, so each needs a guideline test for each screen it changes. One project has a Flutter package outside its `ui_paths`, so no check reaches it until the project adds that path in its own PR. Swift, 1: look review and session proof only. 10 have no UI paths and are not affected. New rule names: 47 Complete plans in 4 projects have rule lines and fail only if edited again; 0 open plans; Hard Eng has none.
+- Overlap: the open wider-switch-offs branch changes `README.md` and `.agents/skills/he/references/requirements.md`; this plan changes `README.md` only if a command list names `look`. No overlap in `.hooks` (that branch changes `gate_config.py`, `gate_runner.py`, `comments.py`, `tool_setup.py`, `project_setup.py`, `source_scan.py`, `whole_project.py`; this plan changes `browser.py`, `shipping.py`, `ship_evidence.py`, `pr_text.py`, `hard-eng.py` and adds `look.py`, `ui_measure.py`, `ui_proof.py`). The open Dart analysis branch has no commits and no plan yet. Recovery: rebase on `develop` after each merge.
+- A look review can run long. It runs in the background with an exit notice (HE-NO-FOREGROUND-POLL).
+
+## ux_reference
+
+N/A — this change has no screens of its own: Hard Eng has no app UI, its `ui_paths` list is empty, and the fixture screens are test inputs, proved in Acceptance.
+
+## Verification
+
+Result: Pending
+Evidence: Pending — the build has not started.
+E2E: Required — `tests/test_ui_quality.py::test_red_to_fixed_journey_end_to_end`: a sealed copy, a real agent-browser capture, a stub reviewer stream and a fake `gh`; expected: `ship ready` refuses the red screen and passes the fixed one. The real-agent `look` run on both fixtures runs once after every change is finished.
+Real service: N/A — no outside service: agent-browser, the agent CLIs and Flutter run on this machine, and `gh` is faked in tests as in the existing ship tests.
+Retro: Pending — written at task end.
+
+Delivery target: Merge
+Delivery: Pending — required remote proof.
