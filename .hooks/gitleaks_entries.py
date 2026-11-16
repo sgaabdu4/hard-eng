@@ -9,6 +9,7 @@ from pathlib import Path
 
 from challenge import known
 from gate_config import generated_sources
+from gitleaks_scan import scan_environment
 
 COMMIT_ENTRY = re.compile(r"([0-9a-f]{40}|[0-9a-f]{64}):(.+):([\w.-]+):\d+")
 CURRENT_ENTRY = re.compile(r"(.+):([\w.-]+):\d+")
@@ -43,6 +44,7 @@ def scan(
             str(report),
         ],
         cwd=cwd,
+        env=scan_environment(),
         capture_output=True,
         timeout=timeout,
         check=False,

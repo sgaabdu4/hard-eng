@@ -4,7 +4,7 @@ import re
 import tomllib
 from pathlib import Path, PurePosixPath
 
-from command_words import segments
+from command_words import assigns_variables, segments
 
 CLIPPY_FILES = {"clippy.toml", ".clippy.toml"}
 CLIPPY_DEFAULTS = {
@@ -36,21 +36,6 @@ CLIPPY_DEFAULTS = {
 }
 FLAG_SPLIT = re.compile(r"[\s,=:'\"\[\]]+")
 ASSIGNMENT = re.compile(r"rustflags[\"']?\s*[:=]", re.IGNORECASE)
-FLAG_SUFFIXES = (".yml", ".yaml", ".sh", ".bash", ".toml", ".json", ".mk")
-FLAG_NAMES = {
-    "Makefile",
-    "makefile",
-    "GNUmakefile",
-    "Dockerfile",
-    "justfile",
-    ".envrc",
-    ".env",
-}
-
-
-def sets_flags(name: str) -> bool:
-    """A workflow, script or config file; prose and notes can name the flags without setting them."""
-    return name.endswith(FLAG_SUFFIXES) or PurePosixPath(name).name in FLAG_NAMES
 
 
 def allows(flags: str) -> str | None:
@@ -149,3 +134,13 @@ def validate_rust_command(command: list[str], directory: Path) -> None:
             "HE-NO-SWITCH-OFF: A Rust gate must not allow lints: fix each finding at its cause "
             f"instead; the gate holds {', '.join(found)}"
         )
+
+
+def rust_file_hits(name: str, text: str) -> list[str]:
+    """The Rust switch-offs of one file: flags it assigns, a Cargo config and Clippy limits."""
+    if name.endswith((".cargo/config", ".cargo/config.toml")):
+        return cargo_config_hits(name, text)
+    found = flag_hits(name, text) if assigns_variables(name) else []
+    if PurePosixPath(name).name in CLIPPY_FILES:
+        found += clippy_hits(name, text)
+    return found

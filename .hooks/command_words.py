@@ -1,7 +1,26 @@
 """The words a gate command really runs: a package script or an `sh -c` string is expanded, and chained commands are split."""
 
 import shlex
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+ASSIGNING_SUFFIXES = (".yml", ".yaml", ".sh", ".bash", ".toml", ".json", ".mk")
+ASSIGNING_NAMES = {
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+    "Dockerfile",
+    "justfile",
+    ".envrc",
+    ".env",
+}
+
+
+def assigns_variables(name: str) -> bool:
+    """A workflow, script or config file; prose and notes can name a variable without setting it."""
+    return (
+        name.endswith(ASSIGNING_SUFFIXES) or PurePosixPath(name).name in ASSIGNING_NAMES
+    )
+
 
 SEPARATORS = {"&&", "||", ";", "|"}
 SHELLS = {"sh", "bash", "zsh"}
