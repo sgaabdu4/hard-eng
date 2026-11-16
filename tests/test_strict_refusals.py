@@ -190,9 +190,12 @@ QUOTED_SWITCHES = [
     ("src/rule.test.ts", "const sample = `\n// eslint-" + "disable-next-line\n`;\n"),
     ("src/a.ts", "const t = `${f('// @ts-" + "ignore')}`;\n"),
     ("scripts/scan.mjs", "const banned = /(?<!dart-)x|eslint-" + "disable/;\n"),
-    ("tool/scan.py", "MARK = '# no" + "qa'\nRULE = f'{x} # no" + "qa'\n"),
+    (
+        "tool/scan.py",
+        "MARK = '# pyl" + "int: disable=x'\nRULE = f'{x} # pyright:" + " ignore'\n",
+    ),
     *(
-        [("tool/tpl.py", "TPL = t'{x} # no" + "qa'\n")]
+        [("tool/tpl.py", "TPL = t'{x} # pyright:" + " ignore'\n")]
         if hasattr(tokenize, "TSTRING_MIDDLE")
         else []
     ),
@@ -260,7 +263,35 @@ QUOTED_NEAR_MISSES = [
         'let a = #"a"b"# // swift-format-' + "ignore\n",
         "swift-format-" + "ignore",
     ),
+    ("tool/scan.py", "X = '# no" + "qa'\n", "# no" + "qa"),
+    ("tool/scan.py", "X = '# isort:" + " skip_file'\n", "# isort:" + " skip_file"),
+    (
+        "src/a.ts",
+        "const r = total! / count + '/' + unit; // eslint-" + "disable-line\n",
+        "eslint-" + "disable",
+    ),
+    (
+        "src/a.ts",
+        "const h = n++ / 2 + '/' + t; // eslint-" + "disable-line\n",
+        "eslint-" + "disable",
+    ),
+    (
+        "src/a.js",
+        "const C = () => <p>Don't</p>; // eslint-" + "disable-line\n",
+        "eslint-" + "disable",
+    ),
 ]
+
+
+def test_a_division_after_a_non_null_mark_hides_no_later_line(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: `/` after a TypeScript non-null `!` divides, so the template after it closes on its line."""
+    text = (
+        "export const half = size! / 2 + `/${unit}`;\n// @ts-"
+        + "ignore\nexport const bad: number = 's';\n"
+    )
+    assert "src/k1.ts:2 holds '@ts-" + "ignore'" in refusal(
+        project(tmp_path, {"src/k1.ts": text})
+    )
 
 
 @pytest.mark.parametrize(("name", "text", "shown"), QUOTED_NEAR_MISSES)

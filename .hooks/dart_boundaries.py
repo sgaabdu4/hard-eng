@@ -162,8 +162,11 @@ def excludes_here(directory: Path, pattern: str) -> bool:
         return True
     if any("**" in part and part != "**" for part in pattern.split("/")):
         return True
+    folder = pattern.rstrip("/").removesuffix("/**").rstrip("/")
     try:
-        return next(directory.glob(pattern), None) is not None
+        return any(
+            next(directory.glob(form), None) is not None for form in {pattern, folder}
+        )
     except (ValueError, NotImplementedError):
         return True
 

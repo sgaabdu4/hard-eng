@@ -265,7 +265,10 @@ SECURITY_OFF = re.compile(
     re.IGNORECASE,
 )
 RAW_OFF = {
-    ".py": re.compile(r"#\s*pragma:\s*no cover"),
+    ".py": re.compile(
+        r"#\s*(?:pragma:\s*no cover|(?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)"
+        r"|(?:ruff:\s*)?isort:\s*(?:skip_file|skip|off)\b)"
+    ),
     ".dart": re.compile(r"//\s*dart-decimate-ignore-(?:next-line(?![\w-])|file\b)"),
     **dict.fromkeys(JAVASCRIPT, re.compile(r"(/\*|//)\s*(istanbul|c8|v8) ignore")),
 }
