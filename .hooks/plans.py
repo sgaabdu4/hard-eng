@@ -544,7 +544,7 @@ def claimed_tests(sections: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
                 found.setdefault(name, []).extend(
                     (path, test.split("[", 1)[0])
                     for path, test in TEST_REFERENCE.findall(line)
-                    if _is_test(PurePosixPath(path))
+                    if names_tests(PurePosixPath(path))
                 )
     return found
 
@@ -657,6 +657,20 @@ def uncommented(file: Path) -> str:
     )
 
 
+RUST_ATTRIBUTE_BODY = r'(?:[^\]"]|"(?:\\.|[^"\\])*")*'
+RUST_GAP = r"(?:\s|//[^\n]*)*"
+RUST_TEST = (
+    rf"#\[(?:\w+::)*(?:test|rstest|test_case)(?:\({RUST_ATTRIBUTE_BODY}\))?\]{RUST_GAP}"
+    rf"(?:#\[{RUST_ATTRIBUTE_BODY}\]{RUST_GAP})*"
+    r"(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+"
+)
+
+
+def names_tests(path: PurePosixPath) -> bool:
+    """Whether a plan's `path::name` can name a test there; Rust unit tests live in src/."""
+    return _is_test(path) or path.suffix == ".rs"
+
+
 def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
     missing = []
     for path, name in references:
@@ -665,12 +679,11 @@ def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
         definition = {
             ".py": rf"\bdef\s+{re.escape(name)}\s*\(",
             ".swift": rf"\bfunc\s+{re.escape(name)}\s*\(|{quoted}",
-            ".rs": rf"#\[(?:\w+::)*test\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s+)?(?:async\s+)?fn\s+{re.escape(name)}\s*\(",
+            ".rs": rf"{RUST_TEST}{re.escape(name)}\s*\(",
         }.get(file.suffix, quoted)
-        # Rust unit tests live in src/ files; the #[test] attribute marks them.
         if not (
             file.is_relative_to(root.resolve())
-            and (_is_test(PurePosixPath(path)) or file.suffix == ".rs")
+            and names_tests(PurePosixPath(path))
             and file.is_file()
             and re.search(definition, uncommented(file))
         ):
