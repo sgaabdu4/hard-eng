@@ -856,3 +856,28 @@ def test_red_to_fixed_journey_end_to_end(
         else:
             with pytest.raises(shipping.ShippingError, match="has findings"):
                 ready(fixture.root, fixture)
+
+
+LAYOUT_RULES = {"competing-buttons", "accent-colours", "overflow", "shared-edge"}
+
+
+@pytest.mark.parametrize(
+    ("name", "edge_widths"),
+    [("govuk-home", ()), ("govuk-buttons", ()), ("pushed-right", (390, 768))],
+)
+def test_saved_public_pages_have_no_layout_misfires(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    name: str,
+    edge_widths: tuple[int, ...],
+) -> None:
+    shutil.copy(FIXTURES / f"public/{name}.html", tmp_path / f"pages/{name}.html")
+    found = capture(browser, tmp_path, site, name)
+    for width in WIDTHS:
+        layout = {rule for rule in found[width] if rule in LAYOUT_RULES}
+        assert layout == ({"shared-edge"} if width in edge_widths else set()), (
+            name,
+            width,
+            found[width],
+        )
