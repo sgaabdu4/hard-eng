@@ -324,8 +324,6 @@ CODEX_MERGE_PATTERNS = [
     ["/opt/homebrew/bin/gh", "pr", "merge"],
     ["/usr/local/bin/gh", "pr", "merge"],
     ["/usr/bin/gh", "pr", "merge"],
-    ["gh", ["-R", "--repo"]],
-    ["gh", "pr", ["-R", "--repo"]],
 ]
 CODEX_MERGE_RULE = "".join(
     f"prefix_rule(\n    pattern = {json.dumps(pattern)},\n"
