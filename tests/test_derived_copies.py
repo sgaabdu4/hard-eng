@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from conftest import SOURCE as HARD_ENG
 from conftest import commit, git
 from generated_marks import generated_sources
 from test_strict_refusals import project, refusal
@@ -103,3 +104,29 @@ def test_a_source_made_of_links_to_the_copy_is_not_a_source(tmp_path: Path) -> N
     git(root, "add", "-A")
     commit(root, "links")
     assert exempt(root) == set()
+
+
+def test_a_mark_with_a_leading_slash_names_one_root_file(tmp_path: Path) -> None:
+    root = project(
+        tmp_path,
+        {
+            "cloudflare-env.d.ts": "/* eslint-disable */\ndeclare const a: 1;\n",
+            "sub/cloudflare-env.d.ts": "/* eslint-disable */\ndeclare const a: 1;\n",
+            ".gitattributes": "/cloudflare-env.d.ts linguist-generated=true\n",
+        },
+    )
+    assert generated_sources(root, ["cloudflare-env.d.ts"]) == {"cloudflare-env.d.ts"}
+    assert generated_sources(root, ["sub/cloudflare-env.d.ts"]) == set()
+
+
+def test_the_web_starter_marks_the_file_wrangler_writes(tmp_path: Path) -> None:
+    """Wrangler writes `eslint-disable` on line 1 of the file that setup commits."""
+    starter = HARD_ENG / ".agents/starters/opennext/.gitattributes"
+    root = project(
+        tmp_path,
+        {
+            "cloudflare-env.d.ts": "/* eslint-disable */\ndeclare const a: 1;\n",
+            ".gitattributes": starter.read_text(),
+        },
+    )
+    validate_whole_project(root)

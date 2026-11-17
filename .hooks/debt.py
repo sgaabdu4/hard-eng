@@ -176,6 +176,14 @@ def ruff_check(command: list[str]) -> int:
     return tool if tool >= 0 and command[tool + 1 : tool + 2] == ["check"] else -1
 
 
+def without_fixes(command: list[str]) -> list[str]:
+    """`fix = true` in ruff's settings makes `ruff check` rewrite files and exit 0."""
+    tool = ruff_check(command)
+    if tool < 0:
+        return command
+    return [*command[: tool + 2], "--no-fix", *command[tool + 2 :]]
+
+
 def by_form(lines: Counter[str], ruff: bool = False) -> Counter[str]:
     forms: Counter[str] = Counter()
     for line, count in lines.items():
