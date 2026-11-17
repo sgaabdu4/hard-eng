@@ -193,7 +193,7 @@ def judge_key(
         if value == default:
             return []
         return [
-            f"{name} is set to {value!r}, not its default {default!r}, and no table classes it: class it in fallow_table.py"
+            f"{name} is set to {value!r}, not its default {default!r}, and no table classes it: remove it from the project's Fallow config or set it back to its default"
         ]
     if kind == "equal" and value != default:
         return [f"{name} is {value!r}, not Fallow's default {default!r}"]

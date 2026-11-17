@@ -14,9 +14,9 @@ from pathlib import Path, PurePosixPath
 from gate_config import (
     ALL_ZERO_OBJECT_ID,
     changed_files,
-    generated_sources,
     initial_point,
 )
+from generated_marks import generated_by_exact_marks
 from plans import _is_test as is_test_path
 from plans import default_branch_point
 from project_files import GIT_LISTING
@@ -31,6 +31,7 @@ from source_scan import (
 )
 from workflow_blocking import blocking_hit, hard_eng_workflow
 
+DIRECTIVE_PAIR = re.compile(r"([\w-]+)=(\S*)")
 DISABLED_CALL = re.compile(r"\.disabled\(")
 QUOTE_OR_BACKSLASH = re.compile(r"[\\'\"]")
 UI_SUFFIXES = (
@@ -228,7 +229,7 @@ def validate_comments(root: Path, base: str | None) -> None:
         and (root / name).is_file()
         and not (root / name).is_symlink()
     )
-    skipped = generated_sources(root, sources)
+    skipped = generated_by_exact_marks(root, sources)
     found = [
         hit
         for name in sources
@@ -706,7 +707,7 @@ SHELLCHECK_FIX = "read the file without a dynamic `source`"
 
 def followed_source(root: Path, name: str, marker: str) -> bool:
     """A shellcheck directive that hides nothing: no `disable=` or `shell=` key, and every `source=` names a file in the project, which shellcheck then reads; /dev/null and a missing path hide the finding."""
-    keys = re.findall(r"([\w-]+)=(\S*)", marker)
+    keys = DIRECTIVE_PAIR.findall(marker)
     if any(key in {"disable", "shell"} for key, _ in keys):
         return False
     sources = [value for key, value in keys if key == "source"]
@@ -759,7 +760,7 @@ def security_switch_offs(
     root: Path, added: dict[str, list[tuple[int, str]]]
 ) -> list[str]:
     names = sorted(name for name in added if not name.startswith(UNOWNED))
-    skipped = generated_sources(root, names)
+    skipped = generated_by_exact_marks(root, names)
     return [
         hit
         for name in names
@@ -840,7 +841,7 @@ def whole_branch_balance(root: Path, point: str) -> tuple[str, list[str], int] |
     if not whole or whole == point or not is_ancestor(root, whole, point):
         return None
     added, removed = diff_lines(root, whole)
-    skipped = generated_sources(root, scoped_names(added, removed))
+    skipped = generated_by_exact_marks(root, scoped_names(added, removed))
     return whole, *assertion_balance(root, added, removed, skipped)
 
 
@@ -912,7 +913,7 @@ def validate_suppressions(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
         ) from error
     names = scoped_names(added, removed)
-    skipped = generated_sources(root, names)
+    skipped = generated_by_exact_marks(root, names)
     lost, gained = assertion_balance(root, added, removed, skipped)
     if len(lost) > gained and base and (whole := whole_branch_balance(root, point)):
         point, lost, gained = whole

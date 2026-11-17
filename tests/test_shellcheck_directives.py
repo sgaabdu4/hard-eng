@@ -37,7 +37,7 @@ def test_a_shellcheck_directive_that_hides_nothing_passes(
     validate_whole_project(project(tmp_path, files))
 
 
-GRADLEW = "#!/bin/sh\n# shellcheck disable=SC2039,SC3045\nx=1\n"
+GRADLEW = "#!/bin/sh\n# shellcheck " + "disable=SC2039,SC3045\nx=1\n"
 
 
 def test_a_generated_gradle_wrapper_is_exempt_through_gitattributes(

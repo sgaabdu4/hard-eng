@@ -34,6 +34,7 @@ from project_files import (
     refuse_ignored_locks,
 )
 
+JSON_INDENT = re.compile(r"\n([ \t]+)\"")
 CARET_VERSION = re.compile(r"\^?(\d+)\.(\d+)\.(\d+)")
 REGEX_SPECIAL_CHARACTER = re.compile(r"([.\[\]()*+?{}|^$\\])")
 SHELL_SHEBANG = re.compile(rb"^#![^\n]*\b(?:bash|sh)(?:\s|$)")
@@ -444,7 +445,7 @@ def retire_boundary_gate(root: Path, package: Group, changes: dict[str, str]) ->
     text = manifest.read_text()
     data = json.loads(text)
     del data["scripts"]["lint:boundaries"]
-    indent = re.search(r"\n([ \t]+)\"", text)
+    indent = JSON_INDENT.search(text)
     separators = None if indent or '": ' in text else (",", ":")
     changes[str(manifest.relative_to(root))] = json.dumps(
         data,

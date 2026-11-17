@@ -293,21 +293,22 @@ def test_a_fallow_gate_that_narrows_the_scan_fails(
     ):
         fallow_gate(tmp_path, [*SCAN, *extra])
     fallow_gate(tmp_path, SCAN)
-    fallow_gate(
-        tmp_path,
-        [
-            "fallow",
-            "audit",
-            "--base",
-            "origin/develop",
-            "--gate",
-            "all",
-            "--format",
-            "json",
-            "--output-file",
-            "coverage/fallow.json",
-        ],
-    )
+    with pytest.raises(ValueError, match="remove --base from the gate command"):
+        fallow_gate(
+            tmp_path,
+            [
+                "fallow",
+                "audit",
+                "--base",
+                "origin/develop",
+                "--gate",
+                "all",
+                "--format",
+                "json",
+                "--output-file",
+                "coverage/fallow.json",
+            ],
+        )
 
 
 def test_the_entry_judge_scans_only_the_files_its_entries_name(

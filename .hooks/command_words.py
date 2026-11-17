@@ -75,6 +75,10 @@ PACKAGE_COMMANDS = frozenset(
         "help",
     }
 )
+SHELL_CHARACTER = re.compile(r"[\s;&|$`]")
+TOOL_PART = re.compile(r"[\w@./+-]+")
+BREAK_OR_TAB = re.compile(r"[^\S ]")
+METAS = re.compile(r"[;&|<>$`]")
 TOOL_WORD = re.compile(r"(ruff|fallow|gitleaks)(@[\w.=<>~+-]+)?")
 UV_FLAGS = {"--no-sync", "--frozen", "--locked"}
 ALLOWED_FORMS = (
@@ -108,8 +112,8 @@ def mentions(words: list[str]) -> bool:
     for word in words:
         if tool_name(word) in JUDGED_TOOLS:
             return True
-        if re.search(r"[\s;&|$`]", word) and any(
-            tool_name(part) in JUDGED_TOOLS for part in re.findall(r"[\w@./+-]+", word)
+        if SHELL_CHARACTER.search(word) and any(
+            tool_name(part) in JUDGED_TOOLS for part in TOOL_PART.findall(word)
         ):
             return True
     return False
@@ -137,7 +141,7 @@ def expanded(command: list[str], directory: Path) -> list[str]:
     )
     scripts = read_project_file(where / "package.json").get("scripts", {})
     if mentions(words):
-        if re.search(r"[^\S ]", str(scripts.get(name, ""))):
+        if BREAK_OR_TAB.search(str(scripts.get(name, ""))):
             raise refusal(
                 f"the script {name} holds a line break or tab, which ends a shell command like `;` does"
             )
@@ -247,11 +251,10 @@ def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] |
         raise refusal(
             f"{local} is a file named {argv[0]} that bun puts first on the path, so it runs in place of the tool: remove it, or install the tool's own package"
         )
-    metas = re.compile(r"[;&|<>$`]")
     bad = [
         word
         for word in argv
-        if word in OPERATORS or "$(" in word or "`" in word or metas.search(word)
+        if word in OPERATORS or "$(" in word or "`" in word or METAS.search(word)
     ]
     if bad:
         raise refusal(f"the gate holds {', '.join(bad)}")

@@ -115,17 +115,21 @@ SWITCHES = [
     ("src/a.ts", "// jscpd:" + "ignore-start\n", "jscpd:" + "ignore"),
     ("src/a.ts", "// fallow-" + "ignore-next-line\n", "fallow-" + "ignore"),
     ("build.sh", "# shellcheck " + "disable=SC2086\n", "shellcheck " + "disable="),
-    ("build.sh", "# shellcheck " + "source=/dev/null\n", "shellcheck source=/dev/null"),
+    (
+        "build.sh",
+        "# shellcheck " + "source=/dev/null\n",
+        "shellcheck " + "source=/dev/null",
+    ),
     (
         "build.sh",
         "# shellcheck " + "source=nowhere.sh\n",
-        "shellcheck source=nowhere.sh",
+        "shellcheck " + "source=nowhere.sh",
     ),
-    ("build.sh", "# shellcheck " + "shell=ksh\n", "shellcheck shell="),
+    ("build.sh", "# shellcheck " + "shell=ksh\n", "shellcheck " + "shell="),
     (
         "build.sh",
-        "# shellcheck enable=require-variable-braces source=/dev/null\n",
-        "shellcheck enable=require-variable-braces source=/dev/null",
+        "# shellcheck enable=require-variable-braces " + "source=/dev/null\n",
+        "shellcheck enable=require-variable-braces " + "source=/dev/null",
     ),
     (
         ".github/workflows/ci.yml",

@@ -14,6 +14,8 @@ GENERATED = re.compile(
     r'(?: >> "\$GITHUB_OUTPUT" \|\| (?:echo docs_only=false|printf \'runner=[\w.-]+\\napple=(?:true|false)\\n\') >> "\$GITHUB_OUTPUT")?$'
 )
 CHECK_LINE = re.compile(r"\.hooks/hard-eng\.py")
+LINE_PREFIX = re.compile(r"^\s*(?:-\s*)?(?:run:\s*)?")
+SPACES = re.compile(r"\s+")
 BROKEN = re.compile(
     r"continue-on-error\s*:\s*(?!(?:false|\$\{\{\s*false\s*\}\})\s*(?:#.*)?$)\S"
     r"|^\s*(?:-\s*)?shell\s*:"
@@ -29,8 +31,8 @@ def hard_eng_workflow(name: str) -> bool:
 
 def blocking_hit(text: str) -> str | None:
     """What a line of the Hard Eng workflow does to let a failing check pass: a line that calls the hooks but is not a generated check line, or a line that ignores a failure."""
-    line = re.sub(r"^\s*(?:-\s*)?(?:run:\s*)?", "", text.rstrip()).strip()
-    if CHECK_LINE.search(line) and not GENERATED.fullmatch(re.sub(r"\s+", " ", line)):
+    line = LINE_PREFIX.sub("", text.rstrip()).strip()
+    if CHECK_LINE.search(line) and not GENERATED.fullmatch(SPACES.sub(" ", line)):
         return line
     found = BROKEN.search(text)
     return found[0] if found else None
