@@ -23,7 +23,7 @@ from comments import (
     security_hits,
 )
 from fallow_settings import SETTINGS_FILES, settings_switch_offs
-from generated_marks import generated_sources
+from generated_marks import copy_findings, generated_sources
 from gitleaks_rules import DEFAULT_RULE_IDS
 from gitleaks_scan import config_variable_hits
 from project_files import GIT_LISTING
@@ -333,7 +333,14 @@ def validate_whole_project(root: Path) -> None:
     texts = text_files(root, names)
     sources = source_names(root, texts)
     kinds = [
-        (SWITCH_OFF_HEADER, [*switch_offs(root, texts), *linked_settings(root, names)]),
+        (
+            SWITCH_OFF_HEADER,
+            [
+                *switch_offs(root, texts),
+                *linked_settings(root, names),
+                *copy_findings(root),
+            ],
+        ),
         (MARKER_HEADER, excuse_markers(root, texts, sources)),
         (
             COMMENT_HEADER,

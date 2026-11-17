@@ -541,3 +541,11 @@ def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
     )
+
+
+@pytest.fixture(autouse=True)
+def forget_mark_proofs() -> None:
+    """A run reads the index once; each test builds its own repository."""
+    import generated_marks
+
+    generated_marks.reset()
