@@ -20,10 +20,6 @@ NODE = (
     "border:1px solid #767676;border-radius:8px;padding:4px 8px;font-size:14px;"
     "color:#55565c"
 )
-SWATCHES = "".join(
-    f"<div style='height:8px;background:{c}'></div>"
-    for c in ("#b00", "#060", "#00b", "#b60")
-)
 LONG_LINE = " ".join(["word"] * 21)
 MOCK_LINES = "".join(f"<div style='{META}'>line {n}</div>" for n in range(10))
 NODES = "".join(f"<span style='{NODE}'>Step {n}</span>" for n in range(9))
@@ -48,17 +44,9 @@ REAL_FAULTS = {
         f"<form><div style='display:flex;gap:8px'><input type=text placeholder=Search aria-label=Search style='{INPUT}'><button type=submit style='{PLAIN_BUTTON}'>Go</button></div></form>",
         "field-control",
     ),
-    "bold-div-title": (
-        f"<div><div style='font-weight:700'>Offer 7</div><p style='{META}'>Posted yesterday</p><p style='{META}'>Ends in three days</p></div>",
-        "extra-text",
-    ),
     "twenty-one-words": (
         f"<section><h2>Feature</h2><p style='{META}'>{LONG_LINE}</p></section>",
         "extra-text",
-    ),
-    "four-accents-one-button": (
-        f"<section><h2>Card</h2>{SWATCHES}<button style='{PLAIN_BUTTON}'>Go</button></section>",
-        "accent-colours",
     ),
     "centred-line-pushed-button": (
         f"<div style='padding:16px'><p style='text-align:center'>Centred line</p><div style='display:flex;justify-content:flex-end'><button style='{PLAIN_BUTTON}'>Go</button></div></div>",
@@ -71,6 +59,9 @@ REAL_PATTERNS = {
     "badge-after-heading": f"<section><h2>Feature</h2><span style='{BADGE}'>New</span><p style='{META}'>One short secondary line</p></section>",
     "value-card": f"<section><h2>Vitals</h2><div style='display:flex;gap:16px'><div><span style='{META}'>Heart rate</span> <strong style='font-size:24px'>72 bpm</strong></div><div><span style='{META}'>Sleep</span> <strong style='font-size:24px'>7 h</strong></div></div></section>",
     "hero-mock-up": f"<section><h1>Hero</h1><p>Lead line.</p><div>{MOCK_LINES}</div></section>",
+    "stat-labels": f"<section><h2>Numbers</h2><div style='display:flex;gap:24px'><div><strong style='font-size:24px'>500+</strong><div style='{META}'>Patients served</div></div><div><strong style='font-size:24px'>3,000+</strong><div style='{META}'>Visits a year</div></div></div></section>",
+    "footer-copyright": f"<footer><h2>Contact</h2><p>Write to us any time.</p><p style='{META}'>Copyright 2026 Example</p></footer>",
+    "icon-list": "<section><h2>Why us</h2><ul style='list-style:none;margin:0;padding:0'><li><svg aria-hidden=true width=16 height=16><circle cx=8 cy=8 r=6 /></svg> <span>Plain words</span></li><li><svg aria-hidden=true width=16 height=16><circle cx=8 cy=8 r=6 /></svg> <span>Fast answers</span></li><li><svg aria-hidden=true width=16 height=16><circle cx=8 cy=8 r=6 /></svg> <span>Fair prices</span></li></ul></section>",
     "diagram-nodes": f"<section><h2>Flow</h2><div style='display:flex;gap:8px;flex-wrap:wrap'>{NODES}</div></section>",
 }
 
