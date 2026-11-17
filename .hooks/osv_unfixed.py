@@ -40,6 +40,17 @@ def above(version: str, bound: Bound, ecosystem: str) -> bool:
     return core > bound or not PRERELEASE[ecosystem].fullmatch(rest)
 
 
+def above_installed(version: str, installed: str, ecosystem: str) -> bool:
+    """A release other than the installed one may sort above it, unless it is a known pre-release of an installed release."""
+    core, rest = release(version)
+    have, own = release(installed)
+    return core > have or (
+        core == have
+        and rest != own
+        and (own != "" or not PRERELEASE[ecosystem].fullmatch(rest))
+    )
+
+
 def objects(value: object) -> list[JsonObject]:
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise ValueError("the advisory record is unreadable")
@@ -136,13 +147,14 @@ def accept_unfixed(item: JsonObject, fetch: Fetch) -> None:
     closed = [bound for bound in bounds if bound is not None]
     if closed and installed > min(closed):
         raise ValueError(f"{version} is above the affected range")
-    ceiling = min([*closed, installed] if None in bounds else closed)
     try:
         versions = READERS[ecosystem](name, fetch)
     except (OSError, TypeError, ValueError) as error:
         raise ValueError(f"the registry could not be read: {error}") from error
     for other in versions:
-        if above(other, ceiling, ecosystem):
+        if (closed and above(other, min(closed), ecosystem)) or (
+            None in bounds and above_installed(other, version, ecosystem)
+        ):
             raise ValueError(
                 f"the release {other} is above the affected range or, for a range with no end, the installed version"
             )

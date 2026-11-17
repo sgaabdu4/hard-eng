@@ -519,3 +519,32 @@ def test_a_pub_release_that_was_retracted_is_not_a_fix(tmp_path: Path) -> None:
         {"https://pub.dev/api/packages/ex": json.dumps({"versions": versions})}
     )
     accepted(report_of(tmp_path, item), fetch)
+
+
+OPEN = [{"introduced": "0"}]
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "installed", "fetch", "newer"),
+    [
+        ("npm", "1.0.0-beta.1", npm("1.0.0-beta.1", "1.0.0"), "1.0.0"),
+        ("npm", "1.0.0-beta.1", npm("1.0.0-beta.1", "1.0.0-beta.2"), "1.0.0-beta.2"),
+        ("PyPI", "1.0rc1", pypi("1.0rc1", "1.0"), "1.0"),
+    ],
+    ids=["npm-release", "npm-later-pre-release", "pypi-release"],
+)
+def test_an_installed_pre_release_fails_when_a_later_release_exists(
+    tmp_path: Path, ecosystem: str, installed: str, fetch: Registry, newer: str
+) -> None:
+    item = package_item(OPEN, version=installed, ecosystem=ecosystem, name="picomatch")
+    if ecosystem == "PyPI":
+        item = package_item(
+            OPEN, version=installed, ecosystem=ecosystem, name="ex-ample"
+        )
+    with pytest.raises(ValueError, match=f"release {newer} is above"):
+        accepted(report_of(tmp_path, item), fetch)
+
+
+def test_an_installed_pre_release_passes_when_it_is_the_newest(tmp_path: Path) -> None:
+    item = package_item(OPEN, version="1.0.0-beta.1")
+    accepted(report_of(tmp_path, item), npm("0.9.0", "1.0.0-beta.1"))
