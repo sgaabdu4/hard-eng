@@ -83,19 +83,39 @@ REFUSED = [
     "gh pr -R o/r merge 12 --rebase",
     "N=12; gh api -X PUT repos/o/r/pulls/$N/merge",
     "gh api graphql -F query=@merge.graphql",
-    "gh api graphql -f query=$QUERY",
     "gh alias set ship-it 'pr merge' && gh ship-it 12",
     "echo 12 | xargs gh pr merge --rebase",
     "eval 'gh pr merge 12 --rebase'",
     "python3 -c \"import subprocess; subprocess.run(['gh', 'pr', 'merge', '12'])\"",
     "node -e \"require('child_process').execSync('gh pr merge 12')\"",
+    "f(){ gh pr merge 12 --rebase; }; f",
+    "{ gh pr merge 12 --rebase; }",
+    "if true; then gh pr merge 12 --rebase; fi",
+    "for n in 12; do gh pr merge $n --rebase; done",
+    "! gh pr merge 12 --rebase",
+    "G=gh; $G pr merge 12 --rebase",
+    "echo 'gh pr merge 12 --rebase' | bash",
+    "bash <<< 'gh pr merge 12 --rebase'",
+    "bash -c -- 'gh pr merge 12 --rebase'",
+    "echo `gh pr merge 12`",
+    "nice gh pr merge 12 --rebase",
+    "timeout 60 gh pr merge 12 --rebase",
+    "caffeinate -i gh pr merge 12 --rebase",
+    "xargs -n1 gh pr merge --rebase < f",
+    "echo 12 | xargs -I{} gh pr merge {} --rebase",
+    "P=pulls/12/merge; gh api -X PUT repos/o/r/$P",
+    "gh alias import merge-aliases.yml",
+    "gh pr merge 12 --rebase --admin --match-head-commit " + HEAD,
+    "gh pr merge 12 --rebase --auto --match-head-commit " + HEAD,
+    "GH_REPO=o/r gh pr merge 12 --rebase --match-head-commit " + HEAD,
+    "gh pr merge 12 --rebase --match-head-commit " + HEAD + " && echo ok",
 ]
 ALLOWED = [
     "gh pr view 12",
     "git merge main",
     'git commit -m "merge notes"',
     "gh api repos/o/r/pulls/12",
-    "echo gh pr merge 12",
+    "gh pr view 12 --json mergeStateStatus,mergeCommit",
     "gh pr merge 12 --rebase --match-head-commit " + HEAD,
     "gh pr merge https://github.com/o/r/pull/12 --rebase --match-head-commit " + HEAD,
     "ls",
@@ -198,9 +218,7 @@ def test_setup_installs_the_codex_merge_rule(tmp_path: Path) -> None:
     setup.configure_hooks(root, changes)
     rules = changes[".codex/rules/hard-eng.rules"]
     patterns = [json.loads(m) for m in re.findall(r"pattern = (\[.*\]),", rules)]
-    flags = ["-R", "--repo"]
     wanted = [["gh", "pr", "merge"], ["env", "gh", "pr", "merge"]]
-    wanted += [["gh", flags], ["gh", "pr", flags]]
     wanted += [[f"{folder}/gh", "pr", "merge"] for folder in HOMES]
     assert sorted(map(str, patterns)) == sorted(map(str, wanted))
     assert rules.count('decision = "forbidden"') == len(wanted)

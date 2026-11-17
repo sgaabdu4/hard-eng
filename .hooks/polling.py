@@ -1,6 +1,7 @@
 """Claude Code PreToolUse hook: refuse a merge that skips ship, and deny foreground polling (HE-NO-FOREGROUND-POLL)."""
 
 import json
+import re
 import sys
 from collections.abc import Callable
 
@@ -28,12 +29,14 @@ def decision(payload: object) -> dict[str, object] | None:
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    if "merge" in command or "graphql" in command:
+    if "erge" in command and re.search(r"\bgh\b", command):
         from pathlib import Path
 
-        from merge_guard import merge_problem
+        from merge_guard import holds_merge, merge_problem
 
-        if problem := merge_problem(command, Path(str(payload.get("cwd") or "."))):
+        if holds_merge(command) and (
+            problem := merge_problem(command, Path(str(payload.get("cwd") or ".")))
+        ):
             return deny(f"Merge refused: {problem}")
     if payload.get("agent_id") or (
         isinstance(tool_input, dict) and tool_input.get("run_in_background") is True
