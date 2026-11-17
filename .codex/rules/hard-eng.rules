@@ -3,3 +3,33 @@ prefix_rule(
     decision = "forbidden",
     justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
 )
+prefix_rule(
+    pattern = ["env", "gh", "pr", "merge"],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)
+prefix_rule(
+    pattern = ["/opt/homebrew/bin/gh", "pr", "merge"],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)
+prefix_rule(
+    pattern = ["/usr/local/bin/gh", "pr", "merge"],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)
+prefix_rule(
+    pattern = ["/usr/bin/gh", "pr", "merge"],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)
+prefix_rule(
+    pattern = ["gh", ["-R", "--repo"]],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)
+prefix_rule(
+    pattern = ["gh", "pr", ["-R", "--repo"]],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)

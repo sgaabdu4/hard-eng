@@ -28,7 +28,7 @@ def decision(payload: object) -> dict[str, object] | None:
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    if "merge" in command:
+    if "merge" in command or "graphql" in command:
         from pathlib import Path
 
         from merge_guard import merge_problem

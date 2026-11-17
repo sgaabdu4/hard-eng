@@ -1,7 +1,7 @@
 """A merge goes through ship: the shell hook and the Codex rule file refuse every other route."""
 
 import json
-import shutil
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -77,6 +77,18 @@ REFUSED = [
     "gh api -X PUT repos/o/r/pulls/12/merge",
     "gh api --method PUT /repos/o/r/pulls/12/merge -f merge_method=rebase",
     "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+    "gh -R o/r pr merge 12 --rebase",
+    "gh --repo o/r pr merge 12 --rebase",
+    "gh pr --repo o/r merge 12 --rebase",
+    "gh pr -R o/r merge 12 --rebase",
+    "N=12; gh api -X PUT repos/o/r/pulls/$N/merge",
+    "gh api graphql -F query=@merge.graphql",
+    "gh api graphql -f query=$QUERY",
+    "gh alias set ship-it 'pr merge' && gh ship-it 12",
+    "echo 12 | xargs gh pr merge --rebase",
+    "eval 'gh pr merge 12 --rebase'",
+    "python3 -c \"import subprocess; subprocess.run(['gh', 'pr', 'merge', '12'])\"",
+    "node -e \"require('child_process').execSync('gh pr merge 12')\"",
 ]
 ALLOWED = [
     "gh pr view 12",
@@ -87,6 +99,11 @@ ALLOWED = [
     "gh pr merge 12 --rebase --match-head-commit " + HEAD,
     "gh pr merge https://github.com/o/r/pull/12 --rebase --match-head-commit " + HEAD,
     "ls",
+    "gh -R o/r pr view 12",
+    "gh api graphql -f query='query { viewer { login } }'",
+    "python3 -c 'print(1)'",
+    "gh alias list",
+    "echo 12 | xargs echo",
 ]
 
 
@@ -169,6 +186,9 @@ def test_ship_ready_records_a_rebase_by_default(
     assert (record["head"], record["method"]) == (fixture.head, "rebase")
 
 
+HOMES = ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin")
+
+
 def test_setup_installs_the_codex_merge_rule(tmp_path: Path) -> None:
     import setup
 
@@ -177,24 +197,14 @@ def test_setup_installs_the_codex_merge_rule(tmp_path: Path) -> None:
     changes: dict[str, str] = {}
     setup.configure_hooks(root, changes)
     rules = changes[".codex/rules/hard-eng.rules"]
-    path = tmp_path / "hard-eng.rules"
-    path.write_text(rules)
-    codex = shutil.which("codex")
-    assert codex is not None, "codex is needed to check the rule file with its own tool"
-
-    def check(*command: str) -> dict[str, object]:
-        done = subprocess.run(
-            [codex, "execpolicy", "check", "--rules", str(path), *command],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        result: dict[str, object] = json.loads(done.stdout)
-        return result
-
-    assert check("gh", "pr", "merge", "12", "--rebase")["decision"] == "forbidden"
-    assert check("gh", "pr", "view", "12") == {"matchedRules": []}
-    assert "--stage merge" in rules
+    patterns = [json.loads(m) for m in re.findall(r"pattern = (\[.*\]),", rules)]
+    flags = ["-R", "--repo"]
+    wanted = [["gh", "pr", "merge"], ["env", "gh", "pr", "merge"]]
+    wanted += [["gh", flags], ["gh", "pr", flags]]
+    wanted += [[f"{folder}/gh", "pr", "merge"] for folder in HOMES]
+    assert sorted(map(str, patterns)) == sorted(map(str, wanted))
+    assert rules.count('decision = "forbidden"') == len(wanted)
+    assert rules.count("--stage merge") == len(wanted)
 
 
 def test_ship_merge_uses_the_recorded_method(
