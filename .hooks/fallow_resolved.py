@@ -4,7 +4,8 @@ import json
 import subprocess
 import tempfile
 from collections.abc import Callable
-from pathlib import Path
+from fnmatch import fnmatch
+from pathlib import Path, PurePosixPath
 
 from fallow_table import judge
 from project_files import GIT_LISTING
@@ -170,6 +171,14 @@ def committed(directory: Path, path: Path) -> bool:
     return done.returncode == 0
 
 
+def covers_every_file(directory: Path, patterns: list[str]) -> bool:
+    regexes = [glob_regex(pattern) for pattern in patterns]
+    names = tracked(directory, FALLOW_SUFFIXES)
+    return bool(regexes and names) and all(
+        any(regex.fullmatch(name) for regex in regexes) for name in names
+    )
+
+
 def proved_hits(
     printed: dict[str, object], directory: Path, proof: tuple[list[str], str | None]
 ) -> list[str]:
@@ -193,7 +202,42 @@ def proved_hits(
             hits.append(
                 "boundaries must set coverage.requireAllFiles to true, so no file escapes its zones"
             )
+        allowed = coverage.get("allowUnmatched") if isinstance(coverage, dict) else None
+        if isinstance(allowed, list) and covers_every_file(directory, allowed):
+            hits.append(
+                "boundaries.coverage.allowUnmatched covers every file, so no file has to belong to a zone; list only the files that belong to none"
+            )
     return hits
+
+
+NATIVE_FILES = (
+    "capacitor.config.*",
+    "AndroidManifest.xml",
+    "Podfile",
+    "Package.swift",
+    "build.gradle*",
+)
+
+
+def named_in_native_files(directory: Path) -> Callable[[str], bool]:
+    """A check that a package name appears in a tracked config or native file, where a package can be used without a JavaScript import."""
+    listed = subprocess.run(
+        [*GIT_LISTING, "ls-files", "-z"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.split("\0")
+    texts = [
+        (directory / name).read_text(errors="replace")
+        for name in listed
+        if any(fnmatch(PurePosixPath(name).name, pattern) for pattern in NATIVE_FILES)
+    ]
+
+    def used(package: str) -> bool:
+        return any(package in text for text in texts)
+
+    return used
 
 
 def untracked_configs(directory: Path) -> list[str]:
@@ -223,7 +267,7 @@ def fallow_hits(
     found = entry_sources(directory, printed, timeout) if printed.get("entry") else {}
     covered = covering(checked, found)
     return [
-        *judge(printed, defaults, drop, covered),
+        *judge(printed, defaults, drop, covered, named_in_native_files(directory)),
         *proved_hits(printed, directory, proof),
         *untracked_configs(directory),
         *refusal(left),

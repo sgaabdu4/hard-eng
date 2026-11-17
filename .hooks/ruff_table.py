@@ -141,6 +141,11 @@ def number_of(entries: list[str]) -> float | None:
 VERSION = re.compile(r"(\d+)\.(\d+)")
 
 
+def entry_names(lines: list[str]) -> set[str]:
+    """The key of each printed entry; the message after it changes no finding."""
+    return {line.split(" = ")[0] for line in lines}
+
+
 def version_hits(key: str, value: list[str], minimum: tuple[int, int]) -> list[str]:
     """A target version other than the requires-python minimum hides findings: a lower one hides pyupgrade rules, a higher one lets Ruff accept syntax that the minimum does not allow."""
     per_file = "per_file" in key
@@ -186,7 +191,11 @@ def judge(
             return [f"the resolved {key} is {value[:1]}, above the limit {default[:1]}"]
     if kind == "rules":
         return rule_hits(enabled(value), enabled(default), role)
-    if kind == "holds" and (missing := [line for line in default if line not in value]):
+    if kind == "holds" and (
+        missing := [
+            line for line in default if line.split(" = ")[0] not in entry_names(value)
+        ]
+    ):
         return [
             f"the resolved {key} lacks {missing[0]!r}: the annotations gate keeps every banned import of the template; set one `--config` banned-api table that lists {', '.join(line.split(' = ')[0] for line in default)} (separate `--config` lines for each entry keep only one)"
         ]

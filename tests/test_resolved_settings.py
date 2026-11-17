@@ -161,8 +161,8 @@ def test_a_setting_that_can_only_add_findings_passes(
 MESSAGE = "Use a precise type instead of Any"
 
 
-def banned(*names: str) -> list[str]:
-    entries = ", ".join(f'"{name}" = {{msg = "{MESSAGE}"}}' for name in names)
+def banned(*names: str, message: str = MESSAGE) -> list[str]:
+    entries = ", ".join(f'"{name}" = {{msg = "{message}"}}' for name in names)
     return ["--config", f"lint.flake8-tidy-imports.banned-api = {{{entries}}}"]
 
 
@@ -249,3 +249,15 @@ def test_the_template_annotations_gate_bans_each_any_for_real(
     )
     assert done.returncode == 1
     assert f"{module}.Any` is banned" in done.stdout
+
+
+def test_the_banned_api_message_is_free_and_only_the_entries_count(
+    tmp_path: Path,
+) -> None:
+    """The message text changes no finding, so a project may word it: each template entry must be present by name."""
+    root = project(tmp_path, "")
+    command = [
+        *ANNOTATIONS[:8],
+        *banned("typing.Any", "typing_extensions.Any", message="Name the type"),
+    ]
+    validate_resolved(root, groups(command, "annotations"), 900)
