@@ -119,3 +119,45 @@ def test_each_measured_limit_finds_one_fault(
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert found[width] == Counter({rule: count}), (width, found[width])
+
+
+def sample_record(images: int = 2, **changes: object) -> dict[str, object]:
+    record: dict[str, object] = {
+        "reviewer": "codex",
+        "session": "a" * 64,
+        "images": [
+            {
+                "name": f"image-{n}.png",
+                "sha256": f"{n:x}" * 64,
+                "read": True,
+                "read_at": "2026-11-17T10:00:01Z",
+            }
+            for n in range(1, images + 1)
+        ],
+        "rules": [
+            "Mistake-proof: Pass — looked",
+            "Hierarchy: Pass — one filled button",
+        ],
+        "outcome": "clean",
+    }
+    return record | changes
+
+
+def test_look_block_hashes_are_checked_in_ci() -> None:
+    import look
+
+    block = look.block_text(sample_record())
+    assert look.block_problem(f"Summary\n\n{block}\n", 2) is None
+    assert "local path" not in str(look.block_problem(block, 2))
+    assert look.block_problem("Summary only", 2) is not None
+    edited = block.replace("one filled button", "all fine")
+    assert "does not match" in str(look.block_problem(edited, 2))
+    assert "one hash line for each After" in str(look.block_problem(block, 3))
+    failed = look.block_text(
+        sample_record(rules=["Hierarchy: Fail — two fills"], outcome="findings")
+    )
+    assert "Fail" in str(look.block_problem(failed, 2))
+    leaked = look.block_text(
+        sample_record(rules=[f"Hierarchy: Pass — saw /{'Users'}/someone/x.png"])
+    )
+    assert "local path" in str(look.block_problem(leaked, 2))

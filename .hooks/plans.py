@@ -212,8 +212,8 @@ def plan_sections(content: str, *, allow_placeholders: bool = False) -> dict[str
     return sections
 
 
-def usability_rules() -> list[tuple[str, list[str]]]:
-    """The Usability rule names of the UX reference, each with the unit words its Pass line counts."""
+def usability_lines() -> list[str]:
+    """The rule lines of the Usability list in the UX reference, each without its `  - ` marker."""
     reference = Path(__file__).resolve().parents[1] / UX_REFERENCE
     try:
         lines = reference.read_text().splitlines()
@@ -222,11 +222,19 @@ def usability_rules() -> list[tuple[str, list[str]]]:
             f"UX Rules cannot read {UX_REFERENCE}: {error}; restore it with `git checkout HEAD -- {UX_REFERENCE}`"
         ) from error
     start = [n for n, line in enumerate(lines) if line.startswith("- Usability =")]
-    rules = []
+    found: list[str] = []
     for line in lines[start[0] + 1 :] if start else []:
         if not line.startswith("  - "):
             break
-        name, marker, rest = line[4:].partition(" (count: ")
+        found.append(line[4:])
+    return found
+
+
+def usability_rules() -> list[tuple[str, list[str]]]:
+    """The Usability rule names of the UX reference, each with the unit words its Pass line counts."""
+    rules = []
+    for line in usability_lines():
+        name, marker, rest = line.partition(" (count: ")
         if marker:
             units = rest.partition("):")[0].split(", ")
         else:
