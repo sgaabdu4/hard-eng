@@ -560,3 +560,17 @@ def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
     )
+
+
+@pytest.fixture
+def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
+    from test_browser import serve_pages
+
+    yield from serve_pages(tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    from test_browser import load_browser
+
+    return load_browser(monkeypatch)
