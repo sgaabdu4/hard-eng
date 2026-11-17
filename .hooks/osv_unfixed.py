@@ -40,12 +40,18 @@ def objects(value: object) -> list[JsonObject]:
     return value
 
 
+def texts(value: object) -> set[str]:
+    if not isinstance(value, list):
+        raise TypeError("the advisory record is unreadable")
+    return {str(item) for item in value}
+
+
 def normal(ecosystem: str, name: object) -> str:
     return NAME_GAPS.sub("-", str(name)).lower() if ecosystem == "PyPI" else str(name)
 
 
 def range_end(events: list[JsonObject]) -> Bound | None:
-    ends = []
+    ends: list[object] = []
     for event in events:
         if "fixed" in event:
             raise ValueError("it has a fixed event")
@@ -88,13 +94,16 @@ def bound_of(advisory: JsonObject, ecosystem: str, name: str) -> Bound | None:
 def accept_unfixed(item: JsonObject, fetch: Fetch) -> None:
     """Print one line and return when the advisories of this package are proven unfixed, else raise ValueError."""
     package = item["package"]
+    if not isinstance(package, dict):
+        raise TypeError("the report lacks the package")
     name, version, ecosystem = (
         str(package[key]) for key in ("name", "version", "ecosystem")
     )
     advisories = objects(item.get("vulnerabilities"))
     ids = [str(advisory.get("id")) for advisory in advisories]
     if not advisories or any(
-        not set(group["ids"]) <= set(ids) for group in objects(item.get("groups") or [])
+        not texts(group.get("ids")) <= set(ids)
+        for group in objects(item.get("groups") or [])
     ):
         raise ValueError("the report lacks the record of a vulnerability")
     if ecosystem not in READERS:

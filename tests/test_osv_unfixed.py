@@ -1,7 +1,6 @@
 """A reported vulnerability passes only when public data proves that no fixed release exists."""
 
 import json
-import urllib.error
 from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -9,7 +8,8 @@ from types import ModuleType, SimpleNamespace
 import freshness
 import pytest
 import reports
-from gate_config import Gate, Group, JsonObject
+from gate_config import Gate, Group
+from test_freshness import Registry
 
 ID = "GHSA-aaaa-bbbb-cccc"
 NPM = "https://registry.npmjs.org/picomatch"
@@ -17,33 +17,18 @@ PYPI = "https://pypi.org/pypi/ex-ample/json"
 BOUNDED = [{"introduced": "0"}, {"last_affected": "4.0.7"}]
 
 
-class Registry:
-    def __init__(self, records: dict[str, object]) -> None:
-        self.records = records
-        self.requests: list[str] = []
-
-    def __call__(self, url: str) -> object:
-        self.requests.append(url)
-        if url not in self.records:
-            raise urllib.error.URLError(f"no recorded response for {url}")
-        return self.records[url]
-
-
 def npm(*versions: str) -> Registry:
-    return Registry({NPM: {"versions": {version: {} for version in versions}}})
+    return Registry({NPM: json.dumps({"versions": {key: {} for key in versions}})})
 
 
 Events = list[dict[str, str]]
+Item = dict[str, object]
 
 
-def advisory(events: Events, ecosystem: str, name: str) -> JsonObject:
+def affected(events: Events, ecosystem: str, name: str) -> Item:
     return {
-        "affected": [
-            {
-                "package": {"ecosystem": ecosystem, "name": name},
-                "ranges": [{"type": "SEMVER", "events": events}],
-            }
-        ]
+        "package": {"ecosystem": ecosystem, "name": name},
+        "ranges": [{"type": "SEMVER", "events": events}],
     }
 
 
@@ -55,19 +40,19 @@ def package_item(
     record: str | None = None,
     more: dict[str, Events] | None = None,
     group: list[str] | None = None,
-) -> JsonObject:
+) -> Item:
     found = {ID: events, **(more or {})}
     return {
         "package": {"name": name, "version": version, "ecosystem": ecosystem},
         "groups": [{"ids": group or list(found)}],
         "vulnerabilities": [
-            {"id": key, **advisory(value, ecosystem, record or name)}
+            {"id": key, "affected": [affected(value, ecosystem, record or name)]}
             for key, value in found.items()
         ],
     }
 
 
-def report_of(tmp_path: Path, *items: JsonObject) -> Path:
+def report_of(tmp_path: Path, *items: Item) -> Path:
     path = tmp_path / "osv.json"
     path.write_text(
         json.dumps(
@@ -119,13 +104,13 @@ def test_an_advisory_with_a_fixed_event_fails_without_a_registry_read(
 
 def test_a_fixed_event_in_a_second_range_fails(tmp_path: Path) -> None:
     item = package_item(BOUNDED)
-    second = [{"introduced": "5"}, {"fixed": "6"}]
+    second: Events = [{"introduced": "5"}, {"fixed": "6"}]
     item["vulnerabilities"] = [
         {
             "id": ID,
             "affected": [
-                *advisory(BOUNDED, "npm", "picomatch")["affected"],
-                *advisory(second, "npm", "picomatch")["affected"],
+                affected(BOUNDED, "npm", "picomatch"),
+                affected(second, "npm", "picomatch"),
             ],
         }
     ]
@@ -174,14 +159,14 @@ FIXED = [{"introduced": "0"}, {"fixed": "4.0.8"}]
         "group-id-with-no-record",
     ],
 )
-def test_any_doubt_about_the_proof_fails(tmp_path: Path, item: JsonObject) -> None:
+def test_any_doubt_about_the_proof_fails(tmp_path: Path, item: Item) -> None:
     with pytest.raises(ValueError, match="vulnerable packages"):
         accepted(report_of(tmp_path, item), npm("4.0.7"))
 
 
 def test_a_report_with_no_advisory_records_fails(tmp_path: Path) -> None:
     item = package_item(BOUNDED)
-    item["vulnerabilities"] = []
+    item["vulnerabilities"] = list[Item]()
     with pytest.raises(ValueError, match="vulnerable packages"):
         accepted(report_of(tmp_path, item), npm("4.0.7"))
 
@@ -195,22 +180,21 @@ def test_a_registry_that_cannot_be_read_fails_and_says_so(tmp_path: Path) -> Non
     path = report_of(tmp_path, package_item(BOUNDED))
     with pytest.raises(ValueError, match="registry.*no recorded response"):
         accepted(path, Registry({}))
-    broken = Registry({NPM: {"dist-tags": {}}})
+    broken = Registry({NPM: '{"dist-tags": {}}'})
     with pytest.raises(ValueError, match="registry"):
         accepted(path, broken)
 
 
 def test_a_clean_report_reads_no_registry(tmp_path: Path) -> None:
-    clean = {"package": {"name": "a", "version": "1", "ecosystem": "npm"}}
+    clean: Item = {"package": {"name": "a", "version": "1", "ecosystem": "npm"}}
     registry = npm("1")
     accepted(report_of(tmp_path, clean), registry)
     assert registry.requests == []
 
 
 def pypi(*releases: str) -> Registry:
-    return Registry(
-        {PYPI: {"releases": {version: [{"filename": "f"}] for version in releases}}}
-    )
+    files = [{"filename": "f"}]
+    return Registry({PYPI: json.dumps({"releases": dict.fromkeys(releases, files)})})
 
 
 def test_a_python_advisory_with_no_fix_passes_and_a_newer_release_fails(
@@ -240,7 +224,7 @@ def run_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     code: int,
-    item: JsonObject,
+    item: Item,
 ) -> bool:
     (tmp_path / "bun.lock").write_text("{}")
     gate: Gate = {
@@ -299,5 +283,5 @@ def test_the_gate_fails_on_any_scanner_exit_other_than_found_vulnerabilities(
 def test_the_gate_fails_when_the_scanner_exits_1_and_the_report_holds_no_finding(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    clean = {"package": {"name": "a", "version": "1", "ecosystem": "npm"}}
+    clean: Item = {"package": {"name": "a", "version": "1", "ecosystem": "npm"}}
     assert run_gate(runner, tmp_path, monkeypatch, 1, clean)
