@@ -131,3 +131,18 @@ def test_fix_in_a_ruff_gate_is_refused(tmp_path: Path) -> None:
     }
     with pytest.raises(ValueError, match="--fix"):
         validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "command", [["bun", "check:fallow"], ["bun", "run", "check:fallow"]]
+)
+def test_bun_runs_a_package_script_with_or_without_run(
+    tmp_path: Path, command: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: `bun <script>` runs the script as `bun run <script>` does, so Fallow's checks judge it too."""
+    scripted(
+        tmp_path, {"check:fallow": "fallow --only dead-code,dupes --fail-on-issues"}
+    )
+    gate: Gate = {"name": "g", "role": "dead-code-duplicates", "command": command}
+    with pytest.raises(ValueError, match="Fallow scans must check health"):
+        validate_gate(gate, tmp_path, set())

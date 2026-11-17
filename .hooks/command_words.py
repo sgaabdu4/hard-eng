@@ -25,6 +25,54 @@ def assigns_variables(name: str) -> bool:
 JUDGED_TOOLS = {"ruff", "fallow", "gitleaks", "clippy", "cargo-clippy"}
 OPERATORS = {"&&", "||", ";", "|", "&", "!", ">", ">>", "<", "2>", "(", ")"}
 MANAGERS = {"npm", "pnpm", "yarn", "bun"}
+PACKAGE_COMMANDS = frozenset(
+    {
+        "run",
+        "run-script",
+        "test",
+        "x",
+        "install",
+        "i",
+        "add",
+        "a",
+        "remove",
+        "rm",
+        "update",
+        "outdated",
+        "pm",
+        "init",
+        "create",
+        "build",
+        "upgrade",
+        "link",
+        "unlink",
+        "publish",
+        "pack",
+        "audit",
+        "why",
+        "repl",
+        "exec",
+        "patch",
+        "info",
+        "dlx",
+        "list",
+        "ls",
+        "cache",
+        "config",
+        "dedupe",
+        "prune",
+        "rebuild",
+        "store",
+        "up",
+        "workspace",
+        "workspaces",
+        "version",
+        "set",
+        "node",
+        "bun",
+        "help",
+    }
+)
 TOOL_WORD = re.compile(r"(ruff|fallow|gitleaks)(@[\w.=<>~+-]+)?")
 UV_FLAGS = {"--no-sync", "--frozen", "--locked"}
 DIRECT_FORMS = (
