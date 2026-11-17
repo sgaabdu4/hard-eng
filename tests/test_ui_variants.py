@@ -122,7 +122,7 @@ def test_a_mock_up_with_text_below_the_floor_reports_only_the_text_size(
 
 
 DECOR = (
-    "<div {mark}><h3>Today</h3>"
+    "<div {mark} style='{frame}'><h3>Today</h3>"
     f"<p style='{SMALL}'>Patient one</p><p style='{SMALL}'>Patient two</p>"
     "<p style='font-size:14px;color:#cccccc;margin:0'>Faint line</p>"
     "<span style='background:#d33;color:#fff;font-size:14px'>Red</span>"
@@ -130,27 +130,61 @@ DECOR = (
     "<span style='background:#33d;color:#fff;font-size:14px'>Blue</span>"
     "</div>"
 )
+FRAMES = {
+    "background": "background:#f2f4f8;padding:12px",
+    "shadow": "box-shadow:0 2px 8px rgba(0,0,0,.3);padding:12px",
+    "border": "border:1px solid #888;padding:12px",
+}
+SUB = f"<p style='{META}'>Posted yesterday</p><p style='{META}'>Ends in three days</p>"
+HIDDEN = "aria-hidden='true'"
+SUB_HIDDEN = SUB.replace("<p ", f"<p {HIDDEN} ")
+DODGES = {
+    "hidden-div": (f"<h2>Offer</h2><div {HIDDEN}>{SUB}</div>", "extra-text"),
+    "hidden-each-p": (f"<h2>Offer</h2>{SUB_HIDDEN}", "extra-text"),
+    "hidden-section": (f"<div {HIDDEN}><h2>Offer</h2>{SUB}</div>", "extra-text"),
+    "img-div": (f"<h2>Offer</h2><div role=img>{SUB}</div>", "extra-text"),
+    "presentation-div": (
+        f"<h2>Offer</h2><div role=presentation>{SUB}</div>",
+        "extra-text",
+    ),
+    "faint-frame": (
+        f"<h2>Offer</h2><div {HIDDEN} style='background:#fefefe'>{SUB}</div>",
+        "extra-text",
+    ),
+    "presentation-main": (
+        f"<main role=presentation><p style='{SMALL}'>Tiny line</p></main>",
+        "text-size",
+    ),
+}
 
 
-@pytest.mark.parametrize(
-    "mark",
-    ["aria-hidden='true'", "role=img aria-label='App preview'", "role=presentation"],
-)
-def test_a_decorative_mock_up_is_not_page_text(
-    tmp_path: Path, site: str, browser: ModuleType, mark: str
+@pytest.mark.parametrize("frame", FRAMES.values(), ids=FRAMES)
+@pytest.mark.parametrize("mark", [HIDDEN, "role=img aria-label='App preview'"])
+def test_a_framed_decorative_mock_up_is_not_page_text(
+    tmp_path: Path, site: str, browser: ModuleType, mark: str, frame: str
 ) -> None:
-    limit_page(
-        tmp_path, f"<section><h2>Preview</h2>{DECOR.format(mark=mark)}</section>"
-    )
+    body = DECOR.format(mark=mark, frame=frame)
+    limit_page(tmp_path, f"<section><h2>Preview</h2>{body}</section>")
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert found[width] == Counter(), (width, found[width])
 
 
+@pytest.mark.parametrize(("body", "rule"), DODGES.values(), ids=DODGES)
+def test_a_mark_on_text_with_no_frame_does_not_hide_a_finding(
+    tmp_path: Path, site: str, browser: ModuleType, body: str, rule: str
+) -> None:
+    limit_page(tmp_path, body)
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert rule in found[width], (width, found[width])
+
+
 def test_the_same_mock_up_without_a_mark_is_measured(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    limit_page(tmp_path, f"<section><h2>Preview</h2>{DECOR.format(mark='')}</section>")
+    body = DECOR.format(mark="", frame=FRAMES["background"])
+    limit_page(tmp_path, f"<section><h2>Preview</h2>{body}</section>")
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert {"text-size", "contrast"} <= set(found[width]), (width, found[width])
