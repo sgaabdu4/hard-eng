@@ -19,7 +19,7 @@ from scope_check import (
     left_out,
     nested_configs,
     refusal,
-    requires_python,
+    requires_python_of,
 )
 from tool_setup import managed_command
 
@@ -209,7 +209,7 @@ def ruff_gate_hits(
                 settings,
                 baseline.result(),
                 gate.get("role"),
-                requires_python(directory),
+                requires_python_of(directory, sample),
             )
             if hit not in hits
         ]
@@ -282,6 +282,7 @@ def validate_resolved(
     groups: list[Group],
     timeout: float,
     every: list[Group] | None = None,
+    only: Gate | None = None,
 ) -> None:
     """Run in the full check after the tools are installed; the Stop hook never runs it. `groups` are judged, `every` names all groups, so a parent knows its children."""
     every = groups if every is None else every
@@ -291,6 +292,7 @@ def validate_resolved(
             task
             for group in groups
             for gate in group["checks"]
+            if only is None or gate is only
             for task in (
                 *ruff_tasks((root, every, group, gate), defaults, timeout),
                 *fallow_tasks((root, every, group, gate), defaults, timeout),
@@ -313,4 +315,4 @@ def judge_before_run(
     except ValueError:
         return
     if judged and judged[0] == "fallow":
-        validate_resolved(root, [{**group, "checks": [gate]}], timeout, groups)
+        validate_resolved(root, [group], timeout, groups, gate)

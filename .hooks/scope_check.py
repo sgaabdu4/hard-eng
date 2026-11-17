@@ -140,9 +140,23 @@ def requires_python(directory: Path) -> tuple[int, int] | None:
     except (OSError, tomllib.TOMLDecodeError):
         return None
     found = re.search(
-        r">=\s*(\d+)\.(\d+)", str(project.get("project", {}).get("requires-python", ""))
+        r"(?:>=|~=)\s*(\d+)\.(\d+)",
+        str(project.get("project", {}).get("requires-python", "")),
     )
     return (int(found[1]), int(found[2])) if found else None
+
+
+def requires_python_of(directory: Path, sample: str | None) -> tuple[int, int] | None:
+    """The minimum of the nearest `pyproject.toml` at or above the sample file, up to the gate folder; a member package has its own."""
+    base = directory.resolve()
+    if sample is None:
+        return requires_python(base)
+    for folder in [(base / sample).parent, *(base / sample).parent.parents]:
+        if (folder / "pyproject.toml").is_file() and (found := requires_python(folder)):
+            return found
+        if folder == base:
+            break
+    return requires_python(base)
 
 
 def ruff_config_of(folder: Path) -> bool:
@@ -164,8 +178,9 @@ def governing_samples(directory: Path, checked: set[str]) -> list[str]:
     """One checked Python file for each distinct Ruff config that governs a file of the gate, so each config is judged."""
     base = directory.resolve()
     chosen: dict[Path, str] = {}
+    own = installed_files(directory)
     for name in sorted(checked):
-        if not name.endswith(RUFF_SUFFIXES):
+        if not name.endswith(RUFF_SUFFIXES) or name in own:
             continue
         folder = (base / name).parent
         found = base
@@ -191,7 +206,7 @@ def harmless_ruff_config(name: str, directory: Path) -> bool:
         if not (isinstance(tool, dict) and "ruff" in tool):
             return True
         config = tool["ruff"]
-    minimum = requires_python(directory)
+    minimum = requires_python_of(directory, name)
     found = re.fullmatch(r"py(\d)(\d+)", str(config.get("target-version", "")))
     return (
         set(config) == {"target-version"}

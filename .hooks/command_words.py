@@ -206,12 +206,9 @@ def shadowed(tool: str, directory: Path) -> bool:
     return False
 
 
-LOCAL_OWNERS = {"fallow": ("/node_modules/fallow/", "/node_modules/@fallow-cli/")}
-
-
 def bin_shadow(tool: str, directory: Path) -> str | None:
     """A file in node_modules/.bin named like the tool that is not the tool's own package: bun puts that folder first on the path."""
-    owners = LOCAL_OWNERS.get(tool, (f"/node_modules/{tool}/",))
+    owners = (f"/node_modules/{tool}/",)
     for folder in [directory.resolve(), *directory.resolve().parents]:
         path = folder / "node_modules/.bin" / tool
         if os.path.lexists(path) and not any(
@@ -238,7 +235,8 @@ def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] |
         )
     local = (
         bin_shadow(argv[0], directory)
-        if words != command or launcher[0] == "bunx" or launcher[:2] == ["bun", "x"]
+        if argv[0] != "fallow"
+        and (words != command or launcher[0] == "bunx" or launcher[:2] == ["bun", "x"])
         else None
     )
     if local:
