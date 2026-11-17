@@ -312,14 +312,20 @@ def _look_block() -> str:
 
 
 @pytest.mark.parametrize(
-    "evidence", [_UI_BODY + "\n" + _look_block() + "\n", _UNCHANGED]
+    ("evidence", "changed"),
+    [
+        (_UI_BODY + "\n" + _look_block() + "\n", {"filename": "src/App.ts"}),
+        (_UNCHANGED, {"filename": "src/App.ts", "patch": "-const a = 1\n+const a = 2"}),
+    ],
+    ids=["pictures", "unchanged-note-on-logic"],
 )
 def test_remote_check_accepts_a_ui_change_with_pictures_or_an_unchanged_note(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evidence: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    evidence: str,
+    changed: dict[str, object],
 ) -> None:
-    problem, _ = _ui_problem(
-        tmp_path, monkeypatch, evidence + _VALID, [{"filename": "src/App.ts"}]
-    )
+    problem, _ = _ui_problem(tmp_path, monkeypatch, evidence + _VALID, [changed])
     assert problem is None
 
 

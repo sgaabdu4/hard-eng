@@ -468,6 +468,14 @@ VISIBLE_CHANGES = {
         file_change("app/lib/helpers.dart", "-  return Padding(child: child);"),
         {"app/lib/helpers.dart": DART_HELPER},
     ),
+    "dart-button-removal": (
+        file_change("app/lib/ui/card.dart", "-  IconButton(onPressed: onDelete),"),
+        {"app/lib/ui/card.dart": "final a = 1;\n"},
+    ),
+    "lit-template-removal": (
+        file_change("src/card.ts", "-<button @click=${this.no}>Decline</button>"),
+        NO_FILES,
+    ),
     "dart-string": (
         file_change("app/lib/label.dart", "-  const a = 1;\n+  final a = 'Save';"),
         {"app/lib/label.dart": "final a = 'Save';\n"},
@@ -488,10 +496,14 @@ NONVISUAL_CHANGES = {
         NO_FILES,
     ),
     "dart-logic": (
+        file_change("app/lib/logic.dart", "+int g(int a) => a + 1;"),
+        {"app/lib/logic.dart": "int g(int a) => a + 1;\n"},
+    ),
+    "typescript-generic": (
         file_change(
-            "app/lib/logic.dart", "-int f(int a) => a;\n+int f(int a) => a + 1;"
+            "src/api.ts", "-const a: Array<string> = []\n+const a: Map<string, number>"
         ),
-        {"app/lib/logic.dart": "int f(int a) => a + 1;\n"},
+        NO_FILES,
     ),
     "comment-only": (
         file_change("src/App.tsx", "-// old note\n+// new note"),
@@ -918,3 +930,45 @@ def test_a_video_after_alone_is_refused_on_a_visible_web_change(
     )
     with pytest.raises(shipping.ShippingError, match="video"):
         ready(fixture.root, fixture)
+
+
+@pytest.mark.parametrize(
+    "name", ["dart-button-removal", "lit-template-removal", "markup"]
+)
+def test_ci_refuses_na_for_the_visible_changes_that_ship_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    from test_pr_text import _VALID
+
+    block = look.block_text(sample_record(1))
+    plan = f"## ux_reference\n{NO_UX}\n\n## Verification\n"
+    change = VISIBLE_CHANGES[name][0]
+    moved: dict[str, object] = dict(change)
+    moved["filename"] = str(change["filename"]).replace("app/", "src/")
+    plan_file: dict[str, object] = {
+        "filename": "features/x/PLAN.md",
+        "status": "modified",
+    }
+    files = [moved, plan_file]
+    problem = ci_problem(
+        tmp_path / "ci",
+        monkeypatch,
+        f"{_UI_BODY}\n{block}\n{_VALID}",
+        files,
+        {"features/x/PLAN.md": plan},
+    )
+    assert "ux_reference says N/A" in str(problem)
+
+
+def test_ci_refuses_the_unchanged_note_on_a_visible_change_with_no_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from test_pr_text import _VALID
+
+    problem = ci_problem(
+        tmp_path / "ci",
+        monkeypatch,
+        f"{_VALID}\n{UNCHANGED_NOTE}",
+        [VISIBLE_FILE],
+    )
+    assert "UI appearance: unchanged" in str(problem)
