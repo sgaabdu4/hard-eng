@@ -47,8 +47,9 @@ const found = [];
 const visible = (el) => {
   const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
-  const clipped = (s.clip && s.clip !== "auto") || (s.clipPath && s.clipPath !== "none");
-  return !clipped && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
+  const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
+  const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
+  return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
 };
 const rgb = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
 const opaque = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); };
@@ -75,17 +76,30 @@ for (const el of controls) {
     found.push({ rule: "tap-size", at: name(el), w: Math.round(b.width), h: Math.round(b.height) });
   }
 }
+const pseudoText = (el) => ["::before", "::after"].map((p) => {
+  const c = getComputedStyle(el, p).content;
+  return c && /^["']/.test(c) ? c.slice(1, -1) : "";
+}).join("");
+const textOf = (el) => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let out = "";
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.parentElement && visible(n.parentElement)) out += n.nodeValue;
+  for (const e of [el, ...el.querySelectorAll("*")]) if (visible(e)) out += pseudoText(e);
+  return (el.value && el.tagName === "INPUT" ? el.value : out).trim();
+};
 const groups = new Map();
 for (const el of controls.filter((c) => c.tagName === "BUTTON" || c.getAttribute("role") === "button")) {
   groups.set(el.parentElement, [...(groups.get(el.parentElement) || []), el]);
 }
 const colourOf = (el, s) => [ownText(el) ? s.color : "", s.backgroundColor, s.borderTopWidth !== "0px" ? s.borderTopColor : ""];
 for (const [parent, members] of groups) {
-  if (members.length < 2) continue;
-  const behind = getComputedStyle(parent).backgroundColor;
-  const filled = members.filter((m) => { const c = getComputedStyle(m).backgroundColor; return opaque(c) && c !== behind && hue(rgb(c)) !== null; });
-  const fills = new Set(filled.map((m) => getComputedStyle(m).backgroundColor));
-  if (fills.size > 1) found.push({ rule: "competing-buttons", at: filled.map(name).join(" + "), fills: fills.size });
+  if (members.length > 1) {
+    const behind = getComputedStyle(parent).backgroundColor;
+    const filled = members.filter((m) => { const c = getComputedStyle(m).backgroundColor; return opaque(c) && c !== behind && hue(rgb(c)) !== null; });
+    const fills = new Set(filled.map((m) => getComputedStyle(m).backgroundColor));
+    if (fills.size > 1) found.push({ rule: "competing-buttons", at: filled.map(name).join(" + "), fills: fills.size });
+  }
+  if ([...parent.children].some((c) => !members.includes(c) && visible(c) && textOf(c))) continue;
   const block = parent.parentElement;
   const box = block.getBoundingClientRect();
   const pad = parseFloat(getComputedStyle(block).paddingLeft);
@@ -96,40 +110,32 @@ for (const [parent, members] of groups) {
   const textLefts = siblings.map((c) => { const r = document.createRange(); r.selectNodeContents(c); return r.getBoundingClientRect().left; });
   const edges = new Set([left, ...textLefts].map((x) => Math.round(x - box.left - pad)));
   if (edges.size > 1) found.push({ rule: "shared-edge", at: name(block), edges: [...edges] });
-  const colours = new Set();
-  for (const el of [block, ...block.querySelectorAll("*")]) {
-    if (!visible(el)) continue;
-    for (const c of colourOf(el, getComputedStyle(el))) {
-      if (c && opaque(c) && hue(rgb(c)) !== null) colours.add(rgb(c).slice(0, 3).join(","));
-    }
-  }
-  if (colours.size > LIMITS.accent_colours) found.push({ rule: "accent-colours", at: name(block), colours: colours.size });
 }
-const textOf = (el) => {
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-  let out = "";
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.parentElement && visible(n.parentElement)) out += n.nodeValue;
-  return (el.value && el.tagName === "INPUT" ? el.value : out).trim();
-};
 const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-const labelled = (el) => ["aria-label", "aria-labelledby", "title"].some((a) => (el.getAttribute(a) || "").trim());
+const labelled = (el) => ["aria-label", "aria-labelledby", "title"].some((a) => (el.getAttribute(a) || "").trim()) || (el.textContent || "").trim() !== "";
 const selectorOf = (el) => el.tagName.toLowerCase() + (el.getAttribute("name") ? `[name="${el.getAttribute("name")}"]` : "");
 const BUTTONS = "button,[role=button],input[type=button],input[type=submit]";
+const submitting = (el) => el.getAttribute("type") === "submit";
+const isControl = (e) => e.matches(BUTTONS + ",a[href],[tabindex],[onclick]") || getComputedStyle(e).cursor === "pointer" || textOf(e) !== "";
 for (const input of document.querySelectorAll("input[type=password]")) {
   if (!visible(input)) continue;
   const r = input.getBoundingClientRect();
-  const scope = input.form || input.parentElement;
-  for (const b of scope.querySelectorAll(BUTTONS)) {
-    const br = b.getBoundingClientRect();
+  const scope = input.form || input.parentElement.parentElement || input.parentElement;
+  const near = (br) => {
     const gap = Math.max(br.left - r.right, r.left - br.right);
     const centre = (br.top + br.bottom) / 2;
-    if (!visible(b) || b.type === "submit" || gap > 24 || centre < r.top - 4 || centre > r.bottom + 4) continue;
+    return gap <= 24 && centre >= r.top - 4 && centre <= r.bottom + 4;
+  };
+  const candidates = [...scope.querySelectorAll("*")].filter((e) => e !== input && visible(e) && !e.contains(input) && !e.closest("label") && !submitting(e) && near(e.getBoundingClientRect()) && isControl(e));
+  for (const b of candidates.filter((c) => !candidates.some((o) => o !== c && c.contains(o)))) {
     const text = textOf(b);
-    const why = !overlaps(br, r) ? "reveal control outside the field" : text ? "reveal control with text" : !labelled(b) ? "reveal control without a label" : "";
+    const why = !overlaps(b.getBoundingClientRect(), r) ? "reveal control outside the field" : text ? "reveal control with text" : !labelled(b) ? "reveal control without a label" : "";
     if (why) found.push({ rule: "field-control", at: text || name(b), selector: selectorOf(input), why });
   }
 }
-const searches = new Set(document.querySelectorAll("input[type=search], [role=search] input:not([type=hidden],[type=submit],[type=button],[type=checkbox],[type=radio])"));
+const fieldText = (i) => [i.placeholder, i.getAttribute("aria-label"), i.title, i.name, i.id, ...[...(i.labels || [])].map((l) => l.innerText)].join(" ");
+const searches = new Set([...document.querySelectorAll("input[type=search], [role=search] input:not([type=hidden],[type=submit],[type=button],[type=checkbox],[type=radio])")]);
+for (const i of document.querySelectorAll("input")) if (["text", "search"].includes(i.type) && /search/i.test(fieldText(i))) searches.add(i);
 for (const input of searches) {
   if (!visible(input)) continue;
   const r = input.getBoundingClientRect();
@@ -148,26 +154,61 @@ const backdrop = (el) => { for (let e = el; e; e = e.parentElement) { const c = 
 const contrastOf = (el) => { const a = lum(rgb(getComputedStyle(el).color).slice(0, 3)), b = lum(backdrop(el)); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
 const bodyPx = parseFloat(getComputedStyle(document.body).fontSize), bodyContrast = contrastOf(document.body);
 const SKIP = "a,button,label,legend,th,td,dt,summary,input,select,textarea,option,time,data,output,meter,nav,pre,code,[role=alert],[aria-live],h1,h2,h3,h4,h5,h6";
+const PICTURES = "svg,figure,picture,canvas,img,[role=img],[aria-hidden=true],[inert]";
+const HEADINGS = "h1,h2,h3,h4,h5,h6";
+const wordsOf = (text) => text.split(/\\s+/).filter(Boolean);
+const isValue = (text) => wordsOf(text).length <= 3 && /^[^\\p{L}]*\\d[\\d.,:%\\/\\s-]*\\p{L}{0,6}\\.?$/u.test(text.trim());
+const chip = (el) => {
+  const s = getComputedStyle(el);
+  const filled = opaque(s.backgroundColor) && s.backgroundColor !== getComputedStyle(el.parentElement).backgroundColor;
+  const edged = s.borderTopWidth !== "0px" && s.borderTopStyle !== "none";
+  return filled || edged;
+};
+const titleLike = (el) => {
+  if (/^H[1-6]$/.test(el.tagName)) return true;
+  const s = getComputedStyle(el);
+  const text = textOf(el);
+  return visible(el) && ownText(el) && !el.closest(SKIP + "," + PICTURES) && !["inline", "inline-block"].includes(s.display) && wordsOf(text).length <= 12 && (parseInt(s.fontWeight, 10) >= 600 || parseFloat(s.fontSize) > bodyPx + 0.5);
+};
 const lineOf = (el) => {
   const text = textOf(el);
-  const words = text.split(/\\s+/).filter(Boolean);
-  if (!text || el.closest(SKIP) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
-  if (words.length <= 3 && /[0-9]/.test(text)) return null;
-  const s = getComputedStyle(el);
-  const secondary = parseFloat(s.fontSize) < bodyPx - 0.5 || contrastOf(el) <= bodyContrast - 3;
-  return secondary ? { el, words: words.length } : null;
+  if (!text || el.closest(SKIP + "," + PICTURES) || chip(el) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
+  if (isValue(text) || [...el.parentElement.children].some((c) => c !== el && ownText(c) && isValue(textOf(c)))) return null;
+  const secondary = parseFloat(getComputedStyle(el).fontSize) < bodyPx - 0.5 || contrastOf(el) <= bodyContrast / 2;
+  return { el, words: wordsOf(text).length, secondary };
 };
-const HEADINGS = "h1,h2,h3,h4,h5,h6";
-for (const heading of document.querySelectorAll(HEADINGS)) {
-  if (!visible(heading)) continue;
-  let top = heading;
-  while (top.parentElement && !["BODY", "MAIN"].includes(top.parentElement.tagName) && top.parentElement.querySelectorAll(HEADINGS).length === 1) top = top.parentElement;
+const cardOf = (title) => {
+  let top = title;
+  const parent = top.parentElement;
+  if (parent && !["BODY", "MAIN"].includes(parent.tagName) && [...parent.children].filter((c) => c !== title && !c.matches(BUTTONS) && textOf(c)).length === 0 && parent.nextElementSibling) top = parent;
+  return top;
+};
+const cards = [];
+const titles = [...document.querySelectorAll("*")].filter((el) => el.children.length < 4 && titleLike(el));
+for (const title of titles) {
+  const top = cardOf(title);
   const roots = [];
-  if (top !== heading) roots.push(top);
-  else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
-  const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
-  if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
-  for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
+  for (let n = top.nextElementSibling; n && !titles.includes(n) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
+  if (!top.parentElement || ["BODY", "MAIN"].includes(top.parentElement.tagName)) cards.push({ title, roots, box: null });
+  else cards.push({ title, roots, box: top.parentElement });
+  const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el) && !el.querySelector(HEADINGS)).map(lineOf).filter(Boolean);
+  if (lines.length > 8) continue;
+  const secondary = lines.filter((line) => line.secondary);
+  if (secondary.length > 1) found.push({ rule: "extra-text", at: name(title), secondary_lines: secondary.length });
+  for (const line of secondary) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(title), words: line.words });
+}
+const accentBlocks = new Set([...groups.keys()].map((p) => p.parentElement));
+for (const card of cards) if (card.box) accentBlocks.add(card.box);
+for (const block of [...accentBlocks]) if (["BODY", "MAIN", "HTML"].includes(block.tagName)) accentBlocks.delete(block);
+for (const block of accentBlocks) {
+  const colours = new Set();
+  for (const el of [block, ...block.querySelectorAll("*")]) {
+    if (!visible(el) || el.closest(PICTURES)) continue;
+    for (const c of colourOf(el, getComputedStyle(el))) {
+      if (c && opaque(c) && hue(rgb(c)) !== null) colours.add(rgb(c).slice(0, 3).join(","));
+    }
+  }
+  if (colours.size > LIMITS.accent_colours) found.push({ rule: "accent-colours", at: name(block), colours: colours.size });
 }
 if (document.documentElement.scrollWidth > innerWidth + 1) {
   found.push({ rule: "overflow", at: "page", scrollWidth: document.documentElement.scrollWidth, width: innerWidth });
