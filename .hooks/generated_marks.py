@@ -22,7 +22,7 @@ NAME_PART = re.compile(r"[\w*-]*")
 def mark_kind(pattern: str) -> str | None:
     plain = pattern.strip("/")
     if not GLOB.search(plain):
-        return "exact" if "/" in plain else None
+        return "exact" if "/" in plain or pattern.startswith("/") else None
     last = plain.split("/")[-1]
     if any(
         last.endswith(suffix) and NAME_PART.fullmatch(last.removesuffix(suffix))
@@ -33,7 +33,7 @@ def mark_kind(pattern: str) -> str | None:
 
 
 def regex(pattern: str) -> re.Pattern[str]:
-    anchored = "/" in pattern.strip("/")
+    anchored = pattern.startswith("/") or "/" in pattern.strip("/")
     text = ""
     parts = pattern.strip("/").split("/")
     for index, part in enumerate(parts):

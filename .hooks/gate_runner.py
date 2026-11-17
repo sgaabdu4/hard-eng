@@ -26,7 +26,7 @@ from ci_jobs import (
     language_groups,
 )
 from dart_boundaries import validate_dart_boundaries, validate_dart_typing
-from debt import OUTPUTS, remember, ruff_check
+from debt import OUTPUTS, remember, without_fixes
 from dependency_graph import SOURCE_SUFFIXES, child_groups
 from gate_config import (
     Gate,
@@ -43,6 +43,7 @@ from python_setup import (
     require_import_contract,
     validate_pyrefly,
 )
+from shellcheck_rc import ignoring_settings
 from tool_setup import gate_scanner, lost_scanner_note, managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -155,14 +156,6 @@ def production_files(
     return files
 
 
-def without_fixes(command: list[str]) -> list[str]:
-    """`fix = true` in ruff's settings makes `ruff check` rewrite files and exit 0."""
-    tool = ruff_check(command)
-    if tool < 0:
-        return command
-    return [*command[: tool + 2], "--no-fix", *command[tool + 2 :]]
-
-
 def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
@@ -175,7 +168,9 @@ def prepare_command(
         return []
     from hot_paths import semgrep_options
 
-    command = without_fixes(semgrep_options(ROOT, group, gate, command))
+    command = ignoring_settings(
+        without_fixes(semgrep_options(ROOT, group, gate, command))
+    )
     if command[0] == "biome" and "." in command:
         from project_setup import javascript_files
 
