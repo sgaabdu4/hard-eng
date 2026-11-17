@@ -356,6 +356,22 @@ def judged_rules(content: str, age: Callable[[], bool] | None) -> None:
             raise
 
 
+def judged_plan_controls(
+    content: str, plan: Path | None, age: Callable[[], bool] | None
+) -> None:
+    """A plain `Controls: None — reason` line needs no part checks, so the Stop path loads no new module for it."""
+    lines = [x for x in content.splitlines() if x.startswith("Controls:")]
+    if (
+        len(lines) == 1
+        and lines[0].startswith("Controls: None — ")
+        and lines[0][17:18].strip()
+    ):
+        return
+    from plan_controls import judged_controls, plan_root
+
+    judged_controls(content, plan and plan_root(plan), age)
+
+
 def ux_proof(
     content: str,
     *,
@@ -397,9 +413,7 @@ def ux_proof(
     for name in ("Capture", "Review"):
         evidence_field(content, name)
     if not legacy:
-        from plan_controls import judged_controls, plan_root
-
-        judged_controls(content, plan and plan_root(plan), age)
+        judged_plan_controls(content, plan, age)
         judged_rules(content, age)
 
 

@@ -126,8 +126,16 @@ def test_a_plan_check_of_a_plan_without_a_visible_change_loads_no_ui_proof(
     assert done.stdout.strip() == "[]"
 
 
+@pytest.mark.parametrize(
+    ("controls", "loaded"),
+    [
+        ("Controls: None — the fixture changes only wording.", "[]"),
+        ("Controls: Field — reuses `src/ui/Field.tsx`", "['plan_controls']"),
+    ],
+    ids=["none-line-loads-nothing", "reuse-line-loads-only-plan-controls"],
+)
 def test_the_stop_path_plan_check_of_a_visible_plan_loads_no_ui_proof(
-    tmp_path: Path, visual_plan: str
+    tmp_path: Path, visual_plan: str, controls: str, loaded: str
 ) -> None:
     import subprocess
     import sys
@@ -144,8 +152,7 @@ def test_the_stop_path_plan_check_of_a_visible_plan_loads_no_ui_proof(
     plan.parent.mkdir(parents=True)
     plan.write_text(
         visual_plan.replace(
-            "Controls: None — the fixture changes only wording.",
-            "Controls: Field — reuses `src/ui/Field.tsx`",
+            "Controls: None — the fixture changes only wording.", controls
         )
     )
     code = (
@@ -162,4 +169,4 @@ def test_the_stop_path_plan_check_of_a_visible_plan_loads_no_ui_proof(
         check=False,
     )
     assert done.returncode == 0, done.stderr
-    assert done.stdout.strip() == "['plan_controls']"
+    assert done.stdout.strip() == loaded
