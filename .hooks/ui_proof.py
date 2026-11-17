@@ -174,8 +174,9 @@ def guideline_problem(root: Path, visible: list[str]) -> str | None:
 
 
 def merge_base(root: Path, base_ref: str) -> str:
+    remote_ref = f"origin/{base_ref}"
     done = subprocess.run(
-        ["git", "merge-base", "HEAD", f"origin/{base_ref}"],
+        ["git", "merge-base", "HEAD", remote_ref],
         cwd=root,
         capture_output=True,
         text=True,

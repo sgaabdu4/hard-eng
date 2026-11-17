@@ -507,7 +507,7 @@ def test_measure_records_an_open_session_state(
         "state.html",
         "<button id=show style='width:60px;height:44px;font-size:16px' "
         "onclick=\"document.body.insertAdjacentHTML('beforeend',"
-        "'<p id=late style=font-size:12px>Opened</p>')\">Show</button>",
+        "'<p id=late style=font-size:10px>Opened</p>')\">Show</button>",
     )
     name = session()
     plain_step(tmp_path, name, "set", "viewport", "768", "900")
