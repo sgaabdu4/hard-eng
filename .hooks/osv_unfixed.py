@@ -93,13 +93,11 @@ def last_affected(advisory: JsonObject, ecosystem: str, name: str) -> Bound | No
 
 
 def malicious(advisory: JsonObject) -> bool:
-    """The marks that the real report of a malicious npm package holds: the MAL- id, the origins key of the malicious-packages feed and CWE-506."""
+    """The marks that real reports of malicious npm packages hold: the MAL- id and, on reviewed advisories, CWE-506."""
     special = advisory.get("database_specific")
     special = special if isinstance(special, dict) else {}
-    return (
-        str(advisory.get("id")).startswith("MAL-")
-        or "malicious-packages-origins" in special
-        or "CWE-506" in texts(special.get("cwe_ids") or [])
+    return str(advisory.get("id")).startswith("MAL-") or "CWE-506" in texts(
+        special.get("cwe_ids") or []
     )
 
 
@@ -134,16 +132,20 @@ def accept_unfixed(item: JsonObject, fetch: Fetch) -> None:
     if ecosystem not in READERS:
         raise ValueError(f"no registry reader for {ecosystem}")
     bounds = [bound_of(advisory, ecosystem, name) for advisory in advisories]
-    if closed := [bound for bound in bounds if bound is not None]:
-        if release(version)[0] > min(closed):
-            raise ValueError(f"{version} is above the affected range")
-        try:
-            versions = READERS[ecosystem](name, fetch)
-        except (OSError, TypeError, ValueError) as error:
-            raise ValueError(f"the registry could not be read: {error}") from error
-        for other in versions:
-            if above(other, min(closed), ecosystem):
-                raise ValueError(f"the release {other} is above the affected range")
+    installed = release(version)[0]
+    closed = [bound for bound in bounds if bound is not None]
+    if closed and installed > min(closed):
+        raise ValueError(f"{version} is above the affected range")
+    ceiling = min([*closed, installed] if None in bounds else closed)
+    try:
+        versions = READERS[ecosystem](name, fetch)
+    except (OSError, TypeError, ValueError) as error:
+        raise ValueError(f"the registry could not be read: {error}") from error
+    for other in versions:
+        if above(other, ceiling, ecosystem):
+            raise ValueError(
+                f"the release {other} is above the affected range or, for a range with no end, the installed version"
+            )
     print(
         f"OSV: {name}@{version} {', '.join(ids)}: no fixed release exists yet, so this passes; "
         "it will fail as soon as a fixed release exists"
