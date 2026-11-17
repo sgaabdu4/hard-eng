@@ -1,11 +1,9 @@
 """The `Controls:` line of a visible-change plan: each control names the shared part it reuses, or a new part with a mockup that `look` has opened."""
 
 import fnmatch
-import hashlib
 import json
 import os
 import re
-import subprocess
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
@@ -22,6 +20,8 @@ def plan_root(plan: Path) -> Path | None:
 
 
 def looked_hashes(root: Path) -> set[str]:
+    import subprocess
+
     """The hashes of the images that a `look` record of this checkout says were opened."""
     done = subprocess.run(
         ["git", "rev-parse", "--git-path", "hard-eng/look"],
@@ -44,6 +44,8 @@ def mockup_problem(entry: str, mockup: str, root: Path) -> str | None:
     image = root / mockup
     if mockup.startswith(("http://", "https://")) or not image.is_file():
         return f"Controls: the mockup in `{entry}` must be an image file in the repository, and `{mockup}` is not"
+    import hashlib
+
     if os.environ.get("GITHUB_ACTIONS"):
         return None
     if hashlib.sha256(image.read_bytes()).hexdigest() not in looked_hashes(root):
@@ -52,6 +54,8 @@ def mockup_problem(entry: str, mockup: str, root: Path) -> str | None:
 
 
 def is_tracked(part: str, root: Path) -> bool:
+    import subprocess
+
     listed = subprocess.run(
         ["git", "ls-files", "--error-unmatch", "--", part],
         cwd=root,

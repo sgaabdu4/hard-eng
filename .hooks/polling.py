@@ -12,6 +12,15 @@ REASON = (
 )
 
 
+MERGE_WORDS = frozenset(("merge", "mergePullRequest", "enablePullRequestAutoMerge"))
+
+
+def holds_merge(command: str) -> bool:
+    """Whether the command has the word `gh` and a merge word, each as its own word and never a part of one."""
+    words = set(re.findall(r"[A-Za-z0-9_]+", command))
+    return "gh" in words and bool(words & MERGE_WORDS)
+
+
 def deny(reason: str) -> dict[str, object]:
     return {
         "hookSpecificOutput": {
@@ -29,14 +38,12 @@ def decision(payload: object) -> dict[str, object] | None:
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    if "erge" in command and re.search(r"\bgh\b", command):
+    if "gh" in command and "erge" in command and holds_merge(command):
         from pathlib import Path
 
-        from merge_guard import holds_merge, merge_problem
+        from merge_guard import merge_problem
 
-        if holds_merge(command) and (
-            problem := merge_problem(command, Path(str(payload.get("cwd") or ".")))
-        ):
+        if problem := merge_problem(command, Path(str(payload.get("cwd") or "."))):
             return deny(f"Merge refused: {problem}")
     if payload.get("agent_id") or (
         isinstance(tool_input, dict) and tool_input.get("run_in_background") is True
