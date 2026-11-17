@@ -29,6 +29,12 @@ def project(tmp_path: Path) -> Path:
     (root / "src/ui/PasswordField.tsx").write_text("export {};\n")
     (root / "design").mkdir()
     (root / "design/search.png").write_bytes(MOCKUP)
+    (root / "README.md").write_text("project\n")
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps({"shipping": {"ui_paths": ["src/**"]}})
+    )
+    (root / "src/ui/Untracked.tsx").write_text("export {};\n")
+    (root / ".gitignore").write_text("src/ui/Untracked.tsx\n")
     commit(root, "parts")
     return root
 
@@ -48,6 +54,10 @@ def refusal(project: Path, visual_plan: str, line: str | None) -> str:
         ("Password box — reuses `src/ui/Missing.tsx`", "src/ui/Missing.tsx"),
         ("Search box — new `src/ui/SearchField.tsx`", "mockup"),
         ("Password box", "reuses"),
+        ("Password box — reuses `README.md`", "ui_paths"),
+        ("Password box — reuses `.`", "tracked file"),
+        ("Password box — reuses `src/ui`", "tracked file"),
+        ("Password box — reuses `src/ui/Untracked.tsx`", "tracked file"),
         (
             "Search box — new `src/ui/SearchField.tsx` — mockup ![M](https://example.test/m.png)",
             "image file in the repository",
@@ -59,6 +69,10 @@ def refusal(project: Path, visual_plan: str, line: str | None) -> str:
         "path-not-found",
         "new-without-mockup",
         "no-part",
+        "outside-ui-paths",
+        "dot",
+        "folder",
+        "untracked",
         "mockup-url",
         "mockup-not-looked-at",
     ],

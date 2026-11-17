@@ -1,5 +1,6 @@
 """The `Controls:` line of a visible-change plan: each control names the shared part it reuses, or a new part with a mockup that `look` has opened."""
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -50,11 +51,30 @@ def mockup_problem(entry: str, mockup: str, root: Path) -> str | None:
     return None
 
 
+def part_problem(part: str, root: Path) -> str | None:
+    """The shared part must be one tracked file, and under the project's `ui_paths` when it has any."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", part],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.split()
+    if tracked != [part]:
+        return f"Controls: the shared part `{part}` must be one tracked file of the repository"
+    try:
+        policy = json.loads((root / "hard-eng.gates.json").read_text())
+        patterns = policy["shipping"]["ui_paths"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if patterns and not any(fnmatch.fnmatchcase(part, pattern) for pattern in patterns):
+        return f"Controls: the shared part `{part}` is not under the project's ui_paths ({', '.join(patterns)})"
+    return None
+
+
 def entry_problem(entry: str, root: Path | None) -> str | None:
     if reused := REUSE.fullmatch(entry):
-        if root is not None and not (root / reused[1]).exists():
-            return f"Controls: the shared part `{reused[1]}` does not exist in the repository"
-        return None
+        return None if root is None else part_problem(reused[1], root)
     new = NEW.fullmatch(entry)
     if new is None:
         return f"Controls: `{entry}` needs `— reuses `<repo path>`` or `— new `<repo path>` — mockup ![..](..)``"
