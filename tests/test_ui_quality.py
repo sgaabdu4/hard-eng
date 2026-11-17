@@ -44,7 +44,11 @@ def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
 
 
 def capture(
-    browser: ModuleType, tmp_path: Path, site: str, name: str
+    browser: ModuleType,
+    tmp_path: Path,
+    site: str,
+    name: str,
+    skip: tuple[str, ...] = (),
 ) -> dict[int, Counter[str]]:
     """Capture one served page at each width; return the finding rules at each width."""
     code = browser.browser_command(
@@ -59,6 +63,7 @@ def capture(
             for finding in json.loads((folder / f"{name}-{width}.json").read_text())[
                 "findings"
             ]
+            if finding.get("selector") not in skip
         )
         for width in WIDTHS
     }
@@ -166,6 +171,7 @@ REAL_UX = (
     "Surface: Existing — /account, rendered by app/account/page.tsx\n"
     "Before: ![Before](https://example.test/account-before.png)\n"
     "Proposed: ![Proposed](https://example.test/account-proposed.png)\n"
+    "Controls: None — the fixture changes only wording.\n"
     "Capture: Native browser test account.spec.ts passed the route and screen assertions.\n"
     "Review: Inspected both account captures at the same viewport; only the proposed label differs.\n"
     + ux_rules_block()
@@ -767,7 +773,14 @@ def test_ci_refuses_pairs_without_a_look_block_and_a_visible_na_reference(
     )
 
 
-UI_MODULES = ("ui_measure", "ui_proof", "look", "merge_guard", "ship_record")
+UI_MODULES = (
+    "ui_measure",
+    "ui_proof",
+    "look",
+    "merge_guard",
+    "ship_record",
+    "plan_controls",
+)
 
 
 @pytest.mark.parametrize(
@@ -840,6 +853,7 @@ def test_ux_text_states_the_measured_limits() -> None:
     assert f"at most {LIMITS['accent_colours']} accent colours" in reference
     assert f"{LIMITS['control_px']} × {LIMITS['control_px']} px on the web" in reference
     assert f"{LIMITS['link_px']} × {LIMITS['link_px']} px (WCAG" in reference
+    assert f"over {LIMITS['secondary_words']} words" in reference
 
 
 def test_red_to_fixed_journey_end_to_end(
@@ -858,7 +872,22 @@ def test_red_to_fixed_journey_end_to_end(
                 ready(fixture.root, fixture)
 
 
-LAYOUT_RULES = {"competing-buttons", "accent-colours", "overflow", "shared-edge"}
+LAYOUT_RULES = {
+    "competing-buttons",
+    "accent-colours",
+    "overflow",
+    "shared-edge",
+    "field-control",
+    "extra-text",
+}
+
+
+GOV_SEARCH_REASON = (
+    "its search field has no icon inside, with one submit button beside it; "
+    "the search row of ux.md is the user's decision, so the finding stays and "
+    "this one element is left out (see the fixture README)"
+)
+KNOWN_DIFFERENCES = {"govuk-home": ('input[name="keywords"]', GOV_SEARCH_REASON)}
 
 
 @pytest.mark.parametrize(
@@ -873,7 +902,8 @@ def test_saved_public_pages_have_no_layout_misfires(
     edge_widths: tuple[int, ...],
 ) -> None:
     shutil.copy(FIXTURES / f"public/{name}.html", tmp_path / f"pages/{name}.html")
-    found = capture(browser, tmp_path, site, name)
+    skip = KNOWN_DIFFERENCES.get(name, ("", ""))[:1]
+    found = capture(browser, tmp_path, site, name, skip)
     for width in WIDTHS:
         layout = {rule for rule in found[width] if rule in LAYOUT_RULES}
         assert layout == ({"shared-edge"} if width in edge_widths else set()), (
@@ -881,3 +911,45 @@ def test_saved_public_pages_have_no_layout_misfires(
             width,
             found[width],
         )
+
+
+@pytest.mark.parametrize(
+    ("name", "rule", "red_count"),
+    [("fields", "field-control", 3), ("text", "extra-text", 2)],
+)
+def test_red_then_fixed_standard_fields_and_extra_text(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    name: str,
+    rule: str,
+    red_count: int,
+) -> None:
+    for variant, expected in (
+        ("red", Counter({rule: red_count})),
+        ("fixed", Counter()),
+    ):
+        page = f"{name}-{variant}"
+        shutil.copy(FIXTURES / f"{page}.html", tmp_path / f"pages/{page}.html")
+        found = capture(browser, tmp_path, site, page)
+        for width in WIDTHS:
+            assert found[width] == expected, (page, width, found[width])
+
+
+def test_standard_patterns_state_behaviour_and_placement_only() -> None:
+    reference = (
+        FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
+    ).read_text()
+    rows = [
+        line
+        for line in reference.split("- Standard patterns =")[1]
+        .split("- Brief =")[0]
+        .splitlines()
+        if line.startswith("| ")
+    ][2:]
+    assert 8 <= len(rows) <= 12
+    for row in rows:
+        assert len(row.split("|")[1:-1]) == 2, row
+        lowered = row.lower()
+        for word in ("colour", "color", "font", "px", "pt ", "pixel", "bold", "round"):
+            assert word not in lowered, (word, row)

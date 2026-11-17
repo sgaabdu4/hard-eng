@@ -626,6 +626,7 @@ def test_native_cli_plan_stage_and_missing_plan(
         "Surface: Mock — account card in app/ui/account-card.tsx\n"
         "Before: N/A — design-system mock has no app capture.\n"
         "Proposed: ![Mock](https://example.test/account-mock.png)\n"
+        "Controls: None — the fixture changes only wording.\n"
         "Capture: Storybook account-card story rendered at the target viewport.\n"
         "Review: Inspected the mock with the affected controls and states.\n"
         + ux_rules_block(),
