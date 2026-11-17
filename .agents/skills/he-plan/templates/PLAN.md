@@ -47,6 +47,7 @@ Evidence: [TODO: Preview shown + inspected; nonvisual work replaces this section
 Surface: [TODO: Existing, New or Mock — actual route/design-system owners]
 Before: [TODO: Markdown image; only Mock or no-prior-UI New may explain N/A — reason]
 Proposed: [TODO: Markdown image of rendered proposal]
+Controls: [TODO: one entry per control that the plan adds or changes, or `None — <reason>`; see the Record rule in ux.md]
 Capture: [TODO: Rendering/capture method + observed result]
 Review: [TODO: Inspected flow/states/devices + direction]
 Rules:

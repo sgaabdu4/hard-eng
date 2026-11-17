@@ -867,7 +867,7 @@ def test_ux_text_states_the_measured_limits() -> None:
     ).read_text()
     floor = LIMITS["text_px"]
     assert (
-        f"text at least {floor} pt on iOS, {floor} sp on Android, {floor} px on the web"
+        f"Text at least {floor} pt on iOS, {floor} sp on Android and {floor} px on the web"
         in reference
     )
     assert f"at most {LIMITS['accent_colours']} accent colours" in reference
