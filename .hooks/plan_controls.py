@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 REUSE = re.compile(r".+ — reuses `([^`\s]+)`")
 NEW = re.compile(r".+ — new `[^`\s]+`( — mockup !\[[^\]\n]*\]\(([^)\s]+)\))?")
 NONE = re.compile(r"None — \S.*")
+CONTROLS_LINE = re.compile(r"(?m)^Controls: *(.*)$")
 
 
 def plan_root(plan: Path) -> Path | None:
@@ -101,7 +102,7 @@ def entry_problem(entry: str, root: Path | None, tracked: bool = False) -> str |
 def controls_problem(
     content: str, root: Path | None, tracked: bool = False
 ) -> str | None:
-    found = re.findall(r"(?m)^Controls: *(.*)$", content)
+    found = CONTROLS_LINE.findall(content)
     if len(found) != 1 or not found[0].strip():
         return "ux_reference needs one `Controls:` line: each changed or new control with the shared part it reuses, or `None — reason`"
     line = found[0].strip()

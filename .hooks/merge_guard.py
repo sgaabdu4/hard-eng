@@ -18,6 +18,7 @@ VALUE_FLAGS = frozenset(
     ("--match-head-commit", "-R", "--repo", "-b", "--body", "-F", "--body-file")
     + ("-t", "--subject", "-A", "--author-email")
 )
+SHELL_MARKS = re.compile(r"[;&|<>`$(){}\n]")
 PULL_NUMBER = re.compile(r"(?:^|/pull/)(\d+)/?$")
 REFUSED_FLAGS = frozenset(("--admin", "--auto", "--disable-auto"))
 STEP = "Merge with `python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge`."
@@ -81,9 +82,7 @@ def merge_problem(command: str, cwd: Path) -> str | None:
         tokens = shlex.split(command)
     except ValueError:
         tokens = list[str]()
-    plain = tokens[:3] == ["gh", "pr", "merge"] and not re.search(
-        r"[;&|<>`$(){}\n]", command
-    )
+    plain = tokens[:3] == ["gh", "pr", "merge"] and not SHELL_MARKS.search(command)
     if not plain:
         return f"a command that holds `gh` and `merge` must be exactly one plain `gh pr merge`. {STEP}"
     if REFUSED_FLAGS & set(tokens):

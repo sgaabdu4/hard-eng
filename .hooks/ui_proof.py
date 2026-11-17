@@ -25,6 +25,7 @@ CATALOG_FOLDERS = frozenset(("l10n", "locales", "i18n", "messages"))
 PAGE_WRITE = re.compile(
     r"innerHTML|textContent|createElement|\.style\b|className|classList"
 )
+SURFACE_ROUTE = re.compile(r"(?m)^Surface: *\w+ — (/\S*?)[,\s]")
 TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[a-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
@@ -296,9 +297,7 @@ def is_native(visible: list[str]) -> bool:
 
 def surface_route(plan_text: str) -> str:
     """The route that the plan's `Surface: Existing — /route, rendered by ...` line names, or an empty string."""
-    found = re.search(
-        r"(?m)^Surface: *\w+ — (/\S*?)[,\s]", reference_section(plan_text)
-    )
+    found = SURFACE_ROUTE.search(reference_section(plan_text))
     return found[1] if found else ""
 
 

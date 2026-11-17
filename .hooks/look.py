@@ -30,6 +30,8 @@ PROMPT = (
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
 BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "image", "verdict", "record")
+BULLET = re.compile(r"^[-*•]\s+")
+COUNT_NOTE = re.compile(r"([^:(]+?)\s*(\([^)]*\))\s*:\s*(.*)")
 IMAGE_DETAIL = re.compile(r"Image (\S+?\.png)\s*[:—–-]+\s*(.+)")
 IMAGE_LINE = re.compile(r"- image: ([0-9a-f]{64}) read (\S+)")
 LOCAL_PATH = re.compile(r"(?<![\w:/.-])/(?:Users|home|tmp|var|private)/")
@@ -157,8 +159,8 @@ def codex_proof(stream: str) -> tuple[dict[str, str], str, str]:
 def clean_line(line: str) -> str:
     """A reviewer line in the form `Rule: Pass — text`: no bullet or bold marks, and a count note such as `(clicks: 2)` moved after the text."""
     text = line.strip().replace("**", "").replace("`", "")
-    text = re.sub(r"^[-*•]\s+", "", text)
-    found = re.match(r"([^:(]+?)\s*(\([^)]*\))\s*:\s*(.*)", text)
+    text = BULLET.sub("", text)
+    found = COUNT_NOTE.match(text)
     return f"{found[1]}: {found[3]} {found[2]}" if found else text
 
 
