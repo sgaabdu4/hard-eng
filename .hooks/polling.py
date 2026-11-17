@@ -12,14 +12,15 @@ REASON = (
 
 
 UNQUOTE = str.maketrans("", "", "'\"\\")
-MERGE_WORDS = frozenset(("merge", "mergePullRequest", "enablePullRequestAutoMerge"))
+NONWORD = str.maketrans({c: " " for c in "!\"#$%&'()*+,-.:;<=>?@[\\]^`{|}~"})
 
 
-def holds_merge(command: str) -> bool:
-    """Whether the command, with its quotes and backslashes removed, has the word `gh` and a merge word, each as its own word and never a part of one."""
-    text = command.translate(UNQUOTE)
-    words = set("".join(c if c.isalnum() or c == "_" else " " for c in text).split())
-    return "gh" in words and bool(words & MERGE_WORDS)
+def has_gh(command: str) -> bool:
+    """Whether the command, with its quotes removed, has a word that is `gh` or a path to it, in any letter case."""
+    bare = command.replace("\\\n", "").translate(UNQUOTE).lower()
+    return "gh" in bare and any(
+        word.rsplit("/", 1)[-1] == "gh" for word in bare.translate(NONWORD).split()
+    )
 
 
 def deny(reason: str) -> dict[str, object]:
@@ -39,8 +40,7 @@ def decision(payload: object) -> dict[str, object] | None:
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    bare = command.translate(UNQUOTE)
-    if "gh" in bare and "erge" in bare and holds_merge(command):
+    if has_gh(command):
         from pathlib import Path
 
         from merge_guard import merge_problem
