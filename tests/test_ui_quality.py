@@ -786,7 +786,9 @@ UI_MODULES = (
 @pytest.mark.parametrize(
     "argv", [["stop", "claude"], ["session", "claude"], ["check", "--quick"]]
 )
-def test_quick_check_runs_no_ui_proof(tmp_path: Path, argv: list[str]) -> None:
+def test_quick_check_runs_no_ui_proof(
+    tmp_path: Path, argv: list[str], completed_plan: str
+) -> None:
     import subprocess
     import sys
 
@@ -795,6 +797,8 @@ def test_quick_check_runs_no_ui_proof(tmp_path: Path, argv: list[str]) -> None:
     project = tmp_path / "project"
     init(project)
     (project / "a.txt").write_text("a\n")
+    (project / "features/x").mkdir(parents=True)
+    (project / "features/x/PLAN.md").write_text(completed_plan)
     commit(project, "first")
     shutil.copytree(
         SOURCE / ".hooks",
@@ -953,3 +957,27 @@ def test_standard_patterns_state_behaviour_and_placement_only() -> None:
         lowered = row.lower()
         for word in ("colour", "color", "font", "px", "pt ", "pixel", "bold", "round"):
             assert word not in lowered, (word, row)
+
+
+def test_a_plan_check_of_a_plan_without_a_visible_change_loads_no_ui_proof(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    import subprocess
+    import sys
+
+    from conftest import SOURCE
+
+    plan = tmp_path / "PLAN.md"
+    plan.write_text(completed_plan)
+    code = (
+        "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import plans; "
+        "plans.validate_plan(pathlib.Path(sys.argv[2])); "
+        "print(sorted(m for m in sys.argv[3:] if m in sys.modules))"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", code, str(SOURCE / ".hooks"), str(plan), *UI_MODULES],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert done.stdout.strip() == "[]"
