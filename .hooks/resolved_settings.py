@@ -268,3 +268,15 @@ def validate_resolved(
             "HE-NO-SWITCH-OFF: The settings that Ruff and Fallow print switch a check off or drop files:\n"
             + "\n".join(f"  {line}" for line in dict.fromkeys(refused))
         )
+
+
+def judge_before_run(
+    root: Path, group: Group, gate: Gate, groups: list[Group] | None, timeout: float
+) -> None:
+    """Judge the Fallow settings again right before Fallow starts, so a script that ran earlier in the check cannot change them after the first judge."""
+    try:
+        judged = direct(gate["command"], root / group["path"])
+    except ValueError:
+        return
+    if judged and judged[0] == "fallow":
+        validate_resolved(root, [{**group, "checks": [gate]}], timeout, groups)
