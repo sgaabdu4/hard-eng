@@ -21,6 +21,7 @@ CLASSES = {
     "version",
     "proved",
     "holds",
+    "used",
 }
 
 

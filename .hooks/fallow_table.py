@@ -13,7 +13,7 @@ FALLOW_KEYS = {
     "ignoreFindings": "equal",
     "framework": "equal",
     "workspaces": "equal",
-    "ignoreDependencies": "equal",
+    "ignoreDependencies": "used",
     "ignoreUnresolvedImports": "equal",
     "ignoreDependencyOverrides": "equal",
     "rulePacks": "free",
@@ -171,12 +171,22 @@ def named_hit(name: str, text: str, covered: Callable[[str], str]) -> str:
     )
 
 
+NATIVE_PROOF = (
+    "capacitor.config.*, AndroidManifest.xml, Podfile, Package.swift or build.gradle*"
+)
+
+
+def unproved(text: str) -> bool:
+    return False
+
+
 def judge_key(
     name: str,
     value: object,
     default: object,
     drop: Callable[[list[str]], list[str]],
     covered: Callable[[str], str],
+    used: Callable[[str], bool] = unproved,
 ) -> list[str]:
     kind = FALLOW_KEYS.get(name)
     if kind is None and not any(name.startswith(item) for item in FALLOW_PREFIXES):
@@ -197,6 +207,12 @@ def judge_key(
             for text in strings(value)
             if any(mark in text for mark in GLOB_CHARACTERS)
         ]
+    if kind == "used":
+        return [
+            f"{name} lists {text!r}: Fallow cannot see where a package is used outside a JavaScript import, so the entry passes only when the name appears in a tracked {NATIVE_PROOF}; none does"
+            for text in strings(value)
+            if not used(text)
+        ]
     if kind == "patterns":
         return [f"{name}: {hit}" for hit in drop(strings(value))]
     return []
@@ -207,11 +223,12 @@ def judge(
     defaults: dict[str, object],
     drop: Callable[[list[str]], list[str]],
     covered: Callable[[str], str],
+    used: Callable[[str], bool] = unproved,
 ) -> list[str]:
     """What the printed Fallow config does wrong, key by key, compared with Fallow's own defaults."""
     base = flatten(defaults)
     hits = rule_hits(config, defaults)
     for name, value in flatten(config).items():
         if name not in {"rules", "overrides"}:
-            hits += judge_key(name, value, base.get(name), drop, covered)
+            hits += judge_key(name, value, base.get(name), drop, covered, used)
     return hits

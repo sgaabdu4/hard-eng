@@ -264,3 +264,26 @@ def test_a_rust_file_without_cfg_attr_is_not_masked(
     )
     with pytest.raises(AssertionError, match="masked"):
         comments.rust_cfg_attr_hits(wrapped, "src/lib.rs", [(1, "x")], "adds")
+
+
+@pytest.mark.parametrize("name", [".cargo/config.toml", ".cargo/config"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        '[alias]\nclippy = "test --no-run"\n',
+        '[alias]\nclippy = ["test", "--no-run"]\n',
+        '[alias]\nb = "build"\nclippy = "check"\n',
+    ],
+)
+def test_a_cargo_alias_that_replaces_clippy_is_refused(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    """HE-NO-SWITCH-OFF: an alias named `clippy` runs in place of `cargo clippy`, so the gate runs another command and exits 0."""
+    message = refusal(project(tmp_path, {name: text}))
+    assert f"{name}:" in message
+    assert "alias `clippy`" in message
+
+
+def test_a_cargo_alias_with_another_name_passes(tmp_path: Path) -> None:
+    text = '[alias]\nlint = "clippy --all-targets"\nxtest = "test --no-run"\n'
+    validate_whole_project(project(tmp_path, {".cargo/config.toml": text}))

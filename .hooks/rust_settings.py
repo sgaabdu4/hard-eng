@@ -63,6 +63,17 @@ def flag_hits(name: str, text: str) -> list[str]:
     return found
 
 
+def alias_hits(name: str, lines: list[str], config: dict[str, object]) -> list[str]:
+    """An alias named like the judged subcommand runs another command in place of `cargo clippy`."""
+    aliases = config.get("alias")
+    if not (isinstance(aliases, dict) and "clippy" in aliases):
+        return []
+    number = next((n for n, line in enumerate(lines, 1) if "clippy" in line), 1)
+    return [
+        f"{name}:{number} defines the alias `clippy`, which runs in place of `cargo clippy`; rename or remove the alias"
+    ]
+
+
 def cargo_config_hits(name: str, text: str) -> list[str]:
     """Rust flags of a Cargo config, also when the list runs over several lines."""
     found = flag_hits(name, text)
@@ -89,7 +100,7 @@ def cargo_config_hits(name: str, text: str) -> list[str]:
                 hits += walk(value)
         return hits
 
-    return walk(config)
+    return [*walk(config), *alias_hits(name, lines, config)]
 
 
 def clippy_hits(name: str, text: str) -> list[str]:
