@@ -426,17 +426,17 @@ def retire_boundary_gate(root: Path, package: Group, changes: dict[str, str]) ->
     package["checks"].remove(GENERATED_BOUNDARY)
     if body is None:
         return
-    lines = manifest.read_text().splitlines(keepends=True)
-    at = next(
-        number
-        for number, line in enumerate(lines)
-        if line.lstrip().startswith('"lint:boundaries"')
-    )
-    last = not lines[at].rstrip().endswith(",")
-    del lines[at]
-    if last and at:
-        lines[at - 1] = lines[at - 1].rstrip().removesuffix(",") + "\n"
-    changes[str(manifest.relative_to(root))] = "".join(lines)
+    text = manifest.read_text()
+    data = json.loads(text)
+    del data["scripts"]["lint:boundaries"]
+    indent = re.search(r"\n([ \t]+)\"", text)
+    separators = None if indent or '": ' in text else (",", ":")
+    changes[str(manifest.relative_to(root))] = json.dumps(
+        data,
+        indent=indent[1] if indent else None,
+        separators=separators,
+        ensure_ascii=False,
+    ) + ("\n" if text.endswith("\n") else "")
 
 
 def adapt_boundaries(package: Group) -> None:
