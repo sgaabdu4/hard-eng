@@ -141,6 +141,20 @@ def number_of(entries: list[str]) -> float | None:
 VERSION = re.compile(r"(\d+)\.(\d+)")
 
 
+def version_hits(key: str, value: list[str], minimum: tuple[int, int]) -> list[str]:
+    per_file = "per_file" in key
+    lines = (
+        [line for line in value if line.startswith("data = ")] if per_file else value
+    )
+    for found in (match for line in lines for match in VERSION.findall(line)):
+        if (int(found[0]), int(found[1])) < minimum:
+            what = "per-file target version" if per_file else "target version"
+            return [
+                f"the resolved {what} {found[0]}.{found[1]} is below the requires-python minimum {minimum[0]}.{minimum[1]}: a lower target hides pyupgrade findings; raise it to {minimum[0]}.{minimum[1]} or higher, or remove the entry"
+            ]
+    return []
+
+
 def judge(
     key: str,
     value: list[str],
@@ -151,7 +165,11 @@ def judge(
     role, minimum = context
     kind = classify(key)
     if kind is None:
-        return [f"{key} is a setting that no table classes: class it in ruff_table.py"]
+        if value == default:
+            return []
+        return [
+            f"{key} is set to {value[:1]}, not its default {default[:1]}, and no table classes it: class it in ruff_table.py"
+        ]
     if kind == "equal" and value != default:
         return [f"the resolved {key} differs from Ruff's default {default or '[]'}"]
     if kind == "limit":
@@ -165,18 +183,7 @@ def judge(
             f"the resolved {key} lacks {missing[0]!r}: the annotations gate keeps every banned import of the template; set one `--config` banned-api table that lists {', '.join(line.split(' = ')[0] for line in default)} (separate `--config` lines for each entry keep only one)"
         ]
     if kind == "version" and minimum:
-        per_file = "per_file" in key
-        lines = (
-            [line for line in value if line.startswith("data = ")]
-            if per_file
-            else value
-        )
-        for found in (match for line in lines for match in VERSION.findall(line)):
-            if (int(found[0]), int(found[1])) < minimum:
-                what = "per-file target version" if per_file else "target version"
-                return [
-                    f"the resolved {what} {found[0]}.{found[1]} is below the requires-python minimum {minimum[0]}.{minimum[1]}: a lower target hides pyupgrade findings; raise it to {minimum[0]}.{minimum[1]} or higher, or remove the entry"
-                ]
+        return version_hits(key, value, minimum)
     return []
 
 

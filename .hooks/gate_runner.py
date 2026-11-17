@@ -439,6 +439,14 @@ def remembered_output(
     return note + remember(group, gate, text)
 
 
+def judge_fallow_run(
+    group: Group, gate: Gate, groups: list[Group] | None, timeout: float
+) -> None:
+    from resolved_settings import judge_before_run
+
+    judge_before_run(ROOT, group, gate, groups, timeout)
+
+
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -464,6 +472,7 @@ def run_limited_gate(
                 f"COVERED {gate['name']}{reason}; elapsed {time.monotonic() - started:.3f}s"
             )
             return False
+        judge_fallow_run(group, gate, groups, timeout)
         from reports import (
             SCANNERS,
             emit_dart_test_failure,

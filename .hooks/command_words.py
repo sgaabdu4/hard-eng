@@ -143,6 +143,22 @@ def expanded(command: list[str], directory: Path) -> list[str]:
     return words
 
 
+def after_launcher(words: list[str]) -> list[str]:
+    """The words after a template launcher, or none when the words start with another one."""
+    if words[0] == "uvx":
+        return words[1:]
+    if words[0] == "bunx":
+        return words[1:]
+    if words[:2] == ["bun", "x"]:
+        return words[2:]
+    if words[:2] == ["uv", "run"]:
+        rest = words[2:]
+        while rest and rest[0] in UV_FLAGS:
+            rest = rest[1:]
+        return rest
+    return []
+
+
 def launched(words: list[str]) -> tuple[list[str], list[str]] | None:
     """The launcher words up to and including the tool as written, and the words from the tool on, when a template launcher starts them."""
     if not words:
@@ -151,20 +167,14 @@ def launched(words: list[str]) -> tuple[list[str], list[str]] | None:
         return words[:1], words
     if words[0] == "cargo":
         return (words[:1], words) if "clippy" in words[:3] else None
-    rest: list[str] | None = None
-    if words[0] == "uvx":
-        rest = words[1:]
-    elif words[:2] == ["bun", "x"]:
-        rest = words[2:]
-    elif words[0] == "bunx":
-        rest = words[1:]
-    elif words[:2] == ["uv", "run"]:
-        rest = words[2:]
-        while rest and rest[0] in UV_FLAGS:
-            rest = rest[1:]
-    if rest and (found := TOOL_WORD.fullmatch(rest[0])):
-        return [*words[: len(words) - len(rest)], rest[0]], [found[1], *rest[1:]]
-    return None
+    rest = after_launcher(words)
+    found = TOOL_WORD.fullmatch(rest[0]) if rest else None
+    if found is None:
+        return None
+    bun = words[0] == "bunx" or words[:2] == ["bun", "x"]
+    if bun and not (found[1] == "fallow" and found[2]):
+        return None
+    return [*words[: len(words) - len(rest)], rest[0]], [found[1], *rest[1:]]
 
 
 def shadowed(tool: str, directory: Path) -> bool:

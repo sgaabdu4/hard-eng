@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fallow_table import judge
 from project_files import GIT_LISTING
-from scope_check import glob_regex, left_out, refusal, tracked
+from scope_check import FALLOW_CONFIGS, glob_regex, left_out, refusal, tracked
 
 
 def printed_config(
@@ -196,6 +196,18 @@ def proved_hits(
     return hits
 
 
+def untracked_configs(directory: Path) -> list[str]:
+    """A Fallow settings file that Git does not track: a script can write it just before the run."""
+    hits = []
+    for name in sorted(FALLOW_CONFIGS):
+        path = directory / name
+        if path.is_file() and not committed(directory, path):
+            hits.append(
+                f"{name} is not tracked by Git: commit it, because a file that a script writes can change what Fallow reports"
+            )
+    return hits
+
+
 def fallow_hits(
     directory: Path,
     config: str | None,
@@ -213,5 +225,6 @@ def fallow_hits(
     return [
         *judge(printed, defaults, drop, covered),
         *proved_hits(printed, directory, proof),
+        *untracked_configs(directory),
         *refusal(left),
     ]

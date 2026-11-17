@@ -30,7 +30,7 @@ def test_every_class_in_the_tables_is_known() -> None:
 
 
 def test_every_setting_that_ruff_prints_has_a_class(tmp_path: Path) -> None:
-    """The table fails when Ruff prints a key that it lacks."""
+    """The newest Ruff: Hard Eng's own check fails when it prints a key that no table has, so the class is added before a project meets it."""
     (tmp_path / "a.py").write_text("x = 1\n")
     done = subprocess.run(
         ["uvx", "ruff@latest", "check", "--isolated", "--show-settings", "."],
@@ -56,7 +56,11 @@ def test_every_setting_that_fallow_prints_has_a_class(tmp_path: Path) -> None:
         )
     )
     done = subprocess.run(
-        ["fallow", "config"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ["bunx", "fallow@latest", "config"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     missing = sorted(
         key
@@ -95,3 +99,49 @@ def test_a_ruff_setting_that_no_table_classes_is_refused() -> None:
 def test_a_fallow_setting_that_no_table_classes_is_refused() -> None:
     hits = judge({"madeUpKey": 1}, {}, lambda patterns: [], lambda glob: "")
     assert any("no table classes" in hit for hit in hits)
+
+
+def test_a_new_ruff_setting_at_its_default_passes() -> None:
+    """A tool release that adds a setting must not turn a project red: an unclassed key at its default changes no result."""
+    assert (
+        ruff_hits("linter.made_up_key = 1\n", "linter.made_up_key = 1\n", "lint") == []
+    )
+    hits = ruff_hits("linter.made_up_key = 2\n", "linter.made_up_key = 1\n", "lint")
+    assert any("no table classes" in hit for hit in hits)
+
+
+def test_a_new_fallow_setting_at_its_default_passes() -> None:
+    def drop(patterns: list[str]) -> list[str]:
+        return []
+
+    def covered(glob: str) -> str:
+        return ""
+
+    nothing = (drop, covered)
+    assert judge({"madeUpKey": 1}, {"madeUpKey": 1}, *nothing) == []
+    hits = judge({"madeUpKey": 2}, {"madeUpKey": 1}, *nothing)
+    assert any("no table classes" in hit and "default" in hit for hit in hits)
+
+
+SIX_KEYS: dict[str, object] = {
+    "duplicates": {"ignoreSymlinks": False},
+    "health": {
+        "changeCoupling": {
+            "maxFilesPerCommit": 30,
+            "minRevisions": 5,
+            "minSharedRevisions": 5,
+            "minDegree": 0.3,
+        }
+    },
+    "showCascade": False,
+}
+
+
+def test_the_six_keys_of_fallow_3_43_have_a_class() -> None:
+    missing = [
+        key
+        for key in flatten(SIX_KEYS)
+        if key not in FALLOW_KEYS
+        and not any(key.startswith(prefix) for prefix in FALLOW_PREFIXES)
+    ]
+    assert not missing

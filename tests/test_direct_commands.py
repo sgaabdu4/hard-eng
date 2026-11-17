@@ -195,3 +195,47 @@ def test_the_refusal_lists_every_allowed_form(tmp_path: Path, form: str) -> None
     with pytest.raises(ValueError, match=DIRECT) as raised:
         validate_gate(gate, tmp_path, set())
     assert form in str(raised.value)
+
+
+def test_the_fallow_role_must_run_fallow() -> None:
+    """HE-NO-SWITCH-OFF: a node script that copies a saved report is not the Fallow check."""
+    from tool_setup import require_role_tool
+
+    gate: Gate = {
+        "name": "dead-code-duplicates",
+        "role": "dead-code-duplicates",
+        "command": ["node", "fake.mjs"],
+        "report": {"type": "fallow", "path": "coverage/fallow.json"},
+    }
+    with pytest.raises(ValueError, match="must run `fallow`"):
+        require_role_tool("javascript", gate, gate["command"])
+
+
+@pytest.mark.parametrize(
+    "flag", ["--silent", "--bun", "-b", "--no-install", "--elide-lines=1"]
+)
+def test_a_manager_flag_before_a_script_name_is_refused(
+    tmp_path: Path, flag: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a flag before the script name hides the script from every judge."""
+    scripted(tmp_path, {"check:fallow": "fallow --fail-on-issues"})
+    gate: Gate = {"name": "g", "command": ["bun", flag, "check:fallow"]}
+    with pytest.raises(ValueError, match=rf"flag {flag.split('=')[0]} before"):
+        validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["bunx", "fallow", "--fail-on-issues"],
+        ["bun", "x", "fallow", "--fail-on-issues"],
+        ["bunx", "ruff@latest", "check", "."],
+        ["bun", "x", "ruff", "check", "."],
+        ["bunx", "gitleaks@latest", "dir", "."],
+        ["bun", "x", "gitleaks", "dir", "."],
+    ],
+)
+def test_bunx_runs_only_a_pinned_fallow(tmp_path: Path, command: list[str]) -> None:
+    """HE-NO-SWITCH-OFF: an unpinned bunx resolves a local `.bin` file, and ruff and gitleaks have their own launchers."""
+    with pytest.raises(ValueError, match=DIRECT):
+        validate_gate({"name": "g", "command": command}, tmp_path, set())

@@ -232,6 +232,10 @@ def package_script_invocation(
                 raise ValueError(
                     "Use an explicit package directory and run script for verification; package selectors are not supported"
                 )
+            if len(arguments) > 1 and arguments[1].startswith("-"):
+                raise ValueError(
+                    f"the flag {arguments[1].split('=')[0]} before the script name hides the script from the checks: write `{arguments[0]} run <script>` with no flag"
+                )
         if (
             executable in {"pnpm", "yarn", "bun"}
             and len(arguments) > 1

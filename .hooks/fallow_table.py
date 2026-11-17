@@ -30,6 +30,7 @@ FALLOW_KEYS = {
     "duplicates.ignoredClones": "equal",
     "duplicates.ignoreDefaults": "equal",
     "duplicates.skipLocal": "equal",
+    "duplicates.ignoreSymlinks": "equal",
     "duplicates.crossLanguage": "free",
     "duplicates.ignoreImports": "equal",
     "duplicates.normalization": "equal",
@@ -59,9 +60,11 @@ FALLOW_KEYS = {
     "includeEntryExports": "free",
     "autoImports": "equal",
     "failOnParseError": "free",
+    "showCascade": "free",
 }
 FALLOW_PREFIXES = {
     "health.ownership.": "free",
+    "health.changeCoupling.": "free",
     "boundaries": "proved",
     "flags": "free",
     "fix": "free",
@@ -177,8 +180,10 @@ def judge_key(
 ) -> list[str]:
     kind = FALLOW_KEYS.get(name)
     if kind is None and not any(name.startswith(item) for item in FALLOW_PREFIXES):
+        if value == default:
+            return []
         return [
-            f"{name} is a setting that no table classes: class it in fallow_table.py"
+            f"{name} is set to {value!r}, not its default {default!r}, and no table classes it: class it in fallow_table.py"
         ]
     if kind == "equal" and value != default:
         return [f"{name} is {value!r}, not Fallow's default {default!r}"]

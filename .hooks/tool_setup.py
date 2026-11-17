@@ -77,6 +77,7 @@ ROLE_TOOLS: dict[str, dict[str, tuple[str, ...]]] = {
         "focused-tests": ("biome", "lint"),
         "typing-style": ("biome", "lint"),
         "types": ("tsc",),
+        "dead-code-duplicates": ("fallow",),
     },
     "dart": {"format": ("dart", "format"), "types": ("dart", "analyze")},
     "swift": {"format-lint": ("swift", "format", "lint")},
