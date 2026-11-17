@@ -275,6 +275,16 @@ SECURITY_OFF = re.compile(
     r"|shellcheck\s+(?:[\w-]+=\S+\s+)*(?:(?:disable|shell)=|source=\S*)|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
+CI_NOT_BLOCKING = re.compile(
+    r"continue-on-error\s*:\s*(?!false\b)\S|\|\|\s*(?:true|:)(?![\w-])|;\s*true(?![\w-])"
+)
+
+
+def hard_eng_workflow(name: str) -> bool:
+    path = PurePosixPath(name)
+    return path.name == "hard-eng.yml" and ".github" in path.parts
+
+
 RAW_OFF = {
     ".py": re.compile(
         r"#\s*(?:pragma:\s*no cover|(?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)"
@@ -722,7 +732,11 @@ def security_hits(
     found: list[str] = []
     for number, text in lines:
         entry = text.strip()
-        if (hit := SECURITY_OFF.search(text)) and not followed_source(
+        if hard_eng_workflow(name) and (hit := CI_NOT_BLOCKING.search(text)):
+            found.append(
+                f"{name}:{number} {verb} {hit[0]!r}: the Hard Eng job and its check step must be blocking, so a failing check fails the job"
+            )
+        elif (hit := SECURITY_OFF.search(text)) and not followed_source(
             root, name, hit[0]
         ):
             fix = f"; {SHELLCHECK_FIX}" if "shellcheck" in hit[0] else ""

@@ -19,6 +19,7 @@ from comments import (
     block_hits,
     comment_map,
     entry_file,
+    hard_eng_workflow,
     pattern_switch_offs,
     security_hits,
 )
@@ -232,7 +233,12 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         lines = list(enumerate(text.splitlines(), 1))
         base = PurePosixPath(name).name
         entries = entry_file(root, name, LINE_IGNORES)
-        if entries or SECURITY_OFF.search(text) or any(w in text for w in RETRY_WORDS):
+        if (
+            entries
+            or hard_eng_workflow(name)
+            or SECURITY_OFF.search(text)
+            or any(w in text for w in RETRY_WORDS)
+        ):
             found += security_hits(root, name, lines, "holds", entries)
         found += pattern_switch_offs(root, name, lines, "holds")
         if base == ".gitleaks.toml":
