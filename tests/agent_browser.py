@@ -29,7 +29,7 @@ FEATURE_MAP = """# Feature map
 | Sign-in | `/login`, with the `viewer` role in `hard-eng.gates.json` | `python3 .hooks/hard-eng.py browser signin viewer --session signin` |
 | Plan label on the dashboard | Sign in, then open `/dashboard`; the label is `#plan-label` | `python3 .hooks/hard-eng.py browser capture <app>/dashboard --session capture --state <saved sign-in> --ring '#plan-label'` |
 """
-WIDTHS = (390, 1280)
+WIDTHS = (390, 768, 1280)
 LEFT = 20
 LABEL = (LEFT, 120, 260, 44)
 PERSONAL_LINES = {"email": 200, "phone": 240}

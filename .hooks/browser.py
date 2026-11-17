@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -21,14 +22,17 @@ ROLE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 USAGE = (
     "browser --session S <agent-browser step>: run one step from .hard-eng/browser. "
     "browser capture <url> --session S [--state FILE] [--ring SELECTOR] [--name NAME]: "
-    "whole-page images at 390 and 1280 px with red boxes and hidden emails and phones. "
+    "whole-page images at the standard widths with red boxes and hidden emails and phones, "
+    "and a measured record for each image. "
+    "browser measure --session S --name NAME [--ring SELECTOR]: the same for the open "
+    "session's page at its current width. "
     "browser signin <role> --session S: save a session file for a role of hard-eng.gates.json. "
     "Every step needs its own --session; close --all is refused."
 )
 TIMEOUT = 600
 STEP_TIMEOUT = 300
 REFRESH_SECONDS = 24 * 60 * 60
-WIDTHS = (390, 1280)
+WIDTHS = (390, 768, 1280)
 SHARED = (
     "Each agent keeps its own browser session: pass --session NAME, and never "
     "`close --all`, because parallel agents share the tool."
@@ -134,6 +138,7 @@ for (const { element, style, box } of fixed) {
   element.style.top = (atBottom ? pageHeight - innerHeight : 0) + box.top - now.top - scrollY + "px";
   element.style.left = box.left - now.left + "px";
 }
+document.querySelectorAll("[data-he-ring]").forEach((ring) => ring.remove());
 const missing = [];
 for (const selector of RINGS) {
   let found = [];
@@ -146,6 +151,7 @@ for (const selector of RINGS) {
   for (const element of shown) {
     const box = element.getBoundingClientRect();
     const ring = document.createElement("div");
+    ring.dataset.heRing = "";
     Object.assign(ring.style, {
       position: "absolute", left: box.left + scrollX + "px", top: box.top + scrollY + "px",
       width: box.width + "px", height: box.height + "px", boxSizing: "border-box",
@@ -320,7 +326,56 @@ def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
         )
 
 
-def capture_page(tool: str, folder: Path, args: argparse.Namespace, width: int) -> Path:
+def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object]]:
+    """The faults of the page as it is now: the page script and axe, before anything draws on it."""
+    from ui_measure import AXE_TAGS, axe_findings, measure_script
+
+    reply = require(
+        run_tool(tool, folder, session, "eval", "--stdin", text=measure_script())
+    )
+    audit = require(
+        run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
+    )
+    return [*json.loads(json.loads(reply)), *axe_findings(audit)]
+
+
+def shoot_page(
+    tool: str, root: Path, session: str, rings: list[str], name: str, width: int
+) -> Path:
+    """Measure the open page, hide personal data, draw rings and keep an image with its record."""
+    from ui_measure import write_record
+
+    folder = output_folder(root)
+    findings = measure_page(tool, folder, session)
+    script = PAGE_SCRIPT.replace("RINGS", json.dumps(rings))
+    reply = require(run_tool(tool, folder, session, "eval", "--stdin", text=script))
+    if missing := json.loads(json.loads(reply)):
+        raise ValueError(
+            f"--ring {', '.join(missing)} matched no visible element at width {width}"
+        )
+    unread_frames(tool, folder, session, width)
+    image = folder / f"{name}-{width}.png"
+    try:
+        require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
+        unread_frames(tool, folder, session, width)
+        write_record(root, image, width, findings)
+    except BaseException:
+        image.unlink(missing_ok=True)
+        image.with_suffix(".json").unlink(missing_ok=True)
+        raise
+    if findings:
+        print(
+            f"browser: {len(findings)} findings at {width} px in {image.name}: "
+            + ", ".join(
+                f"{rule} x{count}"
+                for rule, count in Counter(f["rule"] for f in findings).items()
+            ),
+            file=sys.stderr,
+        )
+    return image
+
+
+def capture_page(tool: str, root: Path, args: argparse.Namespace, width: int) -> Path:
     state = ["--state", args.state] if args.state and width == WIDTHS[0] else []
     steps = [
         (*state, "set", "viewport", str(width), "900"),
@@ -328,26 +383,14 @@ def capture_page(tool: str, folder: Path, args: argparse.Namespace, width: int) 
         ("wait", "--load", "networkidle"),
     ]
     for step in steps:
-        require(run_tool(tool, folder, args.session, *step))
-    script = PAGE_SCRIPT.replace("RINGS", json.dumps(args.ring))
-    reply = require(
-        run_tool(tool, folder, args.session, "eval", "--stdin", text=script)
-    )
-    if missing := json.loads(json.loads(reply)):
-        raise ValueError(
-            f"--ring {', '.join(missing)} matched no visible element at width {width}"
-        )
-    unread_frames(tool, folder, args.session, width)
-    image = folder / f"{args.name}-{width}.png"
-    try:
-        require(
-            run_tool(tool, folder, args.session, "screenshot", "--full", str(image))
-        )
-        unread_frames(tool, folder, args.session, width)
-    except BaseException:
+        require(run_tool(tool, output_folder(root), args.session, *step))
+    return shoot_page(tool, root, args.session, args.ring, args.name, width)
+
+
+def forget(images: list[Path]) -> None:
+    for image in images:
         image.unlink(missing_ok=True)
-        raise
-    return image
+        image.with_suffix(".json").unlink(missing_ok=True)
 
 
 def capture(root: Path, argv: list[str]) -> int:
@@ -364,14 +407,28 @@ def capture(root: Path, argv: list[str]) -> int:
     images: list[Path] = []
     try:
         for width in WIDTHS:
-            images.append(capture_page(tool, folder, args, width))
+            images.append(capture_page(tool, root, args, width))
     except BaseException:
-        for image in images:
-            image.unlink(missing_ok=True)
+        forget(images)
         raise
     finally:
         run_tool(tool, folder, args.session, "close")
     print("\n".join(str(image) for image in images))
+    return 0
+
+
+def measure(root: Path, argv: list[str]) -> int:
+    """Measure and capture the open session's page at its current width, and leave the session open."""
+    parser = argparse.ArgumentParser(prog="hard-eng.py browser measure")
+    parser.add_argument("--session", required=True)
+    parser.add_argument("--ring", action="append", default=[])
+    parser.add_argument("--name", required=True)
+    args = parser.parse_args(argv)
+    tool, folder = ensure_tool(), output_folder(root)
+    width = int(
+        json.loads(require(run_tool(tool, folder, args.session, "eval", "innerWidth")))
+    )
+    print(shoot_page(tool, root, args.session, args.ring, args.name, width))
     return 0
 
 
@@ -438,6 +495,8 @@ def dispatch(root: Path, argv: list[str]) -> int:
         return capture(root, argv[1:])
     if argv[:1] == ["signin"]:
         return signin(root, argv[1:])
+    if argv[:1] == ["measure"]:
+        return measure(root, argv[1:])
     if reason := refusal(argv):
         print(reason, file=sys.stderr)
         return 2
