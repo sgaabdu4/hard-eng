@@ -203,8 +203,8 @@ def unchanged_problem(root: Path, reference: str, head: str, base: str) -> str |
     return None
 
 
-def measured_problem(root: Path, after: list[bytes]) -> str | None:
-    """Each After image is a measured capture with no finding, and its name has a record at every width."""
+def measured_problem(root: Path, head: str, after: list[bytes]) -> str | None:
+    """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width."""
     from browser import WIDTHS
 
     records = browser_records(root)
@@ -224,6 +224,8 @@ def measured_problem(root: Path, after: list[bytes]) -> str | None:
             )
             if peer is None:
                 return f"the After capture {stem} has no measured record at {width} px; capture it at every width"
+            if peer.get("commit") != head or peer.get("dirty"):
+                return f"the After capture {peer['image']} was not taken at the head ({head[:12]}) from a clean tree; commit, then capture again"
             if peer.get("findings"):
                 rules = sorted(
                     {
@@ -270,7 +272,7 @@ def is_native(visible: list[str]) -> bool:
 def evidence_problem(
     root: Path, head: str, body: str, after: list[bytes], visible: list[str]
 ) -> str | None:
-    if not is_native(visible) and (problem := measured_problem(root, after)):
+    if not is_native(visible) and (problem := measured_problem(root, head, after)):
         return problem
     return look_problem(root, head, body, after)
 
