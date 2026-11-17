@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import cast
@@ -205,3 +206,13 @@ def test_look_block_holds_no_session_id_and_no_local_path(
     assert record["session"] == hashlib.sha256(b"claude-session-0001").hexdigest()
     assert look.block_problem(block, 1) is None
     assert str(project) not in block and str(tmp_path) not in block
+
+
+def test_the_look_command_is_listed_in_the_runner_help() -> None:
+    done = subprocess.run(
+        [sys.executable, str(SOURCE / ".hooks/hard-eng.py"), "look", "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "images" in done.stdout and "--host" in done.stdout

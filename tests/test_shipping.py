@@ -200,6 +200,8 @@ class FakeGitHub:
         self.calls: list[tuple[str, ...]] = []
         self.setting_reads: list[tuple[str, ...]] = []
         self.rebase_merge_allowed: object = True
+        self.squash_merge_allowed: object = True
+        self.merge_commit_allowed: object = True
         self.attachment_response = (
             "HTTP/2 206 Partial Content\ncontent-type: image/png\n"
             "content-length: 1\ncontent-range: bytes 0-0/85098\n"
@@ -209,7 +211,13 @@ class FakeGitHub:
         if args[:2] != ("repo", "view"):
             raise AssertionError(args)
         self.setting_reads.append(args)
-        return json.dumps({"rebaseMergeAllowed": self.rebase_merge_allowed})
+        return json.dumps(
+            {
+                "rebaseMergeAllowed": self.rebase_merge_allowed,
+                "squashMergeAllowed": self.squash_merge_allowed,
+                "mergeCommitAllowed": self.merge_commit_allowed,
+            }
+        )
 
     def __call__(self, _root: Path, *args: str) -> str:
         if args[0] != "api":

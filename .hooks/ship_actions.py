@@ -17,6 +17,7 @@ from xml.parsers.expat import ExpatError
 from challenge import shipping_note
 from gate_config import Group
 from process_group import exit_when_stopped, passed_minutes, passed_note
+from ship_record import SETTING_NAMES
 from shipping import (
     PendingCheck,
     Shipment,
@@ -71,14 +72,13 @@ def _stale_rebase_report(root: Path, repository: str, base: str, head: str) -> b
     )
 
 
-def rebase_problem(root: Path, repository: str, base: str, head: str) -> str:
+def rebase_problem(root: Path, repository: str, base: str, head: str) -> str | None:
+    """Why a PR GitHub cannot rebase is refused; None when the repository allows another method."""
     try:
-        allowed = merge_settings(root, repository, ("rebaseMergeAllowed",)).get(
-            "rebaseMergeAllowed"
-        )
+        allowed = merge_settings(root, repository, SETTING_NAMES)
     except ShippingError:
         return rebase_step(base)
-    if allowed is not False:
+    if allowed.get("rebaseMergeAllowed") is not False:
         if _stale_rebase_report(root, repository, base, head):
             return (
                 f"GitHub reports that it cannot rebase this PR onto {base}, but the "
@@ -88,6 +88,8 @@ def rebase_problem(root: Path, repository: str, base: str, head: str) -> str:
                 "it, cut its commits (HE-PR-COMMITS)."
             )
         return rebase_step(base)
+    if any(allowed.get(name) is True for name in SETTING_NAMES[1:]):
+        return None
     return (
         "This repository does not allow rebase merges, and Hard Eng merges by "
         "rebase only, so nothing was merged. Allow rebase merges in the "
@@ -597,12 +599,12 @@ def merge(target: Path, plan: Path | None, shipment: Shipment, method: str) -> S
             shipment.head_sha,
         )
     except ShippingError as failure:
-        if _pull(target, *_pr_url(shipment.pr_url)).rebaseable is False:
-            raise ShippingError(
-                rebase_problem(
-                    target, shipment.repository, shipment.base, shipment.head_sha
-                )
-            ) from failure
+        if _pull(target, *_pr_url(shipment.pr_url)).rebaseable is False and (
+            problem := rebase_problem(
+                target, shipment.repository, shipment.base, shipment.head_sha
+            )
+        ):
+            raise ShippingError(problem) from failure
         raise
     try:
         return verify(target, plan, shipment.pr_url, "delivered")
@@ -662,7 +664,7 @@ def run(
         print(shipment.rule_note)
     bypassed = shipment.review_bypass
     if stage == "merge":
-        shipment = merge(target, plan_path, shipment, str(merge_method))
+        shipment = merge(target, plan_path, shipment, shipment.method)
     if stage == "cleanup":
         cleanup(coordinator, shipment)
     revision = shipment.merged_sha or shipment.head_sha

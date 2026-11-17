@@ -12,6 +12,7 @@ import shipping
 from test_shipping import (
     _PR_URL,
     FakeGitHub,
+    Fixture,
     _check,
     _fixture,
     _patch_gh,
@@ -132,12 +133,19 @@ _SETTING_STEP = (
 )
 
 
-def test_a_repository_that_forbids_rebase_merges_is_named_as_the_cause(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _forbidding_fixture(tmp_path: Path) -> tuple[Fixture, FakeGitHub]:
     fixture = _fixture(tmp_path)
     fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
     fake.rebase_merge_allowed = False
+    fake.squash_merge_allowed = False
+    fake.merge_commit_allowed = False
+    return fixture, fake
+
+
+def test_a_repository_that_forbids_rebase_merges_is_named_as_the_cause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = _forbidding_fixture(tmp_path)
     _patch_gh(monkeypatch, fake)
     with pytest.raises(shipping.ShippingError) as refused:
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
@@ -152,6 +160,8 @@ def _failed_merge(
     fixture = _fixture(tmp_path)
     fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
     fake.rebase_merge_allowed = not forbids
+    fake.squash_merge_allowed = False
+    fake.merge_commit_allowed = False
     fake.comparison = _comparison(0)
 
     def merge_fails(_root: Path, *args: str) -> str:
@@ -218,24 +228,28 @@ def test_a_pr_github_can_rebase_never_reads_the_repository_setting(
     assert fake.setting_reads == []
 
 
-_READ = ("repo", "view", "acme/widget", "--json", "rebaseMergeAllowed")
+_READ_READY = (
+    "repo",
+    "view",
+    "acme/widget",
+    "--json",
+    "rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed",
+)
 
 
 def test_the_ready_check_reads_the_setting_of_the_repository_of_the_pull_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fixture = _fixture(tmp_path)
-    fake = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
-    fake.rebase_merge_allowed = False
+    fixture, fake = _forbidding_fixture(tmp_path)
     _ready_outcome(fixture, fake, monkeypatch, "does not allow rebase merges")
-    assert fake.setting_reads == [_READ]
+    assert fake.setting_reads == [_READ_READY]
 
 
 def test_a_failed_merge_reads_the_setting_of_the_repository_of_the_pull_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake, _ = _failed_merge(tmp_path, monkeypatch)
-    assert fake.setting_reads == [_READ]
+    assert fake.setting_reads == [_READ_READY]
 
 
 _STALE = (
@@ -311,6 +325,8 @@ def test_the_setting_message_and_a_rebaseable_pr_add_no_comparison_call(
     fixture = _fixture(tmp_path)
     forbids = FakeGitHub(_pull(fixture, rebaseable=False), [_check(fixture.head)])
     forbids.rebase_merge_allowed = False
+    forbids.squash_merge_allowed = False
+    forbids.merge_commit_allowed = False
     forbids.comparison = _comparison(0)
     _ready_outcome(fixture, forbids, monkeypatch, "does not allow rebase merges")
     assert _compare_reads(forbids) == []

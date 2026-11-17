@@ -36,7 +36,7 @@ def isolate_attachments(monkeypatch: pytest.MonkeyPatch) -> None:
     """The attachment rules are tested apart from the measured and look checks, which have their own tests."""
     import ui_proof
 
-    monkeypatch.setattr(shipping, "download", _image)
+    monkeypatch.setattr(ui_proof, "download", _image)
     monkeypatch.setattr(ui_proof, "evidence_problem", _no_problem)
 
 

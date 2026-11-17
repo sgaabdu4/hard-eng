@@ -506,6 +506,15 @@ def dispatch(root: Path, argv: list[str]) -> int:
     os.execve(tool, [tool, *argv], checkout_space(folder))
 
 
+def run(root: Path, argv: list[str]) -> int:
+    """The launcher's entry for `browser` and for `look`, which shares its fast start."""
+    if argv[0] == "look":
+        from look import look_main
+
+        return look_main(root, argv[1:])
+    return browser_command(root, argv[1:])
+
+
 def browser_command(root: Path, argv: list[str]) -> int:
     if reason := sandbox_refusal(argv):
         print(reason, file=sys.stderr)

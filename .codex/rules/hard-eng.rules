@@ -1,0 +1,5 @@
+prefix_rule(
+    pattern = ["gh", "pr", "merge"],
+    decision = "forbidden",
+    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+)
