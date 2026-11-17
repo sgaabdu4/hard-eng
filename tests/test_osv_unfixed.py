@@ -91,14 +91,6 @@ def test_an_advisory_with_no_fix_and_no_newer_release_passes_and_is_printed(
     assert "no reported vulnerabilities" not in printed
 
 
-def test_an_open_range_with_no_fix_passes_with_no_registry_read(
-    tmp_path: Path,
-) -> None:
-    registry = npm("9.9.9")
-    accepted(report_of(tmp_path, package_item([{"introduced": "0"}])), registry)
-    assert registry.requests == []
-
-
 def test_an_advisory_with_a_fixed_event_fails_without_a_registry_read(
     tmp_path: Path,
 ) -> None:
@@ -453,3 +445,77 @@ def test_loading_the_hook_and_gate_modules_loads_no_osv_module() -> None:
         check=True,
     )
     assert done.stdout.strip() == "[]"
+
+
+FOLDER = Path(__file__).parent / "fixtures/osv"
+
+
+def real_report(tmp_path: Path, name: str) -> Path:
+    path = tmp_path / "osv.json"
+    path.write_text((FOLDER / name).read_text())
+    return path
+
+
+def registry(url: str, *versions: str) -> Registry:
+    return Registry({url: json.dumps({"versions": {key: {} for key in versions}})})
+
+
+def releases(url: str, *versions: str) -> Registry:
+    files = [{"filename": "f"}]
+    return Registry({url: json.dumps({"releases": dict.fromkeys(versions, files)})})
+
+
+@pytest.mark.parametrize(
+    ("report", "fetch", "newer"),
+    [
+        (
+            "grapesjs-osv.json",
+            registry("https://registry.npmjs.org/grapesjs", "0.19.4", "0.19.5"),
+            "0.19.5",
+        ),
+        (
+            "ldapauth-osv.json",
+            registry("https://registry.npmjs.org/ldapauth", "2.2.3", "2.2.4"),
+            "2.2.4",
+        ),
+        (
+            "vyper-osv.json",
+            releases("https://pypi.org/pypi/vyper/json", "0.3.7", "0.4.0"),
+            "0.4.0",
+        ),
+    ],
+    ids=["grapesjs", "ldapauth", "vyper"],
+)
+def test_a_range_open_from_zero_fails_when_the_registry_has_a_newer_release(
+    tmp_path: Path, report: str, fetch: Registry, newer: str
+) -> None:
+    with pytest.raises(ValueError, match=f"release {newer} is above"):
+        accepted(real_report(tmp_path, report), fetch)
+
+
+def test_a_range_open_from_zero_passes_when_the_installed_release_is_the_newest(
+    tmp_path: Path,
+) -> None:
+    fetch = registry("https://registry.npmjs.org/grapesjs", "0.19.3", "0.19.4")
+    accepted(real_report(tmp_path, "grapesjs-osv.json"), fetch)
+    assert fetch.requests == ["https://registry.npmjs.org/grapesjs"]
+
+
+def test_the_lowest_last_affected_of_several_advisories_sets_the_bound(
+    tmp_path: Path,
+) -> None:
+    item = package_item(
+        BOUNDED,
+        more={"GHSA-dddd-eeee-ffff": [{"introduced": "0"}, {"last_affected": "4.0.9"}]},
+    )
+    with pytest.raises(ValueError, match="release 4.0.8 is above"):
+        accepted(report_of(tmp_path, item), npm("4.0.7", "4.0.8"))
+
+
+def test_a_pub_release_that_was_retracted_is_not_a_fix(tmp_path: Path) -> None:
+    item = package_item(BOUNDED, ecosystem="Pub", name="ex")
+    versions = [{"version": "4.0.7"}, {"version": "4.0.8", "retracted": True}]
+    fetch = Registry(
+        {"https://pub.dev/api/packages/ex": json.dumps({"versions": versions})}
+    )
+    accepted(report_of(tmp_path, item), fetch)
