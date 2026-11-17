@@ -717,7 +717,7 @@ def check(
         if shard != "merge":
             provision_tools(ROOT, groups, timeout)
             if not quick:
-                judge_settings(groups, every, timeout)
+                judge_settings(groups, timeout)
         related = base if related_tests else None
         started, failed = time.time(), run_gates(groups, timeout, related) is not False
         save_installed(lock, installed, ROOT)
@@ -733,13 +733,14 @@ def check(
         return int(failed)
 
 
-def judge_settings(groups: list[Group], every: list[Group], timeout: float) -> None:
-    """The full check judges what the tools print and what the ignore file hides, once they are installed."""
+def judge_settings(groups: list[Group], timeout: float) -> None:
+    """The full check judges what the tools print and what the ignore file hides, once they are installed; each group is judged against every group of the project, not only the changed ones."""
+    from gate_config import load_groups
     from gitleaks_entries import validate_entries
     from resolved_settings import validate_resolved
 
     validate_entries(ROOT, timeout)
-    validate_resolved(ROOT, groups, timeout, every)
+    validate_resolved(ROOT, groups, timeout, load_groups(ROOT))
 
 
 def before_gates(groups: list[Group], quick: bool, base: str | None) -> None:

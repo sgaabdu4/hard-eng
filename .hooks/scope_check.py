@@ -119,32 +119,30 @@ def left_out(
     ]
 
 
-def refusal(left: list[str]) -> list[str]:
+def refusal(left: list[str], role: object = None) -> list[str]:
     if not left:
         return []
     more = f" and {len(left) - 1} more" if len(left) > 1 else ""
+    fix = f"; add {left[0]} to the {role} gate's paths" if role else ""
     return [
-        f"the tool does not check {left[0]}{more}, which git tracks; every tracked source file must be checked, or be linguist-generated or belong to a child gate group"
+        f"the tool does not check {left[0]}{more}, which git tracks; every tracked source file must be checked, or be linguist-generated or belong to a child gate group{fix}"
     ]
 
 
 RUFF_CONFIGS = {"ruff.toml", ".ruff.toml", "pyproject.toml"}
 FALLOW_CONFIGS = {".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"}
-FREE_RUFF_KEYS = {"target-version"}
 
 
-def only_free_keys(name: str, directory: Path) -> bool:
-    """A ruff config that sets nothing but keys that cannot change what is reported."""
+def sets_no_ruff_key(name: str, directory: Path) -> bool:
+    """A `pyproject.toml` with no ruff table; every key of a ruff config can change what is reported."""
     try:
         config = tomllib.loads((directory / name).read_text())
     except (OSError, tomllib.TOMLDecodeError):
         return False
     if PurePosixPath(name).name == "pyproject.toml":
         tool = config.get("tool")
-        config = tool.get("ruff") if isinstance(tool, dict) else None
-        if config is None:
-            return True
-    return isinstance(config, dict) and set(config) <= FREE_RUFF_KEYS
+        return not (isinstance(tool, dict) and "ruff" in tool)
+    return False
 
 
 def nested_configs(directory: Path, tool: str, roots: frozenset[Path]) -> list[str]:
@@ -158,7 +156,7 @@ def nested_configs(directory: Path, tool: str, roots: frozenset[Path]) -> list[s
             continue
         if (directory / path.parent).resolve() in roots:
             continue
-        if tool == "ruff" and only_free_keys(name, directory):
+        if tool == "ruff" and sets_no_ruff_key(name, directory):
             continue
         found.append(name)
     return [

@@ -825,6 +825,7 @@ def plan_install(
         add_freshness,
         browser_test_coverage,
         drop_unanchored_excludes,
+        retire_boundary_gate,
         strict_scanner_flags,
     )
 
@@ -833,6 +834,7 @@ def plan_install(
         strict_scanner_flags(package)
         add_freshness(root, SOURCE, package)
         adapt_boundaries(package)
+        retire_boundary_gate(root, package, changes)
         browser_test_coverage(root / package["path"], package)
         configure_semgrep_ignore(root, package, changes)
         configure_typing_checks(package)

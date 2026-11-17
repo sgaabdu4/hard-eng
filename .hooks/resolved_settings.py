@@ -68,15 +68,22 @@ class Defaults:
 
     def __init__(self, pool: ThreadPoolExecutor, root: Path, timeout: float) -> None:
         self.pool, self.root, self.timeout = pool, root, timeout
-        self.ruff_runs: dict[tuple[str, ...], Future[str]] = {}
+        self.ruff_runs: dict[tuple[tuple[str, ...], bool], Future[str]] = {}
         self.fallow_run: Future[dict[str, object]] | None = None
 
-    def ruff(self, prefix: tuple[str, ...]) -> Future[str]:
-        if prefix not in self.ruff_runs:
-            self.ruff_runs[prefix] = self.pool.submit(
-                printed, list(prefix), ["--isolated"], self.root, self.timeout
+    def ruff(self, prefix: tuple[str, ...], role: object = None) -> Future[str]:
+        """Ruff's own settings: its defaults, or for an annotations gate the template rule set."""
+        key = (prefix, role == "annotations")
+        if key not in self.ruff_runs:
+            chosen = ["--select", ANNOTATION_SET] if key[1] else []
+            self.ruff_runs[key] = self.pool.submit(
+                printed,
+                list(prefix),
+                ["--isolated", *chosen],
+                self.root,
+                self.timeout,
             )
-        return self.ruff_runs[prefix]
+        return self.ruff_runs[key]
 
     def fallow(self) -> Future[dict[str, object]]:
         if self.fallow_run is None:
@@ -87,8 +94,29 @@ class Defaults:
 Scope = tuple[Path, list[Group], Group, Gate]
 
 
+ANNOTATION_SET = "ANN,TID251,RUF017,ASYNC210"
+
+
 def group_roots(root: Path, every: list[Group]) -> frozenset[Path]:
     return frozenset((root / group["path"]).resolve() for group in every)
+
+
+def ruff_roots(root: Path, every: list[Group]) -> frozenset[Path]:
+    """The group roots that run Ruff: a ruff config in any other folder is read by the gate above it, whatever language owns the folder."""
+
+    def runs_ruff(group: Group) -> bool:
+        for gate in group["checks"]:
+            try:
+                found = direct(gate["command"], root / group["path"])
+            except ValueError:
+                continue
+            if found and found[0] == "ruff":
+                return True
+        return False
+
+    return frozenset(
+        (root / group["path"]).resolve() for group in every if runs_ruff(group)
+    )
 
 
 def ruff_tasks(
@@ -106,13 +134,13 @@ def ruff_tasks(
     prefix = command[: len(command) - count]
     arguments = command[len(command) - count :]
     children = nested_package_patterns(group, every, gate.get("role", ""))
-    roots = group_roots(root, every)
+    roots = ruff_roots(root, every)
     return [
         partial(
             ruff_gate_hits,
             (tuple(prefix), arguments[1:], directory, gate, timeout),
             (children, roots),
-            defaults.ruff(tuple(prefix)),
+            defaults.ruff(tuple(prefix), gate.get("role")),
         )
     ]
 
@@ -143,7 +171,14 @@ def ruff_gate_hits(
     )
     left = left_out(directory, (".py", ".pyi"), checked, children)
     nested = nested_configs(directory, "ruff", roots)
-    return [f"gate {gate['name']}: {hit}" for hit in [*hits, *refusal(left), *nested]]
+    return [
+        f"gate {gate['name']}: {hit}"
+        for hit in [
+            *hits,
+            *refusal(left, None if "." in arguments else gate.get("role")),
+            *nested,
+        ]
+    ]
 
 
 def fallow_tasks(

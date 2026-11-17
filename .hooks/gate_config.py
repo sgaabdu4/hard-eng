@@ -875,7 +875,6 @@ def validate_package_services(
                 "test:integration": "integration",
                 "test:ui": "ui",
                 "check:generated": "generated",
-                "lint:boundaries": "boundaries",
             }.items()
             if script in manifest.get("scripts", {})
         )

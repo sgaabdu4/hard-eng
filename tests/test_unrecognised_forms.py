@@ -275,11 +275,45 @@ def test_a_fallow_config_below_a_gate_root_needs_its_own_gate_group(
     validate_resolved(root, every, 900)
 
 
-def test_a_nested_ruff_config_that_sets_only_the_target_version_passes(
+def test_a_nested_ruff_config_that_sets_the_target_version_is_refused(
     tmp_path: Path,
 ) -> None:
+    """HE-NO-SWITCH-OFF: no ruff key is free below a gate root, because a lower target version hides findings."""
     root = project(
         tmp_path,
-        {"main.py": "x = 1\n", ".hooks/ruff.toml": 'target-version = "py312"\n'},
+        {"main.py": "x = 1\n", "sub/ruff.toml": 'target-version = "py37"\n'},
     )
-    validate_resolved(root, lint_groups((".", LINT)), 900)
+    with pytest.raises(ValueError, match="give it its own gate group"):
+        validate_resolved(root, lint_groups((".", LINT)), 900)
+
+
+def test_a_ruff_config_in_a_javascript_group_is_judged_by_the_python_gate_above(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: ruff reads the closest config for each Python file, whatever language owns the folder."""
+    root = project(
+        tmp_path,
+        {
+            "main.py": "import os\n",
+            "web/package.json": "{}",
+            "web/tools/x.py": "import os\n",
+            "web/ruff.toml": '[lint]\nselect = ["E501"]\n',
+        },
+    )
+    every: list[Group] = [
+        *lint_groups((".", LINT)),
+        {"path": "web", "language": "javascript", "checks": []},
+    ]
+    with pytest.raises(ValueError, match="give it its own gate group"):
+        validate_resolved(root, every, 900)
+
+
+def test_a_gate_that_leaves_files_out_names_the_path_to_add(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: when only the annotations gate leaves a file out, the refusal says where to add it."""
+    root = project(tmp_path, {"main.py": "x = 1\n", "sub/a.py": "x = 1\n"})
+    command = ["ruff", "check", "main.py", "--select", "ANN"]
+    every: list[Group] = [
+        {"path": ".", "language": "python", "checks": [gate(command, "annotations")]}
+    ]
+    with pytest.raises(ValueError, match=r"add sub/a\.py to the annotations gate"):
+        validate_resolved(root, every, 900)

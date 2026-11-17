@@ -179,6 +179,8 @@ def rule_hits(codes: set[str], defaults: set[str], role: object) -> list[str]:
         hits.append(lacking(lost, "of Ruff's default rules"))
     if role == "complexity" and (lost := COMPLEXITY_CODES - codes):
         hits.append(lacking(lost, "of the complexity rules"))
+    if role == "annotations" and (lost := defaults - codes):
+        hits.append(lacking(lost, "of the annotation rules"))
     return hits
 
 
