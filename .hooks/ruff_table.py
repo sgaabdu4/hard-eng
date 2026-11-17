@@ -162,7 +162,7 @@ def judge(
         return rule_hits(enabled(value), enabled(default), role)
     if kind == "holds" and (missing := [line for line in default if line not in value]):
         return [
-            f"the resolved {key} lacks {missing[0]!r}: the annotations gate keeps every banned import of the template"
+            f"the resolved {key} lacks {missing[0]!r}: the annotations gate keeps every banned import of the template; set one `--config` banned-api table that lists {', '.join(line.split(' = ')[0] for line in default)} (separate `--config` lines for each entry keep only one)"
         ]
     if kind == "version" and minimum:
         per_file = "per_file" in key

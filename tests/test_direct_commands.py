@@ -176,3 +176,22 @@ def test_a_report_key_does_not_excuse_a_gate_from_naming_its_tool(
     }
     with pytest.raises(ValueError, match="must run `ruff check`"):
         require_role_tool("python", gate, command)
+
+
+def test_a_flag_after_run_is_refused_by_name(tmp_path: Path) -> None:
+    """A flag after `run` is taken for the script name; the refusal names the flag."""
+    scripted(tmp_path, {"lint": "ruff check ."})
+    gate: Gate = {"name": "g", "command": ["bun", "run", "--silent", "lint"]}
+    with pytest.raises(ValueError, match=r"flag --silent after `run`"):
+        validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "form",
+    ["uv run --no-sync", "uv run --frozen", "bunx", "bun x", "uvx", "cargo clippy"],
+)
+def test_the_refusal_lists_every_allowed_form(tmp_path: Path, form: str) -> None:
+    gate: Gate = {"name": "g", "command": ["sh", "-c", "ruff check ."]}
+    with pytest.raises(ValueError, match=DIRECT) as raised:
+        validate_gate(gate, tmp_path, set())
+    assert form in str(raised.value)
