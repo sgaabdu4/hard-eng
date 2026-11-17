@@ -80,7 +80,7 @@ def npm_versions(name: str, fetch: Fetch) -> list[str]:
     return list(package["versions"])
 
 
-def pypi_releases(name: str, fetch: Fetch) -> JsonObject:
+def pypi_releases(name: str, fetch: Fetch) -> dict[str, list[JsonObject]]:
     package = fetch(f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json")
     if not isinstance(package, dict) or not isinstance(package.get("releases"), dict):
         raise TypeError(f"PyPI returned an unreadable record for {name}")
@@ -99,7 +99,7 @@ def pypi_eligible(
             and not all(item.get("yanked") for item in files)
             and not newer(version, ceiling)
             and released_before(
-                min(item["upload_time_iso_8601"] for item in files), cutoff
+                min(str(item["upload_time_iso_8601"]) for item in files), cutoff
             )
         ]
     )
