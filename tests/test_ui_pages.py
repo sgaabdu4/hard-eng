@@ -124,3 +124,42 @@ def test_a_plan_check_of_a_plan_without_a_visible_change_loads_no_ui_proof(
         check=True,
     )
     assert done.stdout.strip() == "[]"
+
+
+def test_the_stop_path_plan_check_of_a_visible_plan_loads_no_ui_proof(
+    tmp_path: Path, visual_plan: str
+) -> None:
+    import subprocess
+    import sys
+
+    from conftest import SOURCE, commit, init
+
+    project = tmp_path / "project"
+    init(project)
+    (project / "hard-eng.gates.json").write_text('{"packages": [], "shared": {}}')
+    (project / "src/ui").mkdir(parents=True)
+    (project / "src/ui/Field.tsx").write_text("export {};\n")
+    commit(project, "first")
+    plan = project / "features/x/PLAN.md"
+    plan.parent.mkdir(parents=True)
+    plan.write_text(
+        visual_plan.replace(
+            "Controls: None — the fixture changes only wording.",
+            "Controls: Field — reuses `src/ui/Field.tsx`",
+        )
+    )
+    code = (
+        "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import plans; "
+        "root = pathlib.Path(sys.argv[2]); "
+        "plans.validate_plan(root / 'features/x/PLAN.md'); "
+        "plans.validate_plans(root, 'HEAD', 'Complete'); "
+        "print(sorted(m for m in sys.argv[3:] if m in sys.modules))"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", code, str(SOURCE / ".hooks"), str(project), *UI_MODULES],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "['plan_controls']"
