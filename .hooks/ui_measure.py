@@ -101,6 +101,17 @@ for (const [parent, members] of groups) {
     const fills = new Set(filled.map((m) => getComputedStyle(m).backgroundColor));
     if (fills.size > 1) found.push({ rule: "competing-buttons", at: filled.map(name).join(" + "), fills: fills.size });
   }
+  if (members.length > 1) {
+  const block = parent.parentElement;
+  const colours = new Set();
+  for (const el of [block, ...block.querySelectorAll("*")]) {
+    if (!visible(el)) continue;
+    for (const c of colourOf(el, getComputedStyle(el))) {
+      if (c && opaque(c) && hue(rgb(c)) !== null) colours.add(rgb(c).slice(0, 3).join(","));
+    }
+  }
+  if (colours.size > LIMITS.accent_colours) found.push({ rule: "accent-colours", at: name(block), colours: colours.size });
+  }
   if ([...parent.children].some((c) => !members.includes(c) && visible(c) && textOf(c))) continue;
   if (parent.querySelector("input:not([type=hidden]),select,textarea")) continue;
   const block = parent.parentElement;
@@ -158,61 +169,33 @@ const backdrop = (el) => { for (let e = el; e; e = e.parentElement) { const c = 
 const contrastOf = (el) => { const a = lum(rgb(getComputedStyle(el).color).slice(0, 3)), b = lum(backdrop(el)); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
 const bodyPx = parseFloat(getComputedStyle(document.body).fontSize), bodyContrast = contrastOf(document.body);
 const SKIP = "a,button,label,legend,th,td,dt,summary,input,select,textarea,option,time,data,output,meter,nav,pre,code,[role=alert],[aria-live],h1,h2,h3,h4,h5,h6";
-const PICTURES = "svg,figure,picture,canvas,img,[role=img],[aria-hidden=true],[inert]";
-const HEADINGS = "h1,h2,h3,h4,h5,h6";
-const wordsOf = (text) => text.split(/\\s+/).filter(Boolean);
-const isValue = (text) => wordsOf(text).length <= 3 && /^[^\\p{L}]*\\d[\\d.,:%\\/\\s-]*\\p{L}{0,6}\\.?$/u.test(text.trim());
 const chip = (el) => {
   const s = getComputedStyle(el);
   const filled = opaque(s.backgroundColor) && s.backgroundColor !== getComputedStyle(el.parentElement).backgroundColor;
-  const edged = s.borderTopWidth !== "0px" && s.borderTopStyle !== "none";
-  return filled || edged;
-};
-const titleLike = (el) => {
-  if (/^H[1-6]$/.test(el.tagName)) return true;
-  const s = getComputedStyle(el);
-  const text = textOf(el);
-  return visible(el) && ownText(el) && !el.closest(SKIP + "," + PICTURES) && !["inline", "inline-block"].includes(s.display) && wordsOf(text).length <= 12 && (parseInt(s.fontWeight, 10) >= 600 || parseFloat(s.fontSize) > bodyPx + 0.5);
+  return filled || (s.borderTopWidth !== "0px" && s.borderTopStyle !== "none");
 };
 const lineOf = (el) => {
   const text = textOf(el);
-  if (!text || el.closest(SKIP + "," + PICTURES) || chip(el) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
-  if (isValue(text) || [...el.parentElement.children].some((c) => c !== el && ownText(c) && isValue(textOf(c)))) return null;
-  const secondary = parseFloat(getComputedStyle(el).fontSize) < bodyPx - 0.5 || contrastOf(el) <= bodyContrast / 2;
-  return { el, words: wordsOf(text).length, secondary };
+  const words = text.split(/\\s+/).filter(Boolean);
+  if (!text || el.closest(SKIP) || chip(el) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
+  const valueLike = (t) => t.split(/\\s+/).filter(Boolean).length <= 3 && /[0-9]/.test(t);
+  if (valueLike(text) || [...el.parentElement.children].some((c) => c !== el && !c.matches(HEADINGS) && ownText(c) && valueLike(textOf(c)))) return null;
+  const s = getComputedStyle(el);
+  const secondary = parseFloat(s.fontSize) < bodyPx - 0.5 || contrastOf(el) <= bodyContrast - 3;
+  return secondary ? { el, words: words.length } : null;
 };
-const cardOf = (title) => {
-  let top = title;
-  const parent = top.parentElement;
-  if (parent && !["BODY", "MAIN"].includes(parent.tagName) && [...parent.children].filter((c) => c !== title && !c.matches(BUTTONS) && textOf(c)).length === 0 && parent.nextElementSibling) top = parent;
-  return top;
-};
-const cards = [];
-const titles = [...document.querySelectorAll("*")].filter((el) => el.children.length < 4 && titleLike(el));
-for (const title of titles) {
-  const top = cardOf(title);
+const HEADINGS = "h1,h2,h3,h4,h5,h6";
+for (const heading of document.querySelectorAll(HEADINGS)) {
+  if (!visible(heading)) continue;
+  let top = heading;
+  while (top.parentElement && !["BODY", "MAIN"].includes(top.parentElement.tagName) && top.parentElement.querySelectorAll(HEADINGS).length === 1) top = top.parentElement;
   const roots = [];
-  for (let n = top.nextElementSibling; n && !titles.includes(n) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
-  if (!top.parentElement || ["BODY", "MAIN"].includes(top.parentElement.tagName)) cards.push({ title, roots, box: null });
-  else cards.push({ title, roots, box: top.parentElement });
-  const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el) && !el.querySelector(HEADINGS)).map(lineOf).filter(Boolean);
+  if (top !== heading) roots.push(top);
+  else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
+  const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
   if (lines.length > 8) continue;
-  const secondary = lines.filter((line) => line.secondary);
-  if (secondary.length > 1) found.push({ rule: "extra-text", at: name(title), secondary_lines: secondary.length });
-  for (const line of secondary) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(title), words: line.words });
-}
-const accentBlocks = new Set([...groups.keys()].map((p) => p.parentElement));
-for (const card of cards) if (card.box) accentBlocks.add(card.box);
-for (const block of [...accentBlocks]) if (["BODY", "MAIN", "HTML"].includes(block.tagName)) accentBlocks.delete(block);
-for (const block of accentBlocks) {
-  const colours = new Set();
-  for (const el of [block, ...block.querySelectorAll("*")]) {
-    if (!visible(el) || el.closest(PICTURES)) continue;
-    for (const c of colourOf(el, getComputedStyle(el))) {
-      if (c && opaque(c) && hue(rgb(c)) !== null) colours.add(rgb(c).slice(0, 3).join(","));
-    }
-  }
-  if (colours.size > LIMITS.accent_colours) found.push({ rule: "accent-colours", at: name(block), colours: colours.size });
+  if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
+  for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
 }
 if (document.documentElement.scrollWidth > innerWidth + 1) {
   found.push({ rule: "overflow", at: "page", scrollWidth: document.documentElement.scrollWidth, width: innerWidth });
