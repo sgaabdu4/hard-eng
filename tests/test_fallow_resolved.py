@@ -213,12 +213,14 @@ def test_a_committed_coverage_file_cannot_feed_the_crap_score(tmp_path: Path) ->
     root = repo(
         tmp_path,
         {
-            ".fallowrc.json": settings(health={"coverage": "committed.json"}),
-            "committed.json": "{}",
+            ".fallowrc.json": settings(
+                health={"coverage": "coverage/coverage-final.json"}
+            ),
+            "coverage/coverage-final.json": "{}",
             "src/main.ts": "export {};\n",
         },
     )
-    with pytest.raises(ValueError, match=r"health\.coverage[\s\S]*tests gate writes"):
+    with pytest.raises(ValueError, match=r"health\.coverage[\s\S]*never a committed"):
         validate_resolved(root, tests_group(), 900)
 
 

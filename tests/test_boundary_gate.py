@@ -62,6 +62,30 @@ def test_an_update_removes_the_boundary_gate_and_starter_script_it_added(
     assert snapshot(tmp_path) == before
 
 
+ONE_LINE = [
+    '{"scripts":{"lint:boundaries":"fallow architecture --fail-on-issues"}}',
+    '{"scripts": {"lint:boundaries": "fallow architecture --fail-on-issues"}}\n',
+    '{\n  "name": "x",\n  "scripts": { "lint:boundaries": "fallow architecture --fail-on-issues", "test": "bun test" }\n}\n',
+    '{\n    "scripts": {\n        "test": "bun test",\n        "lint:boundaries": "fallow architecture --fail-on-issues"\n    }\n}\n',
+]
+
+
+@pytest.mark.parametrize("manifest", ONE_LINE)
+def test_an_update_edits_the_manifest_as_data_whatever_its_layout(
+    installer: ModuleType, tmp_path: Path, manifest: str
+) -> None:
+    """A one-line manifest or a one-line `scripts` object must not crash the update; the other keys and the file's indent stay."""
+    package = with_boundary_gate(installer, tmp_path, manifest, None)
+    assert not any(gate.get("role") == "boundaries" for gate in package["checks"])
+    text = (tmp_path / "package.json").read_text()
+    kept = json.loads(text)
+    assert "lint:boundaries" not in kept["scripts"]
+    assert json.loads(manifest).get("name") == kept.get("name")
+    assert ("bun test" in text) == ("bun test" in manifest)
+    assert text.endswith("\n") == manifest.endswith("\n")
+    assert text.startswith(manifest[: manifest.index('"')])
+
+
 def test_an_update_keeps_a_project_own_boundary_gate(
     installer: ModuleType, tmp_path: Path
 ) -> None:
