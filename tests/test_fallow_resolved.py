@@ -200,7 +200,11 @@ def tests_group(report: str = "coverage/lcov.info") -> list[Group]:
         "name": "tests",
         "role": "tests",
         "command": ["bun", "run", "test:coverage"],
-        "report": {"type": "lcov-tests", "path": report},
+        "report": {
+            "type": "lcov-tests",
+            "tests": "coverage/junit.xml",
+            "coverage": report,
+        },
     }
     return [{"path": ".", "language": "javascript", "checks": [gate(), tests]}]
 

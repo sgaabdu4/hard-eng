@@ -133,16 +133,37 @@ RUFF_CONFIGS = {"ruff.toml", ".ruff.toml", "pyproject.toml"}
 FALLOW_CONFIGS = {".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"}
 
 
-def sets_no_ruff_key(name: str, directory: Path) -> bool:
-    """A `pyproject.toml` with no ruff table; every key of a ruff config can change what is reported."""
+def requires_python(directory: Path) -> tuple[int, int] | None:
+    """The lowest Python version the project supports, which Ruff uses as its target when no target is set."""
+    try:
+        project = tomllib.loads((directory / "pyproject.toml").read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    found = re.search(
+        r">=\s*(\d+)\.(\d+)", str(project.get("project", {}).get("requires-python", ""))
+    )
+    return (int(found[1]), int(found[2])) if found else None
+
+
+def harmless_ruff_config(name: str, directory: Path) -> bool:
+    """A `pyproject.toml` with no ruff table, or a ruff config that sets only a target version at the `requires-python` minimum or above; any other key can change what is reported."""
     try:
         config = tomllib.loads((directory / name).read_text())
     except (OSError, tomllib.TOMLDecodeError):
         return False
     if PurePosixPath(name).name == "pyproject.toml":
         tool = config.get("tool")
-        return not (isinstance(tool, dict) and "ruff" in tool)
-    return False
+        if not (isinstance(tool, dict) and "ruff" in tool):
+            return True
+        config = tool["ruff"]
+    minimum = requires_python(directory)
+    found = re.fullmatch(r"py(\d)(\d+)", str(config.get("target-version", "")))
+    return (
+        set(config) == {"target-version"}
+        and minimum is not None
+        and found is not None
+        and (int(found[1]), int(found[2])) >= minimum
+    )
 
 
 def nested_configs(directory: Path, tool: str, roots: frozenset[Path]) -> list[str]:
@@ -156,7 +177,7 @@ def nested_configs(directory: Path, tool: str, roots: frozenset[Path]) -> list[s
             continue
         if (directory / path.parent).resolve() in roots:
             continue
-        if tool == "ruff" and sets_no_ruff_key(name, directory):
+        if tool == "ruff" and harmless_ruff_config(name, directory):
             continue
         found.append(name)
     return [
