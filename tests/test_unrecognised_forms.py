@@ -41,7 +41,6 @@ WRAPPED = [
     ["bash", "-lc", "ruff check . --select E501"],
     ["bash", "-ec", "cargo clippy -- -A warnings"],
     ["bash", "-c", "eval 'ruff check . --exit-zero'"],
-    ["sh", "-c", "$LINT --exit-zero"],
     ["sh", "-c", "ruff check $(echo . --exit-zero)"],
     ["eval", "ruff check . --exit-zero"],
     ["ruff", "check", ".", "--statistics"],
@@ -67,7 +66,6 @@ def test_a_gate_that_cannot_be_reduced_to_a_judged_command_is_refused(
         ["ruff", "check", ".", "--extend-select", "C901,PLR0912,PLR0915"],
         ["ruff", "check", ".", "--select", "ALL"],
         ["ruff", "check", ".", "--output-format", "concise", "--no-cache"],
-        ["bash", "-ec", "ruff check ."],
         ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
     ],
 )

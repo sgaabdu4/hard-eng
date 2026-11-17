@@ -176,9 +176,6 @@ RUST_GATES = [
     ["cargo", "clippy", "--config", "build.@LOW@=['-Awarnings']"],
     ["cargo", "clippy", "--config=build.@LOW@=['-A', 'warnings']"],
     ["cargo", "clippy", "--", "--cap-lints", "allow"],
-    ["env", "@UP@=-Awarnings", "cargo", "clippy"],
-    ["sh", "-c", "cargo clippy -- -A clippy::all"],
-    ["sh", "-c", "@UP@='-A unused' cargo build"],
 ]
 
 

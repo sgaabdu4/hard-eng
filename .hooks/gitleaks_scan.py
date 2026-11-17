@@ -33,9 +33,12 @@ def config_variable_hits(name: str, text: str) -> list[str]:
     ]
 
 
-def validate_config_variables(parts: list[list[str]]) -> None:
+def validate_config_variables(command: list[str]) -> None:
     found = [
-        word for segment in parts for word in segment if CONFIG_ASSIGNMENT.match(word)
+        piece
+        for word in command
+        for piece in word.split()
+        if CONFIG_ASSIGNMENT.match(piece)
     ]
     if found:
         raise ValueError(

@@ -1,7 +1,6 @@
-"""The words a gate command really runs: a package script or an `sh -c` string is expanded, and chained commands are split."""
+"""A gate that runs a judged tool runs it directly: a launcher, the tool, then arguments; every other form is refused."""
 
 import re
-import shlex
 from pathlib import Path, PurePosixPath
 
 ASSIGNING_SUFFIXES = (".yml", ".yaml", ".sh", ".bash", ".toml", ".json", ".mk")
@@ -23,81 +22,107 @@ def assigns_variables(name: str) -> bool:
     )
 
 
-SEPARATORS = {"&&", "||", ";", "|"}
-SHELLS = {"sh", "bash", "zsh"}
-SHELL_FLAGS = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
-HIDDEN_COMMAND = ("$(", "`", "<(", ">(")
-UNREDUCIBLE = (
-    "HE-NO-SWITCH-OFF: A gate command must reduce to words that the checks can read: "
-    "write the tool and its arguments as plain words, without eval, a variable as the command "
-    "or a command substitution; the gate holds "
+JUDGED_TOOLS = {"ruff", "fallow", "gitleaks", "clippy", "cargo-clippy"}
+OPERATORS = {"&&", "||", ";", "|", "&", "!", ">", ">>", "<", "2>", "(", ")"}
+MANAGERS = {"npm", "pnpm", "yarn", "bun"}
+TOOL_WORD = re.compile(r"(ruff|fallow|gitleaks)(@[\w.=<>~+-]+)?")
+UV_FLAGS = {"--no-sync", "--frozen", "--locked"}
+DIRECT_FORMS = (
+    "write `uvx ruff@<pin> check <paths>`, `ruff check <paths>`, `bun x fallow@<pin> <arguments>`, "
+    "`cargo clippy <arguments>` or `gitleaks <arguments>`, or `bun run <script>` where the script is exactly one such command"
 )
 
 
-JUDGED_TOOLS = ("ruff", "cargo", "clippy", "fallow", "gitleaks")
+def refusal(reason: str) -> ValueError:
+    return ValueError(
+        "HE-NO-SWITCH-OFF: A gate that runs ruff, cargo, clippy, fallow or gitleaks must run it directly, "
+        f"so the checks can read its arguments: {DIRECT_FORMS}; {reason}"
+    )
 
 
-def hidden(words: list[str]) -> list[str]:
-    """Words that run something the checks cannot read: eval or a variable as the command, and a substitution beside a judged tool."""
-    judged = any(tool in word for word in words for tool in JUDGED_TOOLS)
-    found = [
-        word
-        for word in words
-        if judged and any(mark in word for mark in HIDDEN_COMMAND)
-    ]
-    starts = [words[:1]] + [
-        words[index + 1 : index + 2]
-        for index, word in enumerate(words)
-        if word in SEPARATORS
-    ]
-    for number, start in enumerate(starts):
-        if not start:
-            continue
-        named_eval = Path(start[0]).name == "eval"
-        if named_eval or (start[0].startswith("$") and (number == 0 or judged)):
-            found.append(start[0])
-    return found
+def tool_name(word: str) -> str:
+    return PurePosixPath(word).name.split("@", 1)[0]
 
 
-def shell_string(arguments: list[str]) -> str | None:
-    """The string after the first flag group that holds `c`, as in `-c`, `-ec` or `-lc`."""
-    for index, word in enumerate(arguments[1:-1], 1):
-        if SHELL_FLAGS.fullmatch(word):
-            return arguments[index + 1]
+def mentions(words: list[str]) -> bool:
+    """A word that is a judged tool, or a string that holds one, as in `sh -c 'ruff check'`; `cargo` alone is not judged, only its `clippy`."""
+    for word in words:
+        if tool_name(word) in JUDGED_TOOLS:
+            return True
+        if re.search(r"[\s;&|$`]", word) and any(
+            tool_name(part) in JUDGED_TOOLS for part in re.findall(r"[\w@./+-]+", word)
+        ):
+            return True
+    return False
+
+
+def expanded(command: list[str], directory: Path) -> list[str]:
+    """A package script run as its words; a script with a `pre` or `post` script runs two commands, so it is refused."""
+    if tool_name(command[0]) not in MANAGERS:
+        return command
+    from project_setup import package_script_invocation, read_project_file
+
+    try:
+        words, where = package_script_invocation(command, directory)
+    except (ValueError, TypeError, OSError):
+        return command
+    if words == command:
+        return command
+    named = [word for word in command[1:] if not word.startswith("-")]
+    scripts = read_project_file(where / "package.json").get("scripts", {})
+    if mentions(words) and (
+        {f"pre{named[1]}", f"post{named[1]}"} & set(scripts)
+        if len(named) > 1
+        else False
+    ):
+        raise refusal(
+            f"the script {named[1]} has a pre or post script, so two commands run"
+        )
+    return words
+
+
+def launched(words: list[str]) -> list[str] | None:
+    """The words from the tool on, when a template launcher starts them."""
+    if not words:
+        return None
+    if words[0] in {"ruff", "fallow", "gitleaks"}:
+        return words
+    if words[0] == "cargo":
+        return words if "clippy" in words[:3] else None
+    rest: list[str] | None = None
+    if words[0] == "uvx":
+        rest = words[1:]
+    elif words[:2] == ["bun", "x"]:
+        rest = words[2:]
+    elif words[0] == "bunx":
+        rest = words[1:]
+    elif words[:2] == ["uv", "run"]:
+        rest = words[2:]
+        while rest and rest[0] in UV_FLAGS:
+            rest = rest[1:]
+    if rest and (found := TOOL_WORD.fullmatch(rest[0])):
+        return [found[1], *rest[1:]]
     return None
 
 
-def unwrapped(command: list[str], directory: Path) -> list[str]:
-    """Expand a package script or a shell string, as `check:fallow` is expanded; a command that cannot be read fails."""
-    arguments = list(command)
-    for _ in range(4):
-        if Path(arguments[0]).name in {"npm", "pnpm", "yarn", "bun"}:
-            from project_setup import package_script_invocation
-
-            try:
-                arguments = package_script_invocation(arguments, directory)[0]
-            except (ValueError, TypeError, OSError):
-                return arguments
-        string = shell_string(arguments) if Path(arguments[0]).name in SHELLS else None
-        if string is None:
-            break
-        try:
-            arguments = shlex.split(string)
-        except ValueError as error:
-            raise ValueError(UNREDUCIBLE + repr(string)) from error
-        if not arguments:
-            break
-    if found := hidden(arguments):
-        raise ValueError(UNREDUCIBLE + ", ".join(found))
-    return arguments
-
-
-def segments(command: list[str], directory: Path) -> list[list[str]]:
-    """One word list for each chained command."""
-    found: list[list[str]] = [[]]
-    for word in unwrapped(command, directory):
-        if word in SEPARATORS:
-            found.append([])
-        else:
-            found[-1].append(word)
-    return [segment for segment in found if segment]
+def direct(command: list[str], directory: Path) -> list[str] | None:
+    """The words from the judged tool on, or none when no judged tool runs; any other form of a judged tool is refused."""
+    words = expanded(command, directory)
+    if not mentions(words) and not mentions(command):
+        return None
+    found = launched(words)
+    if found is None:
+        raise refusal(f"the gate holds {' '.join(command)}")
+    shell = len(words) != len(command)
+    metas = re.compile(r"[;&|<>$`]")
+    bad = [
+        word
+        for word in found
+        if word in OPERATORS
+        or "$(" in word
+        or "`" in word
+        or (shell and metas.search(word))
+    ]
+    if bad:
+        raise refusal(f"the gate holds {', '.join(bad)}")
+    return found

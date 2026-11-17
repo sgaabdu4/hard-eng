@@ -51,7 +51,7 @@ def swap(group: Group, role: str, command: list[str]) -> Group:
     [
         ("python", "format", ["true"], "ruff format"),
         ("python", "types", ["sh", "-c", "exit 0"], "pyrefly check"),
-        ("python", "dead-code", ["echo", "ruff", "check"], "vulture"),
+        ("python", "dead-code", ["echo", "ruffian", "check"], "vulture"),
         ("python", "dead-code", ["true"], "vulture"),
         ("python", "dead-code", ["skylos", "src", "--strict"], "vulture"),
         ("python", "dead-code", ["uvx", "skylos@latest", "src", "--json"], "vulture"),
@@ -93,7 +93,7 @@ def test_a_shared_scan_must_name_its_tool() -> None:
     ("language", "role", "command"),
     [
         ("python", "lint", ["uvx", "ruff@latest", "check", "."]),
-        ("python", "format", ["bash", "-c", "exec uvx ruff@0.14.0 format --check ."]),
+        ("python", "format", ["uvx", "ruff@0.14.0", "format", "--check", "."]),
         (
             "python",
             "dead-code",
