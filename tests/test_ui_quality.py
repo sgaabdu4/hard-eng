@@ -854,7 +854,7 @@ def test_ux_text_names_the_gap_items() -> None:
         "Design system:",
         "plain, calm and positive",
         "phone 390, tablet 768 and desktop 1280 px",
-        "A Pass you type is a record, not proof",
+        "A Pass line you type is a claim, not proof",
     ):
         assert words in reference, words
 

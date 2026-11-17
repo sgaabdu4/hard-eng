@@ -318,15 +318,9 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
 
 
 CODEX_RULES_FILE = ".codex/rules/hard-eng.rules"
+CODEX_MERGE_GH = "gh|env gh|command gh|xargs gh|exec gh|/opt/homebrew/bin/gh|/usr/local/bin/gh|/usr/bin/gh"
 CODEX_MERGE_PATTERNS = [
-    ["gh", "pr", "merge"],
-    *(
-        [wrapper, "gh", "pr", "merge"]
-        for wrapper in ("env", "command", "xargs", "exec")
-    ),
-    ["/opt/homebrew/bin/gh", "pr", "merge"],
-    ["/usr/local/bin/gh", "pr", "merge"],
-    ["/usr/bin/gh", "pr", "merge"],
+    [*word.split(), "pr", "merge"] for word in CODEX_MERGE_GH.split("|")
 ]
 CODEX_MERGE_RULE = "".join(
     f"prefix_rule(\n    pattern = {json.dumps(pattern)},\n"

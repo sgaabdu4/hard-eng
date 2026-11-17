@@ -219,7 +219,7 @@ def test_the_look_command_is_listed_in_the_runner_help() -> None:
 def test_review_text_names_the_look_command() -> None:
     review = (SOURCE / ".agents/skills/code-review/references/review.md").read_text()
     assert "hard-eng.py look" in review
-    assert "Do not accept a Pass line that someone typed by hand" in review
+    assert "Do not accept a typed Pass line in place of a `look` block" in review
 
 
 def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
