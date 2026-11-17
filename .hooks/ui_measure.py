@@ -117,8 +117,10 @@ for (const [parent, members] of groups) {
   const block = parent.parentElement;
   const box = block.getBoundingClientRect();
   const pad = parseFloat(getComputedStyle(block).paddingLeft);
-  const left = Math.min(...members.map((m) => m.getBoundingClientRect().left));
   const row = parent.getBoundingClientRect();
+  const ps = getComputedStyle(parent);
+  const framed = (opaque(ps.backgroundColor) && ps.backgroundColor !== getComputedStyle(block).backgroundColor) || (ps.borderTopWidth !== "0px" && ps.borderTopStyle !== "none");
+  const left = framed ? row.left : Math.min(...members.map((m) => m.getBoundingClientRect().left));
   const stacked = (c) => { const r = c.getBoundingClientRect(); return r.bottom <= row.top + 1 || r.top >= row.bottom - 1; };
   const siblings = [...block.children].filter((c) => c !== parent && visible(c) && ownText(c) && stacked(c));
   const textLefts = siblings.map((c) => { const r = document.createRange(); r.selectNodeContents(c); return r.getBoundingClientRect().left; });
@@ -164,10 +166,7 @@ for (const input of searches) {
   if (icon && labelledButtons.length) found.push({ rule: "field-control", at: name(input), selector: selectorOf(input), why: "search text button beside a field with an icon" });
   if (!icon) found.push({ rule: "field-control", at: name(input), selector: selectorOf(input), why: "search field without an icon inside" });
 }
-const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
-const backdrop = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (opaque(c)) return rgb(c).slice(0, 3); } return [255, 255, 255]; };
-const contrastOf = (el) => { const a = lum(rgb(getComputedStyle(el).color).slice(0, 3)), b = lum(backdrop(el)); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
-const bodyPx = parseFloat(getComputedStyle(document.body).fontSize), bodyContrast = contrastOf(document.body);
+const bodyPx = parseFloat(getComputedStyle(document.body).fontSize);
 const SKIP = "a,button,label,legend,th,td,dt,summary,input,select,textarea,option,time,data,output,meter,nav,pre,code,[role=alert],[aria-live],h1,h2,h3,h4,h5,h6";
 const chip = (el) => {
   const s = getComputedStyle(el);
@@ -177,12 +176,12 @@ const chip = (el) => {
 const lineOf = (el) => {
   const text = textOf(el);
   const words = text.split(/\\s+/).filter(Boolean);
-  if (!text || el.closest(SKIP) || chip(el) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
+  if (!text || !/\\p{L}/u.test(text) || el.closest(SKIP + ",li,footer,[role=contentinfo]") || chip(el) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
   const valueLike = (t) => t.split(/\\s+/).filter(Boolean).length <= 3 && /[0-9]/.test(t);
   if (valueLike(text) || [...el.parentElement.children].some((c) => c !== el && !c.matches(HEADINGS) && ownText(c) && valueLike(textOf(c)))) return null;
   const s = getComputedStyle(el);
-  const secondary = parseFloat(s.fontSize) < bodyPx - 0.5 || contrastOf(el) <= bodyContrast - 3;
-  return secondary ? { el, words: words.length } : null;
+  const px = parseFloat(s.fontSize);
+  return px < bodyPx - 0.5 ? { el, words: words.length, px } : null;
 };
 const HEADINGS = "h1,h2,h3,h4,h5,h6";
 for (const heading of document.querySelectorAll(HEADINGS)) {
@@ -193,7 +192,7 @@ for (const heading of document.querySelectorAll(HEADINGS)) {
   if (top !== heading) roots.push(top);
   else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
   const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
-  if (lines.length > 8) continue;
+  if (lines.length > 8 || lines.some((l) => l.px < LIMITS.text_px)) continue;
   if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
   for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
 }

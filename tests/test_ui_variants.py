@@ -20,6 +20,10 @@ NODE = (
     "border:1px solid #767676;border-radius:8px;padding:4px 8px;font-size:14px;"
     "color:#55565c"
 )
+GREY_BODY = "color:#6b6b6b;margin:0"
+STEPS = "".join(f"<li>Step {n} of the list</li>" for n in range(5))
+SMALL = "font-size:9px;color:#55565c;margin:0"
+MID = "font-size:12px;color:#55565c;margin:0"
 LONG_LINE = " ".join(["word"] * 21)
 MOCK_LINES = "".join(f"<div style='{META}'>line {n}</div>" for n in range(10))
 NODES = "".join(f"<span style='{NODE}'>Step {n}</span>" for n in range(9))
@@ -71,6 +75,11 @@ REAL_PATTERNS = {
     "footer-copyright": f"<footer><h2>Contact</h2><p>Write to us any time.</p><p style='{META}'>Copyright 2026 Example</p></footer>",
     "icon-list": "<section><h2>Why us</h2><ul style='list-style:none;margin:0;padding:0'><li><svg aria-hidden=true width=16 height=16><circle cx=8 cy=8 r=6 /></svg> <span>Plain words</span></li><li><svg aria-hidden=true width=16 height=16><circle cx=8 cy=8 r=6 /></svg> <span>Fast answers</span></li><li><svg aria-hidden=true width=16 height=16><circle cx=8 cy=8 r=6 /></svg> <span>Fair prices</span></li></ul></section>",
     "diagram-nodes": f"<section><h2>Flow</h2><div style='display:flex;gap:8px;flex-wrap:wrap'>{NODES}</div></section>",
+    "grey-body-list": f"<section><h2>Delete</h2><p style='{GREY_BODY}'>Follow these steps.</p><ol style='{GREY_BODY}'>{STEPS}</ol></section>",
+    "list-items-in-a-card": f"<section><h2>Open</h2><ul style='{META};padding:0;list-style:none'>{STEPS}</ul></section>",
+    "footer-lines": f"<footer><h2>Contact</h2><p style='{META}'>Copyright Example Limited</p><p style='{META}'>All rights reserved</p></footer>",
+    "separator-dot": f"<section><h2>Open source</h2><p style='{META}'>A short description</p><span style='{META}'>&middot;</span></section>",
+    "pill-toggle": f"<div style='padding:16px'><p style='margin:0'>Show</p><div style='display:inline-flex;padding:6px;background:#eee;border-radius:30px'><button style='{PLAIN_BUTTON}'>Day</button><button style='{PLAIN_BUTTON}'>Week</button></div></div>",
 }
 
 
@@ -99,6 +108,17 @@ def test_real_patterns_that_look_like_faults_are_not_findings(
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert found[width] == Counter(), (width, found[width])
+
+
+def test_a_mock_up_with_text_below_the_floor_reports_only_the_text_size(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    lines = "".join(f"<div style='{SMALL}'>Patient {'abc'[n]}</div>" for n in range(3))
+    lines += "".join(f"<div style='{MID}'>Visit {'ab'[n]}</div>" for n in range(2))
+    limit_page(tmp_path, f"<section><h2>Dashboard</h2>{lines}</section>")
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert set(found[width]) == {"text-size"}, (width, found[width])
 
 
 def test_a_search_icon_drawn_by_the_wrapper_counts_as_inside_the_field(
