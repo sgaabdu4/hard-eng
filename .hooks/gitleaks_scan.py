@@ -11,18 +11,19 @@ from typing import IO
 from process_group import run_in_group
 from project_files import GIT_LISTING
 
-CONFIG_VARIABLES = ("GITLEAKS_CONFIG", "GITLEAKS_CONFIG_TOML")
-CONFIG_ASSIGNMENT = re.compile(
-    r"\b(?:GITLEAKS_CONFIG(?:_TOML)?|FALLOW_\w+)[\"']?\s*[:=]"
+TOOL_VARIABLES = re.compile(
+    r"GITLEAKS_CONFIG(?:_TOML)?|FALLOW_\w+|CARGO_ALIAS_\w+|CLIPPY_CONF_DIR|SHELLCHECK_OPTS"
+    r"|RUFF_(?!CACHE_DIR\b|NO_CACHE\b)\w+"
 )
+CONFIG_ASSIGNMENT = re.compile(rf"\b(?:{TOOL_VARIABLES.pattern})[\"']?\s*[:=]")
 
 
 def scan_environment(base: dict[str, str] | None = None) -> dict[str, str]:
-    """The environment of a gate run, without the variables that replace a Gitleaks config and without every `FALLOW_` variable, which a newer Fallow release may read."""
+    """The environment of a gate run, without the variables that change what a judged tool reports: the Gitleaks config, every `FALLOW_` variable (a newer release may read more), a Cargo alias, the Clippy config folder, `SHELLCHECK_OPTS` and the Ruff variables other than its two cache ones."""
     return {
         key: value
         for key, value in (os.environ if base is None else base).items()
-        if key not in CONFIG_VARIABLES and not key.startswith("FALLOW_")
+        if not TOOL_VARIABLES.fullmatch(key)
     }
 
 

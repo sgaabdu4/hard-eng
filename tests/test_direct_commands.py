@@ -104,10 +104,10 @@ def test_a_direct_form_passes(tmp_path: Path, command: list[str]) -> None:
 
 
 def test_a_script_that_is_exactly_one_direct_command_passes(tmp_path: Path) -> None:
-    scripted(tmp_path, {"lint": "ruff check ."})
-    gate: Gate = {"name": "g", "command": ["bun", "run", "lint"]}
+    scripted(tmp_path, {"scan": "fallow --fail-on-issues"})
+    gate: Gate = {"name": "g", "command": ["bun", "run", "scan"]}
     validate_gate(gate, tmp_path, set())
-    assert direct(gate["command"], tmp_path) == ["ruff", "check", "."]
+    assert direct(gate["command"], tmp_path) == ["fallow", "--fail-on-issues"]
 
 
 @pytest.mark.parametrize(
@@ -278,21 +278,50 @@ def put_bin(root: Path, tool: str, owner: str | None) -> None:
 
 
 def test_a_local_bin_file_named_like_the_tool_is_refused(tmp_path: Path) -> None:
-    """HE-NO-SWITCH-OFF: `bun run` puts node_modules/.bin first on the path, so a file there named `ruff` runs in place of Ruff."""
-    scripted(tmp_path, {"lint": "ruff check ."})
-    put_bin(tmp_path, "ruff", None)
-    gate: Gate = {"name": "g", "command": ["bun", "run", "lint"]}
-    with pytest.raises(ValueError, match=r"node_modules/\.bin/ruff"):
+    """HE-NO-SWITCH-OFF: `bun run` puts node_modules/.bin first on the path, so a file there named `gitleaks` runs in place of Ruff."""
+    scripted(tmp_path, {"scan": "gitleaks dir ."})
+    put_bin(tmp_path, "gitleaks", None)
+    gate: Gate = {"name": "g", "command": ["bun", "run", "scan"]}
+    with pytest.raises(ValueError, match=r"node_modules/\.bin/gitleaks"):
         validate_gate(gate, tmp_path, set())
 
 
 def test_a_local_bin_link_into_the_tool_package_passes(tmp_path: Path) -> None:
-    scripted(tmp_path, {"lint": "ruff check ."})
-    put_bin(tmp_path, "ruff", "ruff")
-    validate_gate({"name": "g", "command": ["bun", "run", "lint"]}, tmp_path, set())
+    scripted(tmp_path, {"scan": "gitleaks dir ."})
+    put_bin(tmp_path, "gitleaks", "gitleaks")
+    validate_gate({"name": "g", "command": ["bun", "run", "scan"]}, tmp_path, set())
     other = tmp_path / "other"
     other.mkdir()
-    scripted(other, {"lint": "ruff check ."})
-    put_bin(other, "ruff", None)
-    with pytest.raises(ValueError, match=r"node_modules/\.bin/ruff"):
-        validate_gate({"name": "g", "command": ["bun", "run", "lint"]}, other, set())
+    scripted(other, {"scan": "gitleaks dir ."})
+    put_bin(other, "gitleaks", None)
+    with pytest.raises(ValueError, match=r"node_modules/\.bin/gitleaks"):
+        validate_gate({"name": "g", "command": ["bun", "run", "scan"]}, other, set())
+
+
+def test_ruff_in_a_package_script_is_refused(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: `bun run` puts node_modules/.bin first and a local npm package can be named `ruff`; Ruff is not an npm tool, so run it directly or with `uvx ruff@<pin>`."""
+    scripted(tmp_path, {"lint": "ruff check ."})
+    gate: Gate = {"name": "g", "command": ["bun", "run", "lint"]}
+    with pytest.raises(ValueError, match=r"ruff in a package script"):
+        validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["fallow", "audit", "--gate", "all"],
+        ["bun", "x", "fallow@3.43.1", "audit", "--gate", "all"],
+    ],
+)
+def test_the_dead_code_role_refuses_a_fallow_audit(command: list[str]) -> None:
+    """HE-NO-SWITCH-OFF: an audit finds its own base and judges only the changed files, so it cannot stand for the full scan."""
+    from tool_setup import require_role_tool
+
+    gate: Gate = {
+        "name": "dead-code-duplicates",
+        "role": "dead-code-duplicates",
+        "command": command,
+        "report": {"type": "fallow", "path": "coverage/fallow.json"},
+    }
+    with pytest.raises(ValueError, match=r"fallow audit"):
+        require_role_tool("javascript", gate, command)

@@ -36,7 +36,8 @@ def test_a_package_script_that_holds_a_narrowing_flag_fails(tmp_path: Path) -> N
         validate_gate(lint(["bun", "run", "lint"]), tmp_path, set())
     scripts["scripts"]["lint"] = "ruff check ."
     (tmp_path / "package.json").write_text(json.dumps(scripts))
-    validate_gate(lint(["bun", "run", "lint"]), tmp_path, set())
+    with pytest.raises(ValueError, match="ruff in a package script"):
+        validate_gate(lint(["bun", "run", "lint"]), tmp_path, set())
 
 
 def test_a_format_gate_may_exclude_generated_folders(tmp_path: Path) -> None:

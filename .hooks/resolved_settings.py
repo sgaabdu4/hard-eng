@@ -156,6 +156,7 @@ def ruff_tasks(
     ]
     if launcher[:2] == ["uv", "run"]:
         tasks.append(partial(own_binary_hits, launcher[:-1], directory, gate, timeout))
+        tasks.append(partial(lock_source_hits, directory, gate))
     return tasks
 
 
@@ -168,6 +169,32 @@ except metadata.PackageNotFoundError:
     owned = set()
 print("ok" if found and os.path.realpath(found) in owned else "foreign")
 """
+
+
+def lock_source_hits(directory: Path, gate: Gate) -> list[str]:
+    """The `ruff` package of uv.lock must come from a registry: a path, directory, editable or git source is a local package that can carry any file."""
+    import tomllib
+
+    for folder in [directory.resolve(), *directory.resolve().parents]:
+        lock = folder / "uv.lock"
+        if lock.is_file():
+            try:
+                packages = tomllib.loads(lock.read_text()).get("package", [])
+            except tomllib.TOMLDecodeError:
+                break
+            sources = [
+                package.get("source", {})
+                for package in packages
+                if package.get("name") == "ruff"
+            ]
+            if sources and all("registry" in source for source in sources):
+                return []
+            break
+        if (folder / ".git").exists():
+            break
+    return [
+        f"gate {gate['name']}: the ruff that `uv run` starts must come from a registry in uv.lock, not from a path, directory, editable or git source: use the published ruff package or run `uvx ruff@<pin>`"
+    ]
 
 
 def own_binary_hits(
