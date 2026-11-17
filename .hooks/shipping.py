@@ -732,6 +732,12 @@ def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
 
         if validate_plan(resolved_plan) != "Complete":
             raise ShippingError("shipping requires a Complete plan")
+        from plan_controls import plan_root, tracked_problem
+
+        if problem := tracked_problem(
+            resolved_plan.read_text(), plan_root(resolved_plan)
+        ):
+            raise ShippingError(problem)
         sections = plan_sections(resolved_plan.read_text())
     except ShippingError:
         raise

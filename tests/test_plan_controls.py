@@ -33,6 +33,7 @@ def project(tmp_path: Path) -> Path:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"shipping": {"ui_paths": ["src/**"]}})
     )
+    (root / "src/ui/Card.test.tsx").write_text("export {};\n")
     (root / "src/ui/Untracked.tsx").write_text("export {};\n")
     (root / ".gitignore").write_text("src/ui/Untracked.tsx\n")
     commit(root, "parts")
@@ -55,9 +56,9 @@ def refusal(project: Path, visual_plan: str, line: str | None) -> str:
         ("Search box — new `src/ui/SearchField.tsx`", "mockup"),
         ("Password box", "reuses"),
         ("Password box — reuses `README.md`", "ui_paths"),
-        ("Password box — reuses `.`", "tracked file"),
-        ("Password box — reuses `src/ui`", "tracked file"),
-        ("Password box — reuses `src/ui/Untracked.tsx`", "tracked file"),
+        ("Password box — reuses `.`", "one file"),
+        ("Password box — reuses `src/ui`", "one file"),
+        ("Password box — reuses `src/ui/Card.test.tsx`", "test file"),
         (
             "Search box — new `src/ui/SearchField.tsx` — mockup ![M](https://example.test/m.png)",
             "image file in the repository",
@@ -72,7 +73,7 @@ def refusal(project: Path, visual_plan: str, line: str | None) -> str:
         "outside-ui-paths",
         "dot",
         "folder",
-        "untracked",
+        "test-file",
         "mockup-url",
         "mockup-not-looked-at",
     ],
@@ -108,3 +109,15 @@ def test_reused_new_and_no_controls_are_accepted(
     path = project / "PLAN.md"
     path.write_text(with_controls(visual_plan, line))
     assert validate_plan(path) == "Complete"
+
+
+def test_the_full_gate_refuses_a_reused_part_that_git_does_not_track(
+    project: Path,
+) -> None:
+    from plan_controls import tracked_problem
+
+    line = "Controls: Password box — reuses `src/ui/Untracked.tsx`\n"
+    assert "not a tracked file" in str(tracked_problem(line, project))
+    kept = "Controls: Password box — reuses `src/ui/PasswordField.tsx`\n"
+    assert tracked_problem(kept, project) is None
+    assert tracked_problem("no controls here\n", project) is None

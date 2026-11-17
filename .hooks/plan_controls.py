@@ -7,7 +7,7 @@ import os
 import re
 import subprocess
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REUSE = re.compile(r".+ — reuses `([^`\s]+)`")
 NEW = re.compile(r".+ — new `[^`\s]+`( — mockup !\[[^\]\n]*\]\(([^)\s]+)\))?")
@@ -51,17 +51,28 @@ def mockup_problem(entry: str, mockup: str, root: Path) -> str | None:
     return None
 
 
-def part_problem(part: str, root: Path) -> str | None:
-    """The shared part must be one tracked file, and under the project's `ui_paths` when it has any."""
-    tracked = subprocess.run(
-        ["git", "ls-files", "--", part],
+def is_tracked(part: str, root: Path) -> bool:
+    listed = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", part],
         cwd=root,
         capture_output=True,
-        text=True,
         check=False,
-    ).stdout.split()
-    if tracked != [part]:
-        return f"Controls: the shared part `{part}` must be one tracked file of the repository"
+    )
+    return listed.returncode == 0
+
+
+def part_problem(part: str, root: Path, tracked: bool = False) -> str | None:
+    """The shared part must be a file under the project's `ui_paths` when it has any, and not a test file; the full gate also needs it tracked."""
+    from plans import _is_test
+
+    if not (root / part).is_file():
+        return f"Controls: the shared part `{part}` must be one file of the repository"
+    if _is_test(PurePosixPath(part)):
+        return (
+            f"Controls: the shared part `{part}` is a test file, not a shared component"
+        )
+    if tracked and not is_tracked(part, root):
+        return f"Controls: the shared part `{part}` is not a tracked file"
     try:
         policy = json.loads((root / "hard-eng.gates.json").read_text())
         patterns = policy["shipping"]["ui_paths"]
@@ -72,9 +83,9 @@ def part_problem(part: str, root: Path) -> str | None:
     return None
 
 
-def entry_problem(entry: str, root: Path | None) -> str | None:
+def entry_problem(entry: str, root: Path | None, tracked: bool = False) -> str | None:
     if reused := REUSE.fullmatch(entry):
-        return None if root is None else part_problem(reused[1], root)
+        return None if root is None else part_problem(reused[1], root, tracked)
     new = NEW.fullmatch(entry)
     if new is None:
         return f"Controls: `{entry}` needs `— reuses `<repo path>`` or `— new `<repo path>` — mockup ![..](..)``"
@@ -83,14 +94,16 @@ def entry_problem(entry: str, root: Path | None) -> str | None:
     return None if root is None else mockup_problem(entry, new[2], root)
 
 
-def controls_problem(content: str, root: Path | None) -> str | None:
+def controls_problem(
+    content: str, root: Path | None, tracked: bool = False
+) -> str | None:
     found = re.findall(r"(?m)^Controls: *(.*)$", content)
     if len(found) != 1 or not found[0].strip():
         return "ux_reference needs one `Controls:` line: each changed or new control with the shared part it reuses, or `None — reason`"
     line = found[0].strip()
     if NONE.fullmatch(line):
         return None
-    problems = (entry_problem(entry, root) for entry in line.split("; "))
+    problems = (entry_problem(entry, root, tracked) for entry in line.split("; "))
     return next((problem for problem in problems if problem), None)
 
 
@@ -101,3 +114,10 @@ def judged_controls(
     problem = controls_problem(content, root)
     if problem and ("\nControls:" in f"\n{content}" or age is None or age()):
         raise ValueError(problem)
+
+
+def tracked_problem(content: str, root: Path | None) -> str | None:
+    """The full gate's extra check for a plan that has a `Controls:` line: each reused part is tracked by Git."""
+    if "\nControls:" not in f"\n{content}":
+        return None
+    return controls_problem(content, root, tracked=True)
