@@ -81,14 +81,14 @@ def expanded(command: list[str], directory: Path) -> list[str]:
     return words
 
 
-def launched(words: list[str]) -> list[str] | None:
-    """The words from the tool on, when a template launcher starts them."""
+def launched(words: list[str]) -> tuple[list[str], list[str]] | None:
+    """The launcher words up to and including the tool as written, and the words from the tool on, when a template launcher starts them."""
     if not words:
         return None
     if words[0] in {"ruff", "fallow", "gitleaks"}:
-        return words
+        return words[:1], words
     if words[0] == "cargo":
-        return words if "clippy" in words[:3] else None
+        return (words[:1], words) if "clippy" in words[:3] else None
     rest: list[str] | None = None
     if words[0] == "uvx":
         rest = words[1:]
@@ -101,23 +101,48 @@ def launched(words: list[str]) -> list[str] | None:
         while rest and rest[0] in UV_FLAGS:
             rest = rest[1:]
     if rest and (found := TOOL_WORD.fullmatch(rest[0])):
-        return [found[1], *rest[1:]]
+        return [*words[: len(words) - len(rest)], rest[0]], [found[1], *rest[1:]]
     return None
 
 
-def direct(command: list[str], directory: Path) -> list[str] | None:
-    """The words from the judged tool on, or none when no judged tool runs; any other form of a judged tool is refused."""
+def shadowed(tool: str, directory: Path) -> bool:
+    """A project script or entry point named like the tool: `uv run <tool>` would run it instead."""
+    import tomllib
+
+    for folder in [directory.resolve(), *directory.resolve().parents]:
+        try:
+            project = tomllib.loads((folder / "pyproject.toml").read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        scripts = [
+            project.get("project", {}).get("scripts", {}),
+            project.get("tool", {}).get("poetry", {}).get("scripts", {}),
+        ]
+        if any(tool in table for table in scripts if isinstance(table, dict)):
+            return True
+        if (folder / ".git").exists():
+            break
+    return False
+
+
+def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] | None:
+    """The launcher and the words from the judged tool on, or none when no judged tool runs; any other form of a judged tool is refused."""
     words = expanded(command, directory)
     if not mentions(words) and not mentions(command):
         return None
     found = launched(words)
     if found is None:
         raise refusal(f"the gate holds {' '.join(command)}")
+    launcher, argv = found
+    if launcher[:2] == ["uv", "run"] and shadowed(argv[0], directory):
+        raise refusal(
+            f"a project script named {argv[0]} shadows the tool under `uv run`: rename the script or use `uvx {argv[0]}@<pin>`"
+        )
     shell = len(words) != len(command)
     metas = re.compile(r"[;&|<>$`]")
     bad = [
         word
-        for word in found
+        for word in argv
         if word in OPERATORS
         or "$(" in word
         or "`" in word
@@ -125,4 +150,10 @@ def direct(command: list[str], directory: Path) -> list[str] | None:
     ]
     if bad:
         raise refusal(f"the gate holds {', '.join(bad)}")
-    return found
+    return launcher, argv
+
+
+def direct(command: list[str], directory: Path) -> list[str] | None:
+    """The words from the judged tool on, or none when no judged tool runs."""
+    found = launch(command, directory)
+    return found[1] if found else None
