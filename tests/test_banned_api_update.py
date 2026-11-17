@@ -5,6 +5,8 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import update
+from conftest import SOURCE
 from resolved_settings import validate_resolved
 from test_setup import repository
 
@@ -98,7 +100,7 @@ def test_an_annotations_gate_that_adds_a_rule_is_kept_and_named(
     gates = annotations(tmp_path)
     assert [role for role, _ in gates] == ["project-annotations", "annotations"]
     assert gates[0][1] == own
-    lines = [line for line in capsys.readouterr().out.splitlines() if "E501" in line]
+    lines = [line for line in capsys.readouterr().err.splitlines() if "E501" in line]
     assert len(lines) == 1
     assert "adds E501" in lines[0]
     judge(tmp_path)
@@ -114,3 +116,24 @@ def test_a_gate_with_the_annotations_role_and_one_entry_is_refused_with_the_fix(
         ValueError, match=r"one `--config` banned-api table[\s\S]*typing_extensions"
     ):
         judge(tmp_path)
+
+
+def test_an_update_plan_stays_json_when_it_retires_an_annotations_gate(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    """HE-NO-SWITCH-OFF: the update reads the plan from the standard output of setup, so a retired gate is told on the error output only."""
+    python_project(tmp_path)
+    installer.install(tmp_path)
+    own = [
+        "ruff",
+        "check",
+        "src",
+        "tests",
+        "--select",
+        "ANN",
+        "--config",
+        OLD_BANNED[1],
+    ]
+    rewrite(tmp_path, own)
+    changes, _, _, _ = update.update_plan(tmp_path, SOURCE, SOURCE)
+    assert "hard-eng.gates.json" in changes

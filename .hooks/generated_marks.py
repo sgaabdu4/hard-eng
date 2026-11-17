@@ -7,7 +7,9 @@ from gate_config import GENERATED_KEYS, generated_sources
 
 GLOB = re.compile(r"[*?\[]")
 SUFFIX = re.compile(r"[\w*.-]*\.\w+\.\w+")
-FOLDERS = frozenset({"vendor", "generated", "gen", "third_party", "node_modules"})
+FOLDER = re.compile(
+    r"(?:^|_)(?:shared|vendor|vendored|generated|gen|third_party|node_modules)$"
+)
 
 
 def honoured(pattern: str) -> bool:
@@ -18,8 +20,9 @@ def honoured(pattern: str) -> bool:
         return True
     return (
         parts[-1] == "**"
-        and not any(GLOB.search(part) for part in parts[:-1])
-        and bool(FOLDERS & set(parts[:-1]))
+        and len(parts) > 1
+        and not GLOB.search(parts[-2])
+        and bool(FOLDER.search(parts[-2]))
     )
 
 

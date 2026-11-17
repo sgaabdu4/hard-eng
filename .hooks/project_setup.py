@@ -214,6 +214,12 @@ def script_text(arguments: list[str], directory: Path) -> str:
     return script
 
 
+def flagged_built_in(arguments: list[str]) -> bool:
+    """Flags then a package-manager command that runs no script (`bun --env-file=x test`): no script name is hidden."""
+    rest = [word for word in arguments[1:] if not word.startswith("-")]
+    return bool(rest) and rest[0] in PACKAGE_COMMANDS - {"run", "run-script", "x"}
+
+
 def package_script_invocation(
     command: list[str], directory: Path, bun_only: bool = False
 ) -> tuple[list[str], Path]:
@@ -233,7 +239,11 @@ def package_script_invocation(
                 raise ValueError(
                     "Use an explicit package directory and run script for verification; package selectors are not supported"
                 )
-            if len(arguments) > 1 and arguments[1].startswith("-"):
+            if (
+                len(arguments) > 1
+                and arguments[1].startswith("-")
+                and not flagged_built_in(arguments)
+            ):
                 raise ValueError(
                     f"the flag {arguments[1].split('=')[0]} before the script name hides the script from the checks: write `{arguments[0]} run <script>` with no flag"
                 )
