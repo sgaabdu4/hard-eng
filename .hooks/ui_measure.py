@@ -45,13 +45,14 @@ AXE_NAMES = {
 MEASURE_SCRIPT = """(() => {
 const LIMITS = LIMITS_JSON;
 const found = [];
-const visible = (el) => {
+const shown = (el) => {
   const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
   const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
   const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
-  return !el.closest(DECORATION_JSON) && !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
+  return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
 };
+const visible = (el) => !el.closest(DECORATION_JSON) && shown(el);
 const rgb = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
 const opaque = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); };
 const hue = ([r, g, b]) => {
@@ -160,7 +161,7 @@ for (const input of searches) {
   const drawn = (e) => ["::before", "::after"].some((p) => { const c = getComputedStyle(e, p).content; return c && c !== "none" && c !== "normal"; });
   const icon = getComputedStyle(input).backgroundImage !== "none" || drawn(input.parentElement) || drawn(scope) || [...scope.querySelectorAll("svg,img,i")].some((i) => {
     const b = i.getBoundingClientRect();
-    return visible(i) && (b.left + b.right) / 2 > r.left && (b.left + b.right) / 2 < r.right && (b.top + b.bottom) / 2 > r.top && (b.top + b.bottom) / 2 < r.bottom;
+    return shown(i) && (b.left + b.right) / 2 > r.left && (b.left + b.right) / 2 < r.right && (b.top + b.bottom) / 2 > r.top && (b.top + b.bottom) / 2 < r.bottom;
   });
   const submits = [...scope.querySelectorAll("button:not([type=button],[type=reset]),input[type=submit]")].filter(visible);
   const labelledButtons = submits.filter((b) => textOf(b));
