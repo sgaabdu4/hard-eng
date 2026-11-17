@@ -145,6 +145,38 @@ def requires_python(directory: Path) -> tuple[int, int] | None:
     return (int(found[1]), int(found[2])) if found else None
 
 
+def ruff_config_of(folder: Path) -> bool:
+    """A folder holds a config that Ruff reads: a `ruff.toml`, a `.ruff.toml` or a `pyproject.toml` with a ruff table."""
+    if (folder / "ruff.toml").is_file() or (folder / ".ruff.toml").is_file():
+        return True
+    try:
+        project = tomllib.loads((folder / "pyproject.toml").read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    tool = project.get("tool")
+    return isinstance(tool, dict) and "ruff" in tool
+
+
+def governing_samples(directory: Path, checked: set[str]) -> list[str]:
+    """One checked Python file for each distinct Ruff config that governs a file of the gate, so each config is judged."""
+    base = directory.resolve()
+    chosen: dict[Path, str] = {}
+    for name in sorted(checked):
+        if not name.endswith((".py", ".pyi")):
+            continue
+        folder = (base / name).parent
+        found = base
+        for candidate in [folder, *folder.parents]:
+            if ruff_config_of(candidate):
+                found = candidate
+                break
+            if candidate == base or (candidate / ".git").exists():
+                found = candidate
+                break
+        chosen.setdefault(found, name)
+    return list(chosen.values())
+
+
 def harmless_ruff_config(name: str, directory: Path) -> bool:
     """A `pyproject.toml` with no ruff table, or a ruff config that sets only a target version at the `requires-python` minimum or above; any other key can change what is reported."""
     try:

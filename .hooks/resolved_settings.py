@@ -6,13 +6,20 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 
-from command_words import direct
+from command_words import direct, launch
 from dart_boundaries import nested_package_patterns
 from fallow_report import named_config, native_fallow_command, option
 from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
+from ruff_settings import option_words
 from ruff_table import ruff_hits
-from scope_check import left_out, nested_configs, refusal, requires_python
+from scope_check import (
+    governing_samples,
+    left_out,
+    nested_configs,
+    refusal,
+    requires_python,
+)
 from tool_setup import managed_command
 
 
@@ -124,10 +131,11 @@ def ruff_tasks(
 ) -> list[Task]:
     root, every, group, gate = scope
     directory = root / group["path"]
-    judged = direct(gate["command"], directory)
-    if not judged or judged[0] != "ruff" or judged[1:2] != ["check"]:
+    found = launch(gate["command"], directory)
+    if not found or found[1][0] != "ruff" or found[1][1:2] != ["check"]:
         return []
-    command = managed_command(judged, directory)
+    launcher, judged = found
+    command = managed_command([*launcher, *judged[1:]], directory)
     count = len(judged) - 1
     prefix = command[: len(command) - count]
     arguments = command[len(command) - count :]
@@ -150,11 +158,23 @@ def ruff_gate_hits(
 ) -> list[str]:
     children, roots = scope
     prefix, arguments, directory, gate, timeout = run
-    settings = printed(list(prefix), arguments, directory, timeout)
     checked = shown(list(prefix), arguments, directory, timeout)
-    hits = ruff_hits(
-        settings, baseline.result(), gate.get("role"), requires_python(directory)
-    )
+    options = option_words(arguments)
+    hits: list[str] = []
+    for sample in governing_samples(directory, checked) or [None]:
+        settings = printed(
+            list(prefix), [*options, *([sample] if sample else [])], directory, timeout
+        )
+        hits += [
+            hit
+            for hit in ruff_hits(
+                settings,
+                baseline.result(),
+                gate.get("role"),
+                requires_python(directory),
+            )
+            if hit not in hits
+        ]
     left = left_out(directory, (".py", ".pyi"), checked, children)
     nested = nested_configs(directory, "ruff", roots)
     return [

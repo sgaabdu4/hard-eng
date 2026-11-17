@@ -93,6 +93,21 @@ def settings_switch_offs(root: Path, name: str, text: str) -> list[str]:
     return file_hits(root, name, text, frozenset({(root / name).resolve()}))
 
 
+def option_words(arguments: list[str]) -> list[str]:
+    """The options of a `ruff check` command with its paths taken out."""
+    values = RUFF_FLAGS["check"][0]
+    found = []
+    skip = False
+    for word in arguments:
+        if skip:
+            found.append(word)
+            skip = False
+        elif word.startswith("-"):
+            found.append(word)
+            skip = word in values
+    return found
+
+
 def ruff_commands(parts: list[list[str]]) -> list[list[str]]:
     return [found for segment in parts if (found := ruff_command(segment))]
 
