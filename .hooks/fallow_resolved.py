@@ -1,6 +1,7 @@
 """Judge the config Fallow prints for a gate: no check switched off and no file dropped without a reason."""
 
 import json
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -210,23 +211,23 @@ def proved_hits(
     return hits
 
 
-NATIVE_FILES = (
-    "capacitor.config.*",
-    "AndroidManifest.xml",
-    "Podfile",
-    "Package.swift",
-    "build.gradle*",
+NATIVE_FORMS = (
+    ("capacitor.config.*", r"""['"]{name}['"]\s*:"""),
+    ("AndroidManifest.xml", r"""=\s*["'][^"']*{name}"""),
+    ("Podfile", r"^\s*pod\s.*{name}"),
+    ("Package.swift", r"^\s*\.package\(.*{name}"),
+    ("*.gradle", r"^\s*(?!//).*\bproject\(.*{name}"),
+    ("*.gradle.kts", r"^\s*(?!//).*\bproject\(.*{name}"),
 )
-
-
 NATIVE_TWINS = {
     "@capacitor/ios": "capacitor-swift-pm",
     "@capacitor/android": "capacitor-android",
 }
+WHOLE = r"(?<![\w@.-]){}(?![\w-])"
 
 
-def named_in_native_files(directory: Path) -> Callable[[str], bool]:
-    """A check that a package name appears in a tracked config or native file, where a package can be used without a JavaScript import."""
+def native_lines(directory: Path) -> list[tuple[str, list[str]]]:
+    """For each tracked native or config file, the patterns of its real dependency forms and its lines; native files count only in a platform folder."""
     listed = subprocess.run(
         [*GIT_LISTING, "ls-files", "-z"],
         cwd=directory,
@@ -234,15 +235,30 @@ def named_in_native_files(directory: Path) -> Callable[[str], bool]:
         text=True,
         check=False,
     ).stdout.split("\0")
-    texts = [
-        (directory / name).read_text(errors="replace")
-        for name in listed
-        if any(fnmatch(PurePosixPath(name).name, pattern) for pattern in NATIVE_FILES)
-    ]
+    found = []
+    for name in listed:
+        path = PurePosixPath(name)
+        for pattern, form in NATIVE_FORMS:
+            config = pattern.startswith("capacitor.config")
+            platform = {part.lower() for part in path.parts[:-1]} & {"ios", "android"}
+            if fnmatch(path.name, pattern) and (config or platform):
+                text = (directory / name).read_text(errors="replace")
+                found.append((form, text.splitlines()))
+    return found
+
+
+def named_in_native_files(directory: Path) -> Callable[[str], bool]:
+    """A check that a package is used through a real dependency form (a pod, a Swift package, a Gradle project, a manifest value or a Capacitor plugin key) in a platform folder or the Capacitor config, where a package can be used without a JavaScript import."""
+    files = native_lines(directory)
 
     def used(package: str) -> bool:
-        names = (package, NATIVE_TWINS.get(package, package))
-        return any(name in text for text in texts for name in names)
+        for name in (package, NATIVE_TWINS.get(package, package)):
+            word = WHOLE.format(re.escape(name))
+            for form, lines in files:
+                regex = re.compile(form.replace("{name}", word))
+                if any(regex.search(line) for line in lines):
+                    return True
+        return False
 
     return used
 

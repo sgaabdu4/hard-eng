@@ -58,3 +58,20 @@ def test_a_gradle_wrapper_that_is_not_marked_generated_names_the_route(
     assert "app/gradlew:2" in message
     assert "linguist-generated=true" in message
     assert ".gitattributes" in message
+
+
+@pytest.mark.parametrize(
+    "directive",
+    [
+        "disable=SC2086 source=lib.sh",
+        "source=lib.sh disable=SC2086",
+        "shell=ksh source=lib.sh",
+        "enable=require-variable-braces disable=SC2086 source=lib.sh",
+    ],
+)
+def test_a_disable_or_shell_key_fails_whatever_else_the_directive_holds(
+    tmp_path: Path, directive: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a `source=` that names a real file does not excuse a `disable=` or `shell=` key beside it."""
+    files = {"build.sh": f"#!/bin/bash\n# shellcheck {directive}\n", "lib.sh": "x=1\n"}
+    assert "build.sh:2" in refusal(project(tmp_path, files))
