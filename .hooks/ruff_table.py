@@ -142,15 +142,23 @@ VERSION = re.compile(r"(\d+)\.(\d+)")
 
 
 def version_hits(key: str, value: list[str], minimum: tuple[int, int]) -> list[str]:
+    """A target version other than the requires-python minimum hides findings: a lower one hides pyupgrade rules, a higher one lets Ruff accept syntax that the minimum does not allow."""
     per_file = "per_file" in key
     lines = (
         [line for line in value if line.startswith("data = ")] if per_file else value
     )
+    what = "per-file target version" if per_file else "target version"
+    least = f"{minimum[0]}.{minimum[1]}"
     for found in (match for line in lines for match in VERSION.findall(line)):
-        if (int(found[0]), int(found[1])) < minimum:
-            what = "per-file target version" if per_file else "target version"
+        now = (int(found[0]), int(found[1]))
+        if now != minimum:
+            way, harm = (
+                ("below", "a lower target hides pyupgrade findings")
+                if now < minimum
+                else ("above", "a higher target hides the syntax errors of the minimum")
+            )
             return [
-                f"the resolved {what} {found[0]}.{found[1]} is below the requires-python minimum {minimum[0]}.{minimum[1]}: a lower target hides pyupgrade findings; raise it to {minimum[0]}.{minimum[1]} or higher, or remove the entry"
+                f"the resolved {what} {found[0]}.{found[1]} is {way} the requires-python minimum {least}: {harm}; set it to {least} or remove the entry"
             ]
     return []
 

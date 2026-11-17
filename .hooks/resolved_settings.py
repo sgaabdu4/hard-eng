@@ -145,13 +145,46 @@ def ruff_tasks(
     arguments = command[len(command) - count :]
     children = nested_package_patterns(group, every, gate.get("role", ""))
     roots = ruff_roots(root, every)
-    return [
+    tasks = [
         partial(
             ruff_gate_hits,
             (tuple(prefix), arguments[1:], directory, gate, timeout),
             (children, roots),
             defaults.ruff(tuple(prefix), gate.get("role")),
         )
+    ]
+    if launcher[:2] == ["uv", "run"]:
+        tasks.append(partial(own_binary_hits, launcher[:-1], directory, gate, timeout))
+    return tasks
+
+
+OWN_BINARY = """import importlib.metadata as metadata, os, shutil, sys
+tool = sys.argv[1]
+found = shutil.which(tool)
+try:
+    owned = {os.path.realpath(f.locate()) for f in metadata.distribution(tool).files or []}
+except metadata.PackageNotFoundError:
+    owned = set()
+print("ok" if found and os.path.realpath(found) in owned else "foreign")
+"""
+
+
+def own_binary_hits(
+    prefix: list[str], directory: Path, gate: Gate, timeout: float
+) -> list[str]:
+    """`uv run` runs the file the project environment holds under the tool's name: it must be a file that the ruff package installed, not a workspace member's script or a copy."""
+    done = subprocess.run(
+        [*prefix, "python", "-c", OWN_BINARY, "ruff"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if done.stdout.strip() == "ok":
+        return []
+    return [
+        f"gate {gate['name']}: the `ruff` that `{' '.join(prefix)}` runs is not installed by the ruff package: remove the script or file that takes its name, or run `uvx ruff@<pin>`"
     ]
 
 

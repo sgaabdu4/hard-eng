@@ -1,5 +1,6 @@
 """A gate that runs a judged tool runs it directly: a launcher, the tool, then arguments; every other form is refused."""
 
+import os
 import re
 import shlex
 from pathlib import Path, PurePosixPath
@@ -126,12 +127,20 @@ def expanded(command: list[str], directory: Path) -> list[str]:
         return command
     if words == command:
         return command
+    if tool_name(command[0]) != "bun" and mentions(words):
+        raise refusal(
+            f"{command[0]} runs the script through a shell that a project file can change; write `bun run <script>`"
+        )
     named = [word for word in command[1:] if not word.startswith("-")]
     name = (
         named[1] if named[0] in {"run", "run-script"} and len(named) > 1 else named[0]
     )
     scripts = read_project_file(where / "package.json").get("scripts", {})
     if mentions(words):
+        if re.search(r"[^\S ]", str(scripts.get(name, ""))):
+            raise refusal(
+                f"the script {name} holds a line break or tab, which ends a shell command like `;` does"
+            )
         if {f"pre{name}", f"post{name}"} & set(scripts):
             raise refusal(
                 f"the script {name} has a pre or post script, so two commands run"
@@ -197,6 +206,23 @@ def shadowed(tool: str, directory: Path) -> bool:
     return False
 
 
+LOCAL_OWNERS = {"fallow": ("/node_modules/fallow/", "/node_modules/@fallow-cli/")}
+
+
+def bin_shadow(tool: str, directory: Path) -> str | None:
+    """A file in node_modules/.bin named like the tool that is not the tool's own package: bun puts that folder first on the path."""
+    owners = LOCAL_OWNERS.get(tool, (f"/node_modules/{tool}/",))
+    for folder in [directory.resolve(), *directory.resolve().parents]:
+        path = folder / "node_modules/.bin" / tool
+        if os.path.lexists(path) and not any(
+            owner in os.path.realpath(path) for owner in owners
+        ):
+            return os.path.relpath(path, directory)
+        if (folder / ".git").exists():
+            break
+    return None
+
+
 def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] | None:
     """The launcher and the words from the judged tool on, or none when no judged tool runs; any other form of a judged tool is refused."""
     words = expanded(command, directory)
@@ -209,6 +235,15 @@ def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] |
     if launcher[:2] == ["uv", "run"] and shadowed(argv[0], directory):
         raise refusal(
             f"a project script named {argv[0]} shadows the tool under `uv run`: rename the script or use `uvx {argv[0]}@<pin>`"
+        )
+    local = (
+        bin_shadow(argv[0], directory)
+        if words != command or launcher[0] == "bunx" or launcher[:2] == ["bun", "x"]
+        else None
+    )
+    if local:
+        raise refusal(
+            f"{local} is a file named {argv[0]} that bun puts first on the path, so it runs in place of the tool: remove it, or install the tool's own package"
         )
     metas = re.compile(r"[;&|<>$`]")
     bad = [

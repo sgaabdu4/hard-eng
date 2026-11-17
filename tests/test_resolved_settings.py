@@ -122,6 +122,14 @@ FINDING_CHANGING = [
         '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff.per-file-target-version]\n"scripts/*.py" = "py37"\n',
         "per-file target version",
     ),
+    (
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff]\ntarget-version = "py313"\n',
+        "target version 3.13 is above",
+    ),
+    (
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff.per-file-target-version]\n"scripts/*.py" = "py313"\n',
+        "per-file target version 3.13 is above",
+    ),
 ]
 
 
@@ -137,8 +145,6 @@ def test_a_setting_that_changes_which_findings_ruff_reports_is_not_free(
     "settings",
     [
         '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.12"\n[tool.ruff]\ntarget-version = "py312"\n',
-        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff]\ntarget-version = "py313"\n',
-        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff.per-file-target-version]\n"scripts/*.py" = "py313"\n',
         "[tool.ruff]\nline-length = 88\n",
         '[tool.ruff.lint]\nselect = ["ALL"]\n[tool.ruff]\nline-length = 60\n',
         "[tool.ruff]\nline-length = 120\n",

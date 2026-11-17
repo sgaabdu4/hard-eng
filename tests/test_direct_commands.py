@@ -239,3 +239,60 @@ def test_bunx_runs_only_a_pinned_fallow(tmp_path: Path, command: list[str]) -> N
     """HE-NO-SWITCH-OFF: an unpinned bunx resolves a local `.bin` file, and ruff and gitleaks have their own launchers."""
     with pytest.raises(ValueError, match=DIRECT):
         validate_gate({"name": "g", "command": command}, tmp_path, set())
+
+
+@pytest.mark.parametrize(
+    "script", ["ruff check src\necho", "ruff check src\techo", "ruff check\rsrc"]
+)
+def test_a_script_with_a_line_break_or_tab_is_refused(
+    tmp_path: Path, script: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a line break or tab ends a shell command like `;` does, and the words the judge reads stop at it."""
+    scripted(tmp_path, {"lint": script})
+    gate: Gate = {"name": "g", "command": ["bun", "run", "lint"]}
+    with pytest.raises(ValueError, match=DIRECT):
+        validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize("manager", ["npm", "pnpm", "yarn"])
+def test_only_bun_runs_a_script_that_holds_a_judged_tool(
+    tmp_path: Path, manager: str
+) -> None:
+    """HE-NO-SWITCH-OFF: npm, pnpm and yarn run a script through a shell that a project file (`script-shell`, `scriptShell`) can change."""
+    scripted(tmp_path, {"lint": "ruff check ."})
+    gate: Gate = {"name": "g", "command": [manager, "run", "lint"]}
+    with pytest.raises(ValueError, match="write `bun run <script>`"):
+        validate_gate(gate, tmp_path, set())
+
+
+def put_bin(root: Path, tool: str, owner: str | None) -> None:
+    binary = root / "node_modules/.bin" / tool
+    binary.parent.mkdir(parents=True)
+    if owner is None:
+        binary.write_text("#!/bin/sh\nexit 0\n")
+        return
+    real = root / "node_modules" / owner / "bin" / tool
+    real.parent.mkdir(parents=True)
+    real.write_text("#!/bin/sh\nexit 0\n")
+    binary.symlink_to(real)
+
+
+def test_a_local_bin_file_named_like_the_tool_is_refused(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: `bun run` puts node_modules/.bin first on the path, so a file there named `ruff` runs in place of Ruff."""
+    scripted(tmp_path, {"lint": "ruff check ."})
+    put_bin(tmp_path, "ruff", None)
+    gate: Gate = {"name": "g", "command": ["bun", "run", "lint"]}
+    with pytest.raises(ValueError, match=r"node_modules/\.bin/ruff"):
+        validate_gate(gate, tmp_path, set())
+
+
+def test_a_local_bin_link_into_the_tool_package_passes(tmp_path: Path) -> None:
+    scripted(tmp_path, {"scan": "fallow --fail-on-issues"})
+    put_bin(tmp_path, "fallow", "fallow")
+    validate_gate({"name": "g", "command": ["bun", "run", "scan"]}, tmp_path, set())
+    other = tmp_path / "other"
+    other.mkdir()
+    scripted(other, {"scan": "fallow --fail-on-issues"})
+    put_bin(other, "fallow", None)
+    with pytest.raises(ValueError, match=r"node_modules/\.bin/fallow"):
+        validate_gate({"name": "g", "command": ["bun", "run", "scan"]}, other, set())
