@@ -88,7 +88,9 @@ const textOf = (el) => {
   return (el.value && el.tagName === "INPUT" ? el.value : out).trim();
 };
 const groups = new Map();
-for (const el of controls.filter((c) => c.tagName === "BUTTON" || c.getAttribute("role") === "button")) {
+const fields = [...document.querySelectorAll("input:not([type=hidden]),select,textarea")].filter(visible).map((f) => f.getBoundingClientRect());
+const inField = (el) => { const b = el.getBoundingClientRect(); return fields.some((f) => b.left < f.right && f.left < b.right && b.top < f.bottom && f.top < b.bottom); };
+for (const el of controls.filter((c) => (c.tagName === "BUTTON" || c.getAttribute("role") === "button") && !inField(c))) {
   groups.set(el.parentElement, [...(groups.get(el.parentElement) || []), el]);
 }
 const colourOf = (el, s) => [ownText(el) ? s.color : "", s.backgroundColor, s.borderTopWidth !== "0px" ? s.borderTopColor : ""];
@@ -100,6 +102,7 @@ for (const [parent, members] of groups) {
     if (fills.size > 1) found.push({ rule: "competing-buttons", at: filled.map(name).join(" + "), fills: fills.size });
   }
   if ([...parent.children].some((c) => !members.includes(c) && visible(c) && textOf(c))) continue;
+  if (parent.querySelector("input:not([type=hidden]),select,textarea")) continue;
   const block = parent.parentElement;
   const box = block.getBoundingClientRect();
   const pad = parseFloat(getComputedStyle(block).paddingLeft);
@@ -140,7 +143,8 @@ for (const input of searches) {
   if (!visible(input)) continue;
   const r = input.getBoundingClientRect();
   const scope = input.form || input.closest("[role=search]") || input.parentElement;
-  const icon = getComputedStyle(input).backgroundImage !== "none" || [...scope.querySelectorAll("svg,img,i")].some((i) => {
+  const drawn = (e) => ["::before", "::after"].some((p) => { const c = getComputedStyle(e, p).content; return c && c !== "none" && c !== "normal"; });
+  const icon = getComputedStyle(input).backgroundImage !== "none" || drawn(input.parentElement) || drawn(scope) || [...scope.querySelectorAll("svg,img,i")].some((i) => {
     const b = i.getBoundingClientRect();
     return visible(i) && (b.left + b.right) / 2 > r.left && (b.left + b.right) / 2 < r.right && (b.top + b.bottom) / 2 > r.top && (b.top + b.bottom) / 2 < r.bottom;
   });

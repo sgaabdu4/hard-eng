@@ -100,3 +100,17 @@ def test_real_patterns_that_look_like_faults_are_not_findings(
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert found[width] == Counter(), (width, found[width])
+
+
+def test_a_search_icon_drawn_by_the_wrapper_counts_as_inside_the_field(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    body = (
+        "<style>.w{position:relative;width:320px}.w::before{content:'\\\\1F50D';"
+        "position:absolute;left:12px;top:10px}</style>"
+        f"<div class=w><input type=search aria-label=Find style='{INPUT};padding-left:40px'></div>"
+    )
+    limit_page(tmp_path, body)
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
