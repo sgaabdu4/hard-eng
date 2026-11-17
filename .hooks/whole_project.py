@@ -30,6 +30,7 @@ from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
 from rust_settings import CLIPPY_FILES, rust_file_hits
+from shellcheck_rc import rc_hits
 from workflow_blocking import hard_eng_workflow, workflow_hits
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
@@ -243,6 +244,8 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         ):
             found += security_hits(root, name, lines, "holds", entries)
         found += pattern_switch_offs(root, name, lines, "holds")
+        if base in {".shellcheckrc", "shellcheckrc"}:
+            found += rc_hits(name, text)
         if base == ".gitleaks.toml":
             found += gitleaks_switch_offs(name, texts[name])
         if assigns_variables(name):

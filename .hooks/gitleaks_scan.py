@@ -13,17 +13,17 @@ from project_files import GIT_LISTING
 
 TOOL_VARIABLES = re.compile(
     r"GITLEAKS_CONFIG(?:_TOML)?|FALLOW_\w+|CARGO_ALIAS_\w+|CLIPPY_CONF_DIR|SHELLCHECK_OPTS"
-    r"|RUFF_(?!CACHE_DIR\b|NO_CACHE\b)\w+"
+    r"|CARGO_HOME|RUFF_(?!CACHE_DIR\b|NO_CACHE\b)\w+"
 )
 CONFIG_ASSIGNMENT = re.compile(rf"\b(?:{TOOL_VARIABLES.pattern})[\"']?\s*[:=]")
 
 
 def scan_environment(base: dict[str, str] | None = None) -> dict[str, str]:
-    """The environment of a gate run, without the variables that change what a judged tool reports: the Gitleaks config, every `FALLOW_` variable (a newer release may read more), a Cargo alias, the Clippy config folder, `SHELLCHECK_OPTS` and the Ruff variables other than its two cache ones."""
+    """The environment of a gate run, without the variables that change what a judged tool reports: the Gitleaks config, every `FALLOW_` variable (a newer release may read more), a Cargo alias, the Clippy config folder, `SHELLCHECK_OPTS`, `CARGO_HOME` (Cargo reads an alias from its config file), `XDG_CONFIG_HOME` (ShellCheck reads a `shellcheckrc` there) and the Ruff variables other than its two cache ones."""
     return {
         key: value
         for key, value in (os.environ if base is None else base).items()
-        if not TOOL_VARIABLES.fullmatch(key)
+        if not TOOL_VARIABLES.fullmatch(key) and key != "XDG_CONFIG_HOME"
     }
 
 

@@ -172,7 +172,7 @@ print("ok" if found and os.path.realpath(found) in owned else "foreign")
 
 
 def lock_source_hits(directory: Path, gate: Gate) -> list[str]:
-    """The `ruff` package of uv.lock must come from a registry: a path, directory, editable or git source is a local package that can carry any file."""
+    """The `ruff` package of uv.lock must come from the public index: a path, directory, editable or git source is a local package that can carry any file."""
     import tomllib
 
     for folder in [directory.resolve(), *directory.resolve().parents]:
@@ -187,13 +187,16 @@ def lock_source_hits(directory: Path, gate: Gate) -> list[str]:
                 for package in packages
                 if package.get("name") == "ruff"
             ]
-            if sources and all("registry" in source for source in sources):
+            if sources and all(
+                source.get("registry") == "https://pypi.org/simple"
+                for source in sources
+            ):
                 return []
             break
         if (folder / ".git").exists():
             break
     return [
-        f"gate {gate['name']}: the ruff that `uv run` starts must come from a registry in uv.lock, not from a path, directory, editable or git source: use the published ruff package or run `uvx ruff@<pin>`"
+        f"gate {gate['name']}: the ruff that `uv run` starts must come from the public index `https://pypi.org/simple` in uv.lock, not from a path, directory, editable, git or other index source: use the published ruff package or run `uvx ruff@<pin>`"
     ]
 
 

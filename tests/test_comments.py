@@ -106,12 +106,13 @@ def test_touched_files_answer_for_older_blocks_and_generated_output_is_skipped(
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     old = "# written long ago\n# across two lines\nx = 1\n"
-    for name in ("touched.py", "untouched.py", "generated.g.py"):
+    (root / "lib").mkdir()
+    for name in ("touched.py", "untouched.py", "lib/generated.g.py"):
         (root / name).write_text(old)
-    (root / ".gitattributes").write_text("*.g.py linguist-generated=true\n")
+    (root / ".gitattributes").write_text("lib/generated.g.py linguist-generated=true\n")
     commit(root, "baseline")
     validate_comments(root, "HEAD")
-    (root / "generated.g.py").write_text(old + "y = 2\n")
+    (root / "lib/generated.g.py").write_text(old + "y = 2\n")
     validate_comments(root, "HEAD")
     (root / "touched.py").write_text(old + "y = 2\n")
     with pytest.raises(ValueError, match=r"touched\.py:1 holds a 2-line") as error:

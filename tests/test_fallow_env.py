@@ -17,6 +17,7 @@ NAMES = [
     "FALLOW_TYPE_AWARE",
     "FALLOW_MADE_UP_BY_A_NEWER_RELEASE",
     "CARGO_ALIAS_CLIPPY",
+    "CARGO_HOME",
     "CLIPPY_CONF_DIR",
     "SHELLCHECK_OPTS",
     "RUFF_OUTPUT_FILE",
@@ -81,3 +82,10 @@ def test_a_ruff_variable_that_changes_no_finding_may_be_set(
     """Only the cache variables of Ruff change no result, so they stay."""
     validate_whole_project(project(tmp_path, {".env": f"{name}=x\n"}))
     assert name in scan_environment({name: "x"})
+
+
+def test_a_gate_runs_without_a_config_home_that_shellcheck_reads() -> None:
+    """HE-NO-SWITCH-OFF: ShellCheck reads a `shellcheckrc` from `XDG_CONFIG_HOME`, so gates run without it."""
+    assert "XDG_CONFIG_HOME" not in scan_environment(
+        {"XDG_CONFIG_HOME": "x", "PATH": "/bin"}
+    )

@@ -424,8 +424,8 @@ OLD_BLOCK = "# written long ago\n# across two lines\nx = 1\n"
 def test_old_comment_blocks_in_untouched_files_fail(tmp_path: Path) -> None:
     """HE-COMMENT-LINES: the full check fails a comment block in a file that no change touched."""
     exempt = {
-        ".gitattributes": "*.g.py linguist-generated=true\n",
-        "made.g.py": OLD_BLOCK,
+        ".gitattributes": "gen/made.py linguist-generated=true\n",
+        "gen/made.py": OLD_BLOCK,
         ".agents/skills/a/run.py": OLD_BLOCK,
     }
     validate_whole_project(project(tmp_path / "exempt", exempt))

@@ -226,6 +226,27 @@ NATIVE_TWINS = {
 WHOLE = r"(?<![\w@.-]){}(?![\w-])"
 
 
+BLOCK_COMMENTS = re.compile(r"/\*.*?\*/|<!--.*?-->", re.DOTALL)
+
+
+def without_comments(text: str, file_name: str) -> str:
+    """The text with its comments cut out; a comment marker inside a quoted string, such as the `//` of a URL, stays."""
+    marker = "#" if file_name == "Podfile" else "//"
+    cleaned: list[str] = []
+    for line in BLOCK_COMMENTS.sub(" ", text).splitlines():
+        quote = ""
+        for at, char in enumerate(line):
+            if quote:
+                quote = "" if char == quote else quote
+            elif char in "'\"":
+                quote = char
+            elif line.startswith(marker, at):
+                line = line[:at]
+                break
+        cleaned.append(line)
+    return "\n".join(cleaned)
+
+
 def native_lines(directory: Path) -> list[tuple[str, list[str]]]:
     """For each tracked native or config file, the patterns of its real dependency forms and its lines; native files count only in a platform folder."""
     listed = subprocess.run(
@@ -243,7 +264,7 @@ def native_lines(directory: Path) -> list[tuple[str, list[str]]]:
             platform = {part.lower() for part in path.parts[:-1]} & {"ios", "android"}
             if fnmatch(path.name, pattern) and (config or platform):
                 text = (directory / name).read_text(errors="replace")
-                found.append((form, text.splitlines()))
+                found.append((form, without_comments(text, path.name).splitlines()))
     return found
 
 

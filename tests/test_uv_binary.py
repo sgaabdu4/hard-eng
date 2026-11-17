@@ -66,6 +66,8 @@ def test_the_ruff_package_own_file_passes(tmp_path: Path) -> None:
         'editable = "tools/ruff"',
         'path = "tools/ruff.whl"',
         'git = "https://example.invalid/ruff"',
+        'registry = "../idx"',
+        'registry = "https://example.invalid/simple"',
     ],
 )
 def test_a_ruff_that_the_lockfile_takes_from_anywhere_but_the_registry_is_refused(
@@ -73,5 +75,5 @@ def test_a_ruff_that_the_lockfile_takes_from_anywhere_but_the_registry_is_refuse
 ) -> None:
     """HE-NO-SWITCH-OFF: a local package named `ruff` is not the tool: only a registry source in uv.lock counts."""
     environment(tmp_path, fake=False, source=source)
-    with pytest.raises(ValueError, match=r"registry"):
+    with pytest.raises(ValueError, match=r"public index"):
         judge(tmp_path)

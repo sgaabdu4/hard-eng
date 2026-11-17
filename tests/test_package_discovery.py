@@ -28,7 +28,9 @@ def test_generated_package_ownership(tmp_path: Path, attribute: str) -> None:
         path.parent.mkdir()
         path.touch()
     attributes = tmp_path / ".gitattributes"
-    attributes.write_text(f"copy/** {attribute}\nreal/** {attribute}=false\n")
+    attributes.write_text(
+        f"copy/package.json {attribute}\nreal/package.json {attribute}=false\n"
+    )
     manifests = package_manifests(tmp_path, files)
     assert {owner for owner, _ in manifests} == {"canonical", "real"}
     with pytest.raises(ValueError, match="missing from gate configuration"):

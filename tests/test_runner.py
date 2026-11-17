@@ -27,7 +27,8 @@ def test_file_size_boundary_and_narrow_exceptions(
     runner: ModuleType, tmp_path: Path
 ) -> None:
     """HE-FILE-LENGTH: a 1001-line file fails unless a narrow exception covers it."""
-    path = tmp_path / "large.py"
+    path = tmp_path / "src/large.py"
+    path.parent.mkdir()
     path.write_text("value = 1\n" * 1000)
     validate_file_sizes(tmp_path, {})
     path.write_text("value = 1\n" * 1001)
@@ -38,9 +39,9 @@ def test_file_size_boundary_and_narrow_exceptions(
             tmp_path, {"*.py": {"reason": "broad", "evidence": "invalid"}}
         )
     validate_file_sizes(
-        tmp_path, {"large.py": {"reason": "fixture", "evidence": "exact-file test"}}
+        tmp_path, {"src/large.py": {"reason": "fixture", "evidence": "exact-file test"}}
     )
-    (tmp_path / ".gitattributes").write_text("large.py linguist-generated=true\n")
+    (tmp_path / ".gitattributes").write_text("src/large.py linguist-generated=true\n")
     validate_file_sizes(tmp_path, {})
 
 
@@ -669,9 +670,10 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitattributes").write_text(
-        "generated.py linguist-generated=true\nexternal.py linguist-vendored=true\n"
+        "src/generated.py linguist-generated=true\nsrc/external.py linguist-vendored=true\n"
     )
-    for name in ("app.py", "generated.py", "external.py"):
+    (tmp_path / "src").mkdir()
+    for name in ("app.py", "src/generated.py", "src/external.py"):
         (tmp_path / name).write_text("value = 1\n")
     group = {"language": "python", "sources": ["."]}
     assert {p.name for p in runner.production_files(tmp_path, group)} == {"app.py"}

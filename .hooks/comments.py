@@ -263,7 +263,7 @@ SWIFT_OFF = re.compile(
 )
 RUST_OFF = re.compile(
     r"#\s*!?\s*\[\s*(?:allow|expect)\s*\(|#\s*!?\s*\[\s*ignore\b"
-    r"|\brustfmt\s*::\s*skip\b"
+    r"|\brustfmt\s*::\s*skip\b|\bcfg\s*\(\s*not\s*\(\s*clippy\s*\)\s*\)"
 )
 RUST_CFG_ATTR = re.compile(
     r"#\s*!?\s*\[\s*cfg_attr\s*\([^\]]*?\b(?:(?:allow|expect)\s*\(|ignore\b)"

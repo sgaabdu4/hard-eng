@@ -91,7 +91,9 @@ def test_both_checks_refuse_the_same_files_in_owned_exempt_and_generated_folders
     root = tmp_path / "repo"
     init(root)
     (root / "README.md").write_text("fixture\n")
-    (root / ".gitattributes").write_text("gen/** linguist-generated=true\n")
+    (root / ".gitattributes").write_text(
+        "".join(f"gen/{name} linguist-generated=true\n" for name, _ in FORMS)
+    )
     commit(root, "baseline")
     (root / folder / name).parent.mkdir(parents=True, exist_ok=True)
     (root / folder / name).write_text(text)
