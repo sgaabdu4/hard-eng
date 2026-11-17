@@ -30,6 +30,7 @@ PROMPT = (
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
 BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "image", "verdict", "record")
+IMAGE_DETAIL = re.compile(r"Image (\S+?\.png)\s*[:—–-]+\s*(.+)")
 IMAGE_LINE = re.compile(r"- image: ([0-9a-f]{64}) read (\S+)")
 LOCAL_PATH = re.compile(r"(?<![\w:/.-])/(?:Users|home|tmp|var|private)/")
 
@@ -153,27 +154,33 @@ def codex_proof(stream: str) -> tuple[dict[str, str], str, str]:
     return opened, thread, answer
 
 
+def clean_line(line: str) -> str:
+    """A reviewer line in the form `Rule: Pass — text`: no bullet or bold marks, and a count note such as `(clicks: 2)` moved after the text."""
+    text = line.strip().replace("**", "").replace("`", "")
+    text = re.sub(r"^[-*•]\s+", "", text)
+    found = re.match(r"([^:(]+?)\s*(\([^)]*\))\s*:\s*(.*)", text)
+    return f"{found[1]}: {found[3]} {found[2]}" if found else text
+
+
 def judge(
     answer: str, names: list[str], read: dict[str, bool]
 ) -> tuple[str, list[str], dict[str, str]]:
     """The outcome, the rule lines and the image details of the reviewer's answer."""
     if unread := [name for name in names if not read[name]]:
         return f"not done: the reviewer did not open {', '.join(unread)}", [], {}
-    lines = [line.strip() for line in answer.strip().splitlines()]
+    lines = [clean_line(line) for line in answer.strip().splitlines()]
     if not lines or lines[-1] not in VERDICTS:
         return "not done: the reviewer gave no exact VERDICT line", [], {}
     wanted = [name for name, _ in usability_rules()]
     found = {
-        split_rule_line(line[2:])[0]: line[2:]
+        split_rule_line(line)[0]: line
         for line in lines
-        if line.startswith("- ")
+        if split_rule_line(line)[0] in wanted
     }
     details = {
-        line.split(":", 1)[0].removeprefix("Image ").strip(): line.split(":", 1)[
-            1
-        ].strip()
-        for line in lines
-        if line.startswith("Image ") and ":" in line
+        found[1]: found[2].strip()
+        for found in (IMAGE_DETAIL.match(line) for line in lines)
+        if found
     }
     if missing := [name for name in wanted if name not in found]:
         return f"not done: the reviewer skipped the rule {missing[0]}", [], {}
@@ -262,6 +269,8 @@ def review(images: list[Path], host: str | None) -> dict[str, object]:
     outcome, rule_lines, details = judge(
         answer, names, {name: name in times for name in names}
     )
+    if outcome.startswith("not done"):
+        record["answer"] = answer
     record.update(
         outcome=outcome,
         rules=rule_lines,

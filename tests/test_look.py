@@ -241,3 +241,36 @@ def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
         for record in look.records_for(project, head)
         for item in listed(record, "images")
     )
+
+
+def test_look_reads_the_rule_lines_and_image_lines_a_reviewer_actually_writes(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    rules = [f"- **{name}**: Pass — looked at it" for name, _ in usability_rules()]
+    rules[1] = "- Least effort (clicks: 0): N/A — nothing to click"
+    rules[4] = "- No clutter (kept: 20, removed: 0): Pass — one secondary line"
+    answer = "\n".join(
+        [
+            "Review of the image:",
+            *rules,
+            "- Image image-1.png: a card with a title",
+            "- Overall: a plain card",
+            "VERDICT: clean",
+        ]
+    )
+    install_agent(tmp_path, "claude", 1, answer)
+    record = run_look(project, "codex", images)
+    assert record["outcome"] == "clean", record["outcome"]
+    assert len(listed(record, "images")) == 1
+    assert "image-1.png" in cast(dict[str, str], record["details"])
+
+
+def test_look_reads_a_real_claude_answer() -> None:
+    import look
+
+    answer = (FIXTURES / "claude-answer.txt").read_text()
+    outcome, rules, details = look.judge(answer, ["image-1.png"], {"image-1.png": True})
+    assert outcome == "findings"
+    assert len(rules) == len(usability_rules())
+    assert "image-1.png" in details
