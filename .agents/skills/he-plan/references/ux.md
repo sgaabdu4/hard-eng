@@ -3,19 +3,22 @@
 Apply to visible changes; preview only the flow and states needed for the decision.
 
 - Grounding = inspect the actual website/screen, affected flow and token/theme/component owners in `DESIGN.md` + production code. A dashboard shell alone cannot support decisions about unseen workflows. Missing relevant context → expose the gap; never invent a baseline. A requested change that conflicts with an existing app rule (a rule in `PRODUCT.md`, `DESIGN.md` or `docs/requirements.md`, or behaviour that the code enforces) → find the rule + its reason first; say so before agreeing.
-- Usability = judge every proposal, mockup, review and after screenshot against each rule; a Fail means fix the design and inspect it again, before it is shown to anyone:
+- Usability = judge every proposal, mockup, review and after screenshot against each rule; a Fail means fix the design and inspect it again, before it is shown to anyone. A typed Pass is a record, not proof: `ship` refuses an After image without a clean `browser measure` capture, and PR lines come from `look`:
   - Mistake-proof: risky choices blocked, right answer prefilled; ask "how could a rushed person get this wrong?".
   - Least effort (count: clicks): the app acts when sure and shows a person only what needs them, with a prefilled suggestion. Count the clicks per journey; remove any that are not essential.
   - Observe: never ask a person to record or confirm what the system can already see (messages, replies, logs, payments). Record it automatically and offer undo.
   - Undo: one-tap Undo instead of "Are you sure?"; delete, cancel, refund, access removal and reversing money always ask twice.
-  - No clutter (count: kept, removed): for every element ask "would the user miss it?"; if not, remove it. No helper sentences, history notes, badges or repeated text buttons where an icon with a screen-reader label or colour says the same. Details one tap away. Count the elements kept and removed. Screen text: [HE-NO-TEXT-WALLS](../../he/references/requirements.md#he-no-text-walls).
-  - Hierarchy: the one action that matters is the strongest element; everything else is quieter. One focus per screen, few colours, labels with one meaning.
-  - Messages: say what happened and what to do next, in plain calm words, without blame, in the `PRODUCT.md` tone. A confused user means the screen changes, not the user.
+  - No clutter (count: kept, removed): the screen asks the least cognitive load of a person; for every element ask "would the user miss it?"; if not, remove it. No helper sentences, history notes, badges or repeated text buttons where an icon with a screen-reader label or colour says the same. Details one tap away. Count the elements kept and removed. Screen text: [HE-NO-TEXT-WALLS](../../he/references/requirements.md#he-no-text-walls).
+  - Hierarchy: the one action that matters is the strongest element; everything else is quieter. One focus per screen, at most 2 accent colours in one block, labels with one meaning; one filled button per action group, the rest outlined or plain.
+  - Alignment: one shared left edge for the text and controls of a block; centred text only for a short single line; controls sit next to their text, not pushed to the far side of a wide row.
+  - Spacing: one spacing scale, with more room between groups than inside one; related things sit close and unrelated things apart; no element touches the edge of its block.
+  - Design system: every colour, size, radius and component comes from the project's tokens and components in `DESIGN.md` and the code; a one-off value needs a reason.
+  - Messages: say what happened and what to do next, in plain, calm and positive words, without blame, in the `PRODUCT.md` tone. A confused user means the screen changes, not the user.
   - States: empty and first-use screens say what to do next; loading never shows 0 or stale numbers; a slow or failed connection keeps typed input and says so; one press saves once; an automatic job that stops, pauses or falls behind tells a person at once, with what to do.
   - Time: times show in the user's local time; time logic gets time-zone and clock-change tests.
   - Audit: in an app with staff or admin roles, each of their actions writes an audit row (who, when, what).
-  - Accessibility: touch targets at least 44 × 44 pt on iOS, 48 × 48 dp on Android, 44 × 44 px on the web; pointer-only controls at least 24 × 24 px (WCAG 2.5.8); larger for main controls; strong contrast; screen-reader labels.
-  - Widths: check each width the app supports.
+  - Accessibility: touch targets at least 44 × 44 pt on iOS, 48 × 48 dp on Android, 44 × 44 px on the web; pointer-only controls at least 24 × 24 px (WCAG 2.5.8); larger for main controls; text at least 14 px; contrast at least WCAG AA; screen-reader labels.
+  - Widths: check each width the app supports; for the web, phone 390, tablet 768 and desktop 1280 px.
   - Performance: name the screen's data reads, payload size and what loads lazily, per [efficiency](../../he/references/efficiency.md).
 - Brief = a brief that asks a subagent for a design, mockup or preview links this file, includes the full Usability list and states the job, the users and the constraints. It never dictates the layout, the elements per row or the buttons. Process steps that the requester describes are inputs to automate, not screen elements.
 - Pick the first surface below that fits ([HE-REAL-APP-PREVIEW](../../he/references/requirements.md#he-real-app-preview)). Planning may build the proposal in an isolated checkout; production implementation still waits for Ready + authorization. No mandatory video or extra visual-testing platform.

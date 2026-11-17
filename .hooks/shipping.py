@@ -9,7 +9,6 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from functools import partial
 from pathlib import Path
 from typing import TypedDict, cast
 from urllib.parse import urlparse
@@ -17,7 +16,6 @@ from urllib.parse import urlparse
 from agent_hooks import reject_attribution
 from gate_config import JsonValue
 from project_files import parse_project_text, read_project_file
-from ui_proof import changed_files, ui_evidence
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
 HTTP_STATUS_LINE = re.compile(r"(?im)^HTTP/\S+\s+(\d{3})\b")
@@ -670,17 +668,10 @@ def _ui_evidence(
     policy: ShippingPolicy,
     plan: Path | None,
 ) -> None:
+    from ui_proof import ui_evidence
+
     try:
-        ui_evidence(
-            root,
-            pull.body,
-            pull.head_sha,
-            pull.base_ref,
-            files,
-            policy["ui_paths"],
-            plan,
-            partial(_check_attachment, root),
-        )
+        ui_evidence(root, pull, files, policy["ui_paths"], plan, _check_attachment)
     except ValueError as error:
         raise ShippingError(str(error)) from error
 
@@ -927,6 +918,7 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
 
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     from ship_record import base_matches, ship_method
+    from ui_proof import changed_files
 
     if stage not in {"ready", "delivered"}:
         raise ShippingError("shipping stage must be ready or delivered")

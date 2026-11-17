@@ -216,3 +216,9 @@ def test_the_look_command_is_listed_in_the_runner_help() -> None:
         check=True,
     )
     assert "images" in done.stdout and "--host" in done.stdout
+
+
+def test_review_text_names_the_look_command() -> None:
+    review = (SOURCE / ".agents/skills/code-review/references/review.md").read_text()
+    assert "hard-eng.py look" in review
+    assert "never judge a screen from a typed Pass line" in review

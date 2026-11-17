@@ -293,8 +293,8 @@ def test_the_rule_labels_come_from_the_ux_reference() -> None:
     rules = usability_rules()
     labels = [label for label, _ in rules]
     reference = (SOURCE / ".agents/skills/he-plan/references/ux.md").read_text()
-    assert len(rules) == 13
-    assert {"No clutter", "Hierarchy", "Observe"} <= set(labels)
+    assert len(rules) == 16
+    assert {"No clutter", "Hierarchy", "Observe", "Alignment", "Spacing"} <= set(labels)
     assert {label: units for label, units in rules if units} == {
         "Least effort": ["clicks"],
         "No clutter": ["kept", "removed"],
@@ -705,7 +705,7 @@ def test_the_rule_labels_are_read_from_the_reference_file(
     copy.write_text(text.replace(last, "  - Extra: one more rule.\n" + last, 1))
     monkeypatch.setattr(plans, "UX_REFERENCE", str(copy))
     labels = [label for label, _ in usability_rules()]
-    assert len(labels) == 14 and "Extra" in labels
+    assert len(labels) == 17 and "Extra" in labels
 
 
 def test_a_bracket_and_colon_in_the_free_text_is_not_a_marker(

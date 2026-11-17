@@ -6,6 +6,24 @@ import subprocess
 from pathlib import Path
 
 LIMITS = {"text_px": 14, "control_px": 44, "link_px": 24, "accent_colours": 2}
+PROOF_KINDS = {
+    "Mistake-proof": "judgement",
+    "Least effort": "judgement",
+    "Observe": "judgement",
+    "Undo": "test",
+    "No clutter": "session record",
+    "Hierarchy": "measured",
+    "Alignment": "measured",
+    "Spacing": "session record",
+    "Design system": "session record",
+    "Messages": "session record",
+    "States": "test",
+    "Time": "test",
+    "Audit": "test",
+    "Accessibility": "measured",
+    "Widths": "measured",
+    "Performance": "test",
+}
 AXE_TAGS = "wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa"
 AXE_NAMES = {
     "color-contrast": "contrast",

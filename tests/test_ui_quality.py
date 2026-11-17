@@ -765,3 +765,94 @@ def test_ci_refuses_pairs_without_a_look_block_and_a_visible_na_reference(
         )
         is None
     )
+
+
+UI_MODULES = ("ui_measure", "ui_proof", "look", "merge_guard", "ship_record")
+
+
+@pytest.mark.parametrize(
+    "argv", [["stop", "claude"], ["session", "claude"], ["check", "--quick"]]
+)
+def test_quick_check_runs_no_ui_proof(tmp_path: Path, argv: list[str]) -> None:
+    import subprocess
+    import sys
+
+    from conftest import SOURCE, commit, init
+
+    project = tmp_path / "project"
+    init(project)
+    (project / "a.txt").write_text("a\n")
+    commit(project, "first")
+    shutil.copytree(
+        SOURCE / ".hooks",
+        project / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    done = subprocess.run(
+        [sys.executable, "-X", "importtime", ".hooks/hard-eng.py", *argv],
+        cwd=project,
+        input="{}",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    loaded = {line.rsplit("|", 1)[-1].strip() for line in done.stderr.splitlines()}
+    assert len(loaded) > 20
+    assert not loaded.intersection(UI_MODULES), done.stderr
+
+
+def test_every_usability_rule_has_a_proof_kind() -> None:
+    from ui_measure import PROOF_KINDS
+
+    names = [name for name, _ in usability_rules()]
+    assert sorted(PROOF_KINDS) == sorted(names)
+    assert set(PROOF_KINDS.values()) <= {
+        "measured",
+        "session record",
+        "test",
+        "judgement",
+    }
+
+
+def test_ux_text_names_the_gap_items() -> None:
+    reference = (
+        FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
+    ).read_text()
+    for words in (
+        "least cognitive load",
+        "Alignment:",
+        "Spacing:",
+        "Design system:",
+        "plain, calm and positive",
+        "phone 390, tablet 768 and desktop 1280 px",
+        "A typed Pass is a record, not proof",
+    ):
+        assert words in reference, words
+
+
+def test_ux_text_states_the_measured_limits() -> None:
+    from ui_measure import LIMITS
+
+    reference = (
+        FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
+    ).read_text()
+    assert f"text at least {LIMITS['text_px']} px" in reference
+    assert f"at most {LIMITS['accent_colours']} accent colours" in reference
+    assert f"{LIMITS['control_px']} × {LIMITS['control_px']} px on the web" in reference
+    assert f"{LIMITS['link_px']} × {LIMITS['link_px']} px (WCAG" in reference
+
+
+def test_red_to_fixed_journey_end_to_end(
+    tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name, ships in (("red", False), ("fixed", True)):
+        shutil.copy(FIXTURES / f"{name}.html", tmp_path / "pages/shot.html")
+        capture(browser, tmp_path, site, "shot")
+        work = tmp_path / f"ship-{name}"
+        work.mkdir()
+        fixture, _, _ = full_ship(work, monkeypatch, captured=(tmp_path, "shot"))
+        if ships:
+            ready(fixture.root, fixture)
+        else:
+            with pytest.raises(shipping.ShippingError, match="has findings"):
+                ready(fixture.root, fixture)

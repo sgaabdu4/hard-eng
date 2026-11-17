@@ -8,7 +8,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import cast
+from typing import Protocol, cast
 
 from gate_config import JsonValue
 from plans import _is_test as is_test_path
@@ -361,32 +361,39 @@ def download(root: Path, url: str) -> bytes:
     return result.stdout
 
 
+class Described(Protocol):
+    @property
+    def body(self) -> str: ...
+    @property
+    def head_sha(self) -> str: ...
+    @property
+    def base_ref(self) -> str: ...
+
+
 def ui_evidence(
     root: Path,
-    body: str,
-    head: str,
-    base_ref: str,
+    pull: Described,
     files: list[dict[str, JsonValue]],
     patterns: list[str],
     plan: Path | None,
-    check_attachment: Callable[[str], str],
+    check_attachment: Callable[[Path, str], str],
 ) -> None:
     """Raise ValueError when a PR that changes a UI file lacks its screen evidence."""
     from ship_evidence import attachment_urls
 
-    urls = attachment_urls(body, file_names(files), patterns)
-    kinds = {url: check_attachment(url) for url in urls}
+    urls = attachment_urls(pull.body, file_names(files), patterns)
+    kinds = {url: check_attachment(root, url) for url in urls}
     after = [url for url in urls[len(urls) // 2 :] if kinds[url].startswith("image/")]
     plan_text = plan.read_text() if plan is not None and plan.is_file() else ""
     problem = ship_problem(
         root,
-        head,
-        body,
+        pull.head_sha,
+        pull.body,
         cast(list[dict[str, object]], files),
         patterns,
         plan_text,
         after,
-        base_ref,
+        pull.base_ref,
     )
     if problem:
         raise ValueError(f"UI evidence: {problem}")
