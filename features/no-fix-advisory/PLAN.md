@@ -72,4 +72,4 @@ Real service: Passed — npm registry, OSV scanner: the real gate command ran th
 Retro: (1) The fault escaped to the base branch: no test gave the gate an advisory with no fix → `tests/test_osv_unfixed.py::test_the_gate_passes_when_the_scanner_found_only_advisories_with_no_fix`, which failed first. (2) The first design put the check in the report validator, but the runner fails on the scanner's exit code, so the report check alone would still fail the gate → the same test, which runs the runner. (3) `reports.py` and `gate_runner.py` stood at the 1000 line limit, so the OSV validators moved to their own module → HE-FILE-LENGTH. (4) A test helper copied the fake registry of the freshness tests, and the duplicates gate refused it → the helper now imports that fake.
 
 Delivery target: PR
-Delivery: Pending — hosted CI on the pull request; the plan records the result when it ends.
+Delivery: Pending — merge into `develop`. Hosted CI on pull request 645 at head 28ca5e08: 24 checks passed (hard-eng-checks, 6 test shards, pr text, canary targets and the new project runs on Linux and macOS) and 1 skipped (remove-claude-footer); none failed.
