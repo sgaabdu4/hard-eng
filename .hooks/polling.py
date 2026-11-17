@@ -17,9 +17,8 @@ MERGE_WORDS = frozenset(("merge", "mergePullRequest", "enablePullRequestAutoMerg
 
 def holds_merge(command: str) -> bool:
     """Whether the command, with its quotes and backslashes removed, has the word `gh` and a merge word, each as its own word and never a part of one."""
-    import re
-
-    words = set(re.findall(r"[A-Za-z0-9_]+", command.translate(UNQUOTE)))
+    text = command.translate(UNQUOTE)
+    words = set("".join(c if c.isalnum() or c == "_" else " " for c in text).split())
     return "gh" in words and bool(words & MERGE_WORDS)
 
 
