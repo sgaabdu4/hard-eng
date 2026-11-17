@@ -294,8 +294,9 @@ def test_ship_merge_uses_the_recorded_method(
         assert calls[0][-2:] == ("--match-head-commit", fixture.head)
 
 
+@pytest.mark.parametrize("behind", [0, 3], ids=["current", "three-commits-behind"])
 def test_a_release_pull_request_records_a_merge_commit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, behind: int
 ) -> None:
     fixture = _fixture(tmp_path)
     git(fixture.root, "branch", "-M", "develop")
@@ -313,7 +314,9 @@ def test_a_release_pull_request_records_a_merge_commit(
         "sha": "a" * 40,
         "repo": {"full_name": "acme/widget"},
     }
-    _patch_gh(monkeypatch, FakeGitHub(pull, [_check(head)]))
+    fake = FakeGitHub(pull, [_check(head)])
+    fake.comparison = {"behind_by": behind}
+    _patch_gh(monkeypatch, fake)
     shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert shipment.method == "merge"
     record = json.loads((fixture.root / ".git/hard-eng/ship/1.json").read_text())

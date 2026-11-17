@@ -842,10 +842,14 @@ def _compare(root: Path, repository: str, base: str, head: str) -> dict[str, Jso
 
 
 def _current_with_base(
-    root: Path, identity: tuple[str, str, int], base: str, head: str
+    root: Path, identity: tuple[str, str, int], pull: _PullRequest, shipping_base: str
 ) -> None:
-    comparison = _compare(root, "/".join(identity[:2]), base, head)
-    behind = comparison.get("behind_by")
+    from ship_record import is_release
+
+    if is_release(pull, shipping_base):
+        return
+    repository, base = "/".join(identity[:2]), pull.base_ref
+    behind = _compare(root, repository, base, pull.head_sha).get("behind_by")
     if type(behind) is not int:
         raise ShippingError("PR comparison with its base is invalid")
     if behind:
@@ -888,7 +892,7 @@ def _ready_state(
         )
     ):
         raise ShippingError(problem)
-    _current_with_base(root, identity, pull.base_ref, pull.head_sha)
+    _current_with_base(root, identity, pull, policy["base"])
     if pull.mergeable is not True or pull.mergeable_state != "clean":
         _checks(root, "/".join(identity[:2]), pull.head_sha, policy, True)
     bypass = pull.mergeable is True and pull.mergeable_state == "blocked"
