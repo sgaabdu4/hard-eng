@@ -176,6 +176,8 @@ def ui_problem(
         for item in files
         if str(item["filename"]).endswith("PLAN.md") and item.get("status") != "removed"
     ]
+    if not plans and (problem := reference_problem("", visible, body, note)):
+        return problem
     for plan in plans:
         endpoint = f"repos/{owner}/{name}/contents/{plan}?ref={head_sha}"
         try:

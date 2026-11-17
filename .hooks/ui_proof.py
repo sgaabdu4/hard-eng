@@ -25,6 +25,7 @@ CATALOG_FOLDERS = frozenset(("l10n", "locales", "i18n", "messages"))
 PAGE_WRITE = re.compile(
     r"innerHTML|textContent|createElement|\.style\b|className|classList"
 )
+TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[A-Za-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
     r"\b(?:struct|class|extension)\s+\w+\s*:[^{]*\b(?:View|UIView|NSView|UIViewController|NSViewController)\b"
@@ -76,12 +77,20 @@ def is_visible(change: Change) -> bool:
         return True
     text = change.text if change.text is not None else "\n".join(lines)
     if suffix == ".dart":
+        removed = any(
+            line.startswith("-") and not line.startswith("---")
+            for line in change.patch.splitlines()
+        )
         return "lib" in path.parts and (
-            "Widget" in text or any(STRING_LITERAL.search(line) for line in lines)
+            removed
+            or "Widget" in text
+            or any(STRING_LITERAL.search(line) for line in lines)
         )
     if suffix == ".swift":
         return bool(SWIFT_VIEW.search(text))
-    return suffix in {".js", ".ts"} and any(PAGE_WRITE.search(line) for line in lines)
+    return suffix in {".js", ".ts"} and any(
+        PAGE_WRITE.search(line) or TEMPLATE_MARKUP.search(line) for line in lines
+    )
 
 
 def visible_files(changes: list[Change]) -> list[str]:
