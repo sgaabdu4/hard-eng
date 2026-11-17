@@ -11,6 +11,7 @@ LIMITS = {
     "link_px": 24,
     "accent_colours": 2,
     "secondary_words": 20,
+    "frame_ratio": 1.1,
 }
 PROOF_KINDS = {
     "Mistake-proof": ("judgement",),
@@ -30,7 +31,19 @@ PROOF_KINDS = {
     "Widths": ("measured",),
     "Performance": ("test",),
 }
-DECORATION = '[aria-hidden="true"],[role=img],[role=presentation]'
+DECORATION = '[aria-hidden="true"],[role=img]'
+DECORATED_JS = (
+    "((el) => { const root = el.closest(DECORATION_JSON); if (!root) return false; "
+    "const num = (c) => (c.match(/[\\d.]+/g) || []).map(Number); "
+    "const fill = (c) => { const v = num(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); }; "
+    "const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }; "
+    "const behind = (e) => { for (let n = e.parentElement; n; n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (fill(c)) return c; } return 'rgb(255, 255, 255)'; }; "
+    "const apart = (c, e) => { if (!fill(c)) return false; const a = lum(num(c)), b = lum(num(behind(e))); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= LIMITS.frame_ratio; }; "
+    "const boxed = (e) => { const s = getComputedStyle(e); return e.namespaceURI === 'http://www.w3.org/2000/svg' "
+    "|| apart(s.backgroundColor, e) || /\\d+px \\d+px [1-9]/.test(s.boxShadow) "
+    "|| (parseFloat(s.borderTopWidth) >= 1 && s.borderTopStyle !== 'none' && apart(s.borderTopColor, e)); }; "
+    "for (let n = el; n; n = n.parentElement) { if (boxed(n)) return true; if (n === root) return false; } return false; })"
+)
 AXE_TAGS = "wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa"
 AXE_NAMES = {
     "color-contrast": "contrast",
@@ -52,7 +65,8 @@ const shown = (el) => {
   const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
   return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
 };
-const visible = (el) => !el.closest(DECORATION_JSON) && shown(el);
+const decorated = DECORATED_JSFN;
+const visible = (el) => !decorated(el) && shown(el);
 const rgb = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
 const opaque = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); };
 const hue = ([r, g, b]) => {
@@ -207,14 +221,17 @@ return JSON.stringify(found);
 
 def measure_script() -> str:
     script = MEASURE_SCRIPT.replace("LIMITS_JSON", json.dumps(LIMITS))
+    script = script.replace("DECORATED_JSFN", DECORATED_JS)
     return script.replace("DECORATION_JSON", json.dumps(DECORATION))
 
 
 def decoration_script(selectors: list[str]) -> str:
+    decorated = DECORATED_JS.replace("DECORATION_JSON", json.dumps(DECORATION))
     return (
-        f"JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
-        f"return Boolean(document.querySelector(s)?.closest({json.dumps(DECORATION)})); "
-        "} catch { return false; } }))"
+        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; const decorated = {decorated}; "
+        f"return JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
+        "const el = document.querySelector(s); return Boolean(el && decorated(el)); "
+        "} catch { return false; } })); })()"
     )
 
 
