@@ -40,6 +40,14 @@ REAL_FAULTS = {
         f"<input type=search aria-label=Find style='clip-path:inset(0);{INPUT}'>",
         "field-control",
     ),
+    "label-toggle": (
+        f"<div style='display:flex;gap:8px'><input type=password aria-label=Password style='{INPUT}'><input type=checkbox id=c hidden><label for=c style='padding:12px'>Show</label></div>",
+        "field-control",
+    ),
+    "attr-heading": (
+        f"<style>.t::before{{content:attr(data-t)}}</style><section><h2 class=t data-t='Offer 7'></h2><p style='{META}'>Posted yesterday</p><p style='{META}'>Ends in three days</p></section>",
+        "extra-text",
+    ),
     "search-placeholder": (
         f"<form><div style='display:flex;gap:8px'><input type=text placeholder=Search aria-label=Search style='{INPUT}'><button type=submit style='{PLAIN_BUTTON}'>Go</button></div></form>",
         "field-control",

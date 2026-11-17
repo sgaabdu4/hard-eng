@@ -25,7 +25,7 @@ CATALOG_FOLDERS = frozenset(("l10n", "locales", "i18n", "messages"))
 PAGE_WRITE = re.compile(
     r"innerHTML|textContent|createElement|\.style\b|className|classList"
 )
-TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[A-Za-z][\w-]*(?:\s[^<>]*)?/?>""")
+TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[a-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
     r"\b(?:struct|class|extension)\s+\w+\s*:[^{]*\b(?:View|UIView|NSView|UIViewController|NSViewController)\b"
@@ -76,6 +76,8 @@ def is_visible(change: Change) -> bool:
     ):
         return True
     text = change.text if change.text is not None else "\n".join(lines)
+    if change.text is None and suffix in {".dart", ".swift"}:
+        return suffix == ".swift" or "lib" in path.parts
     if suffix == ".dart":
         removed = any(
             line.startswith("-") and not line.startswith("---")
@@ -212,7 +214,9 @@ def unchanged_problem(root: Path, reference: str, head: str, base: str) -> str |
     return None
 
 
-def measured_problem(root: Path, head: str, after: list[bytes]) -> str | None:
+def measured_problem(
+    root: Path, head: str, after: list[bytes], route: str = ""
+) -> str | None:
     """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width."""
     from browser import WIDTHS
 
@@ -233,6 +237,8 @@ def measured_problem(root: Path, head: str, after: list[bytes]) -> str | None:
             )
             if peer is None:
                 return f"the After capture {stem} has no measured record at {width} px; capture it at every width"
+            if route and not str(peer.get("route", "")).startswith(route):
+                return f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {route}; capture the changed screen"
             if peer.get("commit") != head or peer.get("dirty"):
                 return f"the After capture {peer['image']} was not taken at the head ({head[:12]}) from a clean tree; commit, then capture again"
             if peer.get("findings"):
@@ -287,10 +293,25 @@ def is_native(visible: list[str]) -> bool:
     return bool(visible) and all(name.endswith(NATIVE) for name in visible)
 
 
+def surface_route(plan_text: str) -> str:
+    """The route that the plan's `Surface: Existing — /route, rendered by ...` line names, or an empty string."""
+    found = re.search(
+        r"(?m)^Surface: *\w+ — (/\S*?)[,\s]", reference_section(plan_text)
+    )
+    return found[1] if found else ""
+
+
 def evidence_problem(
-    root: Path, head: str, body: str, after: list[bytes], visible: list[str]
+    root: Path,
+    head: str,
+    body: str,
+    after: list[bytes],
+    visible: list[str],
+    route: str = "",
 ) -> str | None:
-    if not is_native(visible) and (problem := measured_problem(root, head, after)):
+    if not is_native(visible) and (
+        problem := measured_problem(root, head, after, route)
+    ):
         return problem
     return look_problem(root, head, body, after)
 
@@ -333,7 +354,9 @@ def ship_problem(
     if videos and not after_urls and visible and not is_native(visible):
         return "the After is a video only; a web change also needs a measured After image, which `browser capture` writes at every width"
     after = [download(root, url) for url in after_urls]
-    return evidence_problem(root, head, body, after, visible) if after else None
+    if not after:
+        return None
+    return evidence_problem(root, head, body, after, visible, surface_route(plan_text))
 
 
 def changed_files(

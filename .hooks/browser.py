@@ -358,7 +358,10 @@ def shoot_page(
     try:
         require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
         unread_frames(tool, folder, session, width)
-        write_record(root, image, width, findings)
+        route = json.loads(
+            require(run_tool(tool, folder, session, "eval", "location.pathname"))
+        )
+        write_record(root, image, width, findings, str(route))
     except BaseException:
         image.unlink(missing_ok=True)
         image.with_suffix(".json").unlink(missing_ok=True)

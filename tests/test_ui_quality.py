@@ -48,7 +48,7 @@ LINK = (
     "font-size:16px;overflow:hidden'>a</a>"
 )
 FAULTS = {
-    "text": ("<p style='font-size:12px'>Small words</p>", "text-size", 1),
+    "text": ("<p style='font-size:10px'>Small words</p>", "text-size", 1),
     "tap": (
         "<button style='width:30px;height:30px;font-size:16px'>Go</button>",
         "tap-size",
@@ -226,7 +226,7 @@ def measured_after(
     for width in widths:
         image = folder / f"after-{width}.png"
         image.write_bytes(b"after-%d" % width)
-        ui_measure.write_record(root, image, width, findings or [])
+        ui_measure.write_record(root, image, width, findings or [], "/account")
     return b"after-390"
 
 
@@ -268,6 +268,7 @@ def captured_ship(
     monkeypatch: pytest.MonkeyPatch,
     page: str,
     folder: str = "ship",
+    route: str = "/shot.html",
 ) -> tuple[Fixture, dict[int, Counter[str]]]:
     """A ready PR that changes the page `page`, with the real capture of that page taken in the PR's own checkout at its head."""
     ship = tmp_path / folder
@@ -275,7 +276,11 @@ def captured_ship(
     text = (FIXTURES / f"{page}.html").read_text()
     change = file_change("src/shot.html", "-<p>old</p>\n+<p>new</p>")
     fixture, fake = ship_setup(
-        ship, monkeypatch, files=[change], committed={"src/shot.html": text}
+        ship,
+        monkeypatch,
+        files=[change],
+        committed={"src/shot.html": text},
+        ux=REAL_UX.replace("/account", route),
     )
     shutil.copy(FIXTURES / f"{page}.html", tmp_path / "pages/shot.html")
     found = capture(browser, fixture.root, site, "shot")
@@ -860,7 +865,11 @@ def test_ux_text_states_the_measured_limits() -> None:
     reference = (
         FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
     ).read_text()
-    assert f"text at least {LIMITS['text_px']} px" in reference
+    floor = LIMITS["text_px"]
+    assert (
+        f"text at least {floor} pt on iOS, {floor} sp on Android, {floor} px on the web"
+        in reference
+    )
     assert f"at most {LIMITS['accent_colours']} accent colours" in reference
     assert f"{LIMITS['control_px']} × {LIMITS['control_px']} px on the web" in reference
     assert f"{LIMITS['link_px']} × {LIMITS['link_px']} px (WCAG" in reference
@@ -933,3 +942,13 @@ def test_ci_refuses_the_unchanged_note_on_a_visible_change_with_no_plan(
         [VISIBLE_FILE],
     )
     assert "UI appearance: unchanged" in str(problem)
+
+
+def test_an_after_capture_of_another_page_than_the_surface_is_refused(
+    tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _ = captured_ship(
+        tmp_path, site, browser, monkeypatch, "fixed", route="/account"
+    )
+    with pytest.raises(shipping.ShippingError, match="capture the changed screen"):
+        ready(fixture.root, fixture)

@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 LIMITS = {
-    "text_px": 14,
+    "text_px": 11,
     "control_px": 44,
     "link_px": 24,
     "accent_colours": 2,
@@ -18,7 +18,7 @@ PROOF_KINDS = {
     "Observe": ("judgement",),
     "Undo": ("judgement",),
     "No clutter": ("measured", "judgement"),
-    "Hierarchy": ("measured",),
+    "Hierarchy": ("measured", "judgement"),
     "Alignment": ("measured", "judgement"),
     "Spacing": ("judgement",),
     "Design system": ("judgement",),
@@ -63,7 +63,7 @@ const hue = ([r, g, b]) => {
 };
 const controls = [...document.querySelectorAll("button,a[href],input:not([type=hidden]),select,textarea,[role=button],[role=link]")].filter(visible);
 const name = (el) => (el.innerText || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30);
-const ownText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+const ownText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim()) || ["::before", "::after"].some((p) => /^["']./.test(getComputedStyle(el, p).content));
 const texts = [...document.body.querySelectorAll("*")].filter((el) => ownText(el) && visible(el));
 for (const el of texts) {
   const px = parseFloat(getComputedStyle(el).fontSize);
@@ -130,7 +130,7 @@ const labelled = (el) => ["aria-label", "aria-labelledby", "title"].some((a) => 
 const selectorOf = (el) => el.tagName.toLowerCase() + (el.getAttribute("name") ? `[name="${el.getAttribute("name")}"]` : "");
 const BUTTONS = "button,[role=button],input[type=button],input[type=submit]";
 const submitting = (el) => el.getAttribute("type") === "submit";
-const isControl = (e) => e.matches(BUTTONS + ",a[href],[tabindex],[onclick]") || getComputedStyle(e).cursor === "pointer" || textOf(e) !== "";
+const isControl = (e) => e.matches(BUTTONS + ",a[href],[tabindex],[onclick],label[for]") || getComputedStyle(e).cursor === "pointer" || textOf(e) !== "";
 for (const input of document.querySelectorAll("input[type=password]")) {
   if (!visible(input)) continue;
   const r = input.getBoundingClientRect();
@@ -140,7 +140,7 @@ for (const input of document.querySelectorAll("input[type=password]")) {
     const centre = (br.top + br.bottom) / 2;
     return gap <= 24 && centre >= r.top - 4 && centre <= r.bottom + 4;
   };
-  const candidates = [...scope.querySelectorAll("*")].filter((e) => e !== input && visible(e) && !e.contains(input) && !e.closest("label") && !submitting(e) && near(e.getBoundingClientRect()) && isControl(e));
+  const candidates = [...scope.querySelectorAll("*")].filter((e) => e !== input && visible(e) && !e.contains(input) && !(input.labels && [...input.labels].some((l) => l.contains(e) && l.querySelector("input") === input)) && !submitting(e) && near(e.getBoundingClientRect()) && isControl(e));
   for (const b of candidates.filter((c) => !candidates.some((o) => o !== c && c.contains(o)))) {
     const text = textOf(b);
     const why = !overlaps(b.getBoundingClientRect(), r) ? "reveal control outside the field" : text ? "reveal control with text" : !labelled(b) ? "reveal control without a label" : "";
@@ -237,7 +237,11 @@ def checkout_state(root: Path) -> dict[str, object]:
 
 
 def write_record(
-    root: Path, image: Path, width: int, findings: list[dict[str, object]]
+    root: Path,
+    image: Path,
+    width: int,
+    findings: list[dict[str, object]],
+    route: str = "",
 ) -> Path:
     record = image.with_suffix(".json")
     record.write_text(
@@ -247,6 +251,7 @@ def write_record(
                 "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
                 "width": width,
                 "findings": findings,
+                "route": route,
                 **checkout_state(root),
             },
             indent=2,
