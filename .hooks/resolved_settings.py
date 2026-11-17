@@ -6,12 +6,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 
-from command_words import segments, unwrapped
+from command_words import direct
 from dart_boundaries import nested_package_patterns
 from fallow_report import named_config, native_fallow_command
 from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
-from ruff_settings import ruff_invocations
 from ruff_table import ruff_hits
 from scope_check import left_out, nested_configs, refusal
 from tool_setup import managed_command
@@ -83,20 +82,27 @@ class Defaults:
         return self.fallow_run
 
 
+Scope = tuple[Path, list[Group], Group, Gate]
+
+
 def group_roots(root: Path, every: list[Group]) -> frozenset[Path]:
     return frozenset((root / group["path"]).resolve() for group in every)
 
 
 def ruff_tasks(
-    root: Path,
-    every: list[Group],
-    group: Group,
-    gate: Gate,
+    scope: Scope,
     defaults: Defaults,
     timeout: float,
 ) -> list[Task]:
+    root, every, group, gate = scope
     directory = root / group["path"]
-    command = managed_command(gate["command"], directory)
+    judged = direct(gate["command"], directory)
+    if not judged or judged[0] != "ruff" or judged[1:2] != ["check"]:
+        return []
+    command = managed_command(judged, directory)
+    count = len(judged) - 1
+    prefix = command[: len(command) - count]
+    arguments = command[len(command) - count :]
     children = nested_package_patterns(group, every, gate.get("role", ""))
     roots = group_roots(root, every)
     return [
@@ -106,8 +112,6 @@ def ruff_tasks(
             (children, roots),
             defaults.ruff(tuple(prefix)),
         )
-        for prefix, arguments in ruff_invocations(segments(command, directory))
-        if arguments[:1] == ["check"]
     ]
 
 
@@ -127,16 +131,14 @@ def ruff_gate_hits(
 
 
 def fallow_tasks(
-    root: Path,
-    every: list[Group],
-    group: Group,
-    gate: Gate,
+    scope: Scope,
     defaults: Defaults,
     timeout: float,
 ) -> list[Task]:
+    root, every, group, gate = scope
     directory = root / group["path"]
-    command = unwrapped(managed_command(gate["command"], directory), directory)
-    invocation = native_fallow_command(command)
+    judged = direct(gate["command"], directory)
+    invocation = native_fallow_command(judged) if judged else None
     if invocation is None:
         return []
     children = nested_package_patterns(group, every, gate.get("role", ""))
@@ -182,8 +184,8 @@ def validate_resolved(
             for group in groups
             for gate in group["checks"]
             for task in (
-                *ruff_tasks(root, every, group, gate, defaults, timeout),
-                *fallow_tasks(root, every, group, gate, defaults, timeout),
+                *ruff_tasks((root, every, group, gate), defaults, timeout),
+                *fallow_tasks((root, every, group, gate), defaults, timeout),
             )
         ]
         refused = [hit for found in pool.map(run_task, tasks) for hit in found]

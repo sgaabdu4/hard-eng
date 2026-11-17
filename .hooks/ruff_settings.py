@@ -93,19 +93,8 @@ def settings_switch_offs(root: Path, name: str, text: str) -> list[str]:
     return file_hits(root, name, text, frozenset({(root / name).resolve()}))
 
 
-def ruff_invocations(
-    parts: list[list[str]],
-) -> list[tuple[list[str], list[str]]]:
-    """Each ruff run of a command as its launcher words and its arguments, one for each chained command."""
-    return [
-        (segment[: len(segment) - len(found)], found)
-        for segment in parts
-        if (found := ruff_command(segment))
-    ]
-
-
 def ruff_commands(parts: list[list[str]]) -> list[list[str]]:
-    return [arguments for _, arguments in ruff_invocations(parts)]
+    return [found for segment in parts if (found := ruff_command(segment))]
 
 
 def ruff_command(command: list[str]) -> list[str]:

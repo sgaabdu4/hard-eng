@@ -353,12 +353,12 @@ def validate_gate(gate: Gate, directory: Path, report_paths: set[Path]) -> None:
     from gitleaks_scan import validate_current_files_gate
 
     validate_current_files_gate(gate.get("role"), command)
-    from command_words import segments
-
-    parts = segments(command, directory)
+    from command_words import direct
     from gitleaks_scan import validate_config_variables
 
-    validate_config_variables(parts)
+    validate_config_variables(command)
+    found = direct(command, directory)
+    parts = [found] if found else []
     from ruff_settings import validate_ruff_command
 
     validate_ruff_command(parts, directory, gate.get("role"))
@@ -707,9 +707,9 @@ def validate_group(root: Path, group: Group, report_paths: set[Path]) -> int:
     from tool_setup import require_role_tool
 
     for index, gate in enumerate(group["checks"]):
-        validate_gate(gate, directory, report_paths)
         command = scripts[index] if scripts else gate["command"]
         require_role_tool(group.get("language", ""), gate, command)
+        validate_gate(gate, directory, report_paths)
     validate_performance(group)
     return len(group["checks"])
 

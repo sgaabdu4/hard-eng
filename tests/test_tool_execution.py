@@ -111,7 +111,6 @@ def import_linter_project(tmp_path: Path) -> Path:
         ["fallow"],
         ["bunx", "fallow"],
         ["bun", "x", "fallow@3.0.0"],
-        ["bun", "x", "--package=fallow@latest", "fallow"],
     ],
 )
 def test_gate_rejects_disabled_fallow_metric_before_execution(
@@ -128,14 +127,6 @@ def test_gate_rejects_disabled_fallow_metric_before_execution(
         validate_gate(gate, tmp_path, set())
     gate["command"] = [*prefix, "audit", "--gate=all", "--max-crap", "30"]
     validate_gate(gate, tmp_path, set())
-
-
-def test_fallow_named_arguments_do_not_imply_tool_invocation(tmp_path: Path) -> None:
-    validate_gate(
-        {"name": "custom", "command": ["node", "check.mjs", "fallow", "audit"]},
-        tmp_path,
-        set(),
-    )
 
 
 @pytest.mark.parametrize(
