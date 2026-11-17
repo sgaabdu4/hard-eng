@@ -16,7 +16,7 @@ from dependency_graph import (
     readers_above,
     shared_only,
 )
-from generated_marks import LISTED, generated_sources
+from generated_marks import LISTED, generated_sources, listed_with_blobs
 from project_files import (
     GIT_LISTING,
     biome_formatters,
@@ -150,12 +150,7 @@ def fixture_manifest(root: Path, manifest: Path, manifests: list[Path]) -> bool:
 
 
 def listed_names(root: Path) -> list[str]:
-    names = subprocess.check_output(
-        [*GIT_LISTING, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-        text=True,
-    )
-    return sorted(set(names.split("\0")) - {""})
+    return listed_with_blobs(root)
 
 
 def regular_file(path: Path) -> bool:
@@ -252,7 +247,7 @@ def validate_file_sizes(
         raise ValueError(
             "HE-FILE-LENGTH: Handwritten files exceed 1000 physical lines: "
             + "; ".join(failures)
-            + ". Split the file; or mark generator output with `<pattern> linguist-generated=true` in .gitattributes;"
+            + ". Split the file; or mark each generator output file by its exact path with `<path> linguist-generated=true` in .gitattributes;"
             + " or add a `file_size_exceptions` entry for the exact file, with `reason` and `evidence`, in hard-eng.gates.json"
         )
 

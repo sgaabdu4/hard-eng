@@ -167,6 +167,10 @@ def commit(root: Path, message: str) -> str:
 
 
 def init(root: Path) -> None:
+    """A run reads the index once; each test builds its own repository, so a new one forgets the proofs."""
+    import generated_marks
+
+    generated_marks.reset()
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     with (root / ".git/config").open("a") as config:
@@ -541,11 +545,3 @@ def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
     )
-
-
-@pytest.fixture(autouse=True)
-def forget_mark_proofs() -> None:
-    """A run reads the index once; each test builds its own repository."""
-    import generated_marks
-
-    generated_marks.reset()

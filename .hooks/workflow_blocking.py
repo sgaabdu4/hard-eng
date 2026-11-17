@@ -75,6 +75,16 @@ def step_hits(step: dict[str, object]) -> list[str]:
         hits.append("the check step sets continue-on-error")
     if "if" in step and not STEP_IF.fullmatch(str(step["if"]).strip()):
         hits.append(f"the check step runs only when {step['if']!r}")
+    hits += env_hits(step)
+    for line in str(step.get("run", "")).splitlines():
+        text = SPACES.sub(" ", line.strip())
+        if text and not any(form.fullmatch(text) for form in GENERATED_LINES):
+            hits.append(f"the check step holds {text!r}")
+    return hits
+
+
+def env_hits(step: dict[str, object]) -> list[str]:
+    hits = []
     env = step.get("env")
     for key, value in (env if isinstance(env, dict) else {}).items():
         if key not in STEP_ENV and not key.startswith("MISE_"):
@@ -88,10 +98,6 @@ def step_hits(step: dict[str, object]) -> list[str]:
             )
         if isinstance(env, dict) and name in env:
             hits.append(f"the check step sets the launcher variable {name}")
-    for line in str(step.get("run", "")).splitlines():
-        text = SPACES.sub(" ", line.strip())
-        if text and not any(form.fullmatch(text) for form in GENERATED_LINES):
-            hits.append(f"the check step holds {text!r}")
     return hits
 
 
@@ -130,6 +136,53 @@ def line_of(text: str, step: dict[str, object]) -> int:
     return text.count("\n", 0, at) + 1 if at >= 0 else 1
 
 
+def trigger_hits(name: str, data: dict[object, object]) -> list[str]:
+    triggers = data.get("on", data.get(True))
+    events = (
+        {triggers}
+        if isinstance(triggers, str)
+        else set(triggers)
+        if isinstance(triggers, (list, dict))
+        else set()
+    )
+    if events & TRIGGERS:
+        return []
+    return [f"{name}:1 runs on {sorted(map(str, events))} only: {FIX}"]
+
+
+def skip_hits(name: str, words: list[tuple[str, str, int]]) -> list[str]:
+    only = {language for kind, language, _ in words if kind == "only"}
+    return [
+        f"{name}:{line} skips {language} with no job that checks only {language}: {FIX}"
+        for kind, language, line in words
+        if kind == "skip" and language not in only
+    ]
+
+
+def check_steps(job: dict[str, object]) -> list[dict[str, object]]:
+    steps = job.get("steps")
+    return [
+        step
+        for step in (steps if isinstance(steps, list) else [])
+        if isinstance(step, dict) and ".hooks/hard-eng.py" in str(step.get("run", ""))
+    ]
+
+
+def step_findings(
+    name: str, text: str, steps: list[dict[str, object]]
+) -> tuple[list[str], list[tuple[str, str, int]]]:
+    found: list[str] = []
+    words: list[tuple[str, str, int]] = []
+    for step in steps:
+        line = line_of(text, step)
+        words += [
+            (match[1], match[2], line)
+            for match in LANGUAGE_FLAG.finditer(str(step["run"]))
+        ]
+        found += [f"{name}:{line} {hit}: {FIX}" for hit in step_hits(step)]
+    return found, words
+
+
 def workflow_hits(name: str, text: str) -> list[str]:
     """Findings for a Hard Eng workflow, read as YAML: only the steps that call the hooks and their job are judged."""
     try:
@@ -142,47 +195,23 @@ def workflow_hits(name: str, text: str) -> list[str]:
         return [f"{name}:1 cannot be read as YAML: {FIX}"]
     if not isinstance(data, dict):
         return [f"{name}:1 is not a workflow: {FIX}"]
-    found: list[str] = []
-    triggers = data.get("on", data.get(True))
-    events = (
-        {triggers}
-        if isinstance(triggers, str)
-        else set(triggers)
-        if isinstance(triggers, (list, dict))
-        else set()
-    )
-    if not events & TRIGGERS:
-        found.append(f"{name}:1 runs on {sorted(map(str, events))} only: {FIX}")
+    found: list[str] = trigger_hits(name, data)
     jobs = data.get("jobs")
     checks = 0
     words: list[tuple[str, str, int]] = []
     for job in (jobs if isinstance(jobs, dict) else {}).values():
         if not isinstance(job, dict):
             continue
-        steps = [
-            step
-            for step in job.get("steps") or []
-            if isinstance(step, dict)
-            and ".hooks/hard-eng.py" in str(step.get("run", ""))
-        ]
+        steps = check_steps(job)
         if not steps:
             continue
         checks += sum(" check " in str(step["run"]) for step in steps)
         launchers = set().union(*map(launcher_names, steps))
         found += [f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data, launchers)]
-        for step in steps:
-            for match in LANGUAGE_FLAG.finditer(str(step["run"])):
-                words.append((match[1], match[2], line_of(text, step)))
-        for step in steps:
-            found += [
-                f"{name}:{line_of(text, step)} {hit}: {FIX}" for hit in step_hits(step)
-            ]
-    only = {language for kind, language, _ in words if kind == "only"}
-    found += [
-        f"{name}:{line} skips {language} with no job that checks only {language}: {FIX}"
-        for kind, language, line in words
-        if kind == "skip" and language not in only
-    ]
+        step_found, step_words = step_findings(name, text, steps)
+        found += step_found
+        words += step_words
+    found += skip_hits(name, words)
     if not checks:
         found.append(f"{name}:1 holds no generated check step: {FIX}")
     return found

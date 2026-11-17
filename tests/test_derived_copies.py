@@ -1,7 +1,12 @@
 """A folder mark exempts a folder only when Hard Eng proves it is a byte copy of a package that nothing exempts."""
 
+import json
+import re
+import subprocess
 from pathlib import Path
+from unittest import mock
 
+import pytest
 from conftest import SOURCE as HARD_ENG
 from conftest import commit, git
 from generated_marks import generated_sources
@@ -141,3 +146,72 @@ def test_a_glob_folder_mark_names_the_file_that_differs(tmp_path: Path) -> None:
         "functions/f/vendor/lib_a/lib/src/b.dart differs from packages/lib_a/lib/src/b.dart"
         in refusal(root)
     )
+
+
+def test_the_proof_reads_the_index_once_for_many_copies_and_many_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hooks add no time: a gate load asks about the same copies again and again, and each new Git process costs about ten milliseconds."""
+    files = {".gitattributes": ""}
+    for index in range(8):
+        for name, text in SOURCE.items():
+            files[name.replace("lib_a", f"lib_{index}")] = text.replace(
+                "lib_a", f"lib_{index}"
+            )
+            files[name.replace("packages/lib_a", f"functions/f/vendor/lib_{index}")] = (
+                text.replace("lib_a", f"lib_{index}")
+            )
+        files[".gitattributes"] += (
+            f"functions/f/vendor/lib_{index}/** linguist-vendored\n"
+        )
+    root = project(tmp_path, files)
+    names = sorted(name for name in files if name.startswith("functions/"))
+    spy = mock.Mock(wraps=subprocess.run)
+    monkeypatch.setattr(subprocess, "run", spy)
+    for _ in range(5):
+        assert generated_sources(root, names) == set(names)
+    started = [
+        " ".join(call.args[0][3:5])
+        for call in spy.call_args_list
+        if call.args[0][0] == "git"
+    ]
+    assert started.count("ls-files -s") == 1, started
+    assert started.count("cat-file --batch") == 1, started
+    assert started.count("check-attr -z") <= 6, started
+    assert len(started) <= 8, started
+
+
+def test_the_refusal_headers_state_the_narrow_mark_rule() -> None:
+    """A header that says any marked file passes sends a reader to a mark that exempts nothing."""
+    from comments import COMMENT_HEADER, SWITCH_OFF_HEADER
+
+    for header in (COMMENT_HEADER, SWITCH_OFF_HEADER):
+        assert "exact path" in header
+        assert ".g.dart" in header
+
+
+def test_the_shell_gate_example_of_the_gate_guide_is_what_the_runner_runs() -> None:
+    """The guide shows the command that a project writes, so the runner adds nothing to it."""
+    from shellcheck_rc import ignoring_settings
+
+    guide = (HARD_ENG / ".agents/skills/he/references/gates.md").read_text()
+    found = re.search(r'\{"name": "shellcheck".*?"command": (\[[^\]]*\])\}', guide)
+    assert found
+    command = json.loads(found[1])
+    assert ignoring_settings(command) == command
+
+
+def test_the_proof_asks_git_only_for_the_pubspec_texts_after_the_load_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Load already lists the files with their blob ids and asks for their attributes, so the proof adds one `cat-file` and no second listing or attribute call."""
+    import generated_marks
+
+    root = project(tmp_path, {**SOURCE, **COPY, ".gitattributes": MARK})
+    generated_marks.reset()
+    names = generated_marks.listed_with_blobs(root)
+    spy = mock.Mock(wraps=subprocess.run)
+    monkeypatch.setattr(generated_marks.subprocess, "run", spy)
+    assert generated_sources(root, names) == set(COPY)
+    asked = [call.args[0][3] for call in spy.call_args_list]
+    assert sorted(asked) == ["cat-file", "check-attr"]
