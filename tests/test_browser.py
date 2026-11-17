@@ -1,5 +1,6 @@
 import fcntl
 import functools
+import hashlib
 import json
 import os
 import re
@@ -66,8 +67,7 @@ def stay_quiet(handler: Site, format: str, *arguments: object) -> None:
     del handler, format, arguments
 
 
-@pytest.fixture
-def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
+def serve_pages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
     monkeypatch.setattr(Site, "do_POST", sign_in, raising=False)
     monkeypatch.setattr(Site, "log_message", stay_quiet)
     pages = tmp_path / "pages"
@@ -82,7 +82,11 @@ def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
 
 
 @pytest.fixture
-def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
+    yield from serve_pages(tmp_path, monkeypatch)
+
+
+def load_browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     monkeypatch.setenv("PATH", os.environ["PATH"])
     import browser as module
 
@@ -93,6 +97,11 @@ def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
         Path(tempfile.gettempdir()) / "hard-eng-browser-profile.lock",
     )
     return module
+
+
+@pytest.fixture
+def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    return load_browser(monkeypatch)
 
 
 def no_provision(monkeypatch: pytest.MonkeyPatch, shared: Path) -> None:
@@ -131,7 +140,9 @@ def run_as_shell(step: str) -> None:
 
 
 def page(tmp_path: Path, name: str, body: str) -> None:
-    (tmp_path / "pages" / name).write_text(f"<!doctype html><body>{body}</body>")
+    (tmp_path / "pages" / name).write_text(
+        f"<!doctype html><html lang=en><title>Page</title><body>{body}</body>"
+    )
 
 
 def session() -> str:
@@ -421,7 +432,7 @@ def test_refuses_shared_sessions(
     assert name not in open_sessions(browser, tmp_path)
 
 
-def test_capture_draws_boxes_at_both_widths(
+def test_capture_draws_boxes_at_each_width(
     tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
 ) -> None:
     page(
@@ -430,6 +441,11 @@ def test_capture_draws_boxes_at_both_widths(
         "<style>body{margin:0;height:1600px}div{position:absolute;background:#def}</style>"
         "<div id=a style='left:20px;top:40px;width:100px;height:60px'></div>"
         "<div id=b style='left:30px;top:1100px;width:150px;height:80px'></div>",
+    )
+    page(
+        tmp_path,
+        "wide.html",
+        "<style>body{margin:0}div{width:900px;height:5px;background:#def}</style><div></div>",
     )
     name = session()
     code = browser.browser_command(
@@ -451,9 +467,27 @@ def test_capture_draws_boxes_at_both_widths(
     folder = tmp_path / ".hard-eng/browser"
     assert capsys.readouterr().out.split() == [
         str(folder / "boxes-390.png"),
+        str(folder / "boxes-768.png"),
         str(folder / "boxes-1280.png"),
     ]
-    for width in (390, 1280):
+    assert (
+        browser.browser_command(
+            tmp_path,
+            ["capture", f"{site}/wide.html", "--session", name, "--name", "wide"],
+        )
+        == 0
+    )
+    overflow = {
+        width: [
+            finding["rule"]
+            for finding in json.loads((folder / f"wide-{width}.json").read_text())[
+                "findings"
+            ]
+        ]
+        for width in (390, 768, 1280)
+    }
+    assert overflow == {390: ["overflow"], 768: ["overflow"], 1280: []}
+    for width in (390, 768, 1280):
         image_width, height, rows, step = decode(folder / f"boxes-{width}.png")
         assert image_width == width
         assert height >= 1600
@@ -463,6 +497,50 @@ def test_capture_draws_boxes_at_both_widths(
             assert is_red(rows, step, left + wide - 2, top + high // 2)
             assert not is_red(rows, step, left + wide // 2, top + high // 2)
     assert name not in open_sessions(browser, tmp_path)
+
+
+def test_measure_records_an_open_session_state(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(
+        tmp_path,
+        "state.html",
+        "<button id=show style='width:60px;height:44px;font-size:16px' "
+        "onclick=\"document.body.insertAdjacentHTML('beforeend',"
+        "'<p id=late style=font-size:12px>Opened</p>')\">Show</button>",
+    )
+    name = session()
+    plain_step(tmp_path, name, "set", "viewport", "768", "900")
+    plain_step(tmp_path, name, "open", f"{site}/state.html")
+    plain_step(tmp_path, name, "click", "#show")
+    plain_step(tmp_path, name, "wait", "#late")
+    code = browser.browser_command(
+        tmp_path,
+        ["measure", "--session", name, "--name", "state", "--ring", "#late"],
+    )
+    assert code == 0
+    folder = tmp_path / ".hard-eng/browser"
+    record = json.loads((folder / "state-768.json").read_text())
+    assert [item["rule"] for item in record["findings"]] == ["text-size"]
+    assert record["width"] == 768
+    image = folder / "state-768.png"
+    assert record["sha256"] == hashlib.sha256(image.read_bytes()).hexdigest()
+    _, _, rows, step = decode(image)
+    rect = json.loads(
+        json.loads(
+            plain_step(
+                tmp_path,
+                name,
+                "eval",
+                "JSON.stringify(document.querySelector('#late').getBoundingClientRect())",
+            )
+        )
+    )
+    assert is_red(
+        rows, step, int(rect["x"]) + 1, int(rect["y"]) + int(rect["height"]) // 2
+    )
+    assert name in open_sessions(browser, tmp_path)
+    plain_step(tmp_path, name, "close")
 
 
 def test_capture_places_fixed_bars_once_at_their_edge(
@@ -686,6 +764,8 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
                 return subprocess.CompletedProcess(arguments, 1, "", "session closed")
             return subprocess.CompletedProcess(arguments, 0, "0", "")
         reply = json.dumps("[]") if arguments[:1] == ("eval",) else ""
+        if arguments[:1] == ("a11y",):
+            reply = '{"data": {"violations": []}}'
         return subprocess.CompletedProcess(arguments, 0, reply, "")
 
     monkeypatch.setattr(browser, "ensure_tool", lambda: "agent-browser")
@@ -766,7 +846,7 @@ def test_skills_point_to_the_command() -> None:
         text = path.read_text()
         assert "e2e/references/browser.md#capture" in text, name
         assert not re.search(r"\b(390|1280)\b", text), name
-    assert "WIDTHS = (390, 1280)" in command
+    assert "WIDTHS = (390, 768, 1280)" in command
     assert "3px solid red" in command
 
 
