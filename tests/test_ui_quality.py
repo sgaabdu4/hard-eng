@@ -981,3 +981,15 @@ def test_a_plan_check_of_a_plan_without_a_visible_change_loads_no_ui_proof(
         check=True,
     )
     assert done.stdout.strip() == "[]"
+
+
+def test_a_video_after_alone_is_refused_on_a_visible_web_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = ship_setup(tmp_path, monkeypatch)
+    fake.attachment_response = (
+        "HTTP/2 206 Partial Content\ncontent-type: video/mp4\ncontent-length: 1\n"
+        "content-range: bytes 0-0/85098\n"
+    )
+    with pytest.raises(shipping.ShippingError, match="video"):
+        ready(fixture.root, fixture)
