@@ -622,24 +622,53 @@ def passed_branch_point(root: Path) -> str | None:
     return point
 
 
-def changed_paths(root: Path, owner: str, name: str, number: int) -> list[str]:
+def changed_files(
+    root: Path, owner: str, name: str, number: int
+) -> list[dict[str, JsonValue]]:
     endpoint = f"repos/{owner}/{name}/pulls/{number}/files?per_page=100"
     items = _api_items(root, endpoint, "files", "PR files query")
-    paths: list[str] = []
     for item in items:
         filename = item.get("filename")
         if not isinstance(filename, str) or not filename.strip():
             raise ShippingError("PR files query has an invalid filename")
-        paths.append(filename)
         previous = item.get("previous_filename")
-        if previous is not None:
-            if not isinstance(previous, str) or not previous.strip():
-                raise ShippingError("PR files query has an invalid previous filename")
-            paths.append(previous)
-    return sorted(set(paths))
+        if previous is not None and (
+            not isinstance(previous, str) or not previous.strip()
+        ):
+            raise ShippingError("PR files query has an invalid previous filename")
+    return items
 
 
-def _check_attachment(root: Path, url: str) -> None:
+def file_names(files: list[dict[str, JsonValue]]) -> list[str]:
+    """The new name of each changed file, and the old name of each renamed one."""
+    names: set[str] = set()
+    for item in files:
+        names.add(cast(str, item["filename"]))
+        if item.get("previous_filename") is not None:
+            names.add(cast(str, item["previous_filename"]))
+    return sorted(names)
+
+
+def download(root: Path, url: str) -> bytes:
+    """The raw bytes of a PR attachment, fetched with the user's own GitHub sign-in."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--method", "GET", url],
+            cwd=root,
+            capture_output=True,
+            timeout=_GH_TIMEOUT * 4,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ShippingError(
+            f"UI evidence attachment cannot be downloaded: {url}"
+        ) from error
+    if result.returncode != 0 or not result.stdout:
+        raise ShippingError(f"UI evidence attachment cannot be downloaded: {url}")
+    return result.stdout
+
+
+def _check_attachment(root: Path, url: str) -> str:
     parsed = urlparse(url)
     if (
         parsed.scheme != "https"
@@ -675,17 +704,37 @@ def _check_attachment(root: Path, url: str) -> None:
                 raise ValueError
         except ValueError as error:
             raise ShippingError("UI evidence attachment has invalid length") from error
+    return content_type
 
 
 def _ui_evidence(
-    root: Path, pull: _PullRequest, paths: list[str], policy: ShippingPolicy
+    root: Path,
+    pull: _PullRequest,
+    files: list[dict[str, JsonValue]],
+    policy: ShippingPolicy,
+    plan: Path | None,
 ) -> None:
     try:
-        urls = attachment_urls(pull.body, paths, policy["ui_paths"])
+        urls = attachment_urls(pull.body, file_names(files), policy["ui_paths"])
     except ValueError as error:
         raise ShippingError(str(error)) from error
-    for url in urls:
-        _check_attachment(root, url)
+    kinds = {url: _check_attachment(root, url) for url in urls}
+    from ui_proof import ship_problem
+
+    after = urls[len(urls) // 2 :]
+    problem = ship_problem(
+        root,
+        pull.head_sha,
+        pull.body,
+        cast(list[dict[str, object]], files),
+        policy["ui_paths"],
+        plan.read_text() if plan is not None and plan.is_file() else "",
+        [url for url in after if kinds[url].startswith("image/")],
+        download,
+        pull.base_ref,
+    )
+    if problem:
+        raise ShippingError(f"UI evidence: {problem}")
 
 
 def _root_and_branch(root: Path, require_branch: bool) -> tuple[Path, str, str]:
@@ -965,8 +1014,8 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
             revision = _delivered(resolved_root, pull, policy["base"], origin_url)
             merged_sha = revision
         if policy["ui_paths"]:
-            paths = changed_paths(resolved_root, owner, name, number)
-            _ui_evidence(resolved_root, pull, paths, policy)
+            files = changed_files(resolved_root, owner, name, number)
+            _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
         _checks(
             resolved_root,
             repository,

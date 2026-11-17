@@ -262,7 +262,7 @@ def _ui_fake(fixture: Fixture, *, body: str = _UI_BODY) -> FakeGitHub:
     return FakeGitHub(
         _pull(fixture, body=f"{body}\n{_UNDO}"),
         [_check(fixture.head)],
-        [{"filename": "src/App.tsx"}],
+        [{"filename": "src/App.ts", "patch": "@@ -1 +1 @@\n-a\n+b"}],
     )
 
 
