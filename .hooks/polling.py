@@ -11,14 +11,15 @@ REASON = (
 )
 
 
+UNQUOTE = str.maketrans("", "", "'\"\\")
 MERGE_WORDS = frozenset(("merge", "mergePullRequest", "enablePullRequestAutoMerge"))
 
 
 def holds_merge(command: str) -> bool:
-    """Whether the command has the word `gh` and a merge word, each as its own word and never a part of one."""
+    """Whether the command, with its quotes and backslashes removed, has the word `gh` and a merge word, each as its own word and never a part of one."""
     import re
 
-    words = set(re.findall(r"[A-Za-z0-9_]+", command))
+    words = set(re.findall(r"[A-Za-z0-9_]+", command.translate(UNQUOTE)))
     return "gh" in words and bool(words & MERGE_WORDS)
 
 
@@ -39,7 +40,8 @@ def decision(payload: object) -> dict[str, object] | None:
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    if "gh" in command and "erge" in command and holds_merge(command):
+    bare = command.translate(UNQUOTE)
+    if "gh" in bare and "erge" in bare and holds_merge(command):
         from pathlib import Path
 
         from merge_guard import merge_problem
