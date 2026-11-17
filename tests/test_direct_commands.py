@@ -146,3 +146,20 @@ def test_bun_runs_a_package_script_with_or_without_run(
     gate: Gate = {"name": "g", "role": "dead-code-duplicates", "command": command}
     with pytest.raises(ValueError, match="Fallow scans must check health"):
         validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize("command", [["true"], ["bun", "run", "lint"]])
+def test_a_report_key_does_not_excuse_a_gate_from_naming_its_tool(
+    command: list[str],
+) -> None:
+    """HE-NO-SWITCH-OFF: a `report` on a lint gate cannot stand in for the tool the role must run."""
+    from tool_setup import require_role_tool
+
+    gate: Gate = {
+        "name": "lint",
+        "role": "lint",
+        "command": command,
+        "report": {"type": "fallow", "path": "r.json"},
+    }
+    with pytest.raises(ValueError, match="must run `ruff check`"):
+        require_role_tool("python", gate, command)

@@ -203,7 +203,7 @@ def require_role_tool(language: str, gate: Gate, command: list[str]) -> None:
     """A required check that writes no report proves itself only by the tool it names."""
     role = str(gate.get("role"))
     tool = ROLE_TOOLS.get(language, {}).get(role)
-    if tool is None or gate.get("report"):
+    if tool is None:
         return
     words = [
         Path(word.strip("'\"();")).name.split("@", 1)[0]
