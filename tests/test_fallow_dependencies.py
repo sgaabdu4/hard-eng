@@ -29,7 +29,7 @@ def settings(**values: object) -> str:
         ("ios/App/Podfile", PODFILE),
         (
             "android/app/src/main/AndroidManifest.xml",
-            "<uses-permission name='@capacitor/camera'/>\n",
+            '<meta-data android:name="@capacitor/camera" android:value="1"/>\n',
         ),
         ("android/app/build.gradle", "implementation project(':@capacitor/camera')\n"),
         (
@@ -106,3 +106,39 @@ def test_an_unmatched_allowance_that_covers_every_file_is_refused(
     files = {"src/main.ts": "export {};\n", ".fallowrc.json": config}
     with pytest.raises(ValueError, match=r"allowUnmatched[\s\S]*every file"):
         validate_resolved(repo(tmp_path, files), groups(), 900)
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("docs/Podfile", "# notes: is-odd\n"),
+        ("ios/App/Podfile", "# pod 'is-odd'\n"),
+        ("ios/App/Podfile", "pod 'is-odd-extra'\n"),
+        ("android/app/build.gradle", "// project(':is-odd')\n"),
+        ("ios/App/Package.swift", "// is-odd\n"),
+    ],
+)
+def test_a_mention_that_is_not_a_dependency_does_not_prove_the_package_used(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a comment, a note outside a platform folder or a longer name is not a dependency form."""
+    files = {
+        "package.json": json.dumps({"dependencies": {"is-odd": "1.0.0"}}),
+        "src/main.ts": "export {};\n",
+        ".fallowrc.json": settings(ignoreDependencies=["is-odd"]),
+        name: text,
+    }
+    with pytest.raises(ValueError, match=r"ignoreDependencies lists 'is-odd'"):
+        validate_resolved(repo(tmp_path, files), groups(), 900)
+
+
+def test_a_real_dependency_form_in_a_platform_folder_proves_the_package(
+    tmp_path: Path,
+) -> None:
+    files = {
+        "package.json": json.dumps({"dependencies": {"is-odd": "1.0.0"}}),
+        "src/main.ts": "export {};\n",
+        ".fallowrc.json": settings(ignoreDependencies=["is-odd"]),
+        "ios/App/Podfile": "pod 'IsOdd', :path => '../../node_modules/is-odd'\n",
+    }
+    validate_resolved(repo(tmp_path, files), groups(), 900)

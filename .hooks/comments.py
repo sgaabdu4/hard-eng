@@ -714,10 +714,17 @@ SHELLCHECK_FIX = "read the file without a dynamic `source`"
 
 
 def followed_source(root: Path, name: str, marker: str) -> bool:
-    """A `shellcheck source=` that names a file in the project, which shellcheck then reads; /dev/null and a missing path hide the finding."""
-    target = marker.rpartition("source=")[2] if "source=" in marker else ""
-    return bool(target) and any(
-        (base / target).is_file() for base in (root / PurePosixPath(name).parent, root)
+    """A shellcheck directive that hides nothing: no `disable=` or `shell=` key, and every `source=` names a file in the project, which shellcheck then reads; /dev/null and a missing path hide the finding."""
+    keys = re.findall(r"([\w-]+)=(\S*)", marker)
+    if any(key in {"disable", "shell"} for key, _ in keys):
+        return False
+    sources = [value for key, value in keys if key == "source"]
+    return bool(sources) and all(
+        any(
+            (base / value).is_file()
+            for base in (root / PurePosixPath(name).parent, root)
+        )
+        for value in sources
     )
 
 
