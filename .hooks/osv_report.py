@@ -149,12 +149,15 @@ def osv_unfixed_only(path: Path) -> bool:
     """True when the report holds vulnerabilities and no release fixes any of them; a ValueError says what is fixable."""
     import freshness
 
-    report = json.loads(path.read_text())
-    if not any(
-        item.get("vulnerabilities")
-        for result in report["results"]
-        for item in result["packages"]
-    ):
+    try:
+        report = json.loads(path.read_text())
+        if not any(
+            item.get("vulnerabilities")
+            for result in report["results"]
+            for item in result["packages"]
+        ):
+            return False
+    except (KeyError, TypeError, AttributeError):
         return False
     validate_osv(path, unfixed=freshness.fetch_json)
     return True

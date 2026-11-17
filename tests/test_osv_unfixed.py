@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import freshness
+import osv_report
 import pytest
 import reports
 from gate_config import Gate, Group
@@ -211,6 +212,56 @@ def test_a_python_advisory_with_no_fix_passes_and_a_newer_release_fails(
     accepted(path, pypi("2.0", "2.1", "2.1rc1"))
     with pytest.raises(ValueError, match="2.1.post1"):
         accepted(path, pypi("2.1", "2.1.post1"))
+
+
+@pytest.mark.parametrize("release", ["2.1.post1", "2.1-1", "1!2.0", "2.1.1"])
+def test_a_python_release_that_may_sort_above_the_bound_fails(
+    tmp_path: Path, release: str
+) -> None:
+    item = package_item(
+        [{"introduced": "0"}, {"last_affected": "2.1"}],
+        version="2.1",
+        ecosystem="PyPI",
+        name="ex-ample",
+    )
+    with pytest.raises(ValueError, match="above"):
+        accepted(report_of(tmp_path, item), pypi("2.1", release))
+
+
+@pytest.mark.parametrize(
+    ("release", "passes"), [("4.0.7+1", False), ("4.0.7-rc.1", True)]
+)
+def test_a_pub_build_suffix_sorts_above_its_release_and_a_pre_release_below(
+    tmp_path: Path, release: str, passes: bool
+) -> None:
+    item = package_item(BOUNDED, ecosystem="Pub", name="ex")
+    registry = Registry(
+        {
+            "https://pub.dev/api/packages/ex": json.dumps(
+                {"versions": [{"version": "4.0.7"}, {"version": release}]}
+            )
+        }
+    )
+    if passes:
+        accepted(report_of(tmp_path, item), registry)
+    else:
+        with pytest.raises(ValueError, match="above"):
+            accepted(report_of(tmp_path, item), registry)
+
+
+def test_a_range_with_no_end_that_starts_after_zero_fails(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="does not start at 0"):
+        accepted(
+            report_of(tmp_path, package_item([{"introduced": "3.0.0"}])), npm("2.0.0")
+        )
+
+
+def test_a_report_the_scanner_wrote_with_no_results_is_not_accepted(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "osv.json"
+    path.write_text("{}")
+    assert not osv_report.osv_unfixed_only(path)
 
 
 def test_an_ecosystem_with_no_registry_reader_fails(tmp_path: Path) -> None:

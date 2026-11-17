@@ -9,6 +9,12 @@ from gate_config import JsonObject
 VERSION = re.compile(r"(\d+(?:\.\d+)*)(.*)", re.DOTALL)
 NAME_GAPS = re.compile(r"[-_.]+")
 Bound = tuple[int, ...]
+SEMVER_PRERELEASE = r"(-[0-9A-Za-z.-]+)?"
+PRERELEASE = {
+    "npm": re.compile(SEMVER_PRERELEASE + r"(\+[0-9A-Za-z.-]+)?"),
+    "Pub": re.compile(SEMVER_PRERELEASE),
+    "PyPI": re.compile(r"(\.?(a|b|c|rc|alpha|beta|pre|preview|dev)[.-]?\d*)?"),
+}
 READERS: dict[str, Callable[[str, Fetch], list[str]]] = {
     "npm": npm_versions,
     "PyPI": lambda name, fetch: list(pypi_releases(name, fetch)),
@@ -28,10 +34,10 @@ def release(version: object) -> tuple[Bound, str]:
     return tuple(numbers), found[2]
 
 
-def above(version: str, bound: Bound) -> bool:
-    """A suffix such as -rc.1 sorts below its release; .postN sorts above it."""
+def above(version: str, bound: Bound, ecosystem: str) -> bool:
+    """A pre-release suffix sorts below its release; any suffix not known as one may sort above it."""
     core, rest = release(version)
-    return core > bound or (core == bound and rest.lstrip(".-").startswith("post"))
+    return core > bound or not PRERELEASE[ecosystem].fullmatch(rest)
 
 
 def objects(value: object) -> list[JsonObject]:
@@ -61,6 +67,8 @@ def range_end(events: list[JsonObject]) -> Bound | None:
     if len(ends) > 1:
         raise ValueError("a range has two last_affected events")
     if not ends:
+        if {"introduced": "0"} not in events:
+            raise ValueError("a range with no end does not start at 0")
         return None
     core, rest = release(ends[0])
     if rest:
@@ -117,7 +125,7 @@ def accept_unfixed(item: JsonObject, fetch: Fetch) -> None:
         except (OSError, TypeError, ValueError) as error:
             raise ValueError(f"the registry could not be read: {error}") from error
         for other in versions:
-            if above(other, min(closed)):
+            if above(other, min(closed), ecosystem):
                 raise ValueError(f"the release {other} is above the affected range")
     print(
         f"OSV: {name}@{version} {', '.join(ids)}: no fixed release exists yet, so this passes; "
