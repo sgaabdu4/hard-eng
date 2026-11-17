@@ -225,6 +225,20 @@ def test_a_manager_flag_before_a_script_name_is_refused(
 
 
 @pytest.mark.parametrize(
+    "script",
+    ["bun --env-file=test.env test a.test.mjs --reporter=junit", "bun --silent test"],
+)
+def test_a_bun_built_in_after_a_flag_is_not_a_hidden_script(
+    tmp_path: Path, script: str
+) -> None:
+    """A flag hides a script name from the judges; a Bun built-in such as test names no script and runs no judged tool."""
+    scripted(tmp_path, {"test:performance": script})
+    validate_gate(
+        {"name": "g", "command": ["bun", "run", "test:performance"]}, tmp_path, set()
+    )
+
+
+@pytest.mark.parametrize(
     "command",
     [
         ["bunx", "fallow", "--fail-on-issues"],

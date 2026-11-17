@@ -832,6 +832,8 @@ def test_a_catch_all_generated_mark_hides_nothing(
         ("**/*.freezed.dart linguist-generated=true\n", "lib/x/b.freezed.dart"),
         ("functions/f/vendor/** linguist-vendored\n", "functions/f/vendor/c/m.py"),
         ("lib/gen/** linguist-generated=true\n", "lib/gen/m.py"),
+        ("functions/*/app_shared/** linguist-vendored\n", "functions/a/app_shared/m.py"),
+        ("functions/a/shared/** linguist-vendored\n", "functions/a/shared/m.py"),
     ],
 )
 def test_exact_suffix_and_vendor_marks_still_hide_generated_output(

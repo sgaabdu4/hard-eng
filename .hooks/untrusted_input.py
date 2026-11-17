@@ -74,12 +74,14 @@ def retire_covered_annotations(package: Group, template: Gate) -> None:
         extras = annotation_extras(gate["command"], template["command"])
         if extras:
             print(
-                f"Kept the project's annotations gate {gate['name']}: it adds {', '.join(extras)}; the template gate runs beside it."
+                f"Kept the project's annotations gate {gate['name']}: it adds {', '.join(extras)}; the template gate runs beside it.",
+                file=sys.stderr,
             )
         else:
             package["checks"].remove(gate)
             print(
-                f"Retired the project's annotations gate {gate['name']}: the template gate covers it."
+                f"Retired the project's annotations gate {gate['name']}: the template gate covers it.",
+                file=sys.stderr,
             )
 
 
