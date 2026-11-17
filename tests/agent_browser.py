@@ -11,6 +11,7 @@ from typing import Protocol
 
 from agent_actions import Action
 from agent_fixtures import GATES, changed_names, commit_change
+from browser import checkout_space
 from conftest import commit, git
 from test_browser import decode, is_red
 
@@ -147,14 +148,20 @@ class Finished(Protocol):
     def events(self) -> Path | None: ...
 
 
-def browser_processes() -> set[str]:
+def browser_processes(namespace: str | None = None) -> set[str]:
+    """Browser processes; with a namespace, only those whose environment carries it."""
     listing = subprocess.run(
-        ["ps", "-axo", "pid=,command="],
+        ["ps", "-axEwwo", "pid=,command="],
         capture_output=True,
         text=True,
         check=False,
     ).stdout
-    return {line.strip() for line in listing.splitlines() if PROCESS.search(line)}
+    mark = f"AGENT_BROWSER_NAMESPACE={namespace}" if namespace else ""
+    return {
+        line.strip()
+        for line in listing.splitlines()
+        if PROCESS.search(line) and mark in line
+    }
 
 
 def free_port() -> int:
@@ -298,9 +305,10 @@ def secret_failures(fixture: Finished) -> list[str]:
 
 def leftover_failures(root: Path) -> list[str]:
     before = set((root.parent / BASELINE).read_text().split())
+    own = checkout_space(root)["AGENT_BROWSER_NAMESPACE"]
     return [
         f"a browser process from the run is still running: {line[:100]}"
-        for line in sorted(browser_processes())
+        for line in sorted(browser_processes(own))
         if line.split()[0] not in before
     ]
 

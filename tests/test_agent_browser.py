@@ -3,6 +3,9 @@
 import os
 import re
 import struct
+import subprocess
+import sys
+import time
 import zlib
 from collections.abc import Callable
 from pathlib import Path
@@ -11,6 +14,7 @@ import agent_browser
 import pytest
 from agent_actions import Action
 from agent_checks import CASES, Run, fixture
+from browser import checkout_space
 from conftest import git
 
 BLACK = (0, 0, 0)
@@ -257,3 +261,33 @@ def test_a_map_run_adds_only_the_committed_feature_map(
     assert all(
         not other.feature_map for other in CASES if other.name != "browser-proof"
     )
+
+
+def sleeper(namespace: str) -> subprocess.Popen[bytes]:
+    return subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(120)", "agent-browser"],
+        env={**os.environ, "AGENT_BROWSER_NAMESPACE": namespace},
+    )
+
+
+def test_leftover_check_counts_only_the_browsers_of_this_run(tmp_path: Path) -> None:
+    """Another session's browser in the shared tool folder is not a leftover of this run; one in this run's namespace is."""
+    root = tmp_path / "run"
+    root.mkdir()
+    (tmp_path / agent_browser.BASELINE).write_text("")
+    other = sleeper("he-another-session")
+    try:
+        time.sleep(1)
+        assert agent_browser.leftover_failures(root) == []
+        own = sleeper(checkout_space(root)["AGENT_BROWSER_NAMESPACE"])
+        try:
+            time.sleep(1)
+            found = agent_browser.leftover_failures(root)
+            assert len(found) == 1
+            assert str(own.pid) in found[0]
+        finally:
+            own.kill()
+            own.wait()
+    finally:
+        other.kill()
+        other.wait()
