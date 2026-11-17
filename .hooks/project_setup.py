@@ -385,6 +385,42 @@ def adapt_packages(root: Path, config: GateConfig) -> None:
     refuse_ignored_locks(root, own, tracked, ask_git=True)
 
 
+OLD_STARTER_SCRIPTS = {
+    "fallow architecture --fail-on-issues",
+    "fallow architecture --boundaries --fail-on-issues",
+}
+GENERATED_BOUNDARY: Gate = {
+    "name": "lint:boundaries",
+    "role": "boundaries",
+    "command": ["bun", "run", "lint:boundaries"],
+}
+
+
+def retire_boundary_gate(root: Path, package: Group, changes: dict[str, str]) -> None:
+    """Remove the `lint:boundaries` gate that Hard Eng added and the starter script it ran, because the combined Fallow scan checks the boundary rules; a script or gate of the project's own stays."""
+    if package.get("language") == "dart" or GENERATED_BOUNDARY not in package["checks"]:
+        return
+    manifest = root / package["path"] / "package.json"
+    scripts = read_project_file(manifest).get("scripts", {})
+    body = scripts.get("lint:boundaries")
+    if body is not None and body not in OLD_STARTER_SCRIPTS:
+        return
+    package["checks"].remove(GENERATED_BOUNDARY)
+    if body is None:
+        return
+    lines = manifest.read_text().splitlines(keepends=True)
+    at = next(
+        number
+        for number, line in enumerate(lines)
+        if line.lstrip().startswith('"lint:boundaries"')
+    )
+    last = not lines[at].rstrip().endswith(",")
+    del lines[at]
+    if last and at:
+        lines[at - 1] = lines[at - 1].rstrip().removesuffix(",") + "\n"
+    changes[str(manifest.relative_to(root))] = "".join(lines)
+
+
 def adapt_boundaries(package: Group) -> None:
     if package.get("language") == "dart" and any(
         dart_scan_includes_boundaries(gate) for gate in package["checks"]
@@ -917,7 +953,6 @@ def adapt_javascript(directory: Path, package: Group, manager: str) -> None:
         ("test:integration", "integration"),
         ("test:ui", "ui"),
         ("check:generated", "generated"),
-        ("lint:boundaries", "boundaries"),
     ):
         if script in manifest.get("scripts", {}):
             package["checks"].append(

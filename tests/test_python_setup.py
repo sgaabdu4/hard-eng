@@ -147,8 +147,7 @@ def test_standalone_python_does_not_invent_import_architecture(
     installer.configure_typing_checks(package)
     annotations = [gate for gate in package["checks"] if gate["role"] == "annotations"]
     assert len(annotations) == 1
-    assert "main.py" in annotations[0]["command"]
-    assert "src" not in annotations[0]["command"]
+    assert annotations[0]["command"][:3] == ["ruff", "check", "."]
 
 
 def test_a_python_parent_leaves_out_child_groups_that_have_the_same_gate(

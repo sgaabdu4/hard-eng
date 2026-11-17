@@ -12,6 +12,7 @@ from conftest import commit, git, init
 from dart_boundaries import nested_package_patterns, validate_dart_boundaries
 from fallow_report import Report, validate_scanner_command
 from gate_config import (
+    Gate,
     GateConfig,
     Group,
     json_file,
@@ -168,7 +169,7 @@ def test_react_and_existing_project_scripts_are_gated(
     assert checks["build"]["command"] == ["bun", "run", "build"]
     assert checks["integration"]["command"] == ["bun", "run", "test:integration"]
     assert checks["generated"]["command"] == ["bun", "run", "check:generated"]
-    assert checks["boundaries"]["command"] == ["bun", "run", "lint:boundaries"]
+    assert "boundaries" not in checks
     assert checks["react"]["report"]["type"] == "react-doctor"
     assert checks["tests"]["command"][0] == "bun"
 
@@ -192,26 +193,68 @@ def test_a_typescript_package_needs_no_separate_boundary_gate(
     validate_required_checks(tmp_path, config)
 
 
-def test_an_update_adds_no_boundary_gate_and_keeps_a_project_own(
+GENERATED_BOUNDARY = {
+    "name": "lint:boundaries",
+    "role": "boundaries",
+    "command": ["bun", "run", "lint:boundaries"],
+}
+OLD_STARTER = '{\n\t"scripts": {\n\t\t"lint:boundaries": "fallow architecture --fail-on-issues"\n\t}\n}\n'
+
+
+def with_boundary_gate(
+    installer: ModuleType, root: Path, manifest: str, extra: Gate | None
+) -> dict[str, list[dict[str, object]]]:
+    repository(root)
+    (root / "package.json").write_text(manifest)
+    (root / "app.ts").write_text("export const value = 1;\n")
+    config = installer.gate_config(root)
+    config["packages"][0]["checks"].append(extra or GENERATED_BOUNDARY)
+    (root / "hard-eng.gates.json").write_text(json.dumps(config))
+    installer.install(root)
+    return json.loads((root / "hard-eng.gates.json").read_text())["packages"][0]
+
+
+def test_an_update_removes_the_boundary_gate_and_starter_script_it_added(
     installer: ModuleType, tmp_path: Path
 ) -> None:
-    repository(tmp_path)
-    (tmp_path / "app.ts").write_text("export const value = 1;\n")
-    config = installer.gate_config(tmp_path)
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+    """Hard Eng added a `lint:boundaries` gate and an old starter script; both go, and a second update changes nothing."""
+    package = with_boundary_gate(installer, tmp_path, OLD_STARTER, None)
+    assert not any(gate.get("role") == "boundaries" for gate in package["checks"])
+    assert "lint:boundaries" not in (tmp_path / "package.json").read_text()
+    json.loads((tmp_path / "package.json").read_text())
+    before = snapshot(tmp_path)
     installer.install(tmp_path)
-    installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
-    checks = installed["packages"][0]["checks"]
-    assert not any(gate.get("role") == "boundaries" for gate in checks)
-    own = {
+    assert snapshot(tmp_path) == before
+
+
+def test_an_update_keeps_a_project_own_boundary_gate(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    own: Gate = {
         "name": "project-architecture",
         "role": "boundaries",
         "command": ["bun", "run", "project-architecture"],
     }
-    checks.append(own)
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(installed))
-    installer.install(tmp_path)
-    assert json.loads((tmp_path / "hard-eng.gates.json").read_text()) == installed
+    package = with_boundary_gate(installer, tmp_path, '{"scripts": {}}', own)
+    assert own in package["checks"]
+    custom = '{"scripts": {"lint:boundaries": "node check-boundaries.mjs"}}'
+    package = with_boundary_gate(installer, tmp_path / "again", custom, None)
+    assert GENERATED_BOUNDARY in package["checks"]
+    assert "node check-boundaries.mjs" in (tmp_path / "again/package.json").read_text()
+
+
+def test_a_boundaries_script_makes_no_gate_mandatory(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    """The mandatory-check message and the boundaries refusal must never ask for what the other refuses."""
+    repository(tmp_path)
+    (tmp_path / "package.json").write_text(OLD_STARTER)
+    (tmp_path / "app.ts").write_text("export const value = 1;\n")
+    config = installer.gate_config(tmp_path)
+    assert not any(
+        gate.get("role") == "boundaries" for gate in config["packages"][0]["checks"]
+    )
+    validate_required_checks(tmp_path, config)
 
 
 def test_dart_update_consolidates_generated_scans_and_preserves_custom_checks(

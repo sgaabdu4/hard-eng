@@ -148,3 +148,37 @@ def test_a_setting_that_can_only_add_findings_passes(
 ) -> None:
     root = project(tmp_path, settings)
     validate_resolved(root, groups(["uvx", "ruff@latest", "check", "."], "lint"), 900)
+
+
+ANNOTATIONS = [
+    "uvx",
+    "ruff@latest",
+    "check",
+    ".",
+    "--select",
+    "ANN,TID251,RUF017,ASYNC210",
+    "--config",
+    "lint.flake8-annotations.ignore-fully-untyped = false",
+]
+
+
+@pytest.mark.parametrize(
+    "select", ["ANN001", "ANN", "ANN,TID251,RUF017", "E", "ANN,RUF017,ASYNC210"]
+)
+def test_an_annotations_gate_that_drops_a_rule_of_its_set_is_refused(
+    tmp_path: Path, select: str
+) -> None:
+    """HE-NO-SWITCH-OFF: the annotations gate keeps every rule of the template set, as lint keeps Ruff's defaults."""
+    root = project(tmp_path, "")
+    command = [*ANNOTATIONS[:5], select, *ANNOTATIONS[6:]]
+    with pytest.raises(ValueError, match=r"lacks \d+ of the annotation rules"):
+        validate_resolved(root, groups(command, "annotations"), 900)
+
+
+@pytest.mark.parametrize("select", ["ANN,TID251,RUF017,ASYNC210", "ALL"])
+def test_an_annotations_gate_that_keeps_its_set_passes(
+    tmp_path: Path, select: str
+) -> None:
+    root = project(tmp_path, "")
+    command = [*ANNOTATIONS[:5], select, *ANNOTATIONS[6:]]
+    validate_resolved(root, groups(command, "annotations"), 900)

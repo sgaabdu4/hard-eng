@@ -51,8 +51,7 @@
           "command": [
             "ruff",
             "check",
-            "src",
-            "tests",
+            ".",
             "--select",
             "ANN,TID251,RUF017,ASYNC210",
             "--config",
