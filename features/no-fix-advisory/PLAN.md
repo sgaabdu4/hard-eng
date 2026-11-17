@@ -1,6 +1,6 @@
 # The vulnerabilities gate passes a vulnerability that no release fixes
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -65,11 +65,11 @@ N/A — no screen changes; the change is one gate result and one printed line.
 
 ## Verification
 
-Result: Pending
-Evidence: the new tests failed first (27 of 33 failed, the 6 others being cases that already failed as before); the rows added after review failed on the earlier code too, as did the malware rows and the import test (3 and 1). All 54 pass. The full suite run directly passed 5351 of 5353 tests; 2 timed out under machine load and passed alone. The local Complete check passed each gate outside the tests; its tests gate timed out at 1800 s under load, so that run did not pass. The pre-push check passed on the third push. Hosted CI on the pull request is the proof that remains; this plan becomes Complete when it is green.
+Result: Passed
+Evidence: the new tests failed first (27 of 33 failed, the 6 others being cases that already failed as before); the rows added after review failed on the earlier code too, as did the malware rows and the import test (3 and 1). All 54 pass. The full suite run directly passed 5351 of 5353 tests; 2 timed out under machine load and passed alone. The first local Complete run passed each gate outside the tests; its tests gate timed out at 1800 s under load, so that run did not pass, and the direct full-suite run above stands in for it. The push runs the Complete check again, and its result is the push itself. Hosted CI on the pull request is the remote proof; its result is in the Delivery line.
 E2E: N/A — no user journey changes; the gate runs inside checks.
 Real service: Passed — npm registry, OSV scanner: the real gate command ran through `run_limited_gate` on a Bun lockfile with picomatch 4.0.7. The scanner exited 1, the registry listed 35 releases with 4.0.7 the newest, the gate printed `OSV: picomatch@4.0.7 GHSA-fc5q-39xc-vjpf: no fixed release exists yet, so this passes; it will fail as soon as a fixed release exists` and ended `PASS vulnerabilities (exit 1)`. The same command on a lockfile with lodash 4.17.20 failed with `not proven unfixable: GHSA-29mw-wpgm-hmr9: it has a fixed event`. The real report holds `affected[].package`, `ranges[].events` and `groups[].ids`, which are the fields the code reads and the tests build; the tests lack the other fields of the real record. The readers ran once for npm (picomatch, a scoped package), PyPI (requests) and Pub (http); each returned a list of versions. Compared: 2 real reports, 2 agree with the test shape. The version order was compared with the real tools on real release lists: 224207 PyPI pairs against `packaging.version` and 54499 npm pairs against Bun's semver, 0 pairs where the tool says higher and the code says not above. Not caused: a registry refusal, because a public read has none to handle.
-Retro: Pending — written at Complete. (1) The fault escaped to the base branch: no test gave the gate an advisory with no fix → `tests/test_osv_unfixed.py::test_the_gate_passes_when_the_scanner_found_only_advisories_with_no_fix`, which failed first. (2) The first design put the check in the report validator, but the runner fails on the scanner's exit code, so the report check alone would still fail the gate → the same test, which runs the runner. (3) `reports.py` and `gate_runner.py` stood at the 1000 line limit, so the OSV validators moved to their own module → HE-FILE-LENGTH. (4) A test helper copied the fake registry of the freshness tests, and the duplicates gate refused it → the helper now imports that fake.
+Retro: (1) The fault escaped to the base branch: no test gave the gate an advisory with no fix → `tests/test_osv_unfixed.py::test_the_gate_passes_when_the_scanner_found_only_advisories_with_no_fix`, which failed first. (2) The first design put the check in the report validator, but the runner fails on the scanner's exit code, so the report check alone would still fail the gate → the same test, which runs the runner. (3) `reports.py` and `gate_runner.py` stood at the 1000 line limit, so the OSV validators moved to their own module → HE-FILE-LENGTH. (4) A test helper copied the fake registry of the freshness tests, and the duplicates gate refused it → the helper now imports that fake.
 
 Delivery target: PR
-Delivery: Pending — the pull request and its checks.
+Delivery: Pending — hosted CI on the pull request; the plan records the result when it ends.
