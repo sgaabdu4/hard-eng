@@ -287,12 +287,12 @@ def test_a_local_bin_file_named_like_the_tool_is_refused(tmp_path: Path) -> None
 
 
 def test_a_local_bin_link_into_the_tool_package_passes(tmp_path: Path) -> None:
-    scripted(tmp_path, {"scan": "fallow --fail-on-issues"})
-    put_bin(tmp_path, "fallow", "fallow")
-    validate_gate({"name": "g", "command": ["bun", "run", "scan"]}, tmp_path, set())
+    scripted(tmp_path, {"lint": "ruff check ."})
+    put_bin(tmp_path, "ruff", "ruff")
+    validate_gate({"name": "g", "command": ["bun", "run", "lint"]}, tmp_path, set())
     other = tmp_path / "other"
     other.mkdir()
-    scripted(other, {"scan": "fallow --fail-on-issues"})
-    put_bin(other, "fallow", None)
-    with pytest.raises(ValueError, match=r"node_modules/\.bin/fallow"):
-        validate_gate({"name": "g", "command": ["bun", "run", "scan"]}, other, set())
+    scripted(other, {"lint": "ruff check ."})
+    put_bin(other, "ruff", None)
+    with pytest.raises(ValueError, match=r"node_modules/\.bin/ruff"):
+        validate_gate({"name": "g", "command": ["bun", "run", "lint"]}, other, set())
