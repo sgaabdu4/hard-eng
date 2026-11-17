@@ -35,3 +35,26 @@ def test_a_shellcheck_directive_that_hides_nothing_passes(
 ) -> None:
     files = {"build.sh": f"#!/bin/bash\n# shellcheck {directive}\n", "lib.sh": "x=1\n"}
     validate_whole_project(project(tmp_path, files))
+
+
+GRADLEW = "#!/bin/sh\n# shellcheck disable=SC2039,SC3045\nx=1\n"
+
+
+def test_a_generated_gradle_wrapper_is_exempt_through_gitattributes(
+    tmp_path: Path,
+) -> None:
+    """The wrapper's directives come from Gradle: the existing `linguist-generated` route exempts it, with no path list."""
+    files = {
+        "app/gradlew": GRADLEW,
+        ".gitattributes": "app/gradlew linguist-generated=true\n",
+    }
+    validate_whole_project(project(tmp_path, files))
+
+
+def test_a_gradle_wrapper_that_is_not_marked_generated_names_the_route(
+    tmp_path: Path,
+) -> None:
+    message = refusal(project(tmp_path, {"app/gradlew": GRADLEW}))
+    assert "app/gradlew:2" in message
+    assert "linguist-generated=true" in message
+    assert ".gitattributes" in message

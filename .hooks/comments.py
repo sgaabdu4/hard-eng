@@ -739,7 +739,13 @@ def security_hits(
         elif (hit := SECURITY_OFF.search(text)) and not followed_source(
             root, name, hit[0]
         ):
-            fix = f"; {SHELLCHECK_FIX}" if "shellcheck" in hit[0] else ""
+            fix = (
+                f"; {SHELLCHECK_FIX}"
+                if "shellcheck" in hit[0] and "disable=" not in hit[0]
+                else ""
+            )
+            if PurePosixPath(name).name == "gradlew":
+                fix += "; Gradle generates this wrapper: mark it `<path> linguist-generated=true` in .gitattributes"
             found.append(f"{name}:{number} {verb} {hit[0]!r}{fix}")
         elif entries and entry and not entry.startswith("#"):
             found.append(f"{name}:{number} {verb} {entry!r}")
