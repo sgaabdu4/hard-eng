@@ -96,6 +96,12 @@ DIRECT_FORMS = (
 )
 
 
+def flagged_built_in(arguments: list[str]) -> bool:
+    """Flags then a package-manager command that runs no script (`bun --env-file=x test`): no script name is hidden."""
+    rest = [word for word in arguments[1:] if not word.startswith("-")]
+    return bool(rest) and rest[0] in PACKAGE_COMMANDS - {"run", "run-script", "x"}
+
+
 def refusal(reason: str) -> ValueError:
     return ValueError(
         "HE-NO-SWITCH-OFF: A gate that runs ruff, cargo, clippy, fallow or gitleaks must run it directly, "
