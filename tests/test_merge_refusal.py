@@ -96,6 +96,15 @@ REFUSED = [
     "G=gh; $G pr merge 12 --rebase",
     "echo 'gh pr merge 12 --rebase' | bash",
     "echo gh pr merge 12",
+    "command gh pr merge 12 --rebase --match-head-commit " + HEAD,
+    'sh -c "gh pr merge 12 --rebase"',
+    'bash -c "gh pr merge 12 --rebase"',
+    "env gh pr merge 12 --rebase --match-head-commit " + HEAD,
+    "gh --repo=o/r pr merge 12 --rebase --match-head-commit " + HEAD,
+    "gh pr 'me'rge 12 --rebase",
+    'gh pr "mer"ge 12 --rebase',
+    "g'h' pr merge 12 --rebase",
+    "gh pr me\\rge 12 --rebase",
     "bash <<< 'gh pr merge 12 --rebase'",
     "bash -c -- 'gh pr merge 12 --rebase'",
     "echo `gh pr merge 12`",
@@ -117,6 +126,7 @@ ALLOWED = [
     'git commit -m "merge notes"',
     "gh api repos/o/r/pulls/12",
     "gh pr view 12 --json mergeStateStatus,mergeCommit",
+    'gh pr view 12 --json "mergeStateStatus"',
     "gh pr merge 12 --rebase --match-head-commit " + HEAD,
     "gh pr merge https://github.com/o/r/pull/12 --rebase --match-head-commit " + HEAD,
     "ls",
@@ -219,7 +229,10 @@ def test_setup_installs_the_codex_merge_rule(tmp_path: Path) -> None:
     setup.configure_hooks(root, changes)
     rules = changes[".codex/rules/hard-eng.rules"]
     patterns = [json.loads(m) for m in re.findall(r"pattern = (\[.*\]),", rules)]
-    wanted = [["gh", "pr", "merge"], ["env", "gh", "pr", "merge"]]
+    wanted = [["gh", "pr", "merge"]]
+    wanted += [
+        [word, "gh", "pr", "merge"] for word in ("env", "command", "xargs", "exec")
+    ]
     wanted += [[f"{folder}/gh", "pr", "merge"] for folder in HOMES]
     assert sorted(map(str, patterns)) == sorted(map(str, wanted))
     assert rules.count('decision = "forbidden"') == len(wanted)
