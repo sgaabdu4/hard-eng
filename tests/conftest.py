@@ -322,6 +322,7 @@ def visual_plan(completed_plan: str) -> str:
         "Surface: Existing — /account, rendered by app/account/page.tsx\n"
         "Before: ![Before](https://example.test/account-before.png)\n"
         "Proposed: ![Proposed](https://example.test/account-proposed.png)\n"
+        "Controls: None — the fixture changes only wording.\n"
         "Capture: Native browser test account.spec.ts passed the route and screen assertions.\n"
         "Review: Inspected both account captures at the same viewport; only the proposed label differs.\n"
         + ux_rules_block(),

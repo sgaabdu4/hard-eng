@@ -357,7 +357,11 @@ def judged_rules(content: str, age: Callable[[], bool] | None) -> None:
 
 
 def ux_proof(
-    content: str, *, legacy: bool = False, age: Callable[[], bool] | None = None
+    content: str,
+    *,
+    legacy: bool = False,
+    age: Callable[[], bool] | None = None,
+    root: Path | None = None,
 ) -> None:
     if NOT_APPLICABLE_WITH_REASON.fullmatch(content.strip()):
         return
@@ -393,6 +397,9 @@ def ux_proof(
     for name in ("Capture", "Review"):
         evidence_field(content, name)
     if not legacy:
+        from plan_controls import judged_controls
+
+        judged_controls(content, root, age)
         judged_rules(content, age)
 
 
@@ -402,6 +409,7 @@ def readiness_errors(
     *,
     legacy: bool = False,
     age: Callable[[], bool] | None = None,
+    root: Path | None = None,
 ) -> list[str]:
     errors = []
     for name in ("Baseline + execution", "ux_reference"):
@@ -409,7 +417,7 @@ def readiness_errors(
             if name == "Baseline + execution":
                 proof(sections[name], {"Passed"})
             else:
-                ux_proof(sections[name], legacy=legacy, age=age)
+                ux_proof(sections[name], legacy=legacy, age=age, root=root)
         except ValueError as error:
             errors.append(f"{name}: {error}")
     from plan_coverage import coverage_errors
@@ -607,7 +615,11 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
         return asked[0]
 
     soft = age if status == "Complete" else None
-    errors = readiness_errors(sections, status, legacy=legacy, age=soft)
+    from plan_controls import plan_root
+
+    errors = readiness_errors(
+        sections, status, legacy=legacy, age=soft, root=plan_root(path)
+    )
     if errors:
         raise ValueError("; ".join(errors))
     newer_fields(sections, status, legacy=legacy, changed=changed, age=soft)

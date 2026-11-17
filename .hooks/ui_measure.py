@@ -5,7 +5,13 @@ import json
 import subprocess
 from pathlib import Path
 
-LIMITS = {"text_px": 14, "control_px": 44, "link_px": 24, "accent_colours": 2}
+LIMITS = {
+    "text_px": 14,
+    "control_px": 44,
+    "link_px": 24,
+    "accent_colours": 2,
+    "secondary_words": 20,
+}
 PROOF_KINDS = {
     "Mistake-proof": "judgement",
     "Least effort": "judgement",
@@ -98,6 +104,70 @@ for (const [parent, members] of groups) {
     }
   }
   if (colours.size > LIMITS.accent_colours) found.push({ rule: "accent-colours", at: name(block), colours: colours.size });
+}
+const textOf = (el) => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let out = "";
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.parentElement && visible(n.parentElement)) out += n.nodeValue;
+  return (el.value && el.tagName === "INPUT" ? el.value : out).trim();
+};
+const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const labelled = (el) => ["aria-label", "aria-labelledby", "title"].some((a) => (el.getAttribute(a) || "").trim());
+const selectorOf = (el) => el.tagName.toLowerCase() + (el.getAttribute("name") ? `[name="${el.getAttribute("name")}"]` : "");
+const BUTTONS = "button,[role=button],input[type=button],input[type=submit]";
+for (const input of document.querySelectorAll("input[type=password]")) {
+  if (!visible(input)) continue;
+  const r = input.getBoundingClientRect();
+  const scope = input.form || input.parentElement;
+  for (const b of scope.querySelectorAll(BUTTONS)) {
+    const br = b.getBoundingClientRect();
+    const gap = Math.max(br.left - r.right, r.left - br.right);
+    const centre = (br.top + br.bottom) / 2;
+    if (!visible(b) || b.type === "submit" || gap > 24 || centre < r.top - 4 || centre > r.bottom + 4) continue;
+    const text = textOf(b);
+    const why = !overlaps(br, r) ? "reveal control outside the field" : text ? "reveal control with text" : !labelled(b) ? "reveal control without a label" : "";
+    if (why) found.push({ rule: "field-control", at: text || name(b), selector: selectorOf(input), why });
+  }
+}
+const searches = new Set(document.querySelectorAll("input[type=search], [role=search] input:not([type=hidden],[type=submit],[type=button],[type=checkbox],[type=radio])"));
+for (const input of searches) {
+  if (!visible(input)) continue;
+  const r = input.getBoundingClientRect();
+  const scope = input.form || input.closest("[role=search]") || input.parentElement;
+  const icon = getComputedStyle(input).backgroundImage !== "none" || [...scope.querySelectorAll("svg,img,i")].some((i) => {
+    const b = i.getBoundingClientRect();
+    return visible(i) && (b.left + b.right) / 2 > r.left && (b.left + b.right) / 2 < r.right && (b.top + b.bottom) / 2 > r.top && (b.top + b.bottom) / 2 < r.bottom;
+  });
+  const submits = [...scope.querySelectorAll("button:not([type=button],[type=reset]),input[type=submit]")].filter(visible);
+  const labelledButtons = submits.filter((b) => textOf(b));
+  if (icon && labelledButtons.length) found.push({ rule: "field-control", at: name(input), selector: selectorOf(input), why: "search text button beside a field with an icon" });
+  if (!icon) found.push({ rule: "field-control", at: name(input), selector: selectorOf(input), why: "search field without an icon inside" });
+}
+const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+const backdrop = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (opaque(c)) return rgb(c).slice(0, 3); } return [255, 255, 255]; };
+const contrastOf = (el) => { const a = lum(rgb(getComputedStyle(el).color).slice(0, 3)), b = lum(backdrop(el)); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+const bodyPx = parseFloat(getComputedStyle(document.body).fontSize), bodyContrast = contrastOf(document.body);
+const SKIP = "a,button,label,legend,th,td,dt,summary,input,select,textarea,option,time,data,output,meter,nav,pre,code,[role=alert],[aria-live],h1,h2,h3,h4,h5,h6";
+const lineOf = (el) => {
+  const text = textOf(el);
+  const words = text.split(/\\s+/).filter(Boolean);
+  if (!text || el.closest(SKIP) || /error|invalid|alert/i.test(el.className + " " + el.id)) return null;
+  if (words.length <= 3 && /[0-9]/.test(text)) return null;
+  const s = getComputedStyle(el);
+  const secondary = parseFloat(s.fontSize) < bodyPx - 0.5 || contrastOf(el) <= bodyContrast - 3;
+  return secondary ? { el, words: words.length } : null;
+};
+const HEADINGS = "h1,h2,h3,h4,h5,h6";
+for (const heading of document.querySelectorAll(HEADINGS)) {
+  if (!visible(heading)) continue;
+  let top = heading;
+  while (top.parentElement && !["BODY", "MAIN"].includes(top.parentElement.tagName) && top.parentElement.querySelectorAll(HEADINGS).length === 1) top = top.parentElement;
+  const roots = [];
+  if (top !== heading) roots.push(top);
+  else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
+  const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
+  if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
+  for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
 }
 if (document.documentElement.scrollWidth > innerWidth + 1) {
   found.push({ rule: "overflow", at: "page", scrollWidth: document.documentElement.scrollWidth, width: innerWidth });
