@@ -548,3 +548,17 @@ def test_an_installed_pre_release_fails_when_a_later_release_exists(
 def test_an_installed_pre_release_passes_when_it_is_the_newest(tmp_path: Path) -> None:
     item = package_item(OPEN, version="1.0.0-beta.1")
     accepted(report_of(tmp_path, item), npm("0.9.0", "1.0.0-beta.1"))
+
+
+def test_an_open_range_still_counts_when_the_same_advisory_has_a_closed_range(
+    tmp_path: Path,
+) -> None:
+    ranges = [
+        {"type": "SEMVER", "events": OPEN},
+        {"type": "SEMVER", "events": [{"introduced": "0"}, {"last_affected": "1.0.2"}]},
+    ]
+    entry = {"package": {"ecosystem": "npm", "name": "picomatch"}, "ranges": ranges}
+    item = package_item(OPEN, version="1.0.0")
+    item["vulnerabilities"] = [{"id": ID, "affected": [entry]}]
+    with pytest.raises(ValueError, match="release 1.0.1 is above"):
+        accepted(report_of(tmp_path, item), npm("1.0.0", "1.0.1"))

@@ -88,7 +88,7 @@ def range_end(events: list[JsonObject]) -> Bound | None:
 
 
 def last_affected(advisory: JsonObject, ecosystem: str, name: str) -> Bound | None:
-    """Where the advisory's ranges end; None when each range is open. Any fixed event is an error."""
+    """Where the advisory's ranges end; None when any range is open. Any fixed event is an error."""
     ranges = [
         found
         for entry in objects(advisory.get("affected"))
@@ -100,7 +100,7 @@ def last_affected(advisory: JsonObject, ecosystem: str, name: str) -> Bound | No
     if not ranges:
         raise ValueError(f"it has no range for {name}")
     ends = [range_end(objects(found.get("events"))) for found in ranges]
-    return min((end for end in ends if end is not None), default=None)
+    return None if None in ends else min(end for end in ends if end is not None)
 
 
 def malicious(advisory: JsonObject) -> bool:
