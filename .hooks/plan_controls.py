@@ -1,16 +1,36 @@
 """The `Controls:` line of a visible-change plan: each control names the shared part it reuses, or a new part with a mockup that `look` has opened."""
 
-import fnmatch
-import json
 import os
-import re
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
-REUSE = re.compile(r".+ — reuses `([^`\s]+)`")
-NEW = re.compile(r".+ — new `[^`\s]+`( — mockup !\[[^\]\n]*\]\(([^)\s]+)\))?")
-NONE = re.compile(r"None — \S.*")
-CONTROLS_LINE = re.compile(r"(?m)^Controls: *(.*)$")
+MOCKUP_OPEN = " — mockup !["
+
+
+def plain_word(text: str) -> bool:
+    return bool(text) and not any(c.isspace() or c == "`" for c in text)
+
+
+def reused_part(entry: str) -> str | None:
+    head, found, rest = entry.partition(" — reuses `")
+    part = rest[:-1]
+    return part if head and found and rest.endswith("`") and plain_word(part) else None
+
+
+def new_part(entry: str) -> tuple[bool, str | None]:
+    """Whether the entry is a `— new` entry, and the mockup path it names, if any."""
+    head, found, rest = entry.partition(" — new `")
+    part, tick, tail = rest.partition("`")
+    if not (head and found and tick and plain_word(part)):
+        return False, None
+    if not tail:
+        return True, None
+    inner = tail[len(MOCKUP_OPEN) :].removesuffix(")")
+    alt, close, url = inner.partition("](")
+    shaped = tail.startswith(MOCKUP_OPEN) and tail.endswith(")") and close
+    clean = "]" not in alt and "\n" not in alt and ")" not in url
+    named = bool(url) and not any(c.isspace() for c in url)
+    return (True, url) if shaped and clean and named else (False, None)
 
 
 def plan_root(plan: Path) -> Path | None:
@@ -21,6 +41,7 @@ def plan_root(plan: Path) -> Path | None:
 
 
 def looked_hashes(root: Path) -> set[str]:
+    import json
     import subprocess
 
     """The hashes of the images that a `look` record of this checkout says were opened."""
@@ -78,6 +99,9 @@ def part_problem(part: str, root: Path, tracked: bool = False) -> str | None:
         )
     if tracked and not is_tracked(part, root):
         return f"Controls: the shared part `{part}` is not a tracked file"
+    import fnmatch
+    import json
+
     try:
         policy = json.loads((root / "hard-eng.gates.json").read_text())
         patterns = policy["shipping"]["ui_paths"]
@@ -89,24 +113,24 @@ def part_problem(part: str, root: Path, tracked: bool = False) -> str | None:
 
 
 def entry_problem(entry: str, root: Path | None, tracked: bool = False) -> str | None:
-    if reused := REUSE.fullmatch(entry):
-        return None if root is None else part_problem(reused[1], root, tracked)
-    new = NEW.fullmatch(entry)
-    if new is None:
+    if reused := reused_part(entry):
+        return None if root is None else part_problem(reused, root, tracked)
+    is_new, mockup = new_part(entry)
+    if not is_new:
         return f"Controls: `{entry}` needs `— reuses `<repo path>`` or `— new `<repo path>` — mockup ![..](..)``"
-    if new[2] is None:
+    if mockup is None:
         return f"Controls: the new shared part in `{entry}` needs a mockup image"
-    return None if root is None else mockup_problem(entry, new[2], root)
+    return None if root is None else mockup_problem(entry, mockup, root)
 
 
 def controls_problem(
     content: str, root: Path | None, tracked: bool = False
 ) -> str | None:
-    found = CONTROLS_LINE.findall(content)
+    found = [line[9:] for line in content.splitlines() if line.startswith("Controls:")]
     if len(found) != 1 or not found[0].strip():
         return "ux_reference needs one `Controls:` line: each changed or new control with the shared part it reuses, or `None — reason`"
     line = found[0].strip()
-    if NONE.fullmatch(line):
+    if line.startswith("None — ") and line[7:8].strip():
         return None
     problems = (entry_problem(entry, root, tracked) for entry in line.split("; "))
     return next((problem for problem in problems if problem), None)
