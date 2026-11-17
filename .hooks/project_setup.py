@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+from command_words import PACKAGE_COMMANDS
 from coverage_sources import owned_files, source_roots
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
@@ -187,6 +188,15 @@ def gate_script_arguments(group: Group, gate: Gate, directory: Path) -> list[str
         raise TypeError(f"{group['path']}: gate {gate['name']}: {error}") from error
 
 
+def project_scripts(directory: Path) -> dict[str, object]:
+    """The scripts of the folder's package.json, or none when it has no readable one."""
+    try:
+        scripts = read_project_file(directory / "package.json").get("scripts", {})
+    except (OSError, ValueError, TypeError):
+        return {}
+    return scripts if isinstance(scripts, dict) else {}
+
+
 def package_script_invocation(
     command: list[str], directory: Path, bun_only: bool = False
 ) -> tuple[list[str], Path]:
@@ -206,6 +216,14 @@ def package_script_invocation(
                 raise ValueError(
                     "Use an explicit package directory and run script for verification; package selectors are not supported"
                 )
+        if (
+            executable in {"pnpm", "yarn", "bun"}
+            and len(arguments) > 1
+            and arguments[1] not in PACKAGE_COMMANDS
+            and not arguments[1].startswith("-")
+            and arguments[1] in project_scripts(directory)
+        ):
+            arguments = [arguments[0], "run", *arguments[1:]]
         if (
             executable not in {"npm", "pnpm", "yarn", "bun"}
             or len(arguments) <= 2
