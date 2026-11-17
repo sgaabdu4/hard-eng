@@ -92,7 +92,24 @@ def last_affected(advisory: JsonObject, ecosystem: str, name: str) -> Bound | No
     return min((end for end in ends if end is not None), default=None)
 
 
+def malicious(advisory: JsonObject) -> bool:
+    """The marks that the real report of a malicious npm package holds: the MAL- id, the origins key of the malicious-packages feed and CWE-506."""
+    special = advisory.get("database_specific")
+    special = special if isinstance(special, dict) else {}
+    return (
+        str(advisory.get("id")).startswith("MAL-")
+        or "malicious-packages-origins" in special
+        or "CWE-506" in texts(special.get("cwe_ids") or [])
+    )
+
+
 def bound_of(advisory: JsonObject, ecosystem: str, name: str) -> Bound | None:
+    if "withdrawn" in advisory:
+        raise ValueError(f"{advisory.get('id')}: it is withdrawn but still reported")
+    if malicious(advisory):
+        raise ValueError(
+            f"{advisory.get('id')}: it is a malicious package record, which has no fix by design"
+        )
     try:
         return last_affected(advisory, ecosystem, name)
     except ValueError as error:

@@ -336,3 +336,52 @@ def test_the_gate_fails_when_the_scanner_exits_1_and_the_report_holds_no_finding
 ) -> None:
     clean: Item = {"package": {"name": "a", "version": "1", "ecosystem": "npm"}}
     assert run_gate(runner, tmp_path, monkeypatch, 1, clean)
+
+
+MALICIOUS = Path(__file__).parent / "fixtures/osv/malicious-osv.json"
+FLATMAP = "https://registry.npmjs.org/flatmap-stream"
+
+
+def real_malware_report(tmp_path: Path, keep: str, open_range: bool = False) -> Path:
+    report = json.loads(MALICIOUS.read_text())
+    package = report["results"][0]["packages"][0]
+    package["vulnerabilities"] = [
+        found for found in package["vulnerabilities"] if found["id"] == keep
+    ]
+    package["groups"] = [{"ids": [keep]}]
+    if open_range:
+        entry = package["vulnerabilities"][0]["affected"][0]
+        entry["ranges"] = [{"type": "SEMVER", "events": [{"introduced": "0"}]}]
+    path = tmp_path / "osv.json"
+    path.write_text(json.dumps(report))
+    return path
+
+
+def flatmap() -> Registry:
+    return Registry({FLATMAP: json.dumps({"versions": {"0.1.1": {}}})})
+
+
+@pytest.mark.parametrize(
+    ("keep", "open_range"),
+    [("MAL-2025-20690", False), ("GHSA-9x64-5r7x-2q53", True)],
+    ids=["osv-malicious-package-record", "reviewed-advisory-for-embedded-malware"],
+)
+def test_a_malicious_package_record_never_passes_as_having_no_fix(
+    tmp_path: Path, keep: str, open_range: bool
+) -> None:
+    path = real_malware_report(tmp_path, keep, open_range)
+    with pytest.raises(ValueError, match="malicious"):
+        accepted(path, flatmap())
+
+
+def test_a_record_that_is_withdrawn_but_still_reported_fails(tmp_path: Path) -> None:
+    item = package_item(BOUNDED)
+    item["vulnerabilities"] = [
+        {
+            "id": ID,
+            "withdrawn": "2026-01-01T00:00:00Z",
+            "affected": [affected(BOUNDED, "npm", "picomatch")],
+        }
+    ]
+    with pytest.raises(ValueError, match="withdrawn"):
+        accepted(report_of(tmp_path, item), npm("4.0.7"))
