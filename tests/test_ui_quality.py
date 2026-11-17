@@ -882,13 +882,13 @@ def test_ux_text_names_the_gap_items() -> None:
         FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
     ).read_text()
     for words in (
-        "least cognitive load",
+        "think and remember as little as possible",
         "Alignment:",
         "Spacing:",
         "Design system:",
         "plain, calm and positive",
         "phone 390, tablet 768 and desktop 1280 px",
-        "A typed Pass is a record, not proof",
+        "A Pass you type is a record, not proof",
     ):
         assert words in reference, words
 
