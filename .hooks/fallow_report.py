@@ -234,6 +234,7 @@ FALLOW_VALUES = {
     "--max-crap",
     "--gate",
     "--base",
+    "--coverage",
 }
 FALLOW_SWITCHES = {"--fail-on-issues", "--quiet", "-q", "--no-cache"}
 

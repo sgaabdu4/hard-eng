@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from fallow_table import judge
+from project_files import GIT_LISTING
 from scope_check import glob_regex, left_out, refusal, tracked
 
 
@@ -151,12 +152,57 @@ def covering(checked: set[str], found: dict[str, str]) -> Callable[[str], str]:
     return covered
 
 
+def written_coverage(directory: Path, reports: list[str]) -> set[Path]:
+    """The Istanbul map that Hard Eng writes beside each report of a tests gate in the group."""
+    return {
+        (directory / Path(report).parent / "coverage-final.json").resolve()
+        for report in reports
+    }
+
+
+def committed(directory: Path, path: Path) -> bool:
+    done = subprocess.run(
+        [*GIT_LISTING, "ls-files", "--error-unmatch", str(path)],
+        cwd=directory,
+        capture_output=True,
+        check=False,
+    )
+    return done.returncode == 0
+
+
+def proved_hits(
+    printed: dict[str, object], directory: Path, proof: tuple[list[str], str | None]
+) -> list[str]:
+    """Settings judged by what proves them: coverage that the group's own tests write, and boundaries that cover every file."""
+    reports, flag = proof
+    hits = []
+    health = printed.get("health")
+    coverage = health.get("coverage") if isinstance(health, dict) else None
+    for value in [*([str(coverage)] if coverage else []), *([flag] if flag else [])]:
+        path = (directory / value).resolve()
+        if path not in written_coverage(directory, reports) or committed(
+            directory, path
+        ):
+            hits.append(
+                f"health.coverage is {value}; Fallow may read only the coverage-final.json that a tests gate writes in this group, and never a committed file"
+            )
+    boundaries = printed.get("boundaries")
+    if isinstance(boundaries, dict) and boundaries.get("zones"):
+        coverage = boundaries.get("coverage")
+        if not (isinstance(coverage, dict) and coverage.get("requireAllFiles") is True):
+            hits.append(
+                "boundaries must set coverage.requireAllFiles to true, so no file escapes its zones"
+            )
+    return hits
+
+
 def fallow_hits(
     directory: Path,
     config: str | None,
     children: frozenset[str],
     defaults: dict[str, object],
     timeout: float,
+    proof: tuple[list[str], str | None] = ([], None),
 ) -> list[str]:
     printed = printed_config(directory, config, timeout)
     checked = listed_files(directory, config, timeout)
@@ -164,4 +210,8 @@ def fallow_hits(
     drop = pattern_hits(directory, children)
     found = entry_sources(directory, printed, timeout) if printed.get("entry") else {}
     covered = covering(checked, found)
-    return [*judge(printed, defaults, drop, covered), *refusal(left)]
+    return [
+        *judge(printed, defaults, drop, covered),
+        *proved_hits(printed, directory, proof),
+        *refusal(left),
+    ]

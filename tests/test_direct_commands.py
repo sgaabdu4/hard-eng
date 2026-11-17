@@ -120,3 +120,14 @@ def test_the_runner_executes_the_arguments_the_judge_reads(
     judged = direct(command, tmp_path)
     assert judged is not None
     assert managed_command(command, tmp_path)[-len(judged) + 1 :] == judged[1:]
+
+
+def test_fix_in_a_ruff_gate_is_refused(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: `--fix` rewrites the files, so the findings it fixes never fail the gate."""
+    gate: Gate = {
+        "name": "lint",
+        "role": "lint",
+        "command": ["ruff", "check", ".", "--fix"],
+    }
+    with pytest.raises(ValueError, match="--fix"):
+        validate_gate(gate, tmp_path, set())

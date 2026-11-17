@@ -8,8 +8,8 @@ COMPLEXITY_CODES = {"C901", "PLR0912", "PLR0915"}
 
 RUFF_KEYS = {
     "cache_dir": "free",
-    "fix": "free",
-    "fix_only": "free",
+    "fix": "equal",
+    "fix_only": "equal",
     "output_format": "free",
     "output_prefer_rule_codes": "free",
     "show_fixes": "free",
@@ -19,15 +19,15 @@ RUFF_KEYS = {
     "linter.rules.should_fix": "free",
     "linter.per_file_ignores": "equal",
     "linter.exclude": "equal",
-    "linter.unresolved_target_version": "free",
-    "linter.per_file_target_version": "free",
+    "linter.unresolved_target_version": "version",
+    "linter.per_file_target_version": "equal",
     "linter.preview": "free",
     "linter.explicit_preview_rules": "free",
-    "linter.extension": "free",
+    "linter.extension": "equal",
     "linter.src": "free",
-    "linter.tab_size": "free",
-    "linter.line_length": "free",
-    "linter.task_tags": "free",
+    "linter.tab_size": "equal",
+    "linter.line_length": "width",
+    "linter.task_tags": "equal",
     "linter.allowed_confusables": "equal",
     "linter.builtins": "equal",
     "linter.dummy_variable_rgx": "equal",
@@ -38,7 +38,7 @@ RUFF_KEYS = {
     "linter.typing_modules": "equal",
     "linter.typing_extensions": "equal",
     "linter.mccabe.max_complexity": "limit",
-    "linter.pycodestyle.max_line_length": "free",
+    "linter.pycodestyle.max_line_length": "width",
     "linter.pycodestyle.max_doc_length": "free",
     "linter.pylint.max_args": "limit",
     "linter.pylint.max_positional_args": "limit",
@@ -58,11 +58,11 @@ RUFF_PREFIXES = {
     "linter.safety_table.": "free",
     "linter.isort.": "free",
     "linter.flake8_quotes.": "free",
-    "linter.flake8_copyright.": "free",
     "linter.flake8_pytest_style.": "free",
     "linter.flake8_tidy_imports.": "free",
     "linter.flake8_import_conventions.": "free",
     "linter.flake8_annotations.": "equal",
+    "linter.flake8_copyright.": "equal",
     "linter.flake8_bandit.": "equal",
     "linter.flake8_bugbear.": "equal",
     "linter.flake8_builtins.": "equal",
@@ -137,8 +137,17 @@ def number_of(entries: list[str]) -> float | None:
         return None
 
 
-def judge(key: str, value: list[str], default: list[str], role: object) -> list[str]:
+VERSION = re.compile(r"(\d+)\.(\d+)")
+
+
+def judge(
+    key: str,
+    value: list[str],
+    default: list[str],
+    context: tuple[object, set[str], tuple[int, int] | None],
+) -> list[str]:
     """What one printed setting does wrong, by its class."""
+    role, codes, minimum = context
     kind = classify(key)
     if kind is None:
         return [f"{key} is a setting that no table classes: class it in ruff_table.py"]
@@ -150,6 +159,17 @@ def judge(key: str, value: list[str], default: list[str], role: object) -> list[
             return [f"the resolved {key} is {value[:1]}, above the limit {default[:1]}"]
     if kind == "rules":
         return rule_hits(enabled(value), enabled(default), role)
+    if kind == "width":
+        now, base = number_of(value), number_of(default)
+        if "E501" in codes and now is not None and base is not None and now > base:
+            return [
+                f"the resolved {key} is {value[0]}, above Ruff's {default[0]} while E501 is on: a longer line hides its findings"
+            ]
+    found = VERSION.search(" ".join(value)) if kind == "version" and minimum else None
+    if found and minimum and (int(found[1]), int(found[2])) < minimum:
+        return [
+            f"the resolved target version {found[0]} is below the requires-python minimum {minimum[0]}.{minimum[1]}: a lower target hides pyupgrade findings"
+        ]
     return []
 
 
@@ -162,11 +182,14 @@ def rule_hits(codes: set[str], defaults: set[str], role: object) -> list[str]:
     return hits
 
 
-def ruff_hits(settings: str, defaults: str, role: object) -> list[str]:
+def ruff_hits(
+    settings: str, defaults: str, role: object, minimum: tuple[int, int] | None = None
+) -> list[str]:
     """What the resolved settings of one gate drop, key by key, compared with Ruff's own defaults."""
     printed, base = parse(settings), parse(defaults)
+    context = (role, enabled(printed.get("linter.rules.enabled", [])), minimum)
     return [
         hit
         for key, value in printed.items()
-        for hit in judge(key, value, base.get(key, []), role)
+        for hit in judge(key, value, base.get(key, []), context)
     ]

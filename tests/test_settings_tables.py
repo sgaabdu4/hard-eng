@@ -6,11 +6,22 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from fallow_table import FALLOW_KEYS, FALLOW_PREFIXES, flatten
-from ruff_table import RUFF_KEYS, RUFF_PREFIXES, classify, parse
+from fallow_table import FALLOW_KEYS, FALLOW_PREFIXES, flatten, judge
+from ruff_table import RUFF_KEYS, RUFF_PREFIXES, classify, parse, ruff_hits
 from test_fallow_resolved import need_fallow
 
-CLASSES = {"free", "equal", "limit", "limits", "rules", "named", "patterns"}
+CLASSES = {
+    "free",
+    "equal",
+    "limit",
+    "limits",
+    "rules",
+    "named",
+    "patterns",
+    "width",
+    "version",
+    "proved",
+}
 
 
 def test_every_class_in_the_tables_is_known() -> None:
@@ -73,3 +84,14 @@ def test_a_nested_block_is_not_read_as_keys() -> None:
     entry = '\tabsolute_matcher = "/x/a.py"\nbasename_matcher = "a.py"\ndata = [\n\tunused-import (F401),\n]\n\n'
     text = f"linter.per_file_ignores = {{\n{entry}{entry}}}\nlinter.line_length = 88\n"
     assert sorted(parse(text)) == ["linter.line_length", "linter.per_file_ignores"]
+
+
+def test_a_ruff_setting_that_no_table_classes_is_refused() -> None:
+    """HE-NO-SWITCH-OFF: a key that the tables do not class fails, so a new tool setting cannot pass unseen."""
+    hits = ruff_hits("linter.made_up_key = 1\n", "", "lint")
+    assert any("no table classes" in hit for hit in hits)
+
+
+def test_a_fallow_setting_that_no_table_classes_is_refused() -> None:
+    hits = judge({"madeUpKey": 1}, {}, lambda patterns: [], lambda glob: "")
+    assert any("no table classes" in hit for hit in hits)
