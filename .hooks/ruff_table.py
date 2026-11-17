@@ -37,6 +37,7 @@ RUFF_KEYS = {
     "linter.namespace_packages": "equal",
     "linter.typing_modules": "equal",
     "linter.typing_extensions": "equal",
+    "linter.flake8_tidy_imports.banned_api": "holds",
     "linter.mccabe.max_complexity": "limit",
     "linter.pycodestyle.max_line_length": "width",
     "linter.pycodestyle.max_doc_length": "free",
@@ -159,6 +160,10 @@ def judge(
             return [f"the resolved {key} is {value[:1]}, above the limit {default[:1]}"]
     if kind == "rules":
         return rule_hits(enabled(value), enabled(default), role)
+    if kind == "holds" and (missing := [line for line in default if line not in value]):
+        return [
+            f"the resolved {key} lacks {missing[0]!r}: the annotations gate keeps every banned import of the template"
+        ]
     if kind == "width":
         now, base = number_of(value), number_of(default)
         if "E501" in codes and now is not None and base is not None and now > base:
