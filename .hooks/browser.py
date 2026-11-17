@@ -328,7 +328,7 @@ def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
 
 def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object]]:
     """The faults of the page as it is now: the page script and axe, before anything draws on it."""
-    from ui_measure import AXE_TAGS, axe_findings, measure_script
+    from ui_measure import AXE_TAGS, axe_findings, decoration_script, measure_script
 
     reply = require(
         run_tool(tool, folder, session, "eval", "--stdin", text=measure_script())
@@ -336,7 +336,19 @@ def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object
     audit = require(
         run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
     )
-    return [*json.loads(json.loads(reply)), *axe_findings(audit)]
+    found = [*json.loads(json.loads(reply)), *axe_findings(audit)]
+    contrast = [item for item in found if item["rule"] == "contrast"]
+    if not contrast:
+        return found
+    selectors = [str(item["at"]) for item in contrast]
+    reply = require(
+        run_tool(
+            tool, folder, session, "eval", "--stdin", text=decoration_script(selectors)
+        )
+    )
+    flags = json.loads(json.loads(reply))
+    skipped = [item for item, flag in zip(contrast, flags, strict=True) if flag]
+    return [item for item in found if not any(item is gone for gone in skipped)]
 
 
 def shoot_page(

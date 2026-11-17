@@ -30,6 +30,7 @@ PROOF_KINDS = {
     "Widths": ("measured",),
     "Performance": ("test",),
 }
+DECORATION = '[aria-hidden="true"],[role=img],[role=presentation]'
 AXE_TAGS = "wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa"
 AXE_NAMES = {
     "color-contrast": "contrast",
@@ -49,7 +50,7 @@ const visible = (el) => {
   const b = el.getBoundingClientRect();
   const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
   const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
-  return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
+  return !el.closest(DECORATION_JSON) && !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
 };
 const rgb = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
 const opaque = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); };
@@ -204,7 +205,16 @@ return JSON.stringify(found);
 
 
 def measure_script() -> str:
-    return MEASURE_SCRIPT.replace("LIMITS_JSON", json.dumps(LIMITS))
+    script = MEASURE_SCRIPT.replace("LIMITS_JSON", json.dumps(LIMITS))
+    return script.replace("DECORATION_JSON", json.dumps(DECORATION))
+
+
+def decoration_script(selectors: list[str]) -> str:
+    return (
+        f"JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
+        f"return Boolean(document.querySelector(s)?.closest({json.dumps(DECORATION)})); "
+        "} catch { return false; } }))"
+    )
 
 
 def axe_findings(output: str) -> list[dict[str, object]]:

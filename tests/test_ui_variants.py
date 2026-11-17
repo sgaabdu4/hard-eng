@@ -121,6 +121,41 @@ def test_a_mock_up_with_text_below_the_floor_reports_only_the_text_size(
         assert set(found[width]) == {"text-size"}, (width, found[width])
 
 
+DECOR = (
+    "<div {mark}><h3>Today</h3>"
+    f"<p style='{SMALL}'>Patient one</p><p style='{SMALL}'>Patient two</p>"
+    "<p style='font-size:14px;color:#cccccc;margin:0'>Faint line</p>"
+    "<span style='background:#d33;color:#fff;font-size:14px'>Red</span>"
+    "<span style='background:#3a3;color:#fff;font-size:14px'>Green</span>"
+    "<span style='background:#33d;color:#fff;font-size:14px'>Blue</span>"
+    "</div>"
+)
+
+
+@pytest.mark.parametrize(
+    "mark",
+    ["aria-hidden='true'", "role=img aria-label='App preview'", "role=presentation"],
+)
+def test_a_decorative_mock_up_is_not_page_text(
+    tmp_path: Path, site: str, browser: ModuleType, mark: str
+) -> None:
+    limit_page(
+        tmp_path, f"<section><h2>Preview</h2>{DECOR.format(mark=mark)}</section>"
+    )
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
+
+
+def test_the_same_mock_up_without_a_mark_is_measured(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    limit_page(tmp_path, f"<section><h2>Preview</h2>{DECOR.format(mark='')}</section>")
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert {"text-size", "contrast"} <= set(found[width]), (width, found[width])
+
+
 def test_a_search_icon_drawn_by_the_wrapper_counts_as_inside_the_field(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
