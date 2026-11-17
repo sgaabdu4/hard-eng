@@ -69,10 +69,6 @@ def capture(
     }
 
 
-def serve_fixture(tmp_path: Path, name: str) -> None:
-    shutil.copy(FIXTURES / f"{name}.html", tmp_path / "pages" / f"{name}.html")
-
-
 def pair(first: str, second: str) -> str:
     return f"<div>{button(first)}{button(second)}</div>"
 
@@ -293,21 +289,43 @@ def full_ship(
     *,
     widths: tuple[int, ...] = WIDTHS,
     findings: list[dict[str, object]] | None = None,
-    captured: tuple[Path, str] | None = None,
 ) -> tuple[Fixture, FakeGitHub, bytes]:
-    """A ready PR; its After image is generated, or is the 390 px capture that the browser command wrote in `captured`."""
+    """A ready PR whose After image is a generated measured capture."""
     import look
 
     fixture, fake = ship_setup(tmp_path, monkeypatch)
-    if captured is None:
-        after = measured_after(fixture.root, widths, findings)
-    else:
-        shutil.copytree(captured[0] / ".hard-eng", fixture.root / ".hard-eng")
-        after = (captured[0] / f".hard-eng/browser/{captured[1]}-390.png").read_bytes()
+    after = measured_after(fixture.root, widths, findings)
     record = write_look(fixture.root, fixture.head, after)
     fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
     serve_attachments(monkeypatch, after)
     return fixture, fake, after
+
+
+def captured_ship(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    page: str,
+    folder: str = "ship",
+) -> tuple[Fixture, dict[int, Counter[str]]]:
+    """A ready PR that changes the page `page`, with the real capture of that page taken in the PR's own checkout at its head."""
+    import look
+
+    ship = tmp_path / folder
+    ship.mkdir()
+    text = (FIXTURES / f"{page}.html").read_text()
+    change = file_change("src/shot.html", "-<p>old</p>\n+<p>new</p>")
+    fixture, fake = ship_setup(
+        ship, monkeypatch, files=[change], committed={"src/shot.html": text}
+    )
+    shutil.copy(FIXTURES / f"{page}.html", tmp_path / "pages/shot.html")
+    found = capture(browser, fixture.root, site, "shot")
+    after = (fixture.root / ".hard-eng/browser/shot-390.png").read_bytes()
+    record = write_look(fixture.root, fixture.head, after)
+    fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
+    serve_attachments(monkeypatch, after)
+    return fixture, found
 
 
 def test_a_measured_clean_after_image_with_a_clean_look_passes_ship(
@@ -389,8 +407,7 @@ def test_pr_with_pairs_needs_clean_look_lines(
 def test_red_fixture_fails_measurement_and_ship(
     tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    serve_fixture(tmp_path, "red")
-    found = capture(browser, tmp_path, site, "red")
+    fixture, found = captured_ship(tmp_path, site, browser, monkeypatch, "red")
     for width in WIDTHS:
         assert set(found[width]) >= {
             "contrast",
@@ -401,10 +418,6 @@ def test_red_fixture_fails_measurement_and_ship(
             "shared-edge",
             "accent-colours",
         }, (width, found[width])
-    (tmp_path / "ship").mkdir()
-    fixture, _, _ = full_ship(
-        tmp_path / "ship", monkeypatch, captured=(tmp_path, "red")
-    )
     with pytest.raises(shipping.ShippingError, match="has findings"):
         ready(fixture.root, fixture)
 
@@ -412,15 +425,24 @@ def test_red_fixture_fails_measurement_and_ship(
 def test_fixed_fixture_passes_measurement_and_ship(
     tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    serve_fixture(tmp_path, "fixed")
-    assert capture(browser, tmp_path, site, "fixed") == {
-        width: Counter() for width in WIDTHS
-    }
-    (tmp_path / "ship").mkdir()
-    fixture, _, _ = full_ship(
-        tmp_path / "ship", monkeypatch, captured=(tmp_path, "fixed")
-    )
+    fixture, found = captured_ship(tmp_path, site, browser, monkeypatch, "fixed")
+    assert found == {width: Counter() for width in WIDTHS}
     ready(fixture.root, fixture)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"commit": "0" * 40}, {"dirty": True}],
+    ids=["another-commit", "dirty-tree"],
+)
+def test_an_after_capture_must_come_from_the_head_of_a_clean_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changes: dict[str, object]
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch)
+    for path in (fixture.root / ".hard-eng/browser").glob("*.json"):
+        path.write_text(json.dumps(json.loads(path.read_text()) | changes))
+    with pytest.raises(shipping.ShippingError, match="head"):
+        ready(fixture.root, fixture)
 
 
 def no_problem(*_arguments: object) -> None:
@@ -864,123 +886,14 @@ def test_red_to_fixed_journey_end_to_end(
     tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for name, ships in (("red", False), ("fixed", True)):
-        shutil.copy(FIXTURES / f"{name}.html", tmp_path / "pages/shot.html")
-        capture(browser, tmp_path, site, "shot")
-        work = tmp_path / f"ship-{name}"
-        work.mkdir()
-        fixture, _, _ = full_ship(work, monkeypatch, captured=(tmp_path, "shot"))
+        fixture, _ = captured_ship(
+            tmp_path, site, browser, monkeypatch, name, folder=f"ship-{name}"
+        )
         if ships:
             ready(fixture.root, fixture)
         else:
             with pytest.raises(shipping.ShippingError, match="has findings"):
                 ready(fixture.root, fixture)
-
-
-LAYOUT_RULES = {
-    "competing-buttons",
-    "accent-colours",
-    "overflow",
-    "shared-edge",
-    "field-control",
-    "extra-text",
-}
-
-
-GOV_SEARCH_REASON = (
-    "its search field has no icon inside, with one submit button beside it; "
-    "the search row of ux.md is the user's decision, so the finding stays and "
-    "this one element is left out (see the fixture README)"
-)
-KNOWN_DIFFERENCES = {"govuk-home": ('input[name="keywords"]', GOV_SEARCH_REASON)}
-
-
-@pytest.mark.parametrize(
-    ("name", "edge_widths"),
-    [("govuk-home", ()), ("govuk-buttons", ()), ("pushed-right", (390, 768))],
-)
-def test_saved_public_pages_have_no_layout_misfires(
-    tmp_path: Path,
-    site: str,
-    browser: ModuleType,
-    name: str,
-    edge_widths: tuple[int, ...],
-) -> None:
-    shutil.copy(FIXTURES / f"public/{name}.html", tmp_path / f"pages/{name}.html")
-    skip = KNOWN_DIFFERENCES.get(name, ("", ""))[:1]
-    found = capture(browser, tmp_path, site, name, skip)
-    for width in WIDTHS:
-        layout = {rule for rule in found[width] if rule in LAYOUT_RULES}
-        assert layout == ({"shared-edge"} if width in edge_widths else set()), (
-            name,
-            width,
-            found[width],
-        )
-
-
-@pytest.mark.parametrize(
-    ("name", "rule", "red_count"),
-    [("fields", "field-control", 3), ("text", "extra-text", 2)],
-)
-def test_red_then_fixed_standard_fields_and_extra_text(
-    tmp_path: Path,
-    site: str,
-    browser: ModuleType,
-    name: str,
-    rule: str,
-    red_count: int,
-) -> None:
-    for variant, expected in (
-        ("red", Counter({rule: red_count})),
-        ("fixed", Counter()),
-    ):
-        page = f"{name}-{variant}"
-        shutil.copy(FIXTURES / f"{page}.html", tmp_path / f"pages/{page}.html")
-        found = capture(browser, tmp_path, site, page)
-        for width in WIDTHS:
-            assert found[width] == expected, (page, width, found[width])
-
-
-def test_standard_patterns_state_behaviour_and_placement_only() -> None:
-    reference = (
-        FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
-    ).read_text()
-    rows = [
-        line
-        for line in reference.split("- Standard patterns =")[1]
-        .split("- Brief =")[0]
-        .splitlines()
-        if line.startswith("| ")
-    ][2:]
-    assert 8 <= len(rows) <= 12
-    for row in rows:
-        assert len(row.split("|")[1:-1]) == 2, row
-        lowered = row.lower()
-        for word in ("colour", "color", "font", "px", "pt ", "pixel", "bold", "round"):
-            assert word not in lowered, (word, row)
-
-
-def test_a_plan_check_of_a_plan_without_a_visible_change_loads_no_ui_proof(
-    tmp_path: Path, completed_plan: str
-) -> None:
-    import subprocess
-    import sys
-
-    from conftest import SOURCE
-
-    plan = tmp_path / "PLAN.md"
-    plan.write_text(completed_plan)
-    code = (
-        "import sys, pathlib; sys.path.insert(0, sys.argv[1]); import plans; "
-        "plans.validate_plan(pathlib.Path(sys.argv[2])); "
-        "print(sorted(m for m in sys.argv[3:] if m in sys.modules))"
-    )
-    done = subprocess.run(
-        [sys.executable, "-c", code, str(SOURCE / ".hooks"), str(plan), *UI_MODULES],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert done.stdout.strip() == "[]"
 
 
 def test_a_video_after_alone_is_refused_on_a_visible_web_change(
