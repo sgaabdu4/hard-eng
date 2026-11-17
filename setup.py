@@ -159,6 +159,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
         merged = merge(current, additions)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
+    changes.update(agent_hooks.codex_rule_change(root))
     from mcp_setup import retire_copilot_hooks
 
     return retire_copilot_hooks(root, command)

@@ -138,8 +138,14 @@ def ui_problem(
     """The screen-evidence form of a PR that changes a UI file; CI has no captures, so it checks forms only."""
     from look import block_problem
     from ship_evidence import UI_APPEARANCE_UNCHANGED, attachment_urls
-    from shipping import ShippingError, changed_files, file_names, gh
-    from ui_proof import Change, reference_problem, visible_files
+    from shipping import ShippingError, gh
+    from ui_proof import (
+        Change,
+        changed_files,
+        file_names,
+        reference_problem,
+        visible_files,
+    )
 
     owner, _, name = repository.partition("/")
     number, head_sha = pull

@@ -1,4 +1,4 @@
-"""Claude Code PreToolUse hook: deny foreground polling (HE-NO-FOREGROUND-POLL)."""
+"""Claude Code PreToolUse hook: refuse a merge that skips ship, and deny foreground polling (HE-NO-FOREGROUND-POLL)."""
 
 import json
 import sys
@@ -11,28 +11,39 @@ REASON = (
 )
 
 
+def deny(reason: str) -> dict[str, object]:
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }
+
+
 def decision(payload: object) -> dict[str, object] | None:
-    if not isinstance(payload, dict) or payload.get("agent_id"):
+    if not isinstance(payload, dict):
         return None
     tool_input = payload.get("tool_input")
-    if payload.get("tool_name") != "Bash" or not isinstance(tool_input, dict):
+    command = tool_input.get("command") if isinstance(tool_input, dict) else None
+    if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    command = tool_input.get("command")
-    if tool_input.get("run_in_background") is True or not isinstance(command, str):
+    if "merge" in command:
+        from pathlib import Path
+
+        from merge_guard import merge_problem
+
+        if problem := merge_problem(command, Path(str(payload.get("cwd") or "."))):
+            return deny(f"Merge refused: {problem}")
+    if payload.get("agent_id") or (
+        isinstance(tool_input, dict) and tool_input.get("run_in_background") is True
+    ):
         return None
     if "sleep" not in command and "select(" not in command:
         return None
     from wait_text import polls
 
-    if not polls(command):
-        return None
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": REASON,
-        }
-    }
+    return deny(REASON) if polls(command) else None
 
 
 def respond(decide: Callable[[object], dict[str, object] | None]) -> int:

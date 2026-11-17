@@ -30,14 +30,10 @@ if __name__ == "__main__" and (
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    if sys.argv[1] == "browser":
-        from browser import browser_command
+    if sys.argv[1] in ("browser", "look"):
+        from browser import run
 
-        raise SystemExit(browser_command(root, sys.argv[2:]))
-    if sys.argv[1] == "look":
-        from look import look_main
-
-        raise SystemExit(look_main(root, sys.argv[2:]))
+        raise SystemExit(run(root, sys.argv[1:]))
     from agent_hooks import handle_event
 
     raise SystemExit(handle_event(root, sys.argv[1], sys.argv[2]))

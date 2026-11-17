@@ -9,6 +9,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TypedDict, cast
 from urllib.parse import urlparse
@@ -16,7 +17,7 @@ from urllib.parse import urlparse
 from agent_hooks import reject_attribution
 from gate_config import JsonValue
 from project_files import parse_project_text, read_project_file
-from ship_evidence import attachment_urls
+from ui_proof import changed_files, ui_evidence
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
 HTTP_STATUS_LINE = re.compile(r"(?im)^HTTP/\S+\s+(\d{3})\b")
@@ -60,6 +61,7 @@ class Shipment:
     delivery_target: str
     review_bypass: bool = False
     rule_note: str | None = None
+    method: str = "rebase"
 
 
 class ShippingError(ValueError):
@@ -622,52 +624,6 @@ def passed_branch_point(root: Path) -> str | None:
     return point
 
 
-def changed_files(
-    root: Path, owner: str, name: str, number: int
-) -> list[dict[str, JsonValue]]:
-    endpoint = f"repos/{owner}/{name}/pulls/{number}/files?per_page=100"
-    items = _api_items(root, endpoint, "files", "PR files query")
-    for item in items:
-        filename = item.get("filename")
-        if not isinstance(filename, str) or not filename.strip():
-            raise ShippingError("PR files query has an invalid filename")
-        previous = item.get("previous_filename")
-        if previous is not None and (
-            not isinstance(previous, str) or not previous.strip()
-        ):
-            raise ShippingError("PR files query has an invalid previous filename")
-    return items
-
-
-def file_names(files: list[dict[str, JsonValue]]) -> list[str]:
-    """The new name of each changed file, and the old name of each renamed one."""
-    names: set[str] = set()
-    for item in files:
-        names.add(cast(str, item["filename"]))
-        if item.get("previous_filename") is not None:
-            names.add(cast(str, item["previous_filename"]))
-    return sorted(names)
-
-
-def download(root: Path, url: str) -> bytes:
-    """The raw bytes of a PR attachment, fetched with the user's own GitHub sign-in."""
-    try:
-        result = subprocess.run(
-            ["gh", "api", "--method", "GET", url],
-            cwd=root,
-            capture_output=True,
-            timeout=_GH_TIMEOUT * 4,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise ShippingError(
-            f"UI evidence attachment cannot be downloaded: {url}"
-        ) from error
-    if result.returncode != 0 or not result.stdout:
-        raise ShippingError(f"UI evidence attachment cannot be downloaded: {url}")
-    return result.stdout
-
-
 def _check_attachment(root: Path, url: str) -> str:
     parsed = urlparse(url)
     if (
@@ -715,26 +671,18 @@ def _ui_evidence(
     plan: Path | None,
 ) -> None:
     try:
-        urls = attachment_urls(pull.body, file_names(files), policy["ui_paths"])
+        ui_evidence(
+            root,
+            pull.body,
+            pull.head_sha,
+            pull.base_ref,
+            files,
+            policy["ui_paths"],
+            plan,
+            partial(_check_attachment, root),
+        )
     except ValueError as error:
         raise ShippingError(str(error)) from error
-    kinds = {url: _check_attachment(root, url) for url in urls}
-    from ui_proof import ship_problem
-
-    after = urls[len(urls) // 2 :]
-    problem = ship_problem(
-        root,
-        pull.head_sha,
-        pull.body,
-        cast(list[dict[str, object]], files),
-        policy["ui_paths"],
-        plan.read_text() if plan is not None and plan.is_file() else "",
-        [url for url in after if kinds[url].startswith("image/")],
-        download,
-        pull.base_ref,
-    )
-    if problem:
-        raise ShippingError(f"UI evidence: {problem}")
 
 
 def _root_and_branch(root: Path, require_branch: bool) -> tuple[Path, str, str]:
@@ -922,7 +870,7 @@ def _ready_state(
         raise ShippingError("PR must be open and ready for review")
     if branch != pull.head_ref or local_head != pull.head_sha:
         raise ShippingError("local task branch or HEAD does not match PR")
-    if branch == policy["base"]:
+    if branch == policy["base"] and pull.base_ref == policy["base"]:
         raise ShippingError("shipping requires a task branch distinct from base")
     threads = _complete_nodes(
         _graphql_pull(root, *identity, _THREADS_QUERY)[1].get("reviewThreads")
@@ -978,6 +926,8 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
 
 
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
+    from ship_record import base_matches, ship_method
+
     if stage not in {"ready", "delivered"}:
         raise ShippingError("shipping stage must be ready or delivered")
     policy = cast(ShippingPolicy, load_policy(root, required=True))
@@ -994,7 +944,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         raise ShippingError(problem)
     pull = _pull(resolved_root, owner, name, number)
     reject_attribution(resolved_root, "pr", pull.body, "PR body", ShippingError)
-    if pull.base_ref != policy["base"]:
+    if not base_matches(pull, policy["base"]):
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
         raise ShippingError("PR repository or head repository does not match origin")
@@ -1029,6 +979,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         current = _pull(resolved_root, owner, name, number)
         if current != pull:
             raise ShippingError("PR changed during shipping verification")
+    method = ship_method(resolved_root, repository, pull, policy["base"], stage, number)
     return Shipment(
         root=resolved_root,
         plan=resolved_plan,
@@ -1043,4 +994,5 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         delivery_target=target,
         review_bypass=review_bypass,
         rule_note=rule_note,
+        method=method,
     )

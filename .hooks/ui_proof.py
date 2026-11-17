@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import cast
 
+from gate_config import JsonValue
 from plans import _is_test as is_test_path
 from ui_rules import COMMENT_LINE, is_theme_path
 
@@ -279,7 +280,6 @@ def ship_problem(
     patterns: list[str],
     plan_text: str,
     after_urls: list[str],
-    download: Callable[[Path, str], bytes],
     base_ref: str,
 ) -> str | None:
     """What the PR lacks of screen evidence for its visible changes; None when the checks pass."""
@@ -308,3 +308,85 @@ def ship_problem(
         return problem
     after = [download(root, url) for url in after_urls]
     return evidence_problem(root, head, body, after, visible) if after else None
+
+
+def changed_files(
+    root: Path, owner: str, name: str, number: int
+) -> list[dict[str, JsonValue]]:
+    """The PR's files from the API, each with its name, its old name when renamed and its patch."""
+    from shipping import ShippingError, _api_items
+
+    endpoint = f"repos/{owner}/{name}/pulls/{number}/files?per_page=100"
+    items = _api_items(root, endpoint, "files", "PR files query")
+    for item in items:
+        filename = item.get("filename")
+        if not isinstance(filename, str) or not filename.strip():
+            raise ShippingError("PR files query has an invalid filename")
+        previous = item.get("previous_filename")
+        if previous is not None and (
+            not isinstance(previous, str) or not previous.strip()
+        ):
+            raise ShippingError("PR files query has an invalid previous filename")
+    return items
+
+
+def file_names(files: list[dict[str, JsonValue]]) -> list[str]:
+    """The new name of each changed file, and the old name of each renamed one."""
+    names: set[str] = set()
+    for item in files:
+        names.add(cast(str, item["filename"]))
+        if item.get("previous_filename") is not None:
+            names.add(cast(str, item["previous_filename"]))
+    return sorted(names)
+
+
+def download(root: Path, url: str) -> bytes:
+    """The raw bytes of a PR attachment, fetched with the user's own GitHub sign-in."""
+    from shipping import ShippingError
+
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--method", "GET", url],
+            cwd=root,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ShippingError(
+            f"UI evidence attachment cannot be downloaded: {url}"
+        ) from error
+    if result.returncode != 0 or not result.stdout:
+        raise ShippingError(f"UI evidence attachment cannot be downloaded: {url}")
+    return result.stdout
+
+
+def ui_evidence(
+    root: Path,
+    body: str,
+    head: str,
+    base_ref: str,
+    files: list[dict[str, JsonValue]],
+    patterns: list[str],
+    plan: Path | None,
+    check_attachment: Callable[[str], str],
+) -> None:
+    """Raise ValueError when a PR that changes a UI file lacks its screen evidence."""
+    from ship_evidence import attachment_urls
+
+    urls = attachment_urls(body, file_names(files), patterns)
+    kinds = {url: check_attachment(url) for url in urls}
+    after = [url for url in urls[len(urls) // 2 :] if kinds[url].startswith("image/")]
+    plan_text = plan.read_text() if plan is not None and plan.is_file() else ""
+    problem = ship_problem(
+        root,
+        head,
+        body,
+        cast(list[dict[str, object]], files),
+        patterns,
+        plan_text,
+        after,
+        base_ref,
+    )
+    if problem:
+        raise ValueError(f"UI evidence: {problem}")

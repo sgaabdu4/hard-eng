@@ -12,6 +12,7 @@ from types import ModuleType
 import pytest
 import shipping
 import test_browser
+import ui_proof
 from conftest import ux_rules_block
 from plans import usability_rules
 from test_browser import session
@@ -246,7 +247,7 @@ def serve_attachments(monkeypatch: pytest.MonkeyPatch, after: bytes) -> None:
     def download(_root: Path, url: str) -> bytes:
         return served[url]
 
-    monkeypatch.setattr(shipping, "download", download)
+    monkeypatch.setattr(ui_proof, "download", download)
 
 
 def measured_after(
@@ -476,6 +477,19 @@ NONVISUAL_CHANGES = {
 }
 
 
+def no_ux_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: dict[str, object],
+    committed: dict[str, str],
+) -> Fixture:
+    fixture, _ = ship_setup(
+        tmp_path, monkeypatch, ux=NO_UX, files=[change], committed=committed
+    )
+    serve_attachments(monkeypatch, b"after-390")
+    return fixture
+
+
 @pytest.mark.parametrize(
     ("change", "committed"), VISIBLE_CHANGES.values(), ids=VISIBLE_CHANGES
 )
@@ -485,10 +499,7 @@ def test_visible_change_refuses_ux_reference_na(
     change: dict[str, object],
     committed: dict[str, str],
 ) -> None:
-    fixture, _ = ship_setup(
-        tmp_path, monkeypatch, ux=NO_UX, files=[change], committed=committed
-    )
-    serve_attachments(monkeypatch, b"after-390")
+    fixture = no_ux_setup(tmp_path, monkeypatch, change, committed)
     with pytest.raises(shipping.ShippingError, match="ux_reference says N/A"):
         ready(fixture.root, fixture)
 
@@ -502,12 +513,7 @@ def test_nonvisual_ui_paths_change_keeps_ux_reference_na(
     change: dict[str, object],
     committed: dict[str, str],
 ) -> None:
-    import ui_proof
-
-    fixture, _ = ship_setup(
-        tmp_path, monkeypatch, ux=NO_UX, files=[change], committed=committed
-    )
-    serve_attachments(monkeypatch, b"after-390")
+    fixture = no_ux_setup(tmp_path, monkeypatch, change, committed)
     monkeypatch.setattr(ui_proof, "evidence_problem", no_problem)
     ready(fixture.root, fixture)
 
