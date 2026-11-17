@@ -1,6 +1,6 @@
 # The vulnerabilities gate passes a vulnerability that no release fixes
 
-Status: Draft
+Status: Complete
 
 ## Outcome + scope
 
@@ -35,13 +35,13 @@ Limit: an advisory that never gets a fix passes with no end date. It is printed 
 
 ## Acceptance + steps
 
-- [ ] An advisory with a `last_affected` and no fixed event passes when the registry has nothing above it, and is printed with package, version and id → `tests/test_osv_unfixed.py::test_an_advisory_with_no_fix_and_no_newer_release_passes_and_is_printed`
-- [ ] The same advisory with a `fixed` event fails and reads no registry → `tests/test_osv_unfixed.py::test_an_advisory_with_a_fixed_event_fails_without_a_registry_read`
-- [ ] A release above the range, or one that cannot be read, fails; one inside or below it does not → `tests/test_osv_unfixed.py::test_a_release_above_the_affected_range_or_an_unreadable_one_fails`, `tests/test_osv_unfixed.py::test_a_release_inside_or_below_the_affected_range_does_not_fail`
-- [ ] A python advisory passes, and a newer release fails; an ecosystem with no reader fails → `tests/test_osv_unfixed.py::test_a_python_advisory_with_no_fix_passes_and_a_newer_release_fails`, `tests/test_osv_unfixed.py::test_an_ecosystem_with_no_registry_reader_fails`
-- [ ] A registry that cannot be read fails and says so; a clean report reads no registry → `tests/test_osv_unfixed.py::test_a_registry_that_cannot_be_read_fails_and_says_so`, `tests/test_osv_unfixed.py::test_a_clean_report_reads_no_registry`
-- [ ] The runner passes exit 1 with only unfixed advisories, and fails on a fixable one, on any other exit code and on exit 1 with no finding → `tests/test_osv_unfixed.py::test_the_gate_passes_when_the_scanner_found_only_advisories_with_no_fix`, `tests/test_osv_unfixed.py::test_the_gate_fails_when_one_advisory_has_a_fix`, `tests/test_osv_unfixed.py::test_the_gate_fails_on_any_scanner_exit_other_than_found_vulnerabilities`, `tests/test_osv_unfixed.py::test_the_gate_fails_when_the_scanner_exits_1_and_the_report_holds_no_finding`
-- [ ] The real gate passes on a lockfile with picomatch 4.0.7 and fails on one with lodash 4.17.20 → real run, recorded under Verification
+- [x] An advisory with a `last_affected` and no fixed event passes when the registry has nothing above it, and is printed with package, version and id → `tests/test_osv_unfixed.py::test_an_advisory_with_no_fix_and_no_newer_release_passes_and_is_printed`
+- [x] The same advisory with a `fixed` event fails and reads no registry → `tests/test_osv_unfixed.py::test_an_advisory_with_a_fixed_event_fails_without_a_registry_read`
+- [x] A release above the range, or one that cannot be read, fails; one inside or below it does not → `tests/test_osv_unfixed.py::test_a_release_above_the_affected_range_or_an_unreadable_one_fails`, `tests/test_osv_unfixed.py::test_a_release_inside_or_below_the_affected_range_does_not_fail`
+- [x] A python advisory passes, and a newer release fails; an ecosystem with no reader fails → `tests/test_osv_unfixed.py::test_a_python_advisory_with_no_fix_passes_and_a_newer_release_fails`, `tests/test_osv_unfixed.py::test_an_ecosystem_with_no_registry_reader_fails`
+- [x] A registry that cannot be read fails and says so; a clean report reads no registry → `tests/test_osv_unfixed.py::test_a_registry_that_cannot_be_read_fails_and_says_so`, `tests/test_osv_unfixed.py::test_a_clean_report_reads_no_registry`
+- [x] The runner passes exit 1 with only unfixed advisories, and fails on a fixable one, on any other exit code and on exit 1 with no finding → `tests/test_osv_unfixed.py::test_the_gate_passes_when_the_scanner_found_only_advisories_with_no_fix`, `tests/test_osv_unfixed.py::test_the_gate_fails_when_one_advisory_has_a_fix`, `tests/test_osv_unfixed.py::test_the_gate_fails_on_any_scanner_exit_other_than_found_vulnerabilities`, `tests/test_osv_unfixed.py::test_the_gate_fails_when_the_scanner_exits_1_and_the_report_holds_no_finding`
+- [x] The real gate passes on a lockfile with picomatch 4.0.7 and fails on one with lodash 4.17.20 → real run, recorded under Verification
 
 ## Baseline + execution
 
@@ -61,11 +61,11 @@ N/A — no screen changes; the change is one gate result and one printed line.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: the 33 new tests failed first (27 failed, 6 passed, the 6 being cases that already failed as before) and pass after the change. The focused set of 7 test files passed with 436 tests. The format, lint, complexity, annotation, types, dead-code, duplicates, shipped-format and focused-test gates passed; gitleaks passed on the current files. The picomatch lockfile failed on the base code and passes on the new code. The Complete run of `check` is recorded in the pull request.
 E2E: N/A — no user journey changes; the gate runs inside checks.
-Real service: Required — npm registry and OSV scanner: the changed gate runs one time on a lockfile with picomatch 4.0.7 and one time on a lockfile with lodash 4.17.20.
-Retro: Pending
+Real service: Passed — npm registry, OSV scanner: the real gate command ran through `run_limited_gate` on a Bun lockfile with picomatch 4.0.7. The scanner exited 1, the registry listed 35 releases with 4.0.7 the newest, the gate printed `OSV: picomatch@4.0.7 GHSA-fc5q-39xc-vjpf: no fixed release exists yet, so this passes; it will fail as soon as a fixed release exists` and ended `PASS vulnerabilities (exit 1)`. The same command on a lockfile with lodash 4.17.20 failed with `not proven unfixable: GHSA-29mw-wpgm-hmr9: it has a fixed event`. The real report holds `affected[].package`, `ranges[].events` and `groups[].ids`, which are the fields the code reads and the tests build; the tests lack the other fields of the real record. The readers ran once for npm (picomatch, a scoped package), PyPI (requests) and Pub (http); each returned a list of versions. Compared: 2 real reports, 2 agree with the test shape. Not caused: a registry refusal, because a public read has none to handle.
+Retro: (1) The fault escaped to the base branch: no test gave the gate an advisory with no fix → `tests/test_osv_unfixed.py::test_the_gate_passes_when_the_scanner_found_only_advisories_with_no_fix`, which failed first. (2) The first design put the check in the report validator, but the runner fails on the scanner's exit code, so the report check alone would still fail the gate → the same test, which runs the runner. (3) `reports.py` and `gate_runner.py` stood at the 1000 line limit, so the OSV validators moved to their own module → HE-FILE-LENGTH. (4) A test helper copied the fake registry of the freshness tests, and the duplicates gate refused it → the helper now imports that fake.
 
 Delivery target: PR
 Delivery: Pending — the pull request and its checks.
