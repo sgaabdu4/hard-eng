@@ -1,7 +1,6 @@
 """Claude Code PreToolUse hook: refuse a merge that skips ship, and deny foreground polling (HE-NO-FOREGROUND-POLL)."""
 
 import json
-import re
 import sys
 from collections.abc import Callable
 
@@ -17,6 +16,8 @@ MERGE_WORDS = frozenset(("merge", "mergePullRequest", "enablePullRequestAutoMerg
 
 def holds_merge(command: str) -> bool:
     """Whether the command has the word `gh` and a merge word, each as its own word and never a part of one."""
+    import re
+
     words = set(re.findall(r"[A-Za-z0-9_]+", command))
     return "gh" in words and bool(words & MERGE_WORDS)
 
