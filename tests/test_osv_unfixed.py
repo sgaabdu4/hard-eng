@@ -562,3 +562,11 @@ def test_an_open_range_still_counts_when_the_same_advisory_has_a_closed_range(
     item["vulnerabilities"] = [{"id": ID, "affected": [entry]}]
     with pytest.raises(ValueError, match="release 1.0.1 is above"):
         accepted(report_of(tmp_path, item), npm("1.0.0", "1.0.1"))
+
+
+def test_a_python_epoch_release_is_above_the_installed_one_for_an_open_range(
+    tmp_path: Path,
+) -> None:
+    item = package_item(OPEN, version="2.0", ecosystem="PyPI", name="ex-ample")
+    with pytest.raises(ValueError, match="release 1!1.0 is above"):
+        accepted(report_of(tmp_path, item), pypi("2.0", "1!1.0"))

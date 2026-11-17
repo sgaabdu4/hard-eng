@@ -44,11 +44,9 @@ def above_installed(version: str, installed: str, ecosystem: str) -> bool:
     """A release other than the installed one may sort above it, unless it is a known pre-release of an installed release."""
     core, rest = release(version)
     have, own = release(installed)
-    return core > have or (
-        core == have
-        and rest != own
-        and (own != "" or not PRERELEASE[ecosystem].fullmatch(rest))
-    )
+    if rest != own and not PRERELEASE[ecosystem].fullmatch(rest):
+        return True
+    return core > have or (core == have and rest != own and own != "")
 
 
 def objects(value: object) -> list[JsonObject]:
