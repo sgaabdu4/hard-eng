@@ -318,12 +318,21 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
 
 
 CODEX_RULES_FILE = ".codex/rules/hard-eng.rules"
-CODEX_MERGE_RULE = """prefix_rule(
-    pattern = ["gh", "pr", "merge"],
-    decision = "forbidden",
-    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",
+CODEX_MERGE_PATTERNS = [
+    ["gh", "pr", "merge"],
+    ["env", "gh", "pr", "merge"],
+    ["/opt/homebrew/bin/gh", "pr", "merge"],
+    ["/usr/local/bin/gh", "pr", "merge"],
+    ["/usr/bin/gh", "pr", "merge"],
+    ["gh", ["-R", "--repo"]],
+    ["gh", "pr", ["-R", "--repo"]],
+]
+CODEX_MERGE_RULE = "".join(
+    f"prefix_rule(\n    pattern = {json.dumps(pattern)},\n"
+    '    decision = "forbidden",\n'
+    '    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",\n)\n'
+    for pattern in CODEX_MERGE_PATTERNS
 )
-"""
 
 
 def codex_rule_change(root: Path) -> dict[str, str]:

@@ -24,7 +24,13 @@ VALUE_FLAGS = frozenset(
 SHELL_COMMAND_FLAG = re.compile(r"-[a-z]*c[a-z]*")
 VARIABLE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 PULL_NUMBER = re.compile(r"(?:^|/pull/)(\d+)/?$")
-API_MERGE = re.compile(r"pulls/\d+/merge\b|mergePullRequest|enablePullRequestAutoMerge")
+API_MERGE = re.compile(
+    r"pulls/[^\s/]*/merge\b|mergePullRequest|enablePullRequestAutoMerge"
+)
+OPAQUE_QUERY = re.compile(r"=@|^query=\$|\$\(|^--input")
+GH_VALUE_FLAGS = frozenset(("-R", "--repo", "--hostname"))
+INTERPRETERS = ("python", "node", "ruby", "perl", "php", "deno", "bun")
+PR_MERGE_TEXT = re.compile(r"\bpr\W+merge\b")
 STEP = "Merge with `python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge`."
 
 
@@ -106,16 +112,50 @@ def pr_merge_problem(arguments: list[str], cwd: Path) -> str | None:
     return None
 
 
+def subcommand(arguments: list[str]) -> tuple[list[str], list[str]]:
+    """The first two words of a gh command after its leading flags, and everything else."""
+    words: list[str] = []
+    rest: list[str] = []
+    index = 0
+    while index < len(arguments):
+        word = arguments[index]
+        if word.startswith("-"):
+            take = 2 if word in GH_VALUE_FLAGS else 1
+            rest += arguments[index : index + take]
+            index += take
+        elif len(words) < 2:
+            words.append(word)
+            index += 1
+        else:
+            rest += arguments[index:]
+            break
+    return words, rest
+
+
+def gh_problem(arguments: list[str], cwd: Path) -> str | None:
+    words, rest = subcommand(arguments)
+    if words[:2] == ["pr", "merge"]:
+        return pr_merge_problem(rest, cwd)
+    if words[:1] == ["api"] and (
+        any(API_MERGE.search(a) for a in arguments)
+        or ("graphql" in arguments and any(OPAQUE_QUERY.search(a) for a in arguments))
+    ):
+        return f"a merge through `gh api` skips ship, and a query read from a file or a variable cannot be checked. {STEP}"
+    if words[:1] == ["alias"] and any("merge" in a for a in arguments):
+        return f"a `gh alias` that holds a merge skips ship. {STEP}"
+    return None
+
+
 def command_problem(words: list[str], cwd: Path, depth: int) -> str | None:
     name, arguments = program(words)
-    if name == "gh" and arguments[:2] == ["pr", "merge"]:
-        return pr_merge_problem(arguments[2:], cwd)
-    if (
-        name == "gh"
-        and arguments[:1] == ["api"]
-        and any(API_MERGE.search(a) for a in arguments)
+    if name == "gh":
+        return gh_problem(arguments, cwd)
+    if name in ("xargs", "eval") and depth < 3:
+        return merge_problem(" ".join(arguments), cwd, depth + 1)
+    if name.startswith(INTERPRETERS) and any(
+        PR_MERGE_TEXT.search(a) for a in arguments
     ):
-        return f"a merge through `gh api` skips ship. {STEP}"
+        return f"a script that runs `gh pr merge` skips ship. {STEP}"
     if name in SHELLS and depth < 3:
         for position, word in enumerate(arguments[:-1]):
             if SHELL_COMMAND_FLAG.fullmatch(word):
