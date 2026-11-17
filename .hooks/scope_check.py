@@ -139,9 +139,8 @@ def requires_python(directory: Path) -> tuple[int, int] | None:
         project = tomllib.loads((directory / "pyproject.toml").read_text())
     except (OSError, tomllib.TOMLDecodeError):
         return None
-    found = re.search(
-        r"(?:>=|~=)\s*(\d+)\.(\d+)",
-        str(project.get("project", {}).get("requires-python", "")),
+    found = MINIMUM_VERSION.search(
+        str(project.get("project", {}).get("requires-python", ""))
     )
     return (int(found[1]), int(found[2])) if found else None
 
@@ -171,6 +170,8 @@ def ruff_config_of(folder: Path) -> bool:
     return isinstance(tool, dict) and "ruff" in tool
 
 
+MINIMUM_VERSION = re.compile(r"(?:>=|~=)\s*(\d+)\.(\d+)")
+TARGET_VERSION = re.compile(r"py(\d)(\d+)")
 RUFF_SUFFIXES = (".py", ".pyi", ".pyw", ".ipynb")
 
 
@@ -207,7 +208,7 @@ def harmless_ruff_config(name: str, directory: Path) -> bool:
             return True
         config = tool["ruff"]
     minimum = requires_python_of(directory, name)
-    found = re.fullmatch(r"py(\d)(\d+)", str(config.get("target-version", "")))
+    found = TARGET_VERSION.fullmatch(str(config.get("target-version", "")))
     return (
         set(config) == {"target-version"}
         and minimum is not None

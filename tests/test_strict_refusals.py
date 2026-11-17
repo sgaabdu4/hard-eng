@@ -805,3 +805,38 @@ def test_ruff_settings_that_are_not_ignores_pass(tmp_path: Path) -> None:
     assert "pyproject.toml:1 sets the ruff setting per-file-ignores" in refusal(
         project(tmp_path / "table", {"pyproject.toml": table_form})
     )
+
+
+@pytest.mark.parametrize(
+    "attributes",
+    [
+        "* linguist-generated=true\n",
+        "src/** linguist-vendored\n",
+        "*.py linguist-generated=true\n",
+        "**/* linguist-vendored=true\n",
+    ],
+)
+def test_a_catch_all_generated_mark_hides_nothing(
+    tmp_path: Path, attributes: str
+) -> None:
+    """HE-NO-SWITCH-OFF: only an exact path, a generated-name suffix or a vendor folder counts as generated, so a broad mark cannot hide a switch-off."""
+    root = project(tmp_path, {".gitattributes": attributes, "src/app.py": HIDDEN})
+    assert "src/app.py:2" in refusal(root)
+
+
+@pytest.mark.parametrize(
+    ("attributes", "name"),
+    [
+        ("lib/a.dart linguist-generated=true\n", "lib/a.dart"),
+        ("*.g.dart linguist-generated=true\n", "lib/x/b.g.dart"),
+        ("**/*.freezed.dart linguist-generated=true\n", "lib/x/b.freezed.dart"),
+        ("functions/f/vendor/** linguist-vendored\n", "functions/f/vendor/c/m.py"),
+        ("lib/gen/** linguist-generated=true\n", "lib/gen/m.py"),
+    ],
+)
+def test_exact_suffix_and_vendor_marks_still_hide_generated_output(
+    tmp_path: Path, attributes: str, name: str
+) -> None:
+    validate_whole_project(
+        project(tmp_path, {".gitattributes": attributes, name: HIDDEN})
+    )

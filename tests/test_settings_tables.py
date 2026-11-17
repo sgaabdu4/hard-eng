@@ -95,11 +95,13 @@ def test_a_ruff_setting_that_no_table_classes_is_refused() -> None:
     """HE-NO-SWITCH-OFF: a key that the tables do not class fails, so a new tool setting cannot pass unseen."""
     hits = ruff_hits("linter.made_up_key = 1\n", "", "lint")
     assert any("no table classes" in hit for hit in hits)
+    assert not any("ruff_table.py" in hit for hit in hits)
 
 
 def test_a_fallow_setting_that_no_table_classes_is_refused() -> None:
     hits = judge({"madeUpKey": 1}, {}, lambda patterns: [], lambda glob: "")
     assert any("no table classes" in hit for hit in hits)
+    assert not any("fallow_table.py" in hit for hit in hits)
 
 
 def test_a_new_ruff_setting_at_its_default_passes() -> None:

@@ -109,7 +109,7 @@ def import_linter_project(tmp_path: Path) -> Path:
     "prefix",
     [
         ["fallow"],
-        ["bunx", "fallow"],
+        ["bunx", "fallow@3.0.0"],
         ["bun", "x", "fallow@3.0.0"],
     ],
 )

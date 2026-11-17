@@ -181,7 +181,7 @@ def judge(
         if value == default:
             return []
         return [
-            f"{key} is set to {value[:1]}, not its default {default[:1]}, and no table classes it: class it in ruff_table.py"
+            f"{key} is set to {value[:1]}, not its default {default[:1]}, and no table classes it: remove it from the project's Ruff config or set it back to its default"
         ]
     if kind == "equal" and value != default:
         return [f"the resolved {key} differs from Ruff's default {default or '[]'}"]
