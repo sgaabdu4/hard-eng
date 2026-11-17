@@ -87,3 +87,41 @@ def test_a_project_script_that_shadows_ruff_is_refused(tmp_path: Path) -> None:
     }
     with pytest.raises(ValueError, match="shadows"):
         validate_gate(gate, tmp_path, set())
+
+
+NOTEBOOK = (
+    '{"cells": [{"cell_type": "code", "execution_count": null, "metadata": {}, '
+    '"outputs": [], "source": ["import os\\n", "import sys\\n"]}], '
+    '"metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n'
+)
+
+
+def test_a_config_that_governs_only_a_notebook_is_judged(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: a root config that narrows the rules governs a notebook that no .py file shares it with."""
+    root = project(
+        tmp_path,
+        {
+            "pyproject.toml": PYPROJECT + '[tool.ruff.lint]\nselect = ["E4"]\n',
+            "src/ruff.toml": 'target-version = "py310"\n',
+            "src/x.py": "x = 1\n",
+            "analysis.ipynb": NOTEBOOK,
+        },
+    )
+    with pytest.raises(ValueError, match=r"lacks \d+ of Ruff's default rules"):
+        validate_resolved(root, groups("."), 900)
+
+
+def test_a_nested_config_with_a_higher_target_version_is_judged(
+    tmp_path: Path,
+) -> None:
+    """HE-NO-SWITCH-OFF: a nested config that sets only a target version is harmless only at the requires-python minimum."""
+    root = project(
+        tmp_path,
+        {
+            "pyproject.toml": PYPROJECT,
+            "src/ruff.toml": 'target-version = "py313"\n',
+            "src/x.py": "x = 1\n",
+        },
+    )
+    with pytest.raises(ValueError, match=r"target version 3\.13 is above"):
+        validate_resolved(root, groups("."), 900)

@@ -210,12 +210,18 @@ def subcommand(invocation: list[str]) -> str | None:
 
 
 def narrowing(invocation: list[str]) -> list[str]:
-    """Words and flags that cut files out of a scan; an audit may name its base."""
+    """Words and flags that cut files out of a scan; an audit with a base judges only the changed files."""
     words = positionals(invocation)
     found = words[1:] if words[:1] and words[0] in SUBCOMMANDS else words
-    flags = {"-w", "--workspace", "-r", "--root"}
-    if "audit" not in invocation:
-        flags |= {"--changed-since", "--base", "--changed-workspaces"}
+    flags = {
+        "-w",
+        "--workspace",
+        "-r",
+        "--root",
+        "--changed-since",
+        "--base",
+        "--changed-workspaces",
+    }
     return [*found, *(a for a in invocation if split_option(a)[0] in flags)]
 
 
@@ -233,7 +239,6 @@ FALLOW_VALUES = {
     "--max-file-size",
     "--max-crap",
     "--gate",
-    "--base",
     "--coverage",
 }
 FALLOW_SWITCHES = {"--fail-on-issues", "--quiet", "-q", "--no-cache"}

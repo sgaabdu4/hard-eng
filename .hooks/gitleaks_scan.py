@@ -11,25 +11,18 @@ from typing import IO
 from process_group import run_in_group
 from project_files import GIT_LISTING
 
-CONFIG_VARIABLES = (
-    "GITLEAKS_CONFIG",
-    "GITLEAKS_CONFIG_TOML",
-    "FALLOW_COVERAGE",
-    "FALLOW_COVERAGE_ROOT",
-    "FALLOW_MAX_FILE_SIZE",
-    "FALLOW_PRODUCTION",
-)
+CONFIG_VARIABLES = ("GITLEAKS_CONFIG", "GITLEAKS_CONFIG_TOML")
 CONFIG_ASSIGNMENT = re.compile(
-    r"\b(?:GITLEAKS_CONFIG(?:_TOML)?|FALLOW_COVERAGE(?:_ROOT)?|FALLOW_MAX_FILE_SIZE|FALLOW_PRODUCTION)[\"']?\s*[:=]"
+    r"\b(?:GITLEAKS_CONFIG(?:_TOML)?|FALLOW_\w+)[\"']?\s*[:=]"
 )
 
 
 def scan_environment(base: dict[str, str] | None = None) -> dict[str, str]:
-    """The environment of a Gitleaks run, without the variables that replace its config."""
+    """The environment of a gate run, without the variables that replace a Gitleaks config and without every `FALLOW_` variable, which a newer Fallow release may read."""
     return {
         key: value
         for key, value in (os.environ if base is None else base).items()
-        if key not in CONFIG_VARIABLES
+        if key not in CONFIG_VARIABLES and not key.startswith("FALLOW_")
     }
 
 
