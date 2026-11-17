@@ -185,7 +185,7 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> list[str]:
 
 
 def configure_typing_checks(package: Group) -> None:
-    from untrusted_input import strict_typing_rules
+    from untrusted_input import retire_covered_annotations, strict_typing_rules
 
     strict_typing_rules(package)
     template = (
@@ -231,6 +231,8 @@ def configure_typing_checks(package: Group) -> None:
                     gate["role"] = "project-" + required["role"]
             required["name"] = "strict-" + required["name"]
             package["checks"].append(required)
+            if required["role"] == "annotations":
+                retire_covered_annotations(package, required)
 
 
 def adopt_root_dart_gates(checks: list[Gate], required: Gate) -> list[list[str]]:

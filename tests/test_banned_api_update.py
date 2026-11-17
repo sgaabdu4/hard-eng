@@ -62,18 +62,45 @@ def test_an_update_replaces_the_old_two_line_banned_api_gate(
     judge(tmp_path)
 
 
-def test_an_annotations_gate_changed_another_way_is_kept_and_the_template_gate_is_added(
+def test_an_annotations_gate_that_the_template_gate_covers_is_retired(
     installer: ModuleType, tmp_path: Path
 ) -> None:
-    """The update never rewrites a gate it does not recognise: it stays as the project's own and the template gate runs beside it."""
+    """One source of truth: a project gate whose paths, rules and config all lie inside the template gate is removed, so two copies do not run."""
     python_project(tmp_path)
     installer.install(tmp_path)
-    own = ["ruff", "check", ".", "--select", "ANN", "--config", OLD_BANNED[1]]
+    own = ["ruff", "check", "main.py", "--select", "ANN", "--config", OLD_BANNED[1]]
     rewrite(tmp_path, own)
+    installer.install(tmp_path)
+    gates = annotations(tmp_path)
+    assert [role for role, _ in gates] == ["annotations"]
+    assert gates[0][1] != own
+    judge(tmp_path)
+
+
+def test_an_annotations_gate_that_adds_a_rule_is_kept_and_named(
+    installer: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A project gate that adds something the template lacks stays, with one printed line that names it."""
+    python_project(tmp_path)
+    installer.install(tmp_path)
+    own = [
+        "ruff",
+        "check",
+        "main.py",
+        "--select",
+        "ANN,E501",
+        "--config",
+        OLD_BANNED[1],
+    ]
+    rewrite(tmp_path, own)
+    capsys.readouterr()
     installer.install(tmp_path)
     gates = annotations(tmp_path)
     assert [role for role, _ in gates] == ["project-annotations", "annotations"]
     assert gates[0][1] == own
+    lines = [line for line in capsys.readouterr().out.splitlines() if "E501" in line]
+    assert len(lines) == 1
+    assert "adds E501" in lines[0]
     judge(tmp_path)
 
 

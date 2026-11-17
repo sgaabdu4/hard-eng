@@ -272,7 +272,7 @@ TEST_OFF = {
 }
 SECURITY_OFF = re.compile(
     r"\bno(semgrep|sem)\b|gitleaks:allow|jscpd:ignore|fallow-ignore"
-    r"|shellcheck\s+disable=|zizmor:\s*ignore|coverage:ignore-",
+    r"|shellcheck\s+(?:[\w-]+=\S+\s+)*(?:(?:disable|shell)=|source=\S*)|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
 RAW_OFF = {
@@ -700,6 +700,17 @@ def entry_file(root: Path, name: str, names: set[str]) -> bool:
     )
 
 
+SHELLCHECK_FIX = "read the file without a dynamic `source`"
+
+
+def followed_source(root: Path, name: str, marker: str) -> bool:
+    """A `shellcheck source=` that names a file in the project, which shellcheck then reads; /dev/null and a missing path hide the finding."""
+    target = marker.rpartition("source=")[2] if "source=" in marker else ""
+    return bool(target) and any(
+        (base / target).is_file() for base in (root / PurePosixPath(name).parent, root)
+    )
+
+
 def security_hits(
     root: Path,
     name: str,
@@ -711,8 +722,11 @@ def security_hits(
     found: list[str] = []
     for number, text in lines:
         entry = text.strip()
-        if hit := SECURITY_OFF.search(text):
-            found.append(f"{name}:{number} {verb} {hit[0]!r}")
+        if (hit := SECURITY_OFF.search(text)) and not followed_source(
+            root, name, hit[0]
+        ):
+            fix = f"; {SHELLCHECK_FIX}" if "shellcheck" in hit[0] else ""
+            found.append(f"{name}:{number} {verb} {hit[0]!r}{fix}")
         elif entries and entry and not entry.startswith("#"):
             found.append(f"{name}:{number} {verb} {entry!r}")
         elif any(word in text for word in RETRY_WORDS):
