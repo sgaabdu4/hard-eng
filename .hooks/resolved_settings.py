@@ -80,7 +80,7 @@ class Defaults:
         """Ruff's own settings: its defaults, or for an annotations gate the template rule set."""
         key = (prefix, role == "annotations")
         if key not in self.ruff_runs:
-            chosen = ["--select", ANNOTATION_SET] if key[1] else []
+            chosen = ["--select", ANNOTATION_SET, *ANNOTATION_CONFIG] if key[1] else []
             self.ruff_runs[key] = self.pool.submit(
                 printed,
                 list(prefix),
@@ -100,6 +100,12 @@ Scope = tuple[Path, list[Group], Group, Gate]
 
 
 ANNOTATION_SET = "ANN,TID251,RUF017,ASYNC210"
+ANNOTATION_CONFIG = [
+    "--config",
+    'lint.flake8-tidy-imports.banned-api."typing.Any".msg = "Use a precise type instead of Any"',
+    "--config",
+    'lint.flake8-tidy-imports.banned-api."typing_extensions.Any".msg = "Use a precise type instead of Any"',
+]
 
 
 def group_roots(root: Path, every: list[Group]) -> frozenset[Path]:

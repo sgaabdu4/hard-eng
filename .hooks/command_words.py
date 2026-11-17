@@ -1,6 +1,7 @@
 """A gate that runs a judged tool runs it directly: a launcher, the tool, then arguments; every other form is refused."""
 
 import re
+import shlex
 from pathlib import Path, PurePosixPath
 
 ASSIGNING_SUFFIXES = (".yml", ".yaml", ".sh", ".bash", ".toml", ".json", ".mk")
@@ -117,15 +118,19 @@ def expanded(command: list[str], directory: Path) -> list[str]:
     if words == command:
         return command
     named = [word for word in command[1:] if not word.startswith("-")]
+    name = (
+        named[1] if named[0] in {"run", "run-script"} and len(named) > 1 else named[0]
+    )
     scripts = read_project_file(where / "package.json").get("scripts", {})
-    if mentions(words) and (
-        {f"pre{named[1]}", f"post{named[1]}"} & set(scripts)
-        if len(named) > 1
-        else False
-    ):
-        raise refusal(
-            f"the script {named[1]} has a pre or post script, so two commands run"
-        )
+    if mentions(words):
+        if {f"pre{name}", f"post{name}"} & set(scripts):
+            raise refusal(
+                f"the script {name} has a pre or post script, so two commands run"
+            )
+        if tool_name((shlex.split(str(scripts.get(name, ""))) or [""])[0]) in MANAGERS:
+            raise refusal(
+                f"the script {name} runs another script, so write the tool command in it"
+            )
     return words
 
 
@@ -186,15 +191,11 @@ def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] |
         raise refusal(
             f"a project script named {argv[0]} shadows the tool under `uv run`: rename the script or use `uvx {argv[0]}@<pin>`"
         )
-    shell = len(words) != len(command)
     metas = re.compile(r"[;&|<>$`]")
     bad = [
         word
         for word in argv
-        if word in OPERATORS
-        or "$(" in word
-        or "`" in word
-        or (shell and metas.search(word))
+        if word in OPERATORS or "$(" in word or "`" in word or metas.search(word)
     ]
     if bad:
         raise refusal(f"the gate holds {', '.join(bad)}")

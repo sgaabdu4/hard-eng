@@ -150,6 +150,12 @@ def test_a_setting_that_can_only_add_findings_passes(
     validate_resolved(root, groups(["uvx", "ruff@latest", "check", "."], "lint"), 900)
 
 
+BANNED = [
+    "--config",
+    'lint.flake8-tidy-imports.banned-api."typing.Any".msg = "Use a precise type instead of Any"',
+    "--config",
+    'lint.flake8-tidy-imports.banned-api."typing_extensions.Any".msg = "Use a precise type instead of Any"',
+]
 ANNOTATIONS = [
     "uvx",
     "ruff@latest",
@@ -159,6 +165,7 @@ ANNOTATIONS = [
     "ANN,TID251,RUF017,ASYNC210",
     "--config",
     "lint.flake8-annotations.ignore-fully-untyped = false",
+    *BANNED,
 ]
 
 
@@ -182,3 +189,30 @@ def test_an_annotations_gate_that_keeps_its_set_passes(
     root = project(tmp_path, "")
     command = [*ANNOTATIONS[:5], select, *ANNOTATIONS[6:]]
     validate_resolved(root, groups(command, "annotations"), 900)
+
+
+@pytest.mark.parametrize("kept", [0])
+def test_an_annotations_gate_must_keep_every_banned_api_entry(
+    tmp_path: Path, kept: int
+) -> None:
+    root = project(tmp_path, "")
+    command = [*ANNOTATIONS[:8], *BANNED[:kept]]
+    with pytest.raises(ValueError, match=r"banned_api"):
+        validate_resolved(root, groups(command, "annotations"), 900)
+    validate_resolved(root, groups(ANNOTATIONS, "annotations"), 900)
+
+
+def test_the_banned_api_lines_are_the_ones_of_the_template() -> None:
+    import json
+
+    from conftest import SOURCE
+
+    template = json.loads(
+        (SOURCE / ".agents/skills/he/templates/hard-eng.python.json").read_text()
+    )
+    command = next(
+        gate["command"]
+        for gate in template["packages"][0]["checks"]
+        if gate["role"] == "annotations"
+    )
+    assert command[command.index("--config") :][2:] == BANNED

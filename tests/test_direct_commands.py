@@ -38,6 +38,7 @@ WRAPPED = [
     ["bun", "x", "--package=fallow@latest", "fallow", "audit"],
     ["node", "check.mjs", "fallow", "audit"],
     ["env", "X=-Awarnings", "cargo", "clippy"],
+    ["ruff", "check", ".;true"],
 ]
 
 
@@ -63,6 +64,10 @@ SCRIPTS = [
     {"lint": "ruff check .", "prelint": "echo hi"},
     {"lint": "ruff check .", "postlint": "echo hi"},
     {"lint": "echo hi && ruff check ."},
+    {"lint": "ruff check --cache-dir=.ruff_cache;true"},
+    {"lint": "ruff check --cache-dir=.ruff_cache&&true"},
+    {"lint": "bun run lint2", "lint2": "ruff check .", "prelint2": "echo hi"},
+    {"lint": "bun run lint2", "lint2": "ruff check ."},
 ]
 
 
@@ -130,6 +135,14 @@ def test_fix_in_a_ruff_gate_is_refused(tmp_path: Path) -> None:
         "command": ["ruff", "check", ".", "--fix"],
     }
     with pytest.raises(ValueError, match="--fix"):
+        validate_gate(gate, tmp_path, set())
+
+
+def test_bun_without_run_checks_the_pre_script_too(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: `bun lint` runs `prelint` as `bun run lint` does."""
+    scripted(tmp_path, {"lint": "ruff check .", "prelint": "echo hi"})
+    gate: Gate = {"name": "g", "command": ["bun", "lint"]}
+    with pytest.raises(ValueError, match=DIRECT):
         validate_gate(gate, tmp_path, set())
 
 

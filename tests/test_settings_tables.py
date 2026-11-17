@@ -21,6 +21,7 @@ CLASSES = {
     "width",
     "version",
     "proved",
+    "holds",
 }
 
 
