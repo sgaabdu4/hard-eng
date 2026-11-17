@@ -256,15 +256,29 @@ def hidden_by_exact_marks(root: Path, name: str, keys: set[str]) -> bool:
     return False
 
 
+def marked_folders(top: Path, pattern: str) -> list[str]:
+    """The tracked folders that a folder mark names: the one folder, or each folder that its glob matches."""
+    folder = pattern.strip("/").removesuffix("/**")
+    if not GLOB.search(folder):
+        return [folder]
+    folders = {
+        parent.as_posix()
+        for name in tracked_index(top)
+        for parent in PurePosixPath(name).parents
+        if parent.as_posix() != "."
+    }
+    matcher = regex(pattern.removesuffix("/**"))
+    return sorted(held for held in folders if matcher.fullmatch(held))
+
+
 def copy_findings(root: Path) -> list[str]:
     """A folder mark that claims a derived copy whose files differ from their source."""
     top = repository_top(root)
     found = []
-    for attributes in [top / ".gitattributes"]:
-        for pattern in marks(attributes, GENERATED_KEYS):
-            if mark_kind(pattern) != "folder" or GLOB.search(pattern.strip("/")[:-3]):
-                continue
-            folder = pattern.strip("/").removesuffix("/**")
+    for pattern in marks(top / ".gitattributes", GENERATED_KEYS):
+        if mark_kind(pattern) != "folder":
+            continue
+        for folder in marked_folders(top, pattern):
             reason = proven_copy(top, folder)
             if reason and " differs from " in reason:
                 found.append(

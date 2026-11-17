@@ -173,7 +173,7 @@ def impact_outputs(
     from ci_setup import impact_tools, push_base, require_ci_base
     from gate_config import affected_groups, parse_config
 
-    require_ci_base(base)
+    require_ci_base(base, root)
     base = push_base(root, base) or base
     done = False
     with redirect_stdout(sys.stderr), suppress(OSError, subprocess.SubprocessError):

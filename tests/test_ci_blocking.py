@@ -15,6 +15,20 @@ MISE = 'bun x --package="$MISE_PACKAGE" mise --no-config exec uv@latest -- uv ru
 ENV = f"        env:\n          BASE_SHA: {BASE}\n"
 
 
+def launcher(name: str = "PROJECT_MISE_BINARY", second: str | None = None) -> str:
+    """The form older generated workflows use: a variable that names a cached Mise binary."""
+    return (
+        'mise_command=(bun x --package="$MISE_PACKAGE" mise)\n'
+        f'if [[ -n "${name}" ]]; then mise_command=("${second or name}"); fi\n'
+        '"${mise_command[@]}" --no-config install uv@latest &&\n'
+        '"${mise_command[@]}" --no-config exec uv@latest -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"'
+    )
+
+
+def second_job(flag: str) -> str:
+    return f"  apple:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          {CHECK} {flag}\n"
+
+
 def indented(text: str) -> str:
     return "".join(f"          {line}\n" for line in text.splitlines())
 
@@ -87,6 +101,26 @@ REFUSED = {
     "check deleted": workflow("echo nothing"),
     "on narrowed": workflow(on="on:\n  workflow_dispatch:\n"),
     "on narrowed to a string": workflow(on="on: workflow_dispatch\n"),
+    "skip language alone": workflow(CHECK + " --skip-language python"),
+    "skip language beside another only": workflow(
+        CHECK + " --skip-language python", extra=second_job("--only-language swift")
+    ),
+    "launcher variable of the runner": workflow(launcher("CI")),
+    "launcher variable of github": workflow(launcher("GITHUB_ACTOR")),
+    "launcher variable of the runner os": workflow(launcher("RUNNER_OS")),
+    "launcher variable names differ": workflow(
+        launcher("PROJECT_MISE_BINARY", "OTHER_BINARY")
+    ),
+    "launcher variable in the job env": workflow(
+        launcher(), job="    env:\n      PROJECT_MISE_BINARY: 'true'\n"
+    ),
+    "launcher variable in the workflow env": workflow(
+        launcher(), on=ON + "env:\n  PROJECT_MISE_BINARY: 'true'\n"
+    ),
+    "launcher variable in the step env": workflow(
+        launcher("MISE_LAUNCHER_BIN"),
+        env=f"        env:\n          BASE_SHA: {BASE}\n          MISE_LAUNCHER_BIN: 'true'\n",
+    ),
 }
 
 
@@ -126,6 +160,10 @@ PASSED = {
         + " --shard merge",
         env=f"        env:\n          CHECKS: ${{{{ needs.checks.result }}}}\n          TESTS: ${{{{ needs.tests.result }}}}\n          BASE_SHA: {BASE}\n",
     ),
+    "swift split": workflow(
+        CHECK + " --skip-language swift", extra=second_job("--only-language swift")
+    ),
+    "launcher variable set by an earlier step": workflow(launcher()),
     "workflow call only": workflow(on="on:\n  workflow_call:\n"),
     "dispatch beside pull request": workflow(
         on="on:\n  pull_request:\n  workflow_dispatch:\n"
