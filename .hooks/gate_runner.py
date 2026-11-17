@@ -32,9 +32,9 @@ from gate_config import (
     Gate,
     Group,
     Report,
-    generated_sources,
     nonproduction_source,
 )
+from generated_marks import generated_sources
 from project_files import keeping, stop_keeping
 from project_setup import package_script_arguments as test_arguments
 from python_setup import (

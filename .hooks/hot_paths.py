@@ -14,10 +14,10 @@ from gate_config import (
     SOURCE_FILE,
     Gate,
     Group,
-    generated_sources,
     nonproduction_source,
     repository_files,
 )
+from generated_marks import generated_sources
 from source_scan import code_step, code_without_comments
 from tool_setup import managed_command
 

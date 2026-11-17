@@ -4,7 +4,6 @@ import os
 import re
 import stat
 import subprocess
-import sys
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
@@ -17,6 +16,7 @@ from dependency_graph import (
     readers_above,
     shared_only,
 )
+from generated_marks import LISTED, generated_sources
 from project_files import (
     GIT_LISTING,
     biome_formatters,
@@ -204,52 +204,6 @@ def dart_test_support(path: str, language: str | None, packages: list[Group]) ->
             for group in packages
         )
     )
-
-
-GENERATED_KEYS = {"linguist-generated", "linguist-vendored"}
-LISTED: dict[Path, tuple[frozenset[str], set[str]]] = {}
-
-
-def generated_sources(
-    root: Path, names: list[str], generated_only: bool = False
-) -> set[str]:
-    if not names:
-        return set()
-    listed, generated = LISTED.get(root, (frozenset(), set()))
-    if listed.issuperset(names) and not generated_only:
-        return generated.intersection(names)
-    import tempfile
-
-    # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
-    with tempfile.TemporaryFile() as paths:
-        paths.write(("\0".join(names) + "\0").encode())
-        paths.seek(0)
-        listed = subprocess.run(
-            [*GIT_LISTING, "check-attr", "-z", "--all", "--stdin"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            stdin=paths,
-            check=False,
-        )
-    if listed.returncode:
-        repository = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=root,
-            capture_output=True,
-            check=False,
-        )
-        if repository.returncode:
-            return set()  # Standalone source directories have no Git attributes.
-        sys.stderr.write(listed.stderr)
-        listed.check_returncode()
-    attributes = listed.stdout.split("\0")
-    return {
-        name
-        for name, key, value in zip(attributes[::3], attributes[1::3], attributes[2::3])
-        if key in ({"linguist-generated"} if generated_only else GENERATED_KEYS)
-        and value in {"set", "true"}
-    }
 
 
 def validate_file_sizes(

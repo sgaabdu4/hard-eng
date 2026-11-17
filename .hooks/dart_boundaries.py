@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
-from gate_config import generated_sources
+from generated_marks import generated_sources
 from project_files import GIT_LISTING
 
 if TYPE_CHECKING:

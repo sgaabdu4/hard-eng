@@ -22,9 +22,9 @@ from gate_config import (
     JsonObject,
     Report,
     dart_scan_includes_boundaries,
-    generated_sources,
     repository_files,
 )
+from generated_marks import generated_sources
 from hook_chain import is_own
 from project_files import (
     INSTALL_LOCKS,

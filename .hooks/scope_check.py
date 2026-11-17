@@ -5,7 +5,7 @@ import subprocess
 import tomllib
 from pathlib import Path, PurePosixPath
 
-from gate_config import generated_sources
+from generated_marks import generated_sources
 from project_files import GIT_LISTING
 
 SOURCE_FOLDERS = frozenset(
