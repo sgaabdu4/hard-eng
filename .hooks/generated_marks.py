@@ -1,7 +1,6 @@
 """The one owner of which files `linguist-generated` or `linguist-vendored` marks hide: an exact path with a folder, a fixed generator suffix, or a folder that is a byte copy of a judged package; never a catch-all."""
 
 import re
-import shlex
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -12,20 +11,31 @@ GENERATED_KEYS = {"linguist-generated", "linguist-vendored"}
 PROOFS: dict[tuple[Path, str], str | None] = {}
 INDEXES: dict[Path, dict[str, str]] = {}
 PUBSPECS: dict[Path, dict[str, bytes]] = {}
-MARKED_PACKAGES: dict[Path, set[str]] = {}
+MARKED_PACKAGES: dict[Path, dict[str, bool]] = {}
+MARKS: dict[tuple[Path, int, int, frozenset[str]], list[str]] = {}
+TOPS: dict[Path, Path] = {}
+CLAIMED: dict[Path, tuple[list[str], set[str]]] = {}
 LISTED: dict[Path, tuple[frozenset[str], set[str]]] = {}
-GLOB = re.compile(r"[*?\[]")
+LISTINGS: dict[Path, str] = {}
+ASKED: dict[Path, tuple[set[str], set[str]]] = {}
 GENERATOR_SUFFIXES = (".g.dart", ".gr.dart", ".freezed.dart")
-NAME_PART = re.compile(r"[\w*-]*")
+
+
+def has_glob(text: str) -> bool:
+    return any(char in text for char in "*?[")
+
+
+def generator_name(name: str) -> bool:
+    return all(char.isalnum() or char in "_*-" for char in name)
 
 
 def mark_kind(pattern: str) -> str | None:
     plain = pattern.strip("/")
-    if not GLOB.search(plain):
+    if not has_glob(plain):
         return "exact" if "/" in plain or pattern.startswith("/") else None
     last = plain.split("/")[-1]
     if any(
-        last.endswith(suffix) and NAME_PART.fullmatch(last.removesuffix(suffix))
+        last.endswith(suffix) and generator_name(last.removesuffix(suffix))
         for suffix in GENERATOR_SUFFIXES
     ):
         return "suffix"
@@ -48,8 +58,19 @@ def regex(pattern: str) -> re.Pattern[str]:
 
 
 def marks(attribute_file: Path, keys: set[str]) -> list[str]:
-    if not attribute_file.is_file():
+    try:
+        seen = attribute_file.stat()
+    except OSError:
         return []
+    token = (attribute_file, seen.st_mtime_ns, seen.st_size, frozenset(keys))
+    if token not in MARKS:
+        MARKS[token] = read_marks(attribute_file, keys)
+    return MARKS[token]
+
+
+def read_marks(attribute_file: Path, keys: set[str]) -> list[str]:
+    import shlex
+
     found = []
     for line in attribute_file.read_text(errors="replace").splitlines():
         try:
@@ -67,11 +88,17 @@ def marks(attribute_file: Path, keys: set[str]) -> list[str]:
 
 
 def repository_top(root: Path) -> Path:
-    folder = root.resolve()
-    return next(
-        (parent for parent in (folder, *folder.parents) if (parent / ".git").exists()),
-        folder,
-    )
+    if root not in TOPS:
+        folder = root.resolve()
+        TOPS[root] = next(
+            (
+                parent
+                for parent in (folder, *folder.parents)
+                if (parent / ".git").exists()
+            ),
+            folder,
+        )
+    return TOPS[root]
 
 
 def package_name(text: str) -> str | None:
@@ -86,23 +113,63 @@ def reset() -> None:
     INDEXES.clear()
     PUBSPECS.clear()
     MARKED_PACKAGES.clear()
+    MARKS.clear()
+    TOPS.clear()
+    CLAIMED.clear()
+    LISTINGS.clear()
+    ASKED.clear()
+
+
+def listed_with_blobs(root: Path) -> list[str]:
+    """The tracked and unignored untracked paths, in one `ls-files -s` call whose blob ids the derived-copy proof reuses, so the proof asks Git for no second listing."""
+    listed = subprocess.check_output(
+        [
+            *GIT_LISTING,
+            "ls-files",
+            "-s",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
+        cwd=root,
+        text=True,
+    )
+    top = repository_top(root)
+    if root.resolve() == top:
+        LISTINGS[top] = listed
+        INDEXES.pop(top, None)
+    return sorted(
+        {entry.partition("\t")[2] or entry for entry in listed.split("\0")} - {""}
+    )
 
 
 def tracked_index(top: Path) -> dict[str, str]:
     """Every tracked path with its blob id, read once from the index so that a file deleted from disk and not staged changes nothing."""
     if top not in INDEXES:
-        listed = subprocess.run(
-            [*GIT_LISTING, "ls-files", "-s", "-z"],
-            cwd=top,
-            capture_output=True,
-            check=False,
-        ).stdout.decode(errors="replace")
+        listed = LISTINGS.get(top)
+        if listed is None:
+            listed = subprocess.run(
+                [*GIT_LISTING, "ls-files", "-s", "-z"],
+                cwd=top,
+                capture_output=True,
+                check=False,
+            ).stdout.decode(errors="replace")
         INDEXES[top] = {
             path: meta.split()[1]
             for meta, _, path in (entry.partition("\t") for entry in listed.split("\0"))
             if path
         }
     return INDEXES[top]
+
+
+def ancestors(name: str) -> list[str]:
+    """The folders above a tracked path, nearest first, ending in `.`."""
+    found = []
+    while "/" in name:
+        name = name.rpartition("/")[0]
+        found.append(name)
+    return [*found, "."]
 
 
 def folder_prefix(folder: str) -> str:
@@ -123,10 +190,11 @@ def pubspec_texts(top: Path) -> dict[str, bytes]:
             for name in index
             if name == "pubspec.yaml" or name.endswith("/pubspec.yaml")
         ]
+        wanted = "".join(f"{index[name]}\n" for name in names).encode()
         batch = subprocess.run(
             [*GIT_LISTING, "cat-file", "--batch"],
             cwd=top,
-            input="".join(f"{index[name]}\n" for name in names).encode(),
+            input=wanted,
             capture_output=True,
             check=False,
         ).stdout
@@ -141,29 +209,61 @@ def pubspec_texts(top: Path) -> dict[str, bytes]:
     return PUBSPECS[top]
 
 
-def marked_packages(top: Path) -> set[str]:
-    """The folders of tracked packages that hold a file a mark exempts, from one `git check-attr`."""
-    if top not in MARKED_PACKAGES:
-        packages = {
-            PurePosixPath(name).parent.as_posix() for name in pubspec_texts(top)
-        }
+def marked_packages(top: Path, packages: set[str]) -> set[str]:
+    """Which of the package folders hold a file that a mark exempts: one `git check-attr` for every folder not asked about yet."""
+    known = MARKED_PACKAGES.setdefault(top, {})
+    fresh = sorted(packages - known.keys())
+    if fresh:
+        wanted = set(fresh)
         files = [
-            name
-            for name in tracked_index(top)
-            if any(
-                folder_prefix(package) == "" or name.startswith(folder_prefix(package))
-                for package in packages
-            )
+            name for name in tracked_index(top) if wanted.intersection(ancestors(name))
         ]
-        held = set()
-        for name in marked_by_git(top, files, GENERATED_KEYS):
-            held.update(
-                str(parent)
-                for parent in PurePosixPath(name).parents
-                if str(parent) in packages
-            )
-        MARKED_PACKAGES[top] = held
-    return MARKED_PACKAGES[top]
+        asked, marked = ASKED.get(top, (set(), set()))
+        fresh_files = [name for name in files if name not in asked]
+        held = {
+            parent
+            for name in [
+                *(name for name in files if name in marked),
+                *(
+                    marked_by_git(top, fresh_files, GENERATED_KEYS)
+                    if fresh_files
+                    else ()
+                ),
+            ]
+            for parent in ancestors(name)
+        }
+        known.update({package: package in held for package in fresh})
+    return {package for package in packages if known[package]}
+
+
+def claims(top: Path) -> tuple[list[str], set[str]]:
+    """The folders that marks of the root `.gitattributes` claim, and the package folders outside them that share a pubspec name with one: the only sources a proof can ask about."""
+    if top not in CLAIMED:
+        texts = pubspec_texts(top)
+        folders = [
+            folder
+            for pattern in marks(top / ".gitattributes", GENERATED_KEYS)
+            if mark_kind(pattern) == "folder"
+            for folder in marked_folders(top, pattern)
+        ]
+        names = {
+            package_name(data.decode(errors="replace"))
+            for path, data in texts.items()
+            if inside(path, folders)
+        }
+        sources = {
+            PurePosixPath(path).parent.as_posix()
+            for path, data in texts.items()
+            if package_name(data.decode(errors="replace")) in names
+            and not inside(path, folders)
+        }
+        marked_packages(top, sources)
+        CLAIMED[top] = (folders, sources)
+    return CLAIMED[top]
+
+
+def inside(path: str, folders: list[str]) -> bool:
+    return any(path.startswith(folder_prefix(folder)) for folder in folders)
 
 
 def runtime_text(relative: str, data: bytes) -> bytes:
@@ -182,13 +282,15 @@ def derived_copy(top: Path, folder: str) -> str | None:
     name = package_name(own.decode(errors="replace")) if own is not None else None
     if name is None:
         return "it holds no pubspec.yaml, so no package is its source"
-    sources = [
+    folders, _ = claims(top)
+    candidates = {
         PurePosixPath(path).parent.as_posix()
         for path, data in pubspecs.items()
         if not path.startswith(prefix)
+        and not inside(path, folders)
         and package_name(data.decode(errors="replace")) == name
-        and PurePosixPath(path).parent.as_posix() not in marked_packages(top)
-    ]
+    }
+    sources = sorted(candidates - marked_packages(top, candidates))
     if not sources:
         return f"no unmarked tracked package is named {name}"
     first = ""
@@ -259,14 +361,9 @@ def hidden_by_exact_marks(root: Path, name: str, keys: set[str]) -> bool:
 def marked_folders(top: Path, pattern: str) -> list[str]:
     """The tracked folders that a folder mark names: the one folder, or each folder that its glob matches."""
     folder = pattern.strip("/").removesuffix("/**")
-    if not GLOB.search(folder):
+    if not has_glob(folder):
         return [folder]
-    folders = {
-        parent.as_posix()
-        for name in tracked_index(top)
-        for parent in PurePosixPath(name).parents
-        if parent.as_posix() != "."
-    }
+    folders = {parent for name in tracked_index(top) for parent in ancestors(name)[:-1]}
     matcher = regex(pattern.removesuffix("/**"))
     return sorted(held for held in folders if matcher.fullmatch(held))
 
@@ -330,8 +427,7 @@ def generated_sources(
     if listed.issuperset(names) and not generated_only:
         return generated.intersection(names)
     keys = {"linguist-generated"} if generated_only else GENERATED_KEYS
-    return {
-        name
-        for name in marked_by_git(root, names, keys)
-        if hidden_by_exact_marks(root, name, keys)
-    }
+    marked = marked_by_git(root, names, keys)
+    if keys == GENERATED_KEYS and root.resolve() == repository_top(root):
+        ASKED[root.resolve()] = (set(names), set(marked))
+    return {name for name in marked if hidden_by_exact_marks(root, name, keys)}

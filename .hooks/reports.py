@@ -269,7 +269,7 @@ def expected_coverage(
         raise ValueError(
             f"Coverage report omits production files: {', '.join(map(str, relative))}. "
             "Cover them, or mark generator output with "
-            "`<pattern> linguist-generated=true` in .gitattributes"
+            "`<exact path> linguist-generated=true` in .gitattributes"
             + (omit_step(directory, relative) if kind == "python-tests" else "")
             + (
                 ". For Dart code outside lib/: move it under lib/ and test it there"

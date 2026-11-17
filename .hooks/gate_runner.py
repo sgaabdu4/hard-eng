@@ -43,7 +43,6 @@ from python_setup import (
     require_import_contract,
     validate_pyrefly,
 )
-from shellcheck_rc import ignoring_settings
 from tool_setup import gate_scanner, lost_scanner_note, managed_command, provision_tools
 from untrusted_input import (
     next_route_types,
@@ -160,6 +159,7 @@ def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
     from reports import osv_lockfiles
+    from shellcheck_rc import ignoring_settings
 
     command = osv_lockfiles(
         managed_command(gate["command"], ROOT / group["path"]), ROOT / group["path"]
