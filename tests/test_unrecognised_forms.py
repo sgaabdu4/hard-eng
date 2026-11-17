@@ -287,6 +287,21 @@ def test_a_nested_ruff_config_that_sets_the_target_version_is_refused(
         validate_resolved(root, lint_groups((".", LINT)), 900)
 
 
+def test_a_nested_ruff_config_that_sets_a_target_at_the_minimum_passes(
+    tmp_path: Path,
+) -> None:
+    """A target version at the `requires-python` minimum cannot hide a finding, so the folder needs no gate group."""
+    root = project(
+        tmp_path,
+        {
+            "main.py": "x = 1\n",
+            "pyproject.toml": '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.12"\n',
+            "sub/ruff.toml": 'target-version = "py312"\n',
+        },
+    )
+    validate_resolved(root, lint_groups((".", LINT)), 900)
+
+
 def test_a_ruff_config_in_a_javascript_group_is_judged_by_the_python_gate_above(
     tmp_path: Path,
 ) -> None:

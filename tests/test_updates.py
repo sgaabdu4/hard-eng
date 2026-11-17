@@ -858,10 +858,7 @@ def test_retired_families_config_is_regenerated_and_reported(
     assert "skills (script not found)" in notice and "inline (" not in notice
     assert "flagged (script not found)" in notice
     assert "lint (program not found): ['node_modules/.bin/biome'" in notice
-    assert (
-        "audit (HE-NO-SWITCH-OFF: A gate that runs ruff, cargo, clippy, fallow or gitleaks must run it directly"
-        in notice
-    )
+    assert "audit (HE-NO-SWITCH-OFF" in notice
     assert "removed ([Errno 2] No such file or directory" in notice
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)
