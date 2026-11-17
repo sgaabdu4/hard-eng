@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-No test in `tests/test_agent_browser.py` reads the real process list of the machine, so a browser process that starts during the run cannot fail a test. Non-goals: the judge itself, the agent model checks that must read the real list.
+No test in `tests/test_agent_browser.py` judges a run against the real process list of the machine, so a browser process that starts during the run cannot fail a test. Non-goals: the judge itself, the agent model checks that must read the real list.
 
 ## Sources + coverage
 
@@ -46,6 +46,7 @@ N/A — tests only; no visible UI.
 Result: Passed
 Evidence: `tests/test_agent_browser.py` with the stand-in processes: 37 passed. Ruff, Pyrefly and Vulture report no finding. The Complete check passed on this branch.
 Review: the Codex adversarial review approved 78f904ac with no findings. The independent review at 931fccce was clean; the fixture changed after it, so that review ran again.
+Review declined: the map test still reads the real process list :: `test_a_map_run_adds_only_the_committed_feature_map` only prepares the app, which writes the list to the baseline file (`tests/agent_browser.py::prepare_browser_app`); that test never calls the judge and asserts nothing about processes, so no process list can change its result. The outcome line now says "judges".
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
 Retro: (1) Escaped bug: a test on the base branch read the real process list and passed each gate, because no browser process started during those runs → no gate can catch it: a case for "this test reads the machine" would only repeat the fixture. Both tests of the judge get their run from the `judged_run` fixture, which sets the fixed list. (3) Ran too late: the dead-code gate refused an autouse fixture at the push, because no code names it → the focused checks of this plan's Evidence line now include the dead-code command; the fixture is taken by name. (2) The push refused the change without a plan, because it removes lines from a test file → None — the refusal named the step.
