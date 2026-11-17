@@ -1,6 +1,8 @@
 """A reported vulnerability passes only when public data proves that no fixed release exists."""
 
 import json
+import subprocess
+import sys
 import urllib.error
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -435,3 +437,19 @@ def test_a_registry_that_fails_or_lacks_the_package_fails_the_gate(
     item = package_item(BOUNDED, ecosystem=ecosystem, name="ex")
     with pytest.raises(ValueError, match="registry could not be read"):
         reports.validate_osv(report_of(tmp_path, item), unfixed=fetch)
+
+
+def test_loading_the_hook_and_gate_modules_loads_no_osv_module() -> None:
+    hooks = Path(reports.__file__).parent
+    program = (
+        f"import sys; sys.path.insert(0, {str(hooks)!r}); "
+        "import reports, gate_runner, agent_hooks, polling, failures; "
+        "print([m for m in ('osv_report', 'osv_unfixed', 'freshness') if m in sys.modules])"
+    )
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", program],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert done.stdout.strip() == "[]"

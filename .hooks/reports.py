@@ -25,7 +25,6 @@ from fallow_report import finding_lines as fallow_findings
 from fallow_report import reads_coverage, sdk_binaries, validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
 from gate_schedule import QUICK_ROLES
-from osv_report import osv_unfixed_only, validate_osv, validate_osv_image
 from project_setup import package_script_invocation
 from react_report import finding_lines as react_findings
 from react_report import incomplete_reason
@@ -359,6 +358,29 @@ def report_branches(
         print(
             f"Branch coverage: {covered}/{total} ({100 * covered / total:.2f}%; informational)"
         )
+
+
+def validate_osv(
+    path: Path,
+    *,
+    empty_bun: Path | None = None,
+    unfixed: Callable[[str], object] | None = None,
+) -> None:
+    from osv_report import validate_osv as validate
+
+    validate(path, empty_bun=empty_bun, unfixed=unfixed)
+
+
+def validate_osv_image(path: Path) -> None:
+    from osv_report import validate_osv_image as validate
+
+    validate(path)
+
+
+def osv_unfixed_only(path: Path) -> bool:
+    from osv_report import osv_unfixed_only as unfixed_only
+
+    return unfixed_only(path)
 
 
 def validate_semgrep(path: Path, directory: Path | None = None) -> None:
