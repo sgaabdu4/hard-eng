@@ -10,12 +10,19 @@ from resolved_settings import validate_resolved
 LINT = ["uv", "run", "--no-sync", "ruff", "check", "."]
 
 
-def environment(root: Path, fake: bool) -> None:
+LOCK = (
+    'version = 1\n[[package]]\nname = "ruff"\nversion = "0.17.5"\nsource = {{ {} }}\n'
+)
+REGISTRY = 'registry = "https://pypi.org/simple"'
+
+
+def environment(root: Path, fake: bool, source: str = REGISTRY) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "pyproject.toml").write_text(
         '[project]\nname = "demo"\nversion = "0"\nrequires-python = ">=3.10"\n'
     )
     (root / "a.py").write_text("x = 1\n")
+    (root / "uv.lock").write_text(LOCK.format(source))
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     subprocess.run(["uv", "venv", "-q", str(root / ".venv")], cwd=root, check=True)
     if fake:
@@ -50,3 +57,21 @@ def test_a_ruff_file_that_the_ruff_package_did_not_install_is_refused(
 def test_the_ruff_package_own_file_passes(tmp_path: Path) -> None:
     environment(tmp_path, fake=False)
     judge(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'directory = "tools/ruff"',
+        'editable = "tools/ruff"',
+        'path = "tools/ruff.whl"',
+        'git = "https://example.invalid/ruff"',
+    ],
+)
+def test_a_ruff_that_the_lockfile_takes_from_anywhere_but_the_registry_is_refused(
+    tmp_path: Path, source: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a local package named `ruff` is not the tool: only a registry source in uv.lock counts."""
+    environment(tmp_path, fake=False, source=source)
+    with pytest.raises(ValueError, match=r"registry"):
+        judge(tmp_path)

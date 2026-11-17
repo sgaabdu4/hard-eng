@@ -29,6 +29,7 @@ from source_scan import (
     string_end,
     without_literals,
 )
+from workflow_blocking import blocking_hit, hard_eng_workflow
 
 DISABLED_CALL = re.compile(r"\.disabled\(")
 QUOTE_OR_BACKSLASH = re.compile(r"[\\'\"]")
@@ -275,16 +276,6 @@ SECURITY_OFF = re.compile(
     r"|shellcheck\s+(?:[\w-]+=\S+\s+)*(?:(?:disable|shell)=|source=\S*)|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
-CI_NOT_BLOCKING = re.compile(
-    r"continue-on-error\s*:\s*(?!false\b)\S|\|\|\s*(?:true|:)(?![\w-])|;\s*true(?![\w-])"
-)
-
-
-def hard_eng_workflow(name: str) -> bool:
-    path = PurePosixPath(name)
-    return path.name == "hard-eng.yml" and ".github" in path.parts
-
-
 RAW_OFF = {
     ".py": re.compile(
         r"#\s*(?:pragma:\s*no cover|(?:(?:ruff|flake8)\s*:\s*)?(?i:noqa)"
@@ -739,9 +730,9 @@ def security_hits(
     found: list[str] = []
     for number, text in lines:
         entry = text.strip()
-        if hard_eng_workflow(name) and (hit := CI_NOT_BLOCKING.search(text)):
+        if hard_eng_workflow(name) and (hit := blocking_hit(text)):
             found.append(
-                f"{name}:{number} {verb} {hit[0]!r}: the Hard Eng job and its check step must be blocking, so a failing check fails the job"
+                f"{name}:{number} {verb} {hit!r}: the Hard Eng job and its check steps must be blocking and must be the lines that setup generates; restore the generated step or run setup again"
             )
         elif (hit := SECURITY_OFF.search(text)) and not followed_source(
             root, name, hit[0]

@@ -16,6 +16,11 @@ NAMES = [
     "FALLOW_AUDIT_BASE",
     "FALLOW_TYPE_AWARE",
     "FALLOW_MADE_UP_BY_A_NEWER_RELEASE",
+    "CARGO_ALIAS_CLIPPY",
+    "CLIPPY_CONF_DIR",
+    "SHELLCHECK_OPTS",
+    "RUFF_OUTPUT_FILE",
+    "RUFF_MADE_UP_BY_A_NEWER_RELEASE",
 ]
 
 
@@ -67,3 +72,12 @@ def test_a_gate_command_that_sets_the_variable_fails(
     }
     with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
         validate_gate(gate, tmp_path, set())
+
+
+@pytest.mark.parametrize("name", ["RUFF_CACHE_DIR", "RUFF_NO_CACHE"])
+def test_a_ruff_variable_that_changes_no_finding_may_be_set(
+    tmp_path: Path, name: str
+) -> None:
+    """Only the cache variables of Ruff change no result, so they stay."""
+    validate_whole_project(project(tmp_path, {".env": f"{name}=x\n"}))
+    assert name in scan_environment({name: "x"})

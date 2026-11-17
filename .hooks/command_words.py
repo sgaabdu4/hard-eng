@@ -229,6 +229,10 @@ def launch(command: list[str], directory: Path) -> tuple[list[str], list[str]] |
     if found is None:
         raise refusal(f"the gate holds {' '.join(command)}")
     launcher, argv = found
+    if argv[0] == "ruff" and words != command:
+        raise refusal(
+            "ruff in a package script runs whatever package manager file is named `ruff`: run it as `ruff check <paths>` or `uvx ruff@<pin> check <paths>`"
+        )
     if launcher[:2] == ["uv", "run"] and shadowed(argv[0], directory):
         raise refusal(
             f"a project script named {argv[0]} shadows the tool under `uv run`: rename the script or use `uvx {argv[0]}@<pin>`"

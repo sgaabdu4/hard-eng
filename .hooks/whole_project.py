@@ -19,7 +19,6 @@ from comments import (
     block_hits,
     comment_map,
     entry_file,
-    hard_eng_workflow,
     pattern_switch_offs,
     security_hits,
 )
@@ -31,6 +30,7 @@ from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
 from rust_settings import CLIPPY_FILES, rust_file_hits
+from workflow_blocking import hard_eng_workflow
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 TEXT_SUFFIXES = {

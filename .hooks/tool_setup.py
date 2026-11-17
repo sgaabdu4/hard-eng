@@ -220,6 +220,11 @@ def require_role_tool(language: str, gate: Gate, command: list[str]) -> None:
             f"{gate['name']}: the {gate['role']} check must run `{' '.join(tool)}`; "
             f"this command does not name it: {' '.join(gate['command'])}"
         )
+    if (language, role) == ("javascript", "dead-code-duplicates") and "audit" in words:
+        raise ValueError(
+            f"{gate['name']}: the {role} check must run the combined scan, not `fallow audit`, "
+            "which finds its own base and judges only the changed files"
+        )
 
 
 def uvx_scanner(command: list[str]) -> list[str]:
