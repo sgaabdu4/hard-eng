@@ -157,12 +157,15 @@ def ruff_config_of(folder: Path) -> bool:
     return isinstance(tool, dict) and "ruff" in tool
 
 
+RUFF_SUFFIXES = (".py", ".pyi", ".pyw", ".ipynb")
+
+
 def governing_samples(directory: Path, checked: set[str]) -> list[str]:
     """One checked Python file for each distinct Ruff config that governs a file of the gate, so each config is judged."""
     base = directory.resolve()
     chosen: dict[Path, str] = {}
     for name in sorted(checked):
-        if not name.endswith((".py", ".pyi")):
+        if not name.endswith(RUFF_SUFFIXES):
             continue
         folder = (base / name).parent
         found = base
@@ -178,7 +181,7 @@ def governing_samples(directory: Path, checked: set[str]) -> list[str]:
 
 
 def harmless_ruff_config(name: str, directory: Path) -> bool:
-    """A `pyproject.toml` with no ruff table, or a ruff config that sets only a target version at the `requires-python` minimum or above; any other key can change what is reported."""
+    """A `pyproject.toml` with no ruff table, or a ruff config that sets only a target version at the `requires-python` minimum; any other key can change what is reported."""
     try:
         config = tomllib.loads((directory / name).read_text())
     except (OSError, tomllib.TOMLDecodeError):
@@ -194,7 +197,7 @@ def harmless_ruff_config(name: str, directory: Path) -> bool:
         set(config) == {"target-version"}
         and minimum is not None
         and found is not None
-        and (int(found[1]), int(found[2])) >= minimum
+        and (int(found[1]), int(found[2])) == minimum
     )
 
 

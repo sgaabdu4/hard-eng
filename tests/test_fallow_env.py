@@ -13,6 +13,9 @@ NAMES = [
     "FALLOW_COVERAGE_ROOT",
     "FALLOW_MAX_FILE_SIZE",
     "FALLOW_PRODUCTION",
+    "FALLOW_AUDIT_BASE",
+    "FALLOW_TYPE_AWARE",
+    "FALLOW_MADE_UP_BY_A_NEWER_RELEASE",
 ]
 
 
@@ -39,15 +42,10 @@ def test_a_workflow_or_script_that_sets_the_variable_is_refused(
     assert name in message
 
 
-def test_the_audit_base_variable_and_prose_pass(tmp_path: Path) -> None:
+def test_prose_that_names_a_fallow_variable_passes(tmp_path: Path) -> None:
+    """Only a file that sets a variable is refused; a note that names it is not."""
     validate_whole_project(
-        project(
-            tmp_path,
-            {
-                "scripts/audit.sh": "export FALLOW_AUDIT_BASE=origin/main\n",
-                "README.md": "Set FALLOW_COVERAGE=x on your machine.\n",
-            },
-        )
+        project(tmp_path, {"README.md": "Set FALLOW_COVERAGE=x on your machine.\n"})
     )
 
 

@@ -14,6 +14,7 @@ from gate_config import Gate, Group
 from ruff_settings import option_words
 from ruff_table import ruff_hits
 from scope_check import (
+    RUFF_SUFFIXES,
     governing_samples,
     left_out,
     nested_configs,
@@ -212,7 +213,7 @@ def ruff_gate_hits(
             )
             if hit not in hits
         ]
-    left = left_out(directory, (".py", ".pyi"), checked, children)
+    left = left_out(directory, RUFF_SUFFIXES, checked, children)
     nested = nested_configs(directory, "ruff", roots)
     return [
         f"gate {gate['name']}: {hit}"

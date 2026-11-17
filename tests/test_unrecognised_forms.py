@@ -252,6 +252,16 @@ def test_a_fallow_gate_flag_that_loosens_the_duplicate_scan_is_refused(
         validate_gate(gate([*DEAD, *flags], "dead-code-duplicates"), tmp_path, set())
 
 
+def test_a_fallow_gate_with_a_base_is_refused(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: `--base HEAD` makes an audit judge only the changed files, so a branch with old findings passes."""
+    command = ["fallow", "audit", "--gate", "all", "--base", "HEAD", "--fail-on-issues"]
+    with pytest.raises(
+        ValueError,
+        match=r"Fallow scans must cover the whole project[\s\S]*remove --base",
+    ):
+        validate_gate(gate(command, "dead-code-duplicates"), tmp_path, set())
+
+
 def test_a_fallow_config_below_a_gate_root_needs_its_own_gate_group(
     tmp_path: Path,
 ) -> None:
