@@ -570,3 +570,17 @@ def test_a_python_epoch_release_is_above_the_installed_one_for_an_open_range(
     item = package_item(OPEN, version="2.0", ecosystem="PyPI", name="ex-ample")
     with pytest.raises(ValueError, match="release 1!1.0 is above"):
         accepted(report_of(tmp_path, item), pypi("2.0", "1!1.0"))
+
+
+def test_the_closed_range_of_a_mixed_advisory_still_bounds_the_installed_release(
+    tmp_path: Path,
+) -> None:
+    ranges = [
+        {"type": "SEMVER", "events": OPEN},
+        {"type": "SEMVER", "events": [{"introduced": "0"}, {"last_affected": "1.0.0"}]},
+    ]
+    entry = {"package": {"ecosystem": "npm", "name": "picomatch"}, "ranges": ranges}
+    item = package_item(OPEN, version="1.0.1")
+    item["vulnerabilities"] = [{"id": ID, "affected": [entry]}]
+    with pytest.raises(ValueError, match="1.0.1 is above the affected range"):
+        accepted(report_of(tmp_path, item), npm("1.0.0", "1.0.1"))

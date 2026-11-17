@@ -85,8 +85,10 @@ def range_end(events: list[JsonObject]) -> Bound | None:
     return core
 
 
-def last_affected(advisory: JsonObject, ecosystem: str, name: str) -> Bound | None:
-    """Where the advisory's ranges end; None when any range is open. Any fixed event is an error."""
+def last_affected(
+    advisory: JsonObject, ecosystem: str, name: str
+) -> list[Bound | None]:
+    """Where each range of the advisory ends; None for a range with no end. Any fixed event is an error."""
     ranges = [
         found
         for entry in objects(advisory.get("affected"))
@@ -97,8 +99,7 @@ def last_affected(advisory: JsonObject, ecosystem: str, name: str) -> Bound | No
     ]
     if not ranges:
         raise ValueError(f"it has no range for {name}")
-    ends = [range_end(objects(found.get("events"))) for found in ranges]
-    return None if None in ends else min(end for end in ends if end is not None)
+    return [range_end(objects(found.get("events"))) for found in ranges]
 
 
 def malicious(advisory: JsonObject) -> bool:
@@ -110,7 +111,7 @@ def malicious(advisory: JsonObject) -> bool:
     )
 
 
-def bound_of(advisory: JsonObject, ecosystem: str, name: str) -> Bound | None:
+def bound_of(advisory: JsonObject, ecosystem: str, name: str) -> list[Bound | None]:
     if "withdrawn" in advisory:
         raise ValueError(f"{advisory.get('id')}: it is withdrawn but still reported")
     if malicious(advisory):
@@ -140,7 +141,9 @@ def accept_unfixed(item: JsonObject, fetch: Fetch) -> None:
         raise ValueError("the report lacks the record of a vulnerability")
     if ecosystem not in READERS:
         raise ValueError(f"no registry reader for {ecosystem}")
-    bounds = [bound_of(advisory, ecosystem, name) for advisory in advisories]
+    bounds = [
+        end for advisory in advisories for end in bound_of(advisory, ecosystem, name)
+    ]
     installed = release(version)[0]
     closed = [bound for bound in bounds if bound is not None]
     if closed and installed > min(closed):
