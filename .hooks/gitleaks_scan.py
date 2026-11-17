@@ -11,8 +11,17 @@ from typing import IO
 from process_group import run_in_group
 from project_files import GIT_LISTING
 
-CONFIG_VARIABLES = ("GITLEAKS_CONFIG", "GITLEAKS_CONFIG_TOML")
-CONFIG_ASSIGNMENT = re.compile(r"\bGITLEAKS_CONFIG(?:_TOML)?[\"']?\s*[:=]")
+CONFIG_VARIABLES = (
+    "GITLEAKS_CONFIG",
+    "GITLEAKS_CONFIG_TOML",
+    "FALLOW_COVERAGE",
+    "FALLOW_COVERAGE_ROOT",
+    "FALLOW_MAX_FILE_SIZE",
+    "FALLOW_PRODUCTION",
+)
+CONFIG_ASSIGNMENT = re.compile(
+    r"\b(?:GITLEAKS_CONFIG(?:_TOML)?|FALLOW_COVERAGE(?:_ROOT)?|FALLOW_MAX_FILE_SIZE|FALLOW_PRODUCTION)[\"']?\s*[:=]"
+)
 
 
 def scan_environment(base: dict[str, str] | None = None) -> dict[str, str]:
@@ -26,7 +35,7 @@ def scan_environment(base: dict[str, str] | None = None) -> dict[str, str]:
 
 def config_variable_hits(name: str, text: str) -> list[str]:
     return [
-        f"{name}:{number} sets {match[0].rstrip(':= "\'')}, which swaps the Gitleaks config"
+        f"{name}:{number} sets {match[0].rstrip(':= "\'')}, which swaps a scanner config or changes what Fallow reports"
         for number, line in enumerate(text.splitlines(), 1)
         if not line.lstrip().startswith("#")
         and (match := CONFIG_ASSIGNMENT.search(line))
@@ -42,7 +51,7 @@ def validate_config_variables(command: list[str]) -> None:
     ]
     if found:
         raise ValueError(
-            "HE-NO-SWITCH-OFF: A gate must not set the Gitleaks config variables, which swap its config: "
+            "HE-NO-SWITCH-OFF: A gate must not set the variables that swap the Gitleaks config or change what Fallow reports: "
             + ", ".join(found)
         )
 

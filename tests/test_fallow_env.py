@@ -1,0 +1,71 @@
+"""The Fallow variables that change what it reports cannot be set by a project or reach a gate."""
+
+from pathlib import Path
+
+import pytest
+from gate_config import Gate, validate_gate
+from gitleaks_scan import scan_environment
+from test_strict_refusals import project, refusal
+from whole_project import validate_whole_project
+
+NAMES = [
+    "FALLOW_COVERAGE",
+    "FALLOW_COVERAGE_ROOT",
+    "FALLOW_MAX_FILE_SIZE",
+    "FALLOW_PRODUCTION",
+]
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_a_gate_runs_without_the_variable(name: str) -> None:
+    """HE-NO-SWITCH-OFF: a made-up coverage map or a production mode changes what Fallow reports, so gates run without them."""
+    assert name not in scan_environment({name: "x", "PATH": "/bin"})
+
+
+@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize(
+    ("file", "text"),
+    [
+        (".github/workflows/ci.yml", "env:\n  @N@: x\n"),
+        ("scripts/check.sh", "export @N@=x\n"),
+        (".env", "@N@=x\n"),
+    ],
+)
+def test_a_workflow_or_script_that_sets_the_variable_is_refused(
+    tmp_path: Path, name: str, file: str, text: str
+) -> None:
+    message = refusal(project(tmp_path, {file: text.replace("@N@", name)}))
+    assert f"{file}:" in message
+    assert name in message
+
+
+def test_the_audit_base_variable_and_prose_pass(tmp_path: Path) -> None:
+    validate_whole_project(
+        project(
+            tmp_path,
+            {
+                "scripts/audit.sh": "export FALLOW_AUDIT_BASE=origin/main\n",
+                "README.md": "Set FALLOW_COVERAGE=x on your machine.\n",
+            },
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["@N@=x.json", "fallow", "--fail-on-issues"],
+        ["env", "@N@=x.json", "fallow", "--fail-on-issues"],
+    ],
+)
+@pytest.mark.parametrize("name", NAMES)
+def test_a_gate_command_that_sets_the_variable_fails(
+    tmp_path: Path, name: str, command: list[str]
+) -> None:
+    gate: Gate = {
+        "name": "fallow",
+        "role": "dead-code-duplicates",
+        "command": [word.replace("@N@", name) for word in command],
+    }
+    with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+        validate_gate(gate, tmp_path, set())
