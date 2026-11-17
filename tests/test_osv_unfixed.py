@@ -1,7 +1,10 @@
 """A reported vulnerability passes only when public data proves that no fixed release exists."""
 
 import json
+import urllib.error
+from collections.abc import Callable
 from contextlib import nullcontext
+from email.message import Message
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -385,3 +388,50 @@ def test_a_record_that_is_withdrawn_but_still_reported_fails(tmp_path: Path) -> 
     ]
     with pytest.raises(ValueError, match="withdrawn"):
         accepted(report_of(tmp_path, item), npm("4.0.7"))
+
+
+def refuse_with(error: Exception) -> Callable[[str], object]:
+    def fetch(_url: str) -> object:
+        raise error
+
+    return fetch
+
+
+def answer(body: object) -> Callable[[str], object]:
+    return lambda _url: body
+
+
+NOT_FOUND = urllib.error.HTTPError("https://r", 404, "Not Found", Message(), None)
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "fetch"),
+    [
+        ("npm", refuse_with(TimeoutError("timed out"))),
+        ("npm", refuse_with(json.JSONDecodeError("bad", "{", 1))),
+        ("npm", refuse_with(NOT_FOUND)),
+        ("npm", answer({"error": "Not found"})),
+        ("npm", answer(["4.0.7"])),
+        ("PyPI", refuse_with(NOT_FOUND)),
+        ("PyPI", answer({"message": "Not Found"})),
+        ("Pub", refuse_with(NOT_FOUND)),
+        ("Pub", answer({"error": {"code": "NotFound"}})),
+    ],
+    ids=[
+        "npm-timeout",
+        "npm-bad-json",
+        "npm-404",
+        "npm-missing-package-body",
+        "npm-wrong-shape",
+        "pypi-404",
+        "pypi-missing-package-body",
+        "pub-404",
+        "pub-missing-package-body",
+    ],
+)
+def test_a_registry_that_fails_or_lacks_the_package_fails_the_gate(
+    tmp_path: Path, ecosystem: str, fetch: Callable[[str], object]
+) -> None:
+    item = package_item(BOUNDED, ecosystem=ecosystem, name="ex")
+    with pytest.raises(ValueError, match="registry could not be read"):
+        reports.validate_osv(report_of(tmp_path, item), unfixed=fetch)
