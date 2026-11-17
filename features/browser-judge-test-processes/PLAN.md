@@ -14,7 +14,7 @@ Sources: N/A — the request is a failed full suite on a branch that changed no 
 
 Owners: `tests/test_agent_browser.py` (the unit tests of the judge) and `tests/agent_browser.py::browser_processes` (the real list, for model checks).
 Same cause: N/A — no earlier fix of this cause. Searched the tests for `browser_processes`, `leftover_failures` and `judge_browser`: only two tests of this file call the judge; one had the fixed list, one did not. `tests/agent_checks.py` passes the judge to model checks, which need the real list.
-Single source: the fixed list has one owner now, the `listed_processes` fixture. The two copies of its setup in the tests are merged into it.
+Single source: the fixed list has one owner now, the `judged_run` fixture, which both tests of the judge take. The two copies of its setup in the tests are merged into it.
 
 ## Decisions + authorization
 
@@ -44,10 +44,10 @@ N/A — tests only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: `tests/test_agent_browser.py` with the stand-in processes: 37 passed. Ruff and Pyrefly report no finding for the file. The Complete check passed on this branch.
-Review: the Codex adversarial review approved 78f904ac with no findings.
+Evidence: `tests/test_agent_browser.py` with the stand-in processes: 37 passed. Ruff, Pyrefly and Vulture report no finding. The Complete check passed on this branch.
+Review: the Codex adversarial review approved 78f904ac with no findings. The independent review at 931fccce was clean; the fixture changed after it, so that review ran again.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
-Retro: (1) Escaped bug: a test on the base branch read the real process list and passed each gate, because no browser process started during those runs → no gate can catch it: a case for "this test reads the machine" would only repeat the fixture. The `listed_processes` fixture applies to each test in the file, so a new test there cannot read the real list. (2) The push refused the change without a plan, because it removes lines from a test file → None — the refusal named the step.
+Retro: (1) Escaped bug: a test on the base branch read the real process list and passed each gate, because no browser process started during those runs → no gate can catch it: a case for "this test reads the machine" would only repeat the fixture. Both tests of the judge get their run from the `judged_run` fixture, which sets the fixed list. (3) Ran too late: the dead-code gate refused an autouse fixture at the push, because no code names it → the focused checks of this plan's Evidence line now include the dead-code command; the fixture is taken by name. (2) The push refused the change without a plan, because it removes lines from a test file → None — the refusal named the step.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
