@@ -29,7 +29,7 @@ from source_scan import (
     string_end,
     without_literals,
 )
-from workflow_blocking import blocking_hit, hard_eng_workflow
+from workflow_blocking import hard_eng_workflow, workflow_hits
 
 DIRECTIVE_PAIR = re.compile(r"([\w-]+)=(\S*)")
 DISABLED_CALL = re.compile(r"\.disabled\(")
@@ -731,11 +731,7 @@ def security_hits(
     found: list[str] = []
     for number, text in lines:
         entry = text.strip()
-        if hard_eng_workflow(name) and (hit := blocking_hit(text)):
-            found.append(
-                f"{name}:{number} {verb} {hit!r}: the Hard Eng job and its check steps must be blocking and must be the lines that setup generates; restore the generated step or run setup again"
-            )
-        elif (hit := SECURITY_OFF.search(text)) and not followed_source(
+        if (hit := SECURITY_OFF.search(text)) and not followed_source(
             root, name, hit[0]
         ):
             fix = (
@@ -761,7 +757,7 @@ def security_switch_offs(
 ) -> list[str]:
     names = sorted(name for name in added if not name.startswith(UNOWNED))
     skipped = generated_by_exact_marks(root, names)
-    return [
+    found = [
         hit
         for name in names
         if name not in skipped
@@ -769,6 +765,10 @@ def security_switch_offs(
             root, name, added[name], "adds", entry_file(root, name, SCAN_IGNORES)
         )
     ]
+    for name in names:
+        if hard_eng_workflow(name) and (root / name).is_file():
+            found += workflow_hits(name, (root / name).read_text())
+    return found
 
 
 def ui_candidate(text: str) -> bool:

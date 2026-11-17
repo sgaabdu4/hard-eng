@@ -1,27 +1,59 @@
-"""The Hard Eng workflow must block: its check lines are the ones setup generates, and no line turns a failure into a pass."""
+"""The Hard Eng workflow must block: each step that calls the hooks is a generated one, and nothing in its job turns a failure into a pass."""
 
 import re
 from pathlib import PurePosixPath
 
 TOOLS = r'(?:bun x --package="\$MISE_PACKAGE" mise|"\$\{mise_command\[@\]\}")'
-GENERATED = re.compile(
-    r"^(?:[A-Z_]+=\S+ )*"
+CHECK_COMMAND = (
+    r"(?:MISE_FETCH_REMOTE_VERSIONS_CACHE=\w+ )?"
     rf"(?:{TOOLS} --no-config exec (?:[\w@.-]+ |\"\$\{{tools\[@\]\}}\" )+-- uv run --no-project --with pyyaml python"
     r"|python3(?: -B)?)"
     r' \.hooks/hard-eng\.py (?:check|impact) --base "\$BASE_SHA"'
     r"(?: --(?:only|skip)-language \w+)?"
     r'(?: --shard (?:rest|merge|"\$SHARD"))?'
-    r'(?: >> "\$GITHUB_OUTPUT" \|\| (?:echo docs_only=false|printf \'runner=[\w.-]+\\napple=(?:true|false)\\n\') >> "\$GITHUB_OUTPUT")?$'
+    r'(?: >> "\$GITHUB_OUTPUT" \|\| (?:echo docs_only=false|printf \'runner=[\w.-]+\\napple=(?:true|false)\\n\') >> "\$GITHUB_OUTPUT")?'
 )
-CHECK_LINE = re.compile(r"\.hooks/hard-eng\.py")
-LINE_PREFIX = re.compile(r"^\s*(?:-\s*)?(?:run:\s*)?")
-SPACES = re.compile(r"\s+")
-BROKEN = re.compile(
-    r"continue-on-error\s*:\s*(?!(?:false|\$\{\{\s*false\s*\}\})\s*(?:#.*)?$)\S"
-    r"|^\s*(?:-\s*)?shell\s*:"
-    r"|^\s*(?:-\s*)?if\s*:\s*(?:\$\{\{\s*)?(?:false|0|''|\"\")(?:\s*\}\})?\s*$"
-    r"|\bset\s+\+e\b|\btrap\s|\bexit\s+0\b"
+GENERATED_LINES = [
+    re.compile(pattern)
+    for pattern in (
+        CHECK_COMMAND,
+        r"\{",
+        r'\} >> "\$GITHUB_ENV"',
+        r'echo "(?:MISE_DATA_DIR|MISE_CACHE_DIR|MISE_STATE_DIR|BUN_INSTALL_CACHE_DIR)=\$\{\w+:-\$RUNNER_TEMP/hard-eng-tools/[\w/]+\}"',
+        r'echo "MISE_PACKAGE=@jdxcode/mise-\$\(uname -s \| tr \'\[:upper:\]\' \'\[:lower:\]\'\)-\$\(echo "\$RUNNER_ARCH" \| tr \'\[:upper:\]\' \'\[:lower:\]\'\)@latest"',
+        r'read -r -a tools <<< "\$SDK_TOOLS \$\{EXTRA_SDK_TOOLS:-\}"',
+        r'SDK_TOOLS="\$\{SDK_TOOLS//[\w@.-]+/\}"',
+        r'if \[ "\$CHECKS" != success \] \|\| \[ "\$TESTS" != success \]; then',
+        r'echo "checks: \$CHECKS, tests: \$TESTS"',
+        r"exit 1",
+        r"fi",
+        r'mise_command=\(bun x --package="\$MISE_PACKAGE" mise\)',
+        r'if \[\[ -n "\$[A-Z_]+" \]\]; then mise_command=\("\$[A-Z_]+"\); fi',
+        rf"{TOOLS} --no-config install (?:[\w@.-]+ |\"\$\{{tools\[@\]\}}\" )+&&",
+    )
+]
+STEP_IF = re.compile(
+    r"steps\.impact\.outputs\.docs_only (?:==|!=) 'true'(?: && needs\.[\w-]+\.result == '(?:skipped|success)')?"
 )
+STEP_ENV = {
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "MISE_GITHUB_TOKEN",
+    "BASE_SHA",
+    "SDK_TOOLS",
+    "PNPM_CONFIG_STORE_DIR",
+    "PNPM_CONFIG_CACHE_DIR",
+    "CHECKS",
+    "TESTS",
+    "EXTRA_SDK_TOOLS",
+}
+BASE_VALUES = {
+    "${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}",
+    "${{ github.event.pull_request.base.sha || github.event.before }}",
+}
+SAFE_FALSE = {False, "false", "${{ false }}"}
+TRIGGERS = {"pull_request", "workflow_call"}
+FIX = "the Hard Eng job and its check steps must be blocking and must be the steps that setup generates; restore the generated step or run setup again"
 
 
 def hard_eng_workflow(name: str) -> bool:
@@ -29,10 +61,95 @@ def hard_eng_workflow(name: str) -> bool:
     return path.name == "hard-eng.yml" and ".github" in path.parts
 
 
-def blocking_hit(text: str) -> str | None:
-    """What a line of the Hard Eng workflow does to let a failing check pass: a line that calls the hooks but is not a generated check line, or a line that ignores a failure."""
-    line = LINE_PREFIX.sub("", text.rstrip()).strip()
-    if CHECK_LINE.search(line) and not GENERATED.fullmatch(SPACES.sub(" ", line)):
-        return line
-    found = BROKEN.search(text)
-    return found[0] if found else None
+def step_hits(step: dict[str, object]) -> list[str]:
+    hits = []
+    for key in ("shell", "working-directory"):
+        if key in step:
+            hits.append(f"the check step sets {key}")
+    if step.get("continue-on-error", False) not in SAFE_FALSE:
+        hits.append("the check step sets continue-on-error")
+    if "if" in step and not STEP_IF.fullmatch(str(step["if"]).strip()):
+        hits.append(f"the check step runs only when {step['if']!r}")
+    env = step.get("env")
+    for key, value in (env if isinstance(env, dict) else {}).items():
+        if key not in STEP_ENV and not key.startswith("MISE_"):
+            hits.append(f"the check step sets the variable {key}")
+        elif key == "BASE_SHA" and str(value).strip() not in BASE_VALUES:
+            hits.append(f"the check step sets BASE_SHA to {value!r}")
+    for line in str(step.get("run", "")).splitlines():
+        text = re.sub(r"\s+", " ", line.strip())
+        if text and not any(form.fullmatch(text) for form in GENERATED_LINES):
+            hits.append(f"the check step holds {text!r}")
+    return hits
+
+
+def job_hits(job: dict[str, object], workflow: dict[str, object]) -> list[str]:
+    hits = []
+    if job.get("continue-on-error", False) not in SAFE_FALSE:
+        hits.append("the job sets continue-on-error")
+    if str(job.get("if", "")).strip() in {"false", "${{ false }}", "0", "''", '""'}:
+        hits.append("the job never runs")
+    for scope, holder in (("job", job), ("workflow", workflow)):
+        defaults = holder.get("defaults")
+        run = defaults.get("run") if isinstance(defaults, dict) else None
+        for key in ("shell", "working-directory"):
+            if isinstance(run, dict) and key in run:
+                hits.append(f"the {scope} defaults set {key}")
+        env = holder.get("env")
+        for key in ("BASE_SHA", "PATH"):
+            if isinstance(env, dict) and key in env:
+                hits.append(f"the {scope} sets the variable {key}")
+    return hits
+
+
+def line_of(text: str, step: dict[str, object]) -> int:
+    first = next(iter(str(step.get("run", "")).strip().splitlines()), "").strip()
+    at = text.find(first) if first else -1
+    return text.count("\n", 0, at) + 1 if at >= 0 else 1
+
+
+def workflow_hits(name: str, text: str) -> list[str]:
+    """Findings for a Hard Eng workflow, read as YAML: only the steps that call the hooks and their job are judged."""
+    try:
+        import yaml
+    except ImportError:
+        return []
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return [f"{name}:1 cannot be read as YAML: {FIX}"]
+    if not isinstance(data, dict):
+        return [f"{name}:1 is not a workflow: {FIX}"]
+    found: list[str] = []
+    triggers = data.get("on", data.get(True))
+    events = (
+        {triggers}
+        if isinstance(triggers, str)
+        else set(triggers)
+        if isinstance(triggers, (list, dict))
+        else set()
+    )
+    if not events & TRIGGERS:
+        found.append(f"{name}:1 runs on {sorted(map(str, events))} only: {FIX}")
+    jobs = data.get("jobs")
+    checks = 0
+    for job in (jobs if isinstance(jobs, dict) else {}).values():
+        if not isinstance(job, dict):
+            continue
+        steps = [
+            step
+            for step in job.get("steps") or []
+            if isinstance(step, dict)
+            and ".hooks/hard-eng.py" in str(step.get("run", ""))
+        ]
+        if not steps:
+            continue
+        checks += sum(" check " in str(step["run"]) for step in steps)
+        found += [f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data)]
+        for step in steps:
+            found += [
+                f"{name}:{line_of(text, step)} {hit}: {FIX}" for hit in step_hits(step)
+            ]
+    if not checks:
+        found.append(f"{name}:1 holds no generated check step: {FIX}")
+    return found

@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from command_words import PACKAGE_COMMANDS
+from command_words import PACKAGE_COMMANDS, flagged_built_in
 from coverage_sources import owned_files, source_roots
 from fallow_report import fallow_report_path, validate_scanner_command
 from gate_config import (
@@ -212,12 +212,6 @@ def script_text(arguments: list[str], directory: Path) -> str:
     if not isinstance(script, str):
         raise TypeError(f"package script {arguments[2]} is missing from package.json")
     return script
-
-
-def flagged_built_in(arguments: list[str]) -> bool:
-    """Flags then a package-manager command that runs no script (`bun --env-file=x test`): no script name is hidden."""
-    rest = [word for word in arguments[1:] if not word.startswith("-")]
-    return bool(rest) and rest[0] in PACKAGE_COMMANDS - {"run", "run-script", "x"}
 
 
 def package_script_invocation(

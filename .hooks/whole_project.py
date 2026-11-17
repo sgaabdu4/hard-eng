@@ -30,7 +30,7 @@ from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
 from rust_settings import CLIPPY_FILES, rust_file_hits
-from workflow_blocking import hard_eng_workflow
+from workflow_blocking import hard_eng_workflow, workflow_hits
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
 TEXT_SUFFIXES = {
@@ -233,6 +233,8 @@ def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
         lines = list(enumerate(text.splitlines(), 1))
         base = PurePosixPath(name).name
         entries = entry_file(root, name, LINE_IGNORES)
+        if hard_eng_workflow(name):
+            found += workflow_hits(name, text)
         if (
             entries
             or hard_eng_workflow(name)
