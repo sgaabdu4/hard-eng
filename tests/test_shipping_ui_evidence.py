@@ -24,6 +24,22 @@ from test_shipping import (
 )
 
 
+def _image(_root: Path, _url: str) -> bytes:
+    return b"image"
+
+
+def _no_problem(*_arguments: object) -> None:
+    return None
+
+
+def isolate_attachments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The attachment rules are tested apart from the measured and look checks, which have their own tests."""
+    import ui_proof
+
+    monkeypatch.setattr(shipping, "download", _image)
+    monkeypatch.setattr(ui_proof, "evidence_problem", _no_problem)
+
+
 def test_unchanged_ui_needs_comparison_note_without_uploads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -65,6 +81,7 @@ def test_a_pr_that_changes_no_ui_file_needs_no_ui_evidence(
 def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, content_type: str
 ) -> None:
+    isolate_attachments(monkeypatch)
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     fake = _ui_fake(fixture, body=body)
     fake.attachment_response = f"HTTP/2 206 Partial Content\ncontent-type: {content_type}\ncontent-length: 1\ncontent-range: bytes 0-0/85098\n"
@@ -131,6 +148,7 @@ def test_ui_changes_reject_unavailable_or_wrong_attachment_type(
 def test_ui_evidence_falls_back_to_a_plain_get_when_the_ranged_request_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    isolate_attachments(monkeypatch)
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     fake = _ui_fake(fixture)
     plain = "HTTP/1.1 200 OK\ncontent-type: image/png\ncontent-length: 85098\n"

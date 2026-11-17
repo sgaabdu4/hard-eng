@@ -171,7 +171,7 @@ def _event(
             "number": 1,
             "body": body,
             "user": {"login": author},
-            "head": {"ref": head, "repo": {"full_name": repo}},
+            "head": {"ref": head, "sha": "c" * 40, "repo": {"full_name": repo}},
             "base": {"ref": base, "repo": {"full_name": "acme/widget"}},
         }
     }
@@ -298,12 +298,27 @@ def test_remote_check_refuses_a_ui_change_without_pictures(
     ]
 
 
-@pytest.mark.parametrize("evidence", [_UI_BODY + "\n", _UNCHANGED])
+def _look_block() -> str:
+    import look
+
+    record: dict[str, object] = {
+        "reviewer": "codex",
+        "session": "a" * 64,
+        "images": [{"sha256": "b" * 64, "read_at": "2026-11-17T10:00:01Z"}],
+        "rules": ["Hierarchy: Pass — one filled button"],
+        "outcome": "clean",
+    }
+    return look.block_text(record)
+
+
+@pytest.mark.parametrize(
+    "evidence", [_UI_BODY + "\n" + _look_block() + "\n", _UNCHANGED]
+)
 def test_remote_check_accepts_a_ui_change_with_pictures_or_an_unchanged_note(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evidence: str
 ) -> None:
     problem, _ = _ui_problem(
-        tmp_path, monkeypatch, evidence + _VALID, [{"filename": "src/App.tsx"}]
+        tmp_path, monkeypatch, evidence + _VALID, [{"filename": "src/App.ts"}]
     )
     assert problem is None
 

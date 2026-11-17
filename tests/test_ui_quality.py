@@ -1,15 +1,32 @@
 """Measured screen quality: the red and fixed fixtures, each limit, and the ship checks."""
 
+import hashlib
 import json
 import shutil
 from collections import Counter
 from collections.abc import Generator
+from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+import shipping
 import test_browser
+from conftest import ux_rules_block
+from plans import usability_rules
 from test_browser import session
+from test_shipping import (
+    _PR_URL,
+    _UI_BODY,
+    _UNDO,
+    FakeGitHub,
+    Fixture,
+    _check,
+    _fixture,
+    _native,
+    _patch_gh,
+    _pull,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures/ui_quality"
 WIDTHS = (390, 768, 1280)
@@ -48,32 +65,6 @@ def capture(
 
 def serve_fixture(tmp_path: Path, name: str) -> None:
     shutil.copy(FIXTURES / f"{name}.html", tmp_path / "pages" / f"{name}.html")
-
-
-def test_red_fixture_fails_measurement_and_ship(
-    tmp_path: Path, site: str, browser: ModuleType
-) -> None:
-    serve_fixture(tmp_path, "red")
-    found = capture(browser, tmp_path, site, "red")
-    for width in WIDTHS:
-        assert set(found[width]) >= {
-            "contrast",
-            "label",
-            "text-size",
-            "tap-size",
-            "competing-buttons",
-            "shared-edge",
-            "accent-colours",
-        }, (width, found[width])
-
-
-def test_fixed_fixture_passes_measurement_and_ship(
-    tmp_path: Path, site: str, browser: ModuleType
-) -> None:
-    serve_fixture(tmp_path, "fixed")
-    assert capture(browser, tmp_path, site, "fixed") == {
-        width: Counter() for width in WIDTHS
-    }
 
 
 def pair(first: str, second: str) -> str:
@@ -161,3 +152,610 @@ def test_look_block_hashes_are_checked_in_ci() -> None:
         sample_record(rules=[f"Hierarchy: Pass — saw /{'Users'}/someone/x.png"])
     )
     assert "local path" in str(look.block_problem(leaked, 2))
+
+
+BEFORE_BYTES = b"before-image-bytes"
+VISIBLE_FILE: dict[str, object] = {
+    "filename": "src/App.tsx",
+    "patch": "@@ -1 +1 @@\n-<p>Hi</p>\n+<p>Hello</p>",
+}
+REAL_UX = (
+    "Result: Passed\n"
+    "Evidence: Synthetic capture contract for this test, not app acceptance.\n"
+    "Surface: Existing — /account, rendered by app/account/page.tsx\n"
+    "Before: ![Before](https://example.test/account-before.png)\n"
+    "Proposed: ![Proposed](https://example.test/account-proposed.png)\n"
+    "Capture: Native browser test account.spec.ts passed the route and screen assertions.\n"
+    "Review: Inspected both account captures at the same viewport; only the proposed label differs.\n"
+    + ux_rules_block()
+)
+NO_UX = "N/A — fixture commands have no visual interface."
+
+
+def sha_of(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def look_record(head: str, after: bytes, **changes: object) -> dict[str, object]:
+    record: dict[str, object] = {
+        "head": head,
+        "reviewer": "codex",
+        "fresh_same_agent": False,
+        "images": [
+            {
+                "name": "image-1.png",
+                "sha256": sha_of(after),
+                "read": True,
+                "read_at": "2026-11-17T10:00:01Z",
+            }
+        ],
+        "rules": [f"{name}: Pass — checked" for name, _ in usability_rules()],
+        "outcome": "clean",
+        "session": sha_of(b"session"),
+    }
+    return record | changes
+
+
+def ship_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    ux: str = REAL_UX,
+    files: list[dict[str, object]] | None = None,
+    body_extra: str = "",
+    committed: dict[str, str] | None = None,
+    packages: list[dict[str, object]] | None = None,
+) -> tuple[Fixture, FakeGitHub]:
+    """A PR with one visible change and a Before and After pair; every proof is missing until the test adds it."""
+    fixture = _fixture(tmp_path, ui_paths=["src/**", "app/**", "Sources/**"])
+    root = fixture.root
+    for name, text in (committed or {}).items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    if packages:
+        gates = json.loads((root / "hard-eng.gates.json").read_text())
+        gates["packages"] = packages
+        (root / "hard-eng.gates.json").write_text(json.dumps(gates))
+    (root / "PLAN.md").write_text((root / "PLAN.md").read_text().replace(NO_UX, ux))
+    with (root / ".git/info/exclude").open("a") as exclude:
+        exclude.write(".hard-eng/\n")
+    _native(root, "add", "--all")
+    _native(root, "commit", "-q", "--allow-empty", "-m", "plan")
+    fixture = replace(fixture, head=_native(root, "rev-parse", "HEAD"))
+    _native(
+        root,
+        "update-ref",
+        "refs/remotes/origin/main",
+        _native(root, "rev-parse", "main"),
+    )
+    fake = FakeGitHub(
+        _pull(fixture, body=f"{_UI_BODY}\n{body_extra}\n{_UNDO}"),
+        [_check(fixture.head)],
+        files or [VISIBLE_FILE],
+    )
+    _patch_gh(monkeypatch, fake)
+    return fixture, fake
+
+
+def serve_attachments(monkeypatch: pytest.MonkeyPatch, after: bytes) -> None:
+    served = {
+        "https://github.com/user-attachments/assets/old-image": BEFORE_BYTES,
+        "https://github.com/user-attachments/assets/new-image": after,
+    }
+
+    def download(_root: Path, url: str) -> bytes:
+        return served[url]
+
+    monkeypatch.setattr(shipping, "download", download)
+
+
+def measured_after(
+    root: Path,
+    widths: tuple[int, ...] = WIDTHS,
+    findings: list[dict[str, object]] | None = None,
+) -> bytes:
+    """Write one measured capture named after at each width; return the 390 image bytes."""
+    import ui_measure
+
+    folder = root / ".hard-eng/browser"
+    folder.mkdir(parents=True, exist_ok=True)
+    for width in widths:
+        image = folder / f"after-{width}.png"
+        image.write_bytes(b"after-%d" % width)
+        ui_measure.write_record(root, image, width, findings or [])
+    return b"after-390"
+
+
+def write_look(
+    root: Path, head: str, after: bytes, **changes: object
+) -> dict[str, object]:
+    record = look_record(head, after, **changes)
+    path = root / ".git/hard-eng/look" / f"{head}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record))
+    return record
+
+
+def ready(root: Path, fixture: Fixture) -> None:
+    shipping.verify(root, fixture.plan, _PR_URL, "ready")
+
+
+def full_ship(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    widths: tuple[int, ...] = WIDTHS,
+    findings: list[dict[str, object]] | None = None,
+    captured: tuple[Path, str] | None = None,
+) -> tuple[Fixture, FakeGitHub, bytes]:
+    """A ready PR; its After image is generated, or is the 390 px capture that the browser command wrote in `captured`."""
+    import look
+
+    fixture, fake = ship_setup(tmp_path, monkeypatch)
+    if captured is None:
+        after = measured_after(fixture.root, widths, findings)
+    else:
+        shutil.copytree(captured[0] / ".hard-eng", fixture.root / ".hard-eng")
+        after = (captured[0] / f".hard-eng/browser/{captured[1]}-390.png").read_bytes()
+    record = write_look(fixture.root, fixture.head, after)
+    fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
+    serve_attachments(monkeypatch, after)
+    return fixture, fake, after
+
+
+def test_a_measured_clean_after_image_with_a_clean_look_passes_ship(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch)
+    ready(fixture.root, fixture)
+
+
+@pytest.mark.parametrize(
+    ("widths", "findings", "words"),
+    [
+        (WIDTHS, [{"rule": "text-size", "at": "p"}], "findings"),
+        ((390, 1280), [], "768"),
+        ((), [], "matches no measured capture"),
+    ],
+    ids=["findings", "missing-width", "no-capture"],
+)
+def test_ship_refuses_an_unmeasured_after_image(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    widths: tuple[int, ...],
+    findings: list[dict[str, object]],
+    words: str,
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch, widths=widths, findings=findings)
+    if not widths:
+        serve_attachments(monkeypatch, b"after-390")
+    with pytest.raises(shipping.ShippingError, match=words):
+        ready(fixture.root, fixture)
+
+
+def test_a_ring_drawn_after_the_capture_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch)
+    serve_attachments(monkeypatch, b"after-390 with a ring drawn on it")
+    with pytest.raises(shipping.ShippingError, match="matches no measured capture"):
+        ready(fixture.root, fixture)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"outcome": "findings"},
+        {"outcome": "not done: the reviewer did not open image-1.png"},
+        {"rules": ["Hierarchy: Fail — two fills"], "outcome": "findings"},
+        {"images": []},
+        {
+            "images": [
+                {
+                    "name": "image-1.png",
+                    "sha256": "0" * 64,
+                    "read": True,
+                    "read_at": "t",
+                }
+            ]
+        },
+        None,
+    ],
+    ids=["findings", "not-done", "fail-line", "no-images", "other-hash", "no-record"],
+)
+def test_pr_with_pairs_needs_clean_look_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: dict[str, object] | None
+) -> None:
+    fixture, fake, after = full_ship(tmp_path, monkeypatch)
+    path = fixture.root / ".git/hard-eng/look" / f"{fixture.head}.json"
+    if change is None:
+        path.unlink()
+    else:
+        write_look(fixture.root, fixture.head, after, **change)
+    with pytest.raises(shipping.ShippingError, match="[Ll]ook"):
+        ready(fixture.root, fixture)
+    fake.pulls[0]["body"] = f"{_UI_BODY}\n{_UNDO}"
+    with pytest.raises(shipping.ShippingError, match="Look review"):
+        ready(fixture.root, fixture)
+
+
+def test_red_fixture_fails_measurement_and_ship(
+    tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve_fixture(tmp_path, "red")
+    found = capture(browser, tmp_path, site, "red")
+    for width in WIDTHS:
+        assert set(found[width]) >= {
+            "contrast",
+            "label",
+            "text-size",
+            "tap-size",
+            "competing-buttons",
+            "shared-edge",
+            "accent-colours",
+        }, (width, found[width])
+    (tmp_path / "ship").mkdir()
+    fixture, _, _ = full_ship(
+        tmp_path / "ship", monkeypatch, captured=(tmp_path, "red")
+    )
+    with pytest.raises(shipping.ShippingError, match="has findings"):
+        ready(fixture.root, fixture)
+
+
+def test_fixed_fixture_passes_measurement_and_ship(
+    tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve_fixture(tmp_path, "fixed")
+    assert capture(browser, tmp_path, site, "fixed") == {
+        width: Counter() for width in WIDTHS
+    }
+    (tmp_path / "ship").mkdir()
+    fixture, _, _ = full_ship(
+        tmp_path / "ship", monkeypatch, captured=(tmp_path, "fixed")
+    )
+    ready(fixture.root, fixture)
+
+
+def no_problem(*_arguments: object) -> None:
+    return None
+
+
+NO_FILES: dict[str, str] = {}
+
+
+def file_change(name: str, patch: str) -> dict[str, object]:
+    return {"filename": name, "patch": f"@@ -1 +1 @@\n{patch}"}
+
+
+DART_HELPER = "Widget helper(Widget child) {\n  return child;\n}\n"
+SWIFT_VIEW = "struct Card: View {\n  var body: some View { Text(title) }\n}\n"
+VISIBLE_CHANGES = {
+    "markup": (file_change("src/App.tsx", "-<p>Hi</p>\n+<p>Hello</p>"), NO_FILES),
+    "removal-only": (file_change("src/App.tsx", "-<button>Decline</button>"), NO_FILES),
+    "style": (file_change("src/app.css", "-a{color:red}\n+a{color:blue}"), NO_FILES),
+    "image": ({"filename": "src/logo.svg"}, NO_FILES),
+    "theme": (
+        file_change("src/theme/colors.ts", "-const a = 1\n+const a = 2"),
+        NO_FILES,
+    ),
+    "catalog": (file_change("src/l10n/app_en.arb", '-"a": "x"\n+"a": "y"'), NO_FILES),
+    "dart-helper-removal": (
+        file_change("app/lib/helpers.dart", "-  return Padding(child: child);"),
+        {"app/lib/helpers.dart": DART_HELPER},
+    ),
+    "dart-string": (
+        file_change("app/lib/label.dart", "-  const a = 1;\n+  final a = 'Save';"),
+        {"app/lib/label.dart": "final a = 'Save';\n"},
+    ),
+    "swift-view": (
+        file_change("Sources/Card.swift", "-  Text(title)\n+  Text(name)"),
+        {"Sources/Card.swift": SWIFT_VIEW},
+    ),
+    "js-page-write": (
+        file_change("src/page.js", "-el.id = 1\n+el.textContent = x"),
+        NO_FILES,
+    ),
+}
+NONVISUAL_CHANGES = {
+    "test-file": (file_change("src/App.test.tsx", "-a\n+b"), NO_FILES),
+    "typescript-logic": (
+        file_change("src/api.ts", "-const a = 1\n+const a = 2"),
+        NO_FILES,
+    ),
+    "dart-logic": (
+        file_change(
+            "app/lib/logic.dart", "-int f(int a) => a;\n+int f(int a) => a + 1;"
+        ),
+        {"app/lib/logic.dart": "int f(int a) => a + 1;\n"},
+    ),
+    "comment-only": (
+        file_change("src/App.tsx", "-// old note\n+// new note"),
+        NO_FILES,
+    ),
+    "blank-line": (file_change("src/App.tsx", "-\n+"), NO_FILES),
+}
+
+
+@pytest.mark.parametrize(
+    ("change", "committed"), VISIBLE_CHANGES.values(), ids=VISIBLE_CHANGES
+)
+def test_visible_change_refuses_ux_reference_na(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: dict[str, object],
+    committed: dict[str, str],
+) -> None:
+    fixture, _ = ship_setup(
+        tmp_path, monkeypatch, ux=NO_UX, files=[change], committed=committed
+    )
+    serve_attachments(monkeypatch, b"after-390")
+    with pytest.raises(shipping.ShippingError, match="ux_reference says N/A"):
+        ready(fixture.root, fixture)
+
+
+@pytest.mark.parametrize(
+    ("change", "committed"), NONVISUAL_CHANGES.values(), ids=NONVISUAL_CHANGES
+)
+def test_nonvisual_ui_paths_change_keeps_ux_reference_na(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: dict[str, object],
+    committed: dict[str, str],
+) -> None:
+    import ui_proof
+
+    fixture, _ = ship_setup(
+        tmp_path, monkeypatch, ux=NO_UX, files=[change], committed=committed
+    )
+    serve_attachments(monkeypatch, b"after-390")
+    monkeypatch.setattr(ui_proof, "evidence_problem", no_problem)
+    ready(fixture.root, fixture)
+
+
+UNCHANGED_UX = (
+    "N/A — unchanged: ![Before](.hard-eng/browser/before-390.png) "
+    "![After](.hard-eng/browser/after-390.png) — the card at rest"
+)
+UNCHANGED_NOTE = "UI appearance: unchanged — the card at rest looks the same"
+
+
+def write_pair(
+    root: Path,
+    base: str,
+    head: str,
+    *,
+    after_bytes: bytes = b"same-screen",
+    after_commit: str | None = None,
+    after_dirty: bool = False,
+    widths: tuple[int, ...] = WIDTHS,
+) -> None:
+    folder = root / ".hard-eng/browser"
+    folder.mkdir(parents=True, exist_ok=True)
+    for name, data, commit_sha, dirty in (
+        ("before", b"same-screen", base, False),
+        ("after", after_bytes, after_commit or head, after_dirty),
+    ):
+        for width in widths:
+            image = folder / f"{name}-{width}.png"
+            image.write_bytes(data)
+            image.with_suffix(".json").write_text(
+                json.dumps(
+                    {
+                        "image": image.name,
+                        "sha256": sha_of(data),
+                        "width": width,
+                        "findings": [],
+                        "commit": commit_sha,
+                        "dirty": dirty,
+                    }
+                )
+            )
+
+
+def unchanged_ship(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, note: bool = True
+) -> tuple[Fixture, str]:
+    fixture, fake = ship_setup(tmp_path, monkeypatch, ux=UNCHANGED_UX)
+    base = _native(fixture.root, "rev-parse", "origin/main")
+    if note:
+        fake.pulls[0]["body"] = f"{UNCHANGED_NOTE}\n{_UNDO}"
+    return fixture, base
+
+
+@pytest.mark.parametrize(
+    ("after_bytes", "at_base", "dirty", "widths", "words"),
+    [
+        (b"same-screen", False, False, WIDTHS, None),
+        (b"a different screen", False, False, WIDTHS, "differ"),
+        (b"same-screen", True, False, WIDTHS, "head"),
+        (b"same-screen", False, True, WIDTHS, "uncommitted"),
+        (b"same-screen", False, False, (390, 1280), "768"),
+    ],
+    ids=["equal", "bytes-differ", "both-at-base", "dirty-checkout", "missing-width"],
+)
+def test_unchanged_pair_needs_equal_captures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    after_bytes: bytes,
+    at_base: bool,
+    dirty: bool,
+    widths: tuple[int, ...],
+    words: str | None,
+) -> None:
+    fixture, base = unchanged_ship(tmp_path, monkeypatch)
+    write_pair(
+        fixture.root,
+        base,
+        fixture.head,
+        after_bytes=after_bytes,
+        after_commit=base if at_base else None,
+        after_dirty=dirty,
+        widths=widths,
+    )
+    if words is None:
+        ready(fixture.root, fixture)
+        return
+    with pytest.raises(shipping.ShippingError, match=words):
+        ready(fixture.root, fixture)
+
+
+def test_the_unchanged_note_on_a_visible_change_needs_the_plan_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = ship_setup(tmp_path, monkeypatch)
+    fake.pulls[0]["body"] = f"{UNCHANGED_NOTE}\n{_UNDO}"
+    with pytest.raises(shipping.ShippingError, match="stands only beside"):
+        ready(fixture.root, fixture)
+
+
+GUIDELINE_TEST = (
+    "import 'package:shop/ui/card.dart';\n"
+    "void main() { testWidgets('a', (t) async {\n"
+    "  await expectLater(t, meetsGuideline(textContrastGuideline));\n"
+    "  await expectLater(t, meetsGuideline(labeledTapTargetGuideline));\n"
+    "  await expectLater(t, meetsGuideline(iOSTapTargetGuideline));\n"
+    "  await expectLater(t, meetsGuideline(androidTapTargetGuideline));\n"
+    "}); }\n"
+)
+FLUTTER_PACKAGE: list[dict[str, object]] = [
+    {"name": "shop", "path": "app", "language": "dart", "checks": []}
+]
+CARD_CHANGE = file_change("app/lib/ui/card.dart", "-  Text('Old')\n+  Text('New')")
+
+
+def flutter_ship(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tests: dict[str, str]
+) -> tuple[Fixture, FakeGitHub]:
+    tmp_path.mkdir()
+    committed = {
+        "app/pubspec.yaml": "name: shop\ndependencies:\n  flutter:\n    sdk: flutter\n",
+        "app/lib/ui/card.dart": "Widget card() => Text('New');\n",
+        **{f"app/test/{name}": text for name, text in tests.items()},
+    }
+    return ship_setup(
+        tmp_path,
+        monkeypatch,
+        files=[CARD_CHANGE],
+        committed=committed,
+        packages=FLUTTER_PACKAGE,
+    )
+
+
+def native_ready(
+    fixture: Fixture, fake: FakeGitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import look
+
+    after = b"native-after-image"
+    record = write_look(fixture.root, fixture.head, after)
+    fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
+    serve_attachments(monkeypatch, after)
+
+
+def test_flutter_screen_needs_guideline_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = flutter_ship(tmp_path / "a", monkeypatch, {})
+    native_ready(fixture, fake, monkeypatch)
+    with pytest.raises(shipping.ShippingError, match="meetsGuideline"):
+        ready(fixture.root, fixture)
+    partial = GUIDELINE_TEST.replace("androidTapTargetGuideline", "other")
+    fixture, fake = flutter_ship(
+        tmp_path / "b", monkeypatch, {"card_test.dart": partial}
+    )
+    native_ready(fixture, fake, monkeypatch)
+    with pytest.raises(shipping.ShippingError, match="androidTapTargetGuideline"):
+        ready(fixture.root, fixture)
+    elsewhere = GUIDELINE_TEST.replace("ui/card.dart", "ui/other.dart")
+    fixture, fake = flutter_ship(
+        tmp_path / "c", monkeypatch, {"o_test.dart": elsewhere}
+    )
+    native_ready(fixture, fake, monkeypatch)
+    with pytest.raises(shipping.ShippingError, match="meetsGuideline"):
+        ready(fixture.root, fixture)
+    fixture, fake = flutter_ship(
+        tmp_path / "d", monkeypatch, {"card_test.dart": GUIDELINE_TEST}
+    )
+    native_ready(fixture, fake, monkeypatch)
+    ready(fixture.root, fixture)
+
+
+def test_swift_after_image_needs_look_but_no_measurement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = ship_setup(
+        tmp_path,
+        monkeypatch,
+        files=[file_change("Sources/Card.swift", "-  Text(title)\n+  Text(name)")],
+        committed={"Sources/Card.swift": SWIFT_VIEW},
+    )
+    serve_attachments(monkeypatch, b"native-after-image")
+    with pytest.raises(shipping.ShippingError, match="Look review"):
+        ready(fixture.root, fixture)
+    native_ready(fixture, fake, monkeypatch)
+    ready(fixture.root, fixture)
+
+
+def ci_problem(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
+    files: list[dict[str, object]],
+    plans: dict[str, str] | None = None,
+) -> str | None:
+    """What the CI pr text job says about a PR; it holds only the hooks, so it reads the plan from the API."""
+    from pr_text import event_problem
+    from test_pr_text import _event, _project
+
+    tmp_path.mkdir()
+    root = _project(tmp_path, ui_paths=["src/**"])
+    (tmp_path / "pull").mkdir()
+    fake = FakeGitHub(_pull(_fixture(tmp_path / "pull")), [], files)
+    fake.codeowners.update(plans or {})
+    _patch_gh(monkeypatch, fake)
+    return event_problem(_event(tmp_path, body), root)
+
+
+def test_ci_refuses_pairs_without_a_look_block_and_a_visible_na_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import look
+    from test_pr_text import _VALID
+
+    pairs = f"{_UI_BODY}\n{_VALID}"
+    visible: list[dict[str, object]] = [VISIBLE_FILE]
+    assert "Look review" in str(ci_problem(tmp_path / "a", monkeypatch, pairs, visible))
+    block = look.block_text(sample_record(1))
+    assert (
+        ci_problem(
+            tmp_path / "b", monkeypatch, f"{_UI_BODY}\n{block}\n{_VALID}", visible
+        )
+        is None
+    )
+    plan = f"## ux_reference\n{NO_UX}\n\n## Verification\n"
+    with_plan: list[dict[str, object]] = [
+        VISIBLE_FILE,
+        {"filename": "features/x/PLAN.md", "status": "modified"},
+    ]
+    problem = ci_problem(
+        tmp_path / "c",
+        monkeypatch,
+        f"{_UI_BODY}\n{block}\n{_VALID}",
+        with_plan,
+        {"features/x/PLAN.md": plan},
+    )
+    assert "ux_reference says N/A" in str(problem)
+    nonvisual: list[dict[str, object]] = [
+        file_change("src/api.ts", "-a\n+b"),
+        with_plan[1],
+    ]
+    assert (
+        ci_problem(
+            tmp_path / "d",
+            monkeypatch,
+            f"{_UI_BODY}\n{block}\n{_VALID}",
+            nonvisual,
+            {"features/x/PLAN.md": plan},
+        )
+        is None
+    )

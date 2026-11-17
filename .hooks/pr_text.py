@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 from pathlib import Path
@@ -96,8 +97,7 @@ def body_problem(body: str) -> str | None:
 
 def event_problem(event_path: str, root: Path = Path()) -> str | None:
     """Name what the text of the PR in a GitHub event file lacks; None when it passes."""
-    from ship_evidence import attachment_urls
-    from shipping import ShippingError, changed_paths, load_policy
+    from shipping import ShippingError, load_policy
     from update_runner import UPDATE_BRANCH
 
     pull = json.loads(Path(event_path).read_text())["pull_request"]
@@ -116,16 +116,66 @@ def event_problem(event_path: str, root: Path = Path()) -> str | None:
     body = pull["body"] or ""
     problem = body_problem(body)
     if not problem and policy is not None and policy["ui_paths"]:
-        owner, _, name = pull["base"]["repo"]["full_name"].partition("/")
-        try:
-            paths = changed_paths(root, owner, name, pull["number"])
-        except ShippingError as error:
-            problem = f"The list of files that the PR changes is unavailable ({error})"
-        else:
-            try:
-                attachment_urls(body, paths, policy["ui_paths"])
-            except ValueError as error:
-                problem = str(error)
+        problem = ui_problem(
+            root,
+            pull["base"]["repo"]["full_name"],
+            (pull["number"], pull["head"].get("sha", "")),
+            body,
+            policy["ui_paths"],
+        )
     if problem:
         return f"{problem}. Edit the PR text; this check runs again on each edit."
+    return None
+
+
+def ui_problem(
+    root: Path,
+    repository: str,
+    pull: tuple[int, str],
+    body: str,
+    patterns: list[str],
+) -> str | None:
+    """The screen-evidence form of a PR that changes a UI file; CI has no captures, so it checks forms only."""
+    from look import block_problem
+    from ship_evidence import UI_APPEARANCE_UNCHANGED, attachment_urls
+    from shipping import ShippingError, changed_files, file_names, gh
+    from ui_proof import Change, reference_problem, visible_files
+
+    owner, _, name = repository.partition("/")
+    number, head_sha = pull
+    try:
+        files = changed_files(root, owner, name, number)
+    except ShippingError as error:
+        return f"The list of files that the PR changes is unavailable ({error})"
+    try:
+        urls = attachment_urls(body, file_names(files), patterns)
+    except ValueError as error:
+        return str(error)
+    if urls and (problem := block_problem(body, len(urls) // 2)):
+        return problem
+    changes = [
+        Change(
+            str(item["filename"]),
+            item["patch"] if isinstance(item.get("patch"), str) else None,
+        )
+        for item in files
+        if any(
+            fnmatch.fnmatchcase(str(item["filename"]), pattern) for pattern in patterns
+        )
+    ]
+    visible = visible_files(changes)
+    note = bool(UI_APPEARANCE_UNCHANGED.search(body))
+    plans = [
+        str(item["filename"])
+        for item in files
+        if str(item["filename"]).endswith("PLAN.md") and item.get("status") != "removed"
+    ]
+    for plan in plans:
+        endpoint = f"repos/{owner}/{name}/contents/{plan}?ref={head_sha}"
+        try:
+            text = gh(root, "api", "-H", "Accept: application/vnd.github.raw", endpoint)
+        except ShippingError as error:
+            return f"The plan {plan} cannot be read at the PR head ({error})"
+        if problem := reference_problem(text, visible, body, note):
+            return problem
     return None
