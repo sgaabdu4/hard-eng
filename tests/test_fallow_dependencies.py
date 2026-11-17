@@ -51,6 +51,34 @@ def test_an_ignored_dependency_that_a_native_or_config_file_names_passes(
     validate_resolved(repo(tmp_path, files), groups(), 900)
 
 
+@pytest.mark.parametrize(
+    ("package", "name", "text"),
+    [
+        (
+            "@capacitor/ios",
+            "ios/App/CapApp-SPM/Package.swift",
+            '.package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.5.2")\n',
+        ),
+        (
+            "@capacitor/android",
+            "android/app/build.gradle",
+            "implementation project(':capacitor-android')\n",
+        ),
+    ],
+)
+def test_a_capacitor_platform_package_is_proved_by_the_native_package_it_stands_for(
+    tmp_path: Path, package: str, name: str, text: str
+) -> None:
+    """The iOS and Android projects depend on the native twin of the package, so that name is the proof."""
+    files = {
+        "package.json": json.dumps({"dependencies": {package: "1.0.0"}}),
+        "src/main.ts": "export {};\n",
+        ".fallowrc.json": settings(ignoreDependencies=[package]),
+        name: text,
+    }
+    validate_resolved(repo(tmp_path, files), groups(), 900)
+
+
 def test_an_ignored_dependency_that_no_file_names_is_refused(tmp_path: Path) -> None:
     """HE-NO-SWITCH-OFF: with no config or native file that names the package, the entry hides an unused dependency."""
     files = {

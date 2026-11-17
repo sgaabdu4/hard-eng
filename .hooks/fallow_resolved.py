@@ -219,6 +219,12 @@ NATIVE_FILES = (
 )
 
 
+NATIVE_TWINS = {
+    "@capacitor/ios": "capacitor-swift-pm",
+    "@capacitor/android": "capacitor-android",
+}
+
+
 def named_in_native_files(directory: Path) -> Callable[[str], bool]:
     """A check that a package name appears in a tracked config or native file, where a package can be used without a JavaScript import."""
     listed = subprocess.run(
@@ -235,7 +241,8 @@ def named_in_native_files(directory: Path) -> Callable[[str], bool]:
     ]
 
     def used(package: str) -> bool:
-        return any(package in text for text in texts)
+        names = (package, NATIVE_TWINS.get(package, package))
+        return any(name in text for text in texts for name in names)
 
     return used
 
