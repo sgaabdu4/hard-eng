@@ -484,3 +484,13 @@ def test_a_linked_folder_that_holds_settings_is_refusal(
 def test_a_linked_folder_without_settings_passes(tmp_path: Path) -> None:
     root = folder_link(tmp_path, "docs-link", "docs", {"docs/a.txt": "x\n"})
     validate_whole_project(root)
+
+
+def test_the_listed_fallow_flags_in_the_refusal_are_the_allowed_ones() -> None:
+    """The refusal lists what the check allows: `--coverage` is allowed and `--base` is refused."""
+    from fallow_report import fallow_failure
+
+    message = fallow_failure(["fallow", "--fail-on-issues", "--bogus"], {}) or ""
+    listed = message.partition("(")[2].partition(")")[0]
+    assert "--coverage" in listed
+    assert "--base" not in listed

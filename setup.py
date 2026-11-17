@@ -566,7 +566,7 @@ def configure_shellcheck(
                 "name": "shellcheck",
                 "role": "shell",
                 "parallel": True,
-                "command": ["shellcheck", "--", *scripts],
+                "command": ["shellcheck", "--norc", "--", *scripts],
             }
         )
 

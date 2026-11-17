@@ -269,7 +269,7 @@ def fallow_failure(invocation: list[str], report: Report) -> str | None:
         return known
     return (
         "HE-NO-SWITCH-OFF: A Fallow gate may use only the listed flags (--only, --format, --output-file, "
-        "--config, --max-file-size 0, --max-crap, --gate, --base, --fail-on-issues, --quiet, --no-cache); remove "
+        "--config, --max-file-size 0, --max-crap, --gate, --coverage, --fail-on-issues, --quiet, --no-cache); remove "
         + ", ".join(left)
     )
 

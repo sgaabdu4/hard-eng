@@ -172,6 +172,12 @@ def rust_file_hits(name: str, text: str) -> list[str]:
     """The Rust switch-offs of one file: flags it assigns, a Cargo config and Clippy limits."""
     if name.endswith((".cargo/config", ".cargo/config.toml")):
         return cargo_config_hits(name, text)
+    if PurePosixPath(name).name == "config.toml":
+        try:
+            config = tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            return []
+        return alias_hits(name, text.splitlines(), config)
     found = flag_hits(name, text) if assigns_variables(name) else []
     if PurePosixPath(name).name in CLIPPY_FILES:
         found += clippy_hits(name, text)

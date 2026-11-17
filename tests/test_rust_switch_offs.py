@@ -21,6 +21,9 @@ SPACED = [
     f"#[cfg_attr(test, {ALLOW}(dead_code))]\nfn a() {{}}\n",
     "#[rustfmt::skip]\nfn a() {}\n",
     "# [ rustfmt :: skip ]\nfn a() {}\n",
+    "#[cfg(not(clippy))]\nfn a() { let x = 1; }\n",
+    "#[cfg( not ( clippy ) )]\nmod m {}\n",
+    "#![cfg(not(clippy))]\n",
     "#[cfg_attr(test, rustfmt::skip)]\nfn a() {}\n",
 ]
 
@@ -266,7 +269,10 @@ def test_a_rust_file_without_cfg_attr_is_not_masked(
         comments.rust_cfg_attr_hits(wrapped, "src/lib.rs", [(1, "x")], "adds")
 
 
-@pytest.mark.parametrize("name", [".cargo/config.toml", ".cargo/config"])
+@pytest.mark.parametrize(
+    "name",
+    [".cargo/config.toml", ".cargo/config", "tools/cargo/config.toml", "config.toml"],
+)
 @pytest.mark.parametrize(
     "text",
     [

@@ -111,7 +111,9 @@ def test_marking_the_file_generated_clears_the_line_limit_refusal(
     tmp_path: Path,
 ) -> None:
     root = line_limit_project(tmp_path)
-    (root / ".gitattributes").write_text("big.py linguist-generated=true\n")
+    (root / "src").mkdir()
+    (root / "big.py").rename(root / "src/big.py")
+    (root / ".gitattributes").write_text("src/big.py linguist-generated=true\n")
     assert gate_config.load_groups(root)
 
 

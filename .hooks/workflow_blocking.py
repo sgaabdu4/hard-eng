@@ -51,6 +51,7 @@ BASE_VALUES = {
     "${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before }}",
     "${{ github.event.pull_request.base.sha || github.event.before }}",
 }
+SPACES = re.compile(r"\s+")
 SAFE_FALSE = {False, "false", "${{ false }}"}
 TRIGGERS = {"pull_request", "workflow_call"}
 FIX = "the Hard Eng job and its check steps must be blocking and must be the steps that setup generates; restore the generated step or run setup again"
@@ -77,7 +78,7 @@ def step_hits(step: dict[str, object]) -> list[str]:
         elif key == "BASE_SHA" and str(value).strip() not in BASE_VALUES:
             hits.append(f"the check step sets BASE_SHA to {value!r}")
     for line in str(step.get("run", "")).splitlines():
-        text = re.sub(r"\s+", " ", line.strip())
+        text = SPACES.sub(" ", line.strip())
         if text and not any(form.fullmatch(text) for form in GENERATED_LINES):
             hits.append(f"the check step holds {text!r}")
     return hits

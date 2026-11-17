@@ -4,7 +4,6 @@ import re
 import shlex
 import subprocess
 import sys
-import tempfile
 from pathlib import Path, PurePosixPath
 
 from project_files import GIT_LISTING
@@ -85,6 +84,8 @@ def hidden_by_exact_marks(root: Path, name: str, keys: set[str]) -> bool:
 
 
 def marked_by_git(root: Path, names: list[str], keys: set[str]) -> set[str]:
+    import tempfile
+
     # A live stdin pipe deadlocked against git's per-path output on macOS (issue 375).
     with tempfile.TemporaryFile() as paths:
         paths.write(("\0".join(names) + "\0").encode())

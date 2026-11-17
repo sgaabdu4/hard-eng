@@ -101,7 +101,7 @@ def test_generated_output_may_be_ignored_when_the_attributes_name_it(
     """A pattern is allowed when every file it drops is marked linguist-generated."""
     files = {
         ".fallowrc.json": settings(ignorePatterns=["gen/**"]),
-        ".gitattributes": "gen/** linguist-generated\n",
+        ".gitattributes": "gen/a.ts linguist-generated\ngen/b/c.ts linguist-generated\n",
         "gen/a.ts": "export const a = 1;\n",
         "gen/b/c.ts": "export const c = 1;\n",
     }

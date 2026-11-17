@@ -23,7 +23,7 @@ def test_dart_exclusions_require_generated_evidence(
     with pytest.raises(ValueError, match="handwritten source"):
         validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
     attributes = tmp_path / ".gitattributes"
-    attributes.write_text("handwritten.g.dart linguist-generated=true\n")
+    attributes.write_text("*.g.dart linguist-generated=true\n")
     validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
     attributes.unlink()
     source.write_text("// GENERATED CODE - DO NOT MODIFY BY HAND\nconst value = 1;\n")

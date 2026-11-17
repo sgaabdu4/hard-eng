@@ -116,6 +116,11 @@ def test_an_unmatched_allowance_that_covers_every_file_is_refused(
         ("ios/App/Podfile", "pod 'is-odd-extra'\n"),
         ("android/app/build.gradle", "// project(':is-odd')\n"),
         ("ios/App/Package.swift", "// is-odd\n"),
+        ("ios/App/Podfile", "pod 'Firebase' # is-odd\n"),
+        ("capacitor.config.ts", "const a = { 'Other': {}, // 'is-odd': {}\n};\n"),
+        ("android/app/build.gradle", "project(':app') // is-odd\n"),
+        ("android/app/build.gradle", "/* project(':is-odd') */\n"),
+        ("ios/App/Package.swift", '/* .package(path: "is-odd") */\n'),
     ],
 )
 def test_a_mention_that_is_not_a_dependency_does_not_prove_the_package_used(
@@ -140,5 +145,17 @@ def test_a_real_dependency_form_in_a_platform_folder_proves_the_package(
         "src/main.ts": "export {};\n",
         ".fallowrc.json": settings(ignoreDependencies=["is-odd"]),
         "ios/App/Podfile": "pod 'IsOdd', :path => '../../node_modules/is-odd'\n",
+    }
+    validate_resolved(repo(tmp_path, files), groups(), 900)
+
+
+def test_a_url_with_double_slashes_in_a_real_dependency_line_still_proves_the_package(
+    tmp_path: Path,
+) -> None:
+    files = {
+        "package.json": json.dumps({"dependencies": {"is-odd": "1.0.0"}}),
+        "src/main.ts": "export {};\n",
+        ".fallowrc.json": settings(ignoreDependencies=["is-odd"]),
+        "ios/App/Package.swift": '.package(url: "https://example.invalid/is-odd", from: "1.0.0") // note\n',
     }
     validate_resolved(repo(tmp_path, files), groups(), 900)

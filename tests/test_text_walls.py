@@ -232,7 +232,7 @@ def test_exempt_files_and_paths_are_not_judged(tmp_path: Path) -> None:
     """HE-NO-TEXT-WALLS: tests, stories, generated files, tool folders and files outside paths are not judged."""
     root = tmp_path / "repo"
     init(root)
-    (root / ".gitattributes").write_text("src/gen/** linguist-generated\n")
+    (root / ".gitattributes").write_text("src/gen/Card.tsx linguist-generated\n")
     commit(root, "baseline")
     wall = old_wall()
     for name in (
