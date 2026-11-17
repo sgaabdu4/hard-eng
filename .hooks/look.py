@@ -271,6 +271,25 @@ def review(images: list[Path], host: str | None) -> dict[str, object]:
     return record
 
 
+def record_path(root: Path, head: str, hashes: list[str]) -> Path:
+    """One record file for each commit and set of images, so a run on other images keeps the earlier record."""
+    key = sha256("\n".join(sorted(hashes)).encode())[:16]
+    return store(root, f"{head}-{key}", STORE).with_suffix(".json")
+
+
+def records_for(root: Path, head: str) -> list[dict[str, object]]:
+    folder = store(root, head, STORE).parent
+    found: list[dict[str, object]] = []
+    for path in sorted(folder.glob(f"{head}-*.json")) if folder.is_dir() else []:
+        try:
+            record = json.loads(path.read_text())
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            found.append(record)
+    return found
+
+
 def look_command(root: Path, argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="hard-eng.py look")
     parser.add_argument("images", nargs="+")
@@ -282,7 +301,8 @@ def look_command(root: Path, argv: list[str]) -> int:
     head = git_text(root, "rev-parse", "HEAD")
     record = review(images, args.host)
     record["head"] = head
-    path = store(root, head, STORE).with_suffix(".json")
+    hashes = [str(item["sha256"]) for item in listed_images(record)]
+    path = record_path(root, head, hashes)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record, indent=2) + "\n")
     print(f"Look review by {record['reviewer']} at {head}: {record['outcome']}")
@@ -290,6 +310,10 @@ def look_command(root: Path, argv: list[str]) -> int:
     if record["outcome"] == "clean":
         print(f"Paste this into the PR body:\n{block_text(record)}")
     return 0 if record["outcome"] == "clean" else 1
+
+
+def listed_images(record: dict[str, object]) -> list[dict[str, object]]:
+    return cast(list[dict[str, object]], record["images"])
 
 
 def block_text(record: dict[str, object]) -> str:

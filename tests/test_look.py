@@ -121,12 +121,10 @@ def run_look(root: Path, host: str, images: list[Path]) -> dict[str, object]:
 
     code = look.look_command(root, ["--host", host, *map(str, images)])
     head = git(root, "rev-parse", "HEAD").strip()
-    path = (
-        root
-        / git(root, "rev-parse", "--git-path", "hard-eng/look").strip()
-        / f"{head}.json"
+    hashes = [hashlib.sha256(image.read_bytes()).hexdigest() for image in images]
+    record: dict[str, object] = json.loads(
+        look.record_path(root, head, hashes).read_text()
     )
-    record: dict[str, object] = json.loads(path.read_text())
     assert (code == 0) == (record["outcome"] == "clean")
     return record
 
@@ -222,3 +220,24 @@ def test_review_text_names_the_look_command() -> None:
     review = (SOURCE / ".agents/skills/code-review/references/review.md").read_text()
     assert "hard-eng.py look" in review
     assert "never judge a screen from a typed Pass line" in review
+
+
+def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+
+    images = make_images(project, 2)
+    install_agent(tmp_path, "codex", 1, good_answer(1))
+    first = run_look(project, "claude", images[:1])
+    install_agent(tmp_path, "codex", 1, good_answer(1))
+    second = run_look(project, "claude", images[1:])
+    assert first["images"] != second["images"]
+    head = git(project, "rev-parse", "HEAD").strip()
+    assert len(look.records_for(project, head)) == 2
+    first_hash = hashlib.sha256(images[0].read_bytes()).hexdigest()
+    assert any(
+        item["sha256"] == first_hash
+        for record in look.records_for(project, head)
+        for item in listed(record, "images")
+    )

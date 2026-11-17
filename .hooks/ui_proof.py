@@ -237,23 +237,21 @@ def measured_problem(root: Path, head: str, after: list[bytes]) -> str | None:
     return None
 
 
-def look_problem(root: Path, head: str, body: str, after: list[bytes]) -> str | None:
-    """A clean look record for this head that covers each After image, and a PR block that matches it."""
+def look_record_problem(
+    record: dict[str, object], head: str, body: str, after: list[bytes]
+) -> str | None:
+    """Why one look record does not back the PR: not clean, lacking an After image or a rule line, or not the block in the body."""
     import look
-    from challenge import store
     from plans import split_rule_line, usability_rules
 
-    path = store(root, head, look.STORE).with_suffix(".json")
-    if not path.is_file():
-        return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>` and paste its block into the PR body"
-    record = json.loads(path.read_text())
     if record.get("outcome") != "clean":
         return f"Look review: the record for {head[:12]} is {record.get('outcome')}; fix the screen and run `look` again"
-    hashes = {item["sha256"] for item in record.get("images", [])}
+    images = cast(list[dict[str, object]], record.get("images", []))
+    hashes = {item["sha256"] for item in images}
     if missing := [d for d in map(sha256, after) if d not in hashes]:
         return f"Look review: the record does not cover the After image {missing[0][:12]}; run `look` on the After images"
     wanted = [name for name, _ in usability_rules()]
-    lines = record.get("rules", [])
+    lines = cast(list[str], record.get("rules", []))
     if [split_rule_line(line)[0] for line in lines] != wanted or any(
         split_rule_line(line)[1] == "Fail" for line in lines
     ):
@@ -263,6 +261,17 @@ def look_problem(root: Path, head: str, body: str, after: list[bytes]) -> str | 
     if look.block_text(record) not in body.replace("\r\n", "\n"):
         return "Look review: the PR block is not the block of this head's record; paste the block that `look` printed"
     return None
+
+
+def look_problem(root: Path, head: str, body: str, after: list[bytes]) -> str | None:
+    """A clean look record for this head that covers each After image, and a PR block that matches it."""
+    import look
+
+    records = look.records_for(root, head)
+    if not records:
+        return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>` and paste its block into the PR body"
+    problems = [look_record_problem(r, head, body, after) for r in records]
+    return None if None in problems else problems[0]
 
 
 def is_native(visible: list[str]) -> bool:

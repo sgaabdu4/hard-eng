@@ -8,7 +8,9 @@ from collections.abc import Generator
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 
+import look
 import pytest
 import shipping
 import test_browser
@@ -137,8 +139,6 @@ def sample_record(images: int = 2, **changes: object) -> dict[str, object]:
 
 
 def test_look_block_hashes_are_checked_in_ci() -> None:
-    import look
-
     block = look.block_text(sample_record())
     assert look.block_problem(f"Summary\n\n{block}\n", 2) is None
     assert "local path" not in str(look.block_problem(block, 2))
@@ -273,7 +273,8 @@ def write_look(
     root: Path, head: str, after: bytes, **changes: object
 ) -> dict[str, object]:
     record = look_record(head, after, **changes)
-    path = root / ".git/hard-eng/look" / f"{head}.json"
+    images = cast(list[dict[str, object]], record["images"])
+    path = look.record_path(root, head, [str(item["sha256"]) for item in images])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record))
     return record
@@ -291,8 +292,6 @@ def full_ship(
     findings: list[dict[str, object]] | None = None,
 ) -> tuple[Fixture, FakeGitHub, bytes]:
     """A ready PR whose After image is a generated measured capture."""
-    import look
-
     fixture, fake = ship_setup(tmp_path, monkeypatch)
     after = measured_after(fixture.root, widths, findings)
     record = write_look(fixture.root, fixture.head, after)
@@ -310,8 +309,6 @@ def captured_ship(
     folder: str = "ship",
 ) -> tuple[Fixture, dict[int, Counter[str]]]:
     """A ready PR that changes the page `page`, with the real capture of that page taken in the PR's own checkout at its head."""
-    import look
-
     ship = tmp_path / folder
     ship.mkdir()
     text = (FIXTURES / f"{page}.html").read_text()
@@ -392,10 +389,9 @@ def test_pr_with_pairs_needs_clean_look_lines(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: dict[str, object] | None
 ) -> None:
     fixture, fake, after = full_ship(tmp_path, monkeypatch)
-    path = fixture.root / ".git/hard-eng/look" / f"{fixture.head}.json"
-    if change is None:
+    for path in (fixture.root / ".git/hard-eng/look").glob("*.json"):
         path.unlink()
-    else:
+    if change is not None:
         write_look(fixture.root, fixture.head, after, **change)
     with pytest.raises(shipping.ShippingError, match="[Ll]ook"):
         ready(fixture.root, fixture)
@@ -678,8 +674,6 @@ def flutter_ship(
 def native_ready(
     fixture: Fixture, fake: FakeGitHub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import look
-
     after = b"native-after-image"
     record = write_look(fixture.root, fixture.head, after)
     fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
@@ -753,7 +747,6 @@ def ci_problem(
 def test_ci_refuses_pairs_without_a_look_block_and_a_visible_na_reference(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import look
     from test_pr_text import _VALID
 
     pairs = f"{_UI_BODY}\n{_VALID}"
