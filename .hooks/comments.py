@@ -263,10 +263,11 @@ SWIFT_OFF = re.compile(
 )
 RUST_OFF = re.compile(
     r"#\s*!?\s*\[\s*(?:allow|expect)\s*\(|#\s*!?\s*\[\s*ignore\b"
-    r"|\brustfmt\s*::\s*skip\b|\bcfg\s*\(\s*not\s*\(\s*clippy\s*\)\s*\)"
+    r"|\brustfmt\s*::\s*skip\b"
 )
 RUST_CFG_ATTR = re.compile(
     r"#\s*!?\s*\[\s*cfg_attr\s*\([^\]]*?\b(?:(?:allow|expect)\s*\(|ignore\b)"
+    r"|#\s*!?\s*\[\s*cfg(?:_attr)?\s*\([^\]]*?\bnot\s*\(\s*clippy\s*\)"
 )
 TEST_OFF = {
     ".dart": r"\b(skip|solo):(?=\s*(?!false\b)\S)",
@@ -420,12 +421,12 @@ def pattern_switch_offs(
 def rust_cfg_attr_hits(
     root: Path, name: str, lines: list[tuple[int, str]], verb: str
 ) -> list[str]:
-    """A `cfg_attr` that allows or ignores, read as Rust reads it: across lines, outside comments and strings."""
+    """A `cfg_attr` that allows or ignores, or a `cfg` or `cfg_attr` that holds `not(clippy)`, read as Rust reads it: across lines, outside comments and strings."""
     try:
         raw = (root / name).read_text(errors="replace")
     except OSError:
         return []
-    if "cfg_attr" not in raw:
+    if "cfg" not in raw:
         return []
     masked = without_literals(name, code_without_comments(raw, ".rs"))
     wanted = {number for number, _ in lines}

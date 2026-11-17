@@ -130,3 +130,14 @@ def test_the_web_starter_marks_the_file_wrangler_writes(tmp_path: Path) -> None:
         },
     )
     validate_whole_project(root)
+
+
+def test_a_glob_folder_mark_names_the_file_that_differs(tmp_path: Path) -> None:
+    """One mark over many copies gets the same finding as a mark over one folder."""
+    changed = {**COPY, "functions/f/vendor/lib_a/lib/src/b.dart": "int b() => 3;\n"}
+    marks = "functions/*/vendor/lib_a/** linguist-vendored\n"
+    root = project(tmp_path, {**SOURCE, **changed, ".gitattributes": marks})
+    assert (
+        "functions/f/vendor/lib_a/lib/src/b.dart differs from packages/lib_a/lib/src/b.dart"
+        in refusal(root)
+    )

@@ -673,7 +673,7 @@ def check(
     from reports import quick_groups
     from shipping import gate_budget
 
-    require_ci_base(base)
+    require_ci_base(base, ROOT)
     base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
     if shard == "merge":

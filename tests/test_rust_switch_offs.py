@@ -25,6 +25,10 @@ SPACED = [
     "#[cfg( not ( clippy ) )]\nmod m {}\n",
     "#![cfg(not(clippy))]\n",
     "#[cfg_attr(test, rustfmt::skip)]\nfn a() {}\n",
+    "#[cfg(all(unix, not(clippy)))]\nfn a() {}\n",
+    '#[cfg_attr(not(clippy), path = "real.rs")]\nmod m;\n',
+    "#[cfg(\n    any(\n        windows,\n        not(\n            clippy\n        )\n    )\n)]\nfn a() {}\n",
+    "#![cfg_attr(\n    not( clippy ),\n    forbid(unsafe_code)\n)]\n",
 ]
 
 

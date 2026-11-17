@@ -13,6 +13,10 @@ CHECK_COMMAND = (
     r'(?: --shard (?:rest|merge|"\$SHARD"))?'
     r'(?: >> "\$GITHUB_OUTPUT" \|\| (?:echo docs_only=false|printf \'runner=[\w.-]+\\napple=(?:true|false)\\n\') >> "\$GITHUB_OUTPUT")?'
 )
+LAUNCHER = re.compile(
+    r'if \[\[ -n "\$(?P<name>[A-Z_]+)" \]\]; then mise_command=\("\$(?P=name)"\); fi'
+)
+LANGUAGE_FLAG = re.compile(r"--(only|skip)-language (\w+)")
 GENERATED_LINES = [
     re.compile(pattern)
     for pattern in (
@@ -28,7 +32,7 @@ GENERATED_LINES = [
         r"exit 1",
         r"fi",
         r'mise_command=\(bun x --package="\$MISE_PACKAGE" mise\)',
-        r'if \[\[ -n "\$[A-Z_]+" \]\]; then mise_command=\("\$[A-Z_]+"\); fi',
+        LAUNCHER.pattern,
         rf"{TOOLS} --no-config install (?:[\w@.-]+ |\"\$\{{tools\[@\]\}}\" )+&&",
     )
 ]
@@ -77,6 +81,13 @@ def step_hits(step: dict[str, object]) -> list[str]:
             hits.append(f"the check step sets the variable {key}")
         elif key == "BASE_SHA" and str(value).strip() not in BASE_VALUES:
             hits.append(f"the check step sets BASE_SHA to {value!r}")
+    for name in sorted(launcher_names(step)):
+        if name == "CI" or name.startswith(("GITHUB_", "RUNNER_")):
+            hits.append(
+                f"the check step runs ${name}, which the runner sets, as the Mise launcher"
+            )
+        if isinstance(env, dict) and name in env:
+            hits.append(f"the check step sets the launcher variable {name}")
     for line in str(step.get("run", "")).splitlines():
         text = SPACES.sub(" ", line.strip())
         if text and not any(form.fullmatch(text) for form in GENERATED_LINES):
@@ -84,7 +95,17 @@ def step_hits(step: dict[str, object]) -> list[str]:
     return hits
 
 
-def job_hits(job: dict[str, object], workflow: dict[str, object]) -> list[str]:
+def launcher_names(step: dict[str, object]) -> set[str]:
+    return {
+        match["name"]
+        for line in str(step.get("run", "")).splitlines()
+        if (match := LAUNCHER.fullmatch(SPACES.sub(" ", line.strip())))
+    }
+
+
+def job_hits(
+    job: dict[str, object], workflow: dict[str, object], names: set[str]
+) -> list[str]:
     hits = []
     if job.get("continue-on-error", False) not in SAFE_FALSE:
         hits.append("the job sets continue-on-error")
@@ -97,7 +118,7 @@ def job_hits(job: dict[str, object], workflow: dict[str, object]) -> list[str]:
             if isinstance(run, dict) and key in run:
                 hits.append(f"the {scope} defaults set {key}")
         env = holder.get("env")
-        for key in ("BASE_SHA", "PATH"):
+        for key in ("BASE_SHA", "PATH", *sorted(names)):
             if isinstance(env, dict) and key in env:
                 hits.append(f"the {scope} sets the variable {key}")
     return hits
@@ -134,6 +155,7 @@ def workflow_hits(name: str, text: str) -> list[str]:
         found.append(f"{name}:1 runs on {sorted(map(str, events))} only: {FIX}")
     jobs = data.get("jobs")
     checks = 0
+    words: list[tuple[str, str, int]] = []
     for job in (jobs if isinstance(jobs, dict) else {}).values():
         if not isinstance(job, dict):
             continue
@@ -146,11 +168,21 @@ def workflow_hits(name: str, text: str) -> list[str]:
         if not steps:
             continue
         checks += sum(" check " in str(step["run"]) for step in steps)
-        found += [f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data)]
+        launchers = set().union(*map(launcher_names, steps))
+        found += [f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data, launchers)]
+        for step in steps:
+            for match in LANGUAGE_FLAG.finditer(str(step["run"])):
+                words.append((match[1], match[2], line_of(text, step)))
         for step in steps:
             found += [
                 f"{name}:{line_of(text, step)} {hit}: {FIX}" for hit in step_hits(step)
             ]
+    only = {language for kind, language, _ in words if kind == "only"}
+    found += [
+        f"{name}:{line} skips {language} with no job that checks only {language}: {FIX}"
+        for kind, language, line in words
+        if kind == "skip" and language not in only
+    ]
     if not checks:
         found.append(f"{name}:1 holds no generated check step: {FIX}")
     return found

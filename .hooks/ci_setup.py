@@ -862,7 +862,21 @@ def add_workflow_checks(config: GateConfig) -> None:
         )
 
 
-def require_ci_base(base: str | None) -> None:
+def require_ci_base(base: str | None, root: Path) -> None:
+    sha = os.environ.get("GITHUB_SHA", "")
+    if os.environ.get("GITHUB_ACTIONS") == "true" and sha:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        if head != sha:
+            raise ValueError(
+                f"The checkout is at {head or 'no commit'}, not at GITHUB_SHA {sha}, so the check would judge another tree; "
+                "remove `ref:` from the checkout step and any step that moves HEAD before the check"
+            )
     if (
         os.environ.get("GITHUB_ACTIONS") == "true"
         and os.environ.get("GITHUB_EVENT_NAME")
