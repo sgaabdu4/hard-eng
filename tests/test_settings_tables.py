@@ -18,7 +18,6 @@ CLASSES = {
     "rules",
     "named",
     "patterns",
-    "width",
     "version",
     "proved",
     "holds",

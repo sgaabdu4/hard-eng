@@ -20,13 +20,13 @@ RUFF_KEYS = {
     "linter.per_file_ignores": "equal",
     "linter.exclude": "equal",
     "linter.unresolved_target_version": "version",
-    "linter.per_file_target_version": "equal",
+    "linter.per_file_target_version": "version",
     "linter.preview": "free",
     "linter.explicit_preview_rules": "free",
     "linter.extension": "equal",
     "linter.src": "free",
     "linter.tab_size": "equal",
-    "linter.line_length": "width",
+    "linter.line_length": "free",
     "linter.task_tags": "equal",
     "linter.allowed_confusables": "equal",
     "linter.builtins": "equal",
@@ -39,7 +39,7 @@ RUFF_KEYS = {
     "linter.typing_extensions": "equal",
     "linter.flake8_tidy_imports.banned_api": "holds",
     "linter.mccabe.max_complexity": "limit",
-    "linter.pycodestyle.max_line_length": "width",
+    "linter.pycodestyle.max_line_length": "free",
     "linter.pycodestyle.max_doc_length": "free",
     "linter.pylint.max_args": "limit",
     "linter.pylint.max_positional_args": "limit",
@@ -145,10 +145,10 @@ def judge(
     key: str,
     value: list[str],
     default: list[str],
-    context: tuple[object, set[str], tuple[int, int] | None],
+    context: tuple[object, tuple[int, int] | None],
 ) -> list[str]:
     """What one printed setting does wrong, by its class."""
-    role, codes, minimum = context
+    role, minimum = context
     kind = classify(key)
     if kind is None:
         return [f"{key} is a setting that no table classes: class it in ruff_table.py"]
@@ -164,17 +164,19 @@ def judge(
         return [
             f"the resolved {key} lacks {missing[0]!r}: the annotations gate keeps every banned import of the template"
         ]
-    if kind == "width":
-        now, base = number_of(value), number_of(default)
-        if "E501" in codes and now is not None and base is not None and now > base:
-            return [
-                f"the resolved {key} is {value[0]}, above Ruff's {default[0]} while E501 is on: a longer line hides its findings"
-            ]
-    found = VERSION.search(" ".join(value)) if kind == "version" and minimum else None
-    if found and minimum and (int(found[1]), int(found[2])) < minimum:
-        return [
-            f"the resolved target version {found[0]} is below the requires-python minimum {minimum[0]}.{minimum[1]}: a lower target hides pyupgrade findings"
-        ]
+    if kind == "version" and minimum:
+        per_file = "per_file" in key
+        lines = (
+            [line for line in value if line.startswith("data = ")]
+            if per_file
+            else value
+        )
+        for found in (match for line in lines for match in VERSION.findall(line)):
+            if (int(found[0]), int(found[1])) < minimum:
+                what = "per-file target version" if per_file else "target version"
+                return [
+                    f"the resolved {what} {found[0]}.{found[1]} is below the requires-python minimum {minimum[0]}.{minimum[1]}: a lower target hides pyupgrade findings; raise it to {minimum[0]}.{minimum[1]} or higher, or remove the entry"
+                ]
     return []
 
 
@@ -194,7 +196,7 @@ def ruff_hits(
 ) -> list[str]:
     """What the resolved settings of one gate drop, key by key, compared with Ruff's own defaults."""
     printed, base = parse(settings), parse(defaults)
-    context = (role, enabled(printed.get("linter.rules.enabled", [])), minimum)
+    context = (role, minimum)
     return [
         hit
         for key, value in printed.items()

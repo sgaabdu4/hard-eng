@@ -112,15 +112,15 @@ FINDING_CHANGING = [
     ("[tool.ruff]\nfix = true\n", "fix"),
     ("[tool.ruff]\nfix-only = true\n", "fix_only"),
     ('[tool.ruff]\nextension = {"py" = "ipynb"}\n', "linter.extension"),
-    (
-        '[tool.ruff.lint]\nselect = ["ALL"]\n[tool.ruff]\nline-length = 1000\n',
-        "line_length",
-    ),
     ('[tool.ruff.lint]\ntask-tags = ["NEVER"]\n', "task_tags"),
     ("[tool.ruff.lint.flake8-copyright]\nmin-file-size = 100000\n", "min_file_size"),
     (
         '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.12"\n[tool.ruff]\ntarget-version = "py37"\n',
         "target version",
+    ),
+    (
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff.per-file-target-version]\n"scripts/*.py" = "py37"\n',
+        "per-file target version",
     ),
 ]
 
@@ -138,9 +138,11 @@ def test_a_setting_that_changes_which_findings_ruff_reports_is_not_free(
     [
         '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.12"\n[tool.ruff]\ntarget-version = "py312"\n',
         '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff]\ntarget-version = "py313"\n',
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff.per-file-target-version]\n"scripts/*.py" = "py313"\n',
         "[tool.ruff]\nline-length = 88\n",
         '[tool.ruff.lint]\nselect = ["ALL"]\n[tool.ruff]\nline-length = 60\n',
         "[tool.ruff]\nline-length = 120\n",
+        '[tool.ruff]\nline-length = 100\n[tool.ruff.lint]\nextend-select = ["E501"]\n',
     ],
 )
 def test_a_setting_that_can_only_add_findings_passes(
