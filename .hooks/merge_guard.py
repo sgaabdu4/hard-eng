@@ -19,8 +19,6 @@ VALUE_FLAGS = frozenset(
     + ("-t", "--subject", "-A", "--author-email")
 )
 PULL_NUMBER = re.compile(r"(?:^|/pull/)(\d+)/?$")
-WORD = re.compile(r"[A-Za-z0-9_]+")
-MERGE_WORDS = frozenset(("merge", "mergePullRequest", "enablePullRequestAutoMerge"))
 REFUSED_FLAGS = frozenset(("--admin", "--auto", "--disable-auto"))
 STEP = "Merge with `python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge`."
 
@@ -75,12 +73,6 @@ def pr_merge_problem(arguments: list[str], cwd: Path) -> str | None:
     if methods != {record.get("method")}:
         return f"the passed `ship` record names the method {record.get('method')}; use only that flag. {STEP}"
     return None
-
-
-def holds_merge(command: str) -> bool:
-    """Whether the command has the word `gh` and a merge word, each as its own word and never a part of one."""
-    words = set(WORD.findall(command))
-    return "gh" in words and bool(words & MERGE_WORDS)
 
 
 def merge_problem(command: str, cwd: Path) -> str | None:
