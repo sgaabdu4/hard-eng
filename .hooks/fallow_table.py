@@ -43,7 +43,7 @@ FALLOW_KEYS = {
     "health.maxCrap": "limit",
     "health.maxUnitSize": "limit",
     "health.crapRefactorBand": "free",
-    "health.coverage": "free",
+    "health.coverage": "proved",
     "health.coverageRoot": "free",
     "health.ignore": "patterns",
     "health.suggestInlineSuppression": "equal",
@@ -62,7 +62,7 @@ FALLOW_KEYS = {
 }
 FALLOW_PREFIXES = {
     "health.ownership.": "free",
-    "boundaries": "free",
+    "boundaries": "proved",
     "flags": "free",
     "fix": "free",
 }

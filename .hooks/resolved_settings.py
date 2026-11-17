@@ -1,6 +1,8 @@
 """Judge the settings that Ruff and Fallow print for each gate, so no spelling of a setting can hide a narrowed rule set."""
 
+import re
 import subprocess
+import tomllib
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
@@ -8,7 +10,7 @@ from pathlib import Path
 
 from command_words import direct
 from dart_boundaries import nested_package_patterns
-from fallow_report import named_config, native_fallow_command
+from fallow_report import named_config, native_fallow_command, option
 from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
 from ruff_table import ruff_hits
@@ -115,6 +117,18 @@ def ruff_tasks(
     ]
 
 
+def requires_python(directory: Path) -> tuple[int, int] | None:
+    """The lowest Python version the project supports, which Ruff uses as its target when no target is set."""
+    try:
+        project = tomllib.loads((directory / "pyproject.toml").read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    found = re.search(
+        r">=\s*(\d+)\.(\d+)", str(project.get("project", {}).get("requires-python", ""))
+    )
+    return (int(found[1]), int(found[2])) if found else None
+
+
 def ruff_gate_hits(
     run: tuple[tuple[str, ...], list[str], Path, Gate, float],
     scope: tuple[frozenset[str], frozenset[Path]],
@@ -124,7 +138,9 @@ def ruff_gate_hits(
     prefix, arguments, directory, gate, timeout = run
     settings = printed(list(prefix), arguments, directory, timeout)
     checked = shown(list(prefix), arguments, directory, timeout)
-    hits = ruff_hits(settings, baseline.result(), gate.get("role"))
+    hits = ruff_hits(
+        settings, baseline.result(), gate.get("role"), requires_python(directory)
+    )
     left = left_out(directory, (".py", ".pyi"), checked, children)
     nested = nested_configs(directory, "ruff", roots)
     return [f"gate {gate['name']}: {hit}" for hit in [*hits, *refusal(left), *nested]]
@@ -142,10 +158,16 @@ def fallow_tasks(
     if invocation is None:
         return []
     children = nested_package_patterns(group, every, gate.get("role", ""))
+    reports = [
+        other["report"]["path"]
+        for other in group["checks"]
+        if other.get("role") == "tests" and other.get("report", {}).get("path")
+    ]
+    proof = (reports, option(invocation, "--coverage"))
     return [
         partial(
             fallow_gate_hits,
-            (directory, named_config(invocation), children, gate, timeout),
+            (directory, named_config(invocation), children, gate, timeout, proof),
             group_roots(root, every),
             defaults.fallow(),
         )
@@ -153,12 +175,19 @@ def fallow_tasks(
 
 
 def fallow_gate_hits(
-    run: tuple[Path, str | None, frozenset[str], Gate, float],
+    run: tuple[
+        Path,
+        str | None,
+        frozenset[str],
+        Gate,
+        float,
+        tuple[list[str], str | None],
+    ],
     roots: frozenset[Path],
     defaults: Future[dict[str, object]],
 ) -> list[str]:
-    directory, config, children, gate, timeout = run
-    hits = fallow_hits(directory, config, children, defaults.result(), timeout)
+    directory, config, children, gate, timeout, proof = run
+    hits = fallow_hits(directory, config, children, defaults.result(), timeout, proof)
     return [
         f"gate {gate['name']} ({directory.name}): {hit}"
         for hit in [*hits, *nested_configs(directory, "fallow", roots)]

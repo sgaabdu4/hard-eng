@@ -98,3 +98,53 @@ def test_a_complexity_gate_that_drops_a_rule_is_refused(tmp_path: Path) -> None:
         ValueError, match=r"lacks 2 of the complexity rules: PLR0912, PLR0915"
     ):
         validate_resolved(root, groups(narrow, "complexity"), 900)
+
+
+def refused(tmp_path: Path, settings: str, reason: str) -> None:
+    root = project(tmp_path, settings)
+    with pytest.raises(ValueError, match=rf"HE-NO-SWITCH-OFF[\s\S]*{reason}"):
+        validate_resolved(
+            root, groups(["uvx", "ruff@latest", "check", "."], "lint"), 900
+        )
+
+
+FINDING_CHANGING = [
+    ("[tool.ruff]\nfix = true\n", "fix"),
+    ("[tool.ruff]\nfix-only = true\n", "fix_only"),
+    ('[tool.ruff]\nextension = {"py" = "ipynb"}\n', "linter.extension"),
+    (
+        '[tool.ruff.lint]\nselect = ["ALL"]\n[tool.ruff]\nline-length = 1000\n',
+        "line_length",
+    ),
+    ('[tool.ruff.lint]\ntask-tags = ["NEVER"]\n', "task_tags"),
+    ("[tool.ruff.lint.flake8-copyright]\nmin-file-size = 100000\n", "min_file_size"),
+    (
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.12"\n[tool.ruff]\ntarget-version = "py37"\n',
+        "target version",
+    ),
+]
+
+
+@pytest.mark.parametrize(("settings", "reason"), FINDING_CHANGING)
+def test_a_setting_that_changes_which_findings_ruff_reports_is_not_free(
+    tmp_path: Path, settings: str, reason: str
+) -> None:
+    """HE-NO-SWITCH-OFF: a key is free only when it cannot change the findings or the exit code."""
+    refused(tmp_path, settings, reason)
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.12"\n[tool.ruff]\ntarget-version = "py312"\n',
+        '[project]\nname = "x"\nversion = "0"\nrequires-python = ">=3.10"\n[tool.ruff]\ntarget-version = "py313"\n',
+        "[tool.ruff]\nline-length = 88\n",
+        '[tool.ruff.lint]\nselect = ["ALL"]\n[tool.ruff]\nline-length = 60\n',
+        "[tool.ruff]\nline-length = 120\n",
+    ],
+)
+def test_a_setting_that_can_only_add_findings_passes(
+    tmp_path: Path, settings: str
+) -> None:
+    root = project(tmp_path, settings)
+    validate_resolved(root, groups(["uvx", "ruff@latest", "check", "."], "lint"), 900)

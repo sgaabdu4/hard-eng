@@ -193,3 +193,54 @@ def test_an_entry_glob_for_files_no_plugin_finds_asks_for_names(
     with pytest.raises(ValueError, match=r"list each file by name") as refused:
         validate_resolved(root, groups("."), 900)
     assert "already finds" not in str(refused.value)
+
+
+def tests_group(report: str = "coverage/lcov.info") -> list[Group]:
+    tests: Gate = {
+        "name": "tests",
+        "role": "tests",
+        "command": ["bun", "run", "test:coverage"],
+        "report": {"type": "lcov-tests", "path": report},
+    }
+    return [{"path": ".", "language": "javascript", "checks": [gate(), tests]}]
+
+
+def test_a_committed_coverage_file_cannot_feed_the_crap_score(tmp_path: Path) -> None:
+    root = repo(
+        tmp_path,
+        {
+            ".fallowrc.json": settings(health={"coverage": "committed.json"}),
+            "committed.json": "{}",
+            "src/main.ts": "export {};\n",
+        },
+    )
+    with pytest.raises(ValueError, match=r"health\.coverage[\s\S]*tests gate writes"):
+        validate_resolved(root, tests_group(), 900)
+
+
+def test_the_coverage_file_that_the_tests_gate_writes_may_feed_it(
+    tmp_path: Path,
+) -> None:
+    root = repo(
+        tmp_path,
+        {
+            ".fallowrc.json": settings(
+                health={"coverage": "coverage/coverage-final.json"}
+            ),
+            ".gitignore": "coverage/\n",
+            "src/main.ts": "export {};\n",
+        },
+    )
+    validate_resolved(root, tests_group(), 900)
+
+
+def test_boundaries_must_cover_every_file(tmp_path: Path) -> None:
+    config = settings(
+        boundaries={
+            "zones": [{"name": "app", "patterns": ["src/**"]}],
+            "rules": [{"from": "app", "allow": []}],
+        }
+    )
+    root = repo(tmp_path, {".fallowrc.json": config, "src/main.ts": "export {};\n"})
+    with pytest.raises(ValueError, match=r"boundaries[\s\S]*requireAllFiles"):
+        validate_resolved(root, groups("."), 900)

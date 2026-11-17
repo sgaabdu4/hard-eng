@@ -175,7 +175,6 @@ RUFF_FLAGS = {
             "--verbose",
             "-v",
             "--preview",
-            "--fix",
             "--no-fix",
         },
     ),
