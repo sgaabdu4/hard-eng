@@ -23,18 +23,18 @@ Apply to visible changes; preview only the flow and states needed for the decisi
 - Look review = `look` prints a `Look review:` block for the After images. It holds one line per rule, one `- image:` hash line per After image, a `- verdict:` line and a last `- record:` line. Copy that block into the PR body unchanged. Do not paste the block of a mockup.
 - Standard patterns = each row states behaviour and placement only. Use the project's `DESIGN.md` and tokens. With none, use the design the user asked for, else one the agent picks. A plan that changes a control follows its row. A plan that differs from a row writes why in the plan. The user approves each such difference in the `Handoff: Approval` step ([he-plan](../SKILL.md)) before build. In Autonomous mode, the task's own authorization stands for that approval:
 
-| Control                          | Standard form                                                                                                                     |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Password field                   | A reveal control inside the field: an icon with a screen-reader label. The control shows no text, and no text button sits beside the field. The field keeps its visible label.  |
-| Search field                     | A search icon inside the field and the project's shared search component (if none exists, see Any control). No separate text button beside it.                       |
-| Form field                       | A visible label for each field, not a placeholder alone.                                                                          |
-| Destructive action               | Asks twice before it acts. Destructive actions are delete, cancel, refund, access removal and reversing money.                                                               |
-| Other action                     | One tap, then one-tap Undo.                                                                                                       |
-| Empty screen                     | One line that says the next step, plus the action.                                                                                |
-| Error                            | What happened and what to do, in plain words, next to the thing that failed.                                                      |
-| Button group                     | One filled button in each group of buttons that sit together. The other buttons are visibly quieter.                                                                 |
-| Secondary text                   | At most 1 line under a heading or card, at most 20 words.                                                                         |
-| Any control                      | Reuse the project's shared component. If none exists, add one new shared component with a mockup. Name it in `Controls:` before any code (see Record).                                      |
+| Control            | Standard form                                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Password field     | A reveal control inside the field: an icon with a screen-reader label. The control shows no text, and no text button sits beside the field. The field keeps its visible label. |
+| Search field       | A search icon inside the field and the project's shared search component (if none exists, see Any control). No separate text button beside it.                                 |
+| Form field         | A visible label for each field, not a placeholder alone.                                                                                                                       |
+| Destructive action | Asks twice before it acts. Destructive actions are delete, cancel, refund, access removal and reversing money.                                                                 |
+| Other action       | One tap, then one-tap Undo.                                                                                                                                                    |
+| Empty screen       | One line that says the next step, plus the action.                                                                                                                             |
+| Error              | What happened and what to do, in plain words, next to the thing that failed.                                                                                                   |
+| Button group       | One filled button in each group of buttons that sit together. The other buttons are visibly quieter.                                                                           |
+| Secondary text     | At most 1 line under a heading or card, at most 20 words.                                                                                                                      |
+| Any control        | Reuse the project's shared component. If none exists, add one new shared component with a mockup. Name it in `Controls:` before any code (see Record).                         |
 
 - Brief = a brief that asks a subagent for a design, mockup or preview links this file, includes the full Usability list and states the job, the users and the constraints. It never dictates the layout, the elements per row or the buttons. Process steps that the requester describes are inputs to automate, not screen elements.
 - Pick the first surface below that fits ([HE-REAL-APP-PREVIEW](../../he/references/requirements.md#he-real-app-preview)). Planning may build the proposal in an isolated checkout; production implementation still waits for Ready + authorization. No mandatory video or extra visual-testing platform.
