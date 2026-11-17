@@ -95,6 +95,7 @@ REFUSED = [
     "! gh pr merge 12 --rebase",
     "G=gh; $G pr merge 12 --rebase",
     "echo 'gh pr merge 12 --rebase' | bash",
+    "echo gh pr merge 12",
     "bash <<< 'gh pr merge 12 --rebase'",
     "bash -c -- 'gh pr merge 12 --rebase'",
     "echo `gh pr merge 12`",
