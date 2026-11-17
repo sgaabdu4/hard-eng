@@ -141,10 +141,11 @@ def leave_a_process(run: Run) -> None:
 RUNNING: set[str] = set()
 
 
-@pytest.fixture(autouse=True)
-def listed_processes(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture
+def judged_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Run:
     RUNNING.clear()
     monkeypatch.setattr(agent_browser, "browser_processes", lambda: set(RUNNING))
+    return browser_run(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -165,11 +166,11 @@ def listed_processes(monkeypatch: pytest.MonkeyPatch) -> None:
     ],
 )
 def test_browser_proof_judge_fails_each_missing_item(
-    tmp_path: Path,
+    judged_run: Run,
     remove: Callable[[Run], None],
     reason: str,
 ) -> None:
-    run = browser_run(tmp_path)
+    run = judged_run
     assert agent_browser.judge_browser(run) == []
     remove(run)
     failures = agent_browser.judge_browser(run)
@@ -181,9 +182,9 @@ def test_browser_proof_judge_fails_each_missing_item(
     ("ring", "relative"), [(True, False), (False, False), (True, True)]
 )
 def test_judge_reads_images_the_answer_links(
-    tmp_path: Path, ring: bool, relative: bool
+    tmp_path: Path, judged_run: Run, ring: bool, relative: bool
 ) -> None:
-    run = browser_run(tmp_path)
+    run = judged_run
     moved = tmp_path / "proof"
     moved.mkdir()
     for image in sorted((run.root / ".hard-eng/browser").glob("*.png")):
