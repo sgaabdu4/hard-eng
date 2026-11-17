@@ -197,6 +197,22 @@ def project_scripts(directory: Path) -> dict[str, object]:
     return scripts if isinstance(scripts, dict) else {}
 
 
+def script_text(arguments: list[str], directory: Path) -> str:
+    """The script that `<manager> run <name>` runs; a flag in the name place is refused by name."""
+    if arguments[2].startswith("-"):
+        raise ValueError(
+            f"the flag {arguments[2]} after `run` is not allowed: write `{arguments[0]} run <script>` with no flag"
+        )
+    script = (
+        read_project_file(directory / "package.json")
+        .get("scripts", {})
+        .get(arguments[2])
+    )
+    if not isinstance(script, str):
+        raise TypeError(f"package script {arguments[2]} is missing from package.json")
+    return script
+
+
 def package_script_invocation(
     command: list[str], directory: Path, bun_only: bool = False
 ) -> tuple[list[str], Path]:
@@ -234,12 +250,7 @@ def package_script_invocation(
         if identity in scripts_seen:
             raise ValueError("Recursive package test script")
         scripts_seen.add(identity)
-        package = read_project_file(directory / "package.json")
-        script = package.get("scripts", {}).get(arguments[2])
-        if not isinstance(script, str):
-            raise TypeError(
-                f"package script {arguments[2]} is missing from package.json"
-            )
+        script = script_text(arguments, directory)
         arguments = shlex.split(script) + arguments[3:]
         if not arguments:
             raise ValueError("Configured package test script is empty")

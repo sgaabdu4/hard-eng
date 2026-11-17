@@ -102,9 +102,7 @@ Scope = tuple[Path, list[Group], Group, Gate]
 ANNOTATION_SET = "ANN,TID251,RUF017,ASYNC210"
 ANNOTATION_CONFIG = [
     "--config",
-    'lint.flake8-tidy-imports.banned-api."typing.Any".msg = "Use a precise type instead of Any"',
-    "--config",
-    'lint.flake8-tidy-imports.banned-api."typing_extensions.Any".msg = "Use a precise type instead of Any"',
+    'lint.flake8-tidy-imports.banned-api = {"typing.Any" = {msg = "Use a precise type instead of Any"}, "typing_extensions.Any" = {msg = "Use a precise type instead of Any"}}',
 ]
 
 

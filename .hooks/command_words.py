@@ -76,9 +76,18 @@ PACKAGE_COMMANDS = frozenset(
 )
 TOOL_WORD = re.compile(r"(ruff|fallow|gitleaks)(@[\w.=<>~+-]+)?")
 UV_FLAGS = {"--no-sync", "--frozen", "--locked"}
+ALLOWED_FORMS = (
+    "ruff check <paths>",
+    "uvx ruff@<pin> check <paths>",
+    *(f"uv run {flag} ruff check <paths>" for flag in sorted(UV_FLAGS)),
+    "bun x fallow@<pin> <arguments>",
+    "bunx fallow@<pin> <arguments>",
+    "cargo clippy <arguments>",
+    "gitleaks <arguments>",
+)
 DIRECT_FORMS = (
-    "write `uvx ruff@<pin> check <paths>`, `ruff check <paths>`, `bun x fallow@<pin> <arguments>`, "
-    "`cargo clippy <arguments>` or `gitleaks <arguments>`, or `bun run <script>` where the script is exactly one such command"
+    f"write {', '.join(f'`{form}`' for form in ALLOWED_FORMS)}, "
+    "or `bun run <script>` where the script is exactly one such command"
 )
 
 

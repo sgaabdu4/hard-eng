@@ -152,12 +152,15 @@ def test_a_setting_that_can_only_add_findings_passes(
     validate_resolved(root, groups(["uvx", "ruff@latest", "check", "."], "lint"), 900)
 
 
-BANNED = [
-    "--config",
-    'lint.flake8-tidy-imports.banned-api."typing.Any".msg = "Use a precise type instead of Any"',
-    "--config",
-    'lint.flake8-tidy-imports.banned-api."typing_extensions.Any".msg = "Use a precise type instead of Any"',
-]
+MESSAGE = "Use a precise type instead of Any"
+
+
+def banned(*names: str) -> list[str]:
+    entries = ", ".join(f'"{name}" = {{msg = "{MESSAGE}"}}' for name in names)
+    return ["--config", f"lint.flake8-tidy-imports.banned-api = {{{entries}}}"]
+
+
+BANNED = banned("typing.Any", "typing_extensions.Any")
 ANNOTATIONS = [
     "uvx",
     "ruff@latest",
@@ -193,18 +196,18 @@ def test_an_annotations_gate_that_keeps_its_set_passes(
     validate_resolved(root, groups(command, "annotations"), 900)
 
 
-@pytest.mark.parametrize("kept", [0])
+@pytest.mark.parametrize("kept", [(), ("typing.Any",), ("typing_extensions.Any",)])
 def test_an_annotations_gate_must_keep_every_banned_api_entry(
-    tmp_path: Path, kept: int
+    tmp_path: Path, kept: tuple[str, ...]
 ) -> None:
     root = project(tmp_path, "")
-    command = [*ANNOTATIONS[:8], *BANNED[:kept]]
+    command = [*ANNOTATIONS[:8], *(banned(*kept) if kept else [])]
     with pytest.raises(ValueError, match=r"banned_api"):
         validate_resolved(root, groups(command, "annotations"), 900)
     validate_resolved(root, groups(ANNOTATIONS, "annotations"), 900)
 
 
-def test_the_banned_api_lines_are_the_ones_of_the_template() -> None:
+def template_annotations() -> list[str]:
     import json
 
     from conftest import SOURCE
@@ -212,9 +215,31 @@ def test_the_banned_api_lines_are_the_ones_of_the_template() -> None:
     template = json.loads(
         (SOURCE / ".agents/skills/he/templates/hard-eng.python.json").read_text()
     )
-    command = next(
+    return next(
         gate["command"]
         for gate in template["packages"][0]["checks"]
         if gate["role"] == "annotations"
     )
+
+
+def test_the_banned_api_lines_are_the_ones_of_the_template() -> None:
+    command = template_annotations()
     assert command[command.index("--config") :][2:] == BANNED
+
+
+@pytest.mark.parametrize("module", ["typing", "typing_extensions"])
+def test_the_template_annotations_gate_bans_each_any_for_real(
+    tmp_path: Path, module: str
+) -> None:
+    """HE-NO-SWITCH-OFF: real Ruff runs the template's own words and fails on each banned `Any`, not only the first entry."""
+    import subprocess
+
+    command = template_annotations()
+    (tmp_path / "a.py").write_text(
+        f"from {module} import Any\n\n\ndef f(x: dict[str, Any]) -> None:\n    return None\n"
+    )
+    done = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True, check=False, timeout=900
+    )
+    assert done.returncode == 1
+    assert f"{module}.Any` is banned" in done.stdout

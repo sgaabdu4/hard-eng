@@ -18,10 +18,28 @@ DECLARATIONS = Path(".hooks/untrusted-input.d.ts")
 CAST_RULE = "--only=nursery/noUnsafeTypeAssertion"
 
 
+LEGACY_BANNED_API = [
+    "--config",
+    'lint.flake8-tidy-imports.banned-api."typing.Any".msg = "Use a precise type instead of Any"',
+    "--config",
+    'lint.flake8-tidy-imports.banned-api."typing_extensions.Any".msg = "Use a precise type instead of Any"',
+]
+
+
 def strict_typing_rules(package: Group) -> None:
-    """Give an older Biome typing-style gate the rules the template now requires."""
+    """Give an older gate what the template now requires: the Biome cast rule, and one banned-api table in place of two Ruff lines that kept one entry."""
+    from resolved_settings import ANNOTATION_CONFIG
+
+    size = len(LEGACY_BANNED_API)
     for gate in package["checks"]:
         command = gate["command"]
+        for at in range(len(command) - size + 1):
+            if (
+                gate.get("role") == "annotations"
+                and command[at : at + size] == LEGACY_BANNED_API
+            ):
+                command[at : at + size] = ANNOTATION_CONFIG
+                break
         rules = [n for n, value in enumerate(command) if value.startswith("--only=")]
         typing = gate.get("role") == "typing-style" and "biome" in command
         if typing and rules and CAST_RULE not in command:
