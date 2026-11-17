@@ -4,6 +4,7 @@ import json
 import re
 import shlex
 import subprocess
+from itertools import pairwise
 from pathlib import Path
 
 METHOD_FLAGS = {
@@ -97,6 +98,12 @@ VALUE_FLAGS_GH = frozenset(
     + ("--raw-field", "-x", "--method", "-h", "--header", "-q", "--jq", "--json")
     + ("--branch", "--base", "--head", "--label", "--search", "--state", "--limit")
 )
+LOOKUP = re.compile(
+    r"\"?(?:\$\(|`)\s*(?:which|command\s+-v|type\s+-p|whence\s+-p)\s+gh\s*(?:\)|`)\"?",
+    re.IGNORECASE,
+)
+GIT_ALIAS = re.compile(r"^alias\.[^=]+=!")
+FIELD_FLAGS = ("-f", "--field", "--raw-field")
 PLAIN_REASON = (
     "a `gh` command that merges, or that cannot be read, must be exactly one "
     "plain `gh pr merge`."
@@ -104,7 +111,8 @@ PLAIN_REASON = (
 
 
 def command_segments(command: str) -> list[list[str]]:
-    text = command.replace("\\\n", "").replace("`", " ; ").replace("$(", " ; ( ")
+    text = LOOKUP.sub("gh", command.replace("\\\n", ""))
+    text = text.replace("`", "$ ; ").replace("$(", "$ ; ( ").replace("<(", "$ ; ( ")
     lexer = shlex.shlex(text.lower(), posix=True, punctuation_chars=";&|()\n")
     vars(lexer).update(whitespace=" \t\r", whitespace_split=True)
     segments, current = list[list[str]](), list[str]()
@@ -145,6 +153,10 @@ def gh_problem(arguments: list[str]) -> str | None:
             word == "--input" or word.startswith("--input=") or "=@" in word
             for word in arguments
         )
+        opaque = opaque or any(
+            flag in FIELD_FLAGS and ("$" in value or " ; " in value)
+            for flag, value in pairwise(arguments)
+        )
         if opaque or words_of(arguments) & API_WORDS:
             return "a `gh api` call that merges, or that reads its query from a file, must go through ship."
     if positionals[:1] == ["alias"] and positionals[1:2] not in (["list"], ["delete"]):
@@ -159,15 +171,13 @@ def effective_command(segment: list[str]) -> tuple[str, list[str]]:
     if not rest:
         return "", []
     name = rest[0].rsplit("/", 1)[-1]
-    if name in WRAPPERS:
-        for index, word in enumerate(rest[1:], 1):
-            base = word.rsplit("/", 1)[-1]
-            if (
-                base == "gh"
-                or base in SHELLS
-                or base.rstrip("0123456789.") in INTERPRETERS
-            ):
-                return base, rest[index:]
+    for index, word in enumerate(rest[1:] if name != "gh" else [], 1):
+        base = word.rsplit("/", 1)[-1]
+        if base == "gh" or (
+            name in WRAPPERS
+            and (base in SHELLS or base.rstrip("0123456789.") in INTERPRETERS)
+        ):
+            return base, rest[index:]
     return name, rest
 
 
@@ -176,6 +186,10 @@ def segment_problem(segment: list[str]) -> tuple[str | None, bool]:
     if name == "gh":
         return gh_problem(rest[1:]), False
     if name.startswith("$") and holds_code(["gh", *rest]):
+        return PLAIN_REASON, False
+    if name == "alias" and "gh" in words_of(rest[1:]):
+        return PLAIN_REASON, False
+    if name == "git" and any(GIT_ALIAS.match(w) and holds_code([w]) for w in rest):
         return PLAIN_REASON, False
     code = [word for word in rest[1:] if not word.startswith("-")]
     if name in SHELLS or name.rstrip("0123456789.") in INTERPRETERS:
