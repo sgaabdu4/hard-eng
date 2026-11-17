@@ -833,17 +833,36 @@ def test_quick_check_runs_no_ui_proof(
     assert not loaded.intersection(UI_MODULES), done.stderr
 
 
-def test_every_usability_rule_has_a_proof_kind() -> None:
+def plan_proof_kinds() -> dict[str, set[str]]:
+    """The kinds that the plan's gate table gives each Usability rule, read from its rows."""
+    plan = (FIXTURES.parents[2] / "features/ui-quality-enforcement/PLAN.md").read_text()
+    table = plan.split("### What the gate enforces")[1].split("### Coverage")[0]
+    kinds: dict[str, set[str]] = {name: set() for name, _ in usability_rules()}
+    for line in table.splitlines():
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if not line.startswith("|") or len(cells) < 2:
+            continue
+        found = {
+            word
+            for word, label in (
+                ("measured", "measured"),
+                ("judgement", "judgement"),
+                ("test", "tests"),
+            )
+            if label in cells[1].lower()
+        }
+        for name in kinds:
+            if name in cells[0]:
+                kinds[name] |= found
+    return kinds
+
+
+def test_every_usability_rule_has_a_proof_kind_that_matches_the_plan_table() -> None:
     from ui_measure import PROOF_KINDS
 
-    names = [name for name, _ in usability_rules()]
-    assert sorted(PROOF_KINDS) == sorted(names)
-    assert set(PROOF_KINDS.values()) <= {
-        "measured",
-        "session record",
-        "test",
-        "judgement",
-    }
+    assert {name: set(kinds) for name, kinds in PROOF_KINDS.items()} == (
+        plan_proof_kinds()
+    )
 
 
 def test_ux_text_names_the_gap_items() -> None:
