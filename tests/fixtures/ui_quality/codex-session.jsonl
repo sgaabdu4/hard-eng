@@ -1,0 +1,2 @@
+{"timestamp": "{time}", "ordinal": 0, "type": "session_meta", "payload": {"id": "{thread}", "session_id": "{thread}", "timestamp": "{time}", "source": "exec"}}
+{"timestamp": "{time}", "ordinal": 22, "type": "event_msg", "payload": {"type": "item_completed", "thread_id": "{thread}", "turn_id": "turn", "item": {"type": "ImageView", "id": "exec-1", "path": "file://{path}"}, "started_at_ms": 1, "completed_at_ms": 2}}

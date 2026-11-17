@@ -96,11 +96,9 @@ def git_text(root: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
-def store(root: Path, revision: str) -> Path:
+def store(root: Path, revision: str, kind: str = "challenge") -> Path:
     return (
-        root
-        / git_text(root, "rev-parse", "--git-path", "hard-eng/challenge")
-        / revision
+        root / git_text(root, "rev-parse", "--git-path", f"hard-eng/{kind}") / revision
     )
 
 
