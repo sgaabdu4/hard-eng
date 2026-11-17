@@ -263,11 +263,14 @@ def look_problem(root: Path, head: str, body: str, after: list[bytes]) -> str | 
     return None
 
 
+def is_native(visible: list[str]) -> bool:
+    return bool(visible) and all(name.endswith(NATIVE) for name in visible)
+
+
 def evidence_problem(
     root: Path, head: str, body: str, after: list[bytes], visible: list[str]
 ) -> str | None:
-    native_only = bool(visible) and all(name.endswith(NATIVE) for name in visible)
-    if not native_only and (problem := measured_problem(root, after)):
+    if not is_native(visible) and (problem := measured_problem(root, after)):
         return problem
     return look_problem(root, head, body, after)
 
@@ -281,6 +284,7 @@ def ship_problem(
     plan_text: str,
     after_urls: list[str],
     base_ref: str,
+    videos: int = 0,
 ) -> str | None:
     """What the PR lacks of screen evidence for its visible changes; None when the checks pass."""
     from gate_config import generated_sources
@@ -306,6 +310,8 @@ def ship_problem(
         )
     if problem := guideline_problem(root, visible):
         return problem
+    if videos and not after_urls and visible and not is_native(visible):
+        return "the After is a video only; a web change also needs a measured After image, which `browser capture` writes at every width"
     after = [download(root, url) for url in after_urls]
     return evidence_problem(root, head, body, after, visible) if after else None
 
@@ -383,7 +389,9 @@ def ui_evidence(
 
     urls = attachment_urls(pull.body, file_names(files), patterns)
     kinds = {url: check_attachment(root, url) for url in urls}
-    after = [url for url in urls[len(urls) // 2 :] if kinds[url].startswith("image/")]
+    final = urls[len(urls) // 2 :]
+    after = [url for url in final if kinds[url].startswith("image/")]
+    videos = sum(kinds[url].startswith("video/") for url in final)
     plan_text = plan.read_text() if plan is not None and plan.is_file() else ""
     problem = ship_problem(
         root,
@@ -394,6 +402,7 @@ def ui_evidence(
         plan_text,
         after,
         pull.base_ref,
+        videos,
     )
     if problem:
         raise ValueError(f"UI evidence: {problem}")
