@@ -171,7 +171,7 @@ def test_generated_files_may_be_left_out(tmp_path: Path) -> None:
     files = {
         "main.py": "x = 1\n",
         "proto/a_pb2.py": "import os\n",
-        ".gitattributes": "proto/** linguist-generated\n",
+        ".gitattributes": "proto/a_pb2.py linguist-generated\n",
     }
     root = project(tmp_path, files)
     validate_resolved(
@@ -183,6 +183,17 @@ def test_generated_files_may_be_left_out(tmp_path: Path) -> None:
         validate_resolved(
             other, lint_groups((".", [*LINT, "--extend-exclude", "proto"])), 900
         )
+
+
+@pytest.mark.parametrize(
+    "mark", ["* linguist-generated\n", "other/** linguist-vendored\n"]
+)
+def test_a_catch_all_mark_does_not_leave_files_out(tmp_path: Path, mark: str) -> None:
+    """HE-NO-SWITCH-OFF: a broad mark hides no file from the files-checked rule."""
+    files = {"src/a.py": "x = 1\n", "other/b.py": "x = 1\n", ".gitattributes": mark}
+    root = project(tmp_path, files)
+    with pytest.raises(ValueError, match=r"other/b\.py"):
+        validate_resolved(root, lint_groups((".", [*LINT[:3], "src"])), 900)
 
 
 def test_files_that_hard_eng_installs_are_left_out_of_a_project_only(

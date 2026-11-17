@@ -16,7 +16,7 @@ from gate_config import (
     changed_files,
     initial_point,
 )
-from generated_marks import generated_by_exact_marks
+from generated_marks import generated_sources
 from plans import _is_test as is_test_path
 from plans import default_branch_point
 from project_files import GIT_LISTING
@@ -229,7 +229,7 @@ def validate_comments(root: Path, base: str | None) -> None:
         and (root / name).is_file()
         and not (root / name).is_symlink()
     )
-    skipped = generated_by_exact_marks(root, sources)
+    skipped = generated_sources(root, sources)
     found = [
         hit
         for name in sources
@@ -756,7 +756,7 @@ def security_switch_offs(
     root: Path, added: dict[str, list[tuple[int, str]]]
 ) -> list[str]:
     names = sorted(name for name in added if not name.startswith(UNOWNED))
-    skipped = generated_by_exact_marks(root, names)
+    skipped = generated_sources(root, names)
     found = [
         hit
         for name in names
@@ -841,7 +841,7 @@ def whole_branch_balance(root: Path, point: str) -> tuple[str, list[str], int] |
     if not whole or whole == point or not is_ancestor(root, whole, point):
         return None
     added, removed = diff_lines(root, whole)
-    skipped = generated_by_exact_marks(root, scoped_names(added, removed))
+    skipped = generated_sources(root, scoped_names(added, removed))
     return whole, *assertion_balance(root, added, removed, skipped)
 
 
@@ -913,7 +913,7 @@ def validate_suppressions(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
         ) from error
     names = scoped_names(added, removed)
-    skipped = generated_by_exact_marks(root, names)
+    skipped = generated_sources(root, names)
     lost, gained = assertion_balance(root, added, removed, skipped)
     if len(lost) > gained and base and (whole := whole_branch_balance(root, point)):
         point, lost, gained = whole

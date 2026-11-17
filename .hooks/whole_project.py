@@ -23,7 +23,7 @@ from comments import (
     security_hits,
 )
 from fallow_settings import SETTINGS_FILES, settings_switch_offs
-from generated_marks import generated_by_exact_marks
+from generated_marks import generated_sources
 from gitleaks_rules import DEFAULT_RULE_IDS
 from gitleaks_scan import config_variable_hits
 from project_files import GIT_LISTING
@@ -226,7 +226,7 @@ def _line(lines: list[str], key: str) -> int:
 
 def switch_offs(root: Path, texts: dict[str, str]) -> list[str]:
     owned = [name for name in texts if not name.startswith(UNOWNED)]
-    skipped = generated_by_exact_marks(root, owned)
+    skipped = generated_sources(root, owned)
     found: list[str] = []
     for name in (name for name in owned if name not in skipped):
         text = texts[name]
@@ -263,7 +263,7 @@ def source_names(root: Path, texts: dict[str, str]) -> list[str]:
         for name in texts
         if Path(name).suffix in HASH | SLASH and not name.startswith(".agents/")
     ]
-    skipped = generated_by_exact_marks(root, names)
+    skipped = generated_sources(root, names)
     return [name for name in names if name not in skipped]
 
 

@@ -52,8 +52,8 @@ def test_old_switch_offs_anywhere_in_the_project_fail(
 def test_switch_offs_in_generated_output_pass(tmp_path: Path) -> None:
     """HE-NO-SWITCH-OFF: generated output and the folders Hard Eng installs stay exempt."""
     files = {
-        ".gitattributes": "*.g.py linguist-generated=true\n",
-        "made.g.py": HIDDEN,
+        ".gitattributes": "gen/made.py linguist-generated=true\n",
+        "gen/made.py": HIDDEN,
         ".hooks/tool.py": HIDDEN,
         ".agents/skills/tool/run.py": HIDDEN,
         ".claude/rules/run.py": HIDDEN,
@@ -617,11 +617,11 @@ def test_a_stale_or_current_gitleaks_entry_fails(
 
 def test_a_gitleaks_entry_in_a_generated_file_passes(tmp_path: Path) -> None:
     """HE-NO-SWITCH-OFF: a `linguist-generated` file may keep its finding; a `linguist-vendored` file may not."""
-    root, _ = leaky_project(tmp_path, removed=False)
-    entry = f"secret.txt:{RULE}:1"
-    (root / ".gitattributes").write_text("secret.txt linguist-vendored=true\n")
+    root = project(tmp_path, {"data/secret.txt": KEY})
+    entry = f"data/secret.txt:{RULE}:1"
+    (root / ".gitattributes").write_text("data/secret.txt linguist-vendored=true\n")
     assert "is not in a linguist-generated file" in judged(root, entry)
-    (root / ".gitattributes").write_text("secret.txt linguist-generated=true\n")
+    (root / ".gitattributes").write_text("data/secret.txt linguist-generated=true\n")
     assert judged(root, entry) == ""
 
 
@@ -808,20 +808,31 @@ def test_ruff_settings_that_are_not_ignores_pass(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "attributes",
+    ("attributes", "name"),
     [
-        "* linguist-generated=true\n",
-        "src/** linguist-vendored\n",
-        "*.py linguist-generated=true\n",
-        "**/* linguist-vendored=true\n",
+        ("* linguist-generated=true\n", "src/app.py"),
+        ("src/** linguist-vendored\n", "src/app.py"),
+        ("*.py linguist-generated=true\n", "src/app.py"),
+        ("**/* linguist-vendored=true\n", "src/app.py"),
+        ("shared/** linguist-vendored\n", "shared/app.py"),
+        ("src/shared/** linguist-vendored\n", "src/shared/app.py"),
+        ("**/shared/** linguist-vendored\n", "src/shared/app.py"),
+        ("vendor/** linguist-vendored\n", "vendor/app.py"),
+        ("lib/gen/** linguist-generated=true\n", "lib/gen/app.py"),
+        ("my_shared/** linguist-vendored\n", "my_shared/app.py"),
+        ("src_vendor/** linguist-vendored\n", "src_vendor/app.py"),
+        ("*.test.py linguist-generated=true\n", "src/app.test.py"),
+        ("*.spec.py linguist-generated=true\n", "src/app.spec.py"),
+        ("app.py linguist-generated=true\n", "src/app.py"),
+        ("*.g.py linguist-generated=true\n", "src/app.g.py"),
     ],
 )
 def test_a_catch_all_generated_mark_hides_nothing(
-    tmp_path: Path, attributes: str
+    tmp_path: Path, attributes: str, name: str
 ) -> None:
-    """HE-NO-SWITCH-OFF: only an exact path, a generated-name suffix or a vendor folder counts as generated, so a broad mark cannot hide a switch-off."""
-    root = project(tmp_path, {".gitattributes": attributes, "src/app.py": HIDDEN})
-    assert "src/app.py:2" in refusal(root)
+    """HE-NO-SWITCH-OFF: only an exact path with a folder or a fixed generator suffix counts as generated, so a broad mark cannot hide a switch-off."""
+    root = project(tmp_path, {".gitattributes": attributes, name: HIDDEN})
+    assert f"{name}:2" in refusal(root)
 
 
 @pytest.mark.parametrize(
@@ -830,13 +841,14 @@ def test_a_catch_all_generated_mark_hides_nothing(
         ("lib/a.dart linguist-generated=true\n", "lib/a.dart"),
         ("*.g.dart linguist-generated=true\n", "lib/x/b.g.dart"),
         ("**/*.freezed.dart linguist-generated=true\n", "lib/x/b.freezed.dart"),
-        ("functions/f/vendor/** linguist-vendored\n", "functions/f/vendor/c/m.py"),
-        ("lib/gen/** linguist-generated=true\n", "lib/gen/m.py"),
-        ("functions/*/app_shared/** linguist-vendored\n", "functions/a/app_shared/m.py"),
-        ("functions/a/shared/** linguist-vendored\n", "functions/a/shared/m.py"),
+        ("lib/**/*.gr.dart linguist-generated=true\n", "lib/x/b.gr.dart"),
+        (
+            "lib/i18n/strings*.g.dart linguist-generated=true\n",
+            "lib/i18n/strings_en.g.dart",
+        ),
     ],
 )
-def test_exact_suffix_and_vendor_marks_still_hide_generated_output(
+def test_exact_and_generator_suffix_marks_still_hide_generated_output(
     tmp_path: Path, attributes: str, name: str
 ) -> None:
     validate_whole_project(

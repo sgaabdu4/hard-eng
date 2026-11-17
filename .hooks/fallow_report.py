@@ -9,7 +9,8 @@ import subprocess
 from pathlib import Path
 
 from fallow_flags import SHORT_VALUE_FLAGS, SUBCOMMANDS, VALUE_FLAGS
-from gate_config import Gate, Group, JsonObject, Report, generated_sources
+from gate_config import Gate, Group, JsonObject, Report
+from generated_marks import generated_sources
 from project_files import GIT_LISTING
 
 
