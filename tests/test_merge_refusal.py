@@ -193,6 +193,9 @@ ALLOWED = [
     "gh api repos/o/r/pulls/12 --jq .merged",
     "man gh",
     "which gh",
+    "gh api repos/{owner}/{repo}/pulls/12/comments",
+    'gh api "repos/$REPO/pulls/$PR" --jq .body',
+    "gh api repos/o/r/pulls/$PR/reviews",
 ]
 
 

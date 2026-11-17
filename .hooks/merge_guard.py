@@ -135,6 +135,15 @@ def holds_code(tokens: list[str]) -> bool:
     return "gh" in words and bool(words & API_WORDS)
 
 
+def reads_only(arguments: list[str], positionals: list[str]) -> bool:
+    """A `gh api` call with no method flag, no field and no `--input` only reads."""
+    return positionals[:1] == ["api"] and not any(
+        word in ("-x", "--method", "--input", *FIELD_FLAGS)
+        or word.startswith(("--method=", "-x", "--field=", "--raw-field=", "--input="))
+        for word in arguments
+    )
+
+
 def gh_problem(arguments: list[str]) -> str | None:
     positionals, index = list[str](), 0
     while index < len(arguments):
@@ -144,7 +153,8 @@ def gh_problem(arguments: list[str]) -> str | None:
         elif word in VALUE_FLAGS_GH:
             index += 1
         index += 1
-    if any(UNSAFE.search(word) for word in positionals[:2]):
+    checked = positionals[:1] if reads_only(arguments, positionals) else positionals[:2]
+    if any(UNSAFE.search(word) for word in checked):
         return "a `gh` command word that a shell expands cannot be read."
     if positionals[:1] == ["pr"] and "merge" in positionals[1:]:
         return PLAIN_REASON
