@@ -112,6 +112,7 @@ class _PullRequest:
     merge_commit_sha: str | None
     commits: int
     rebaseable: bool | None = field(compare=False)
+    default_branch: str | None = field(default=None, compare=False)
 
 
 def _run(
@@ -431,6 +432,11 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
         ),
         commits=commits,
         rebaseable=rebaseable,
+        default_branch=_optional_text(
+            _object(base.get("repo"), "PR base repository"),
+            "default_branch",
+            "PR base repository",
+        ),
     )
 
 
@@ -844,9 +850,9 @@ def _compare(root: Path, repository: str, base: str, head: str) -> dict[str, Jso
 def _current_with_base(
     root: Path, identity: tuple[str, str, int], pull: _PullRequest, shipping_base: str
 ) -> None:
-    from ship_record import is_release
+    from ship_record import route
 
-    if is_release(pull, shipping_base):
+    if route(pull, shipping_base) in ("release", "join"):
         return
     repository, base = "/".join(identity[:2]), pull.base_ref
     behind = _compare(root, repository, base, pull.head_sha).get("behind_by")
@@ -881,10 +887,15 @@ def _ready_state(
     from change_size import commits_problem
     from pr_text import body_problem
     from ship_actions import rebase_problem
+    from ship_record import route
 
     if problem := (
         body_problem(pull.body)
-        or commits_problem(pull.commits)
+        or (
+            None
+            if route(pull, policy["base"]) is not None
+            else commits_problem(pull.commits)
+        )
         or (
             rebase_problem(root, "/".join(identity[:2]), pull.base_ref, pull.head_sha)
             if pull.rebaseable is False
