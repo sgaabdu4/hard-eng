@@ -435,14 +435,24 @@ class Tidy:
     def checked_out(self) -> set[str]:
         from ship_actions import worktrees
 
-        return {
-            record.get("branch", "").removeprefix("refs/heads/")
-            for record in worktrees(self.root)
-        } | paused_branches(self.common)
+        pointed = tidy_git(
+            self.root, "for-each-ref", "--format=%(symref)", "refs/heads"
+        ).split()
+        return (
+            {
+                record.get("branch", "").removeprefix("refs/heads/")
+                for record in worktrees(self.root)
+            }
+            | paused_branches(self.common)
+            | {name.removeprefix("refs/heads/") for name in pointed}
+        )
 
     def remove_branch(self, line: str) -> None:
-        tip, _, ref = line.partition(" ")
+        tip, ref, symref = line.split(" ")
         name = ref.removeprefix("refs/heads/")
+        if symref:
+            note(f"kept branch {name}: symbolic ref to {symref}")
+            return
         reason = self.branch_reason(name, tip, self.checked_out())
         if reason is not None:
             if reason not in {"protected", "checked out"}:
@@ -455,6 +465,7 @@ class Tidy:
             lambda: self.branch_local(name, tip, self.checked_out(), {}),
             "update-ref",
             "-d",
+            "--no-deref",
             ref,
             tip,
         )
@@ -467,13 +478,16 @@ class Tidy:
     def remove_branches(self) -> None:
         """A failure on one branch keeps it and goes on; a failed listing stops the repository."""
         listing = tidy_git(
-            self.root, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads"
+            self.root,
+            "for-each-ref",
+            "--format=%(objectname) %(refname) %(symref)",
+            "refs/heads",
         )
         for line in listing.splitlines():
             try:
                 self.remove_branch(line)
             except ITEM_ERRORS as error:
-                note(f"kept branch {line.partition(' ')[2]}: {error}")
+                note(f"kept branch {line.split(' ')[1]}: {error}")
 
     def target_reason(self, path: Path) -> str | None:
         target = path / "target"

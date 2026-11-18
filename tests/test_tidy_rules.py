@@ -215,3 +215,18 @@ def test_a_commit_that_an_expiring_rescue_ref_holds_gets_a_fresh_ref_on_a_new_re
     assert "zero" not in branches(primary)
     gc_now(primary)
     assert resolves(primary, tip)
+
+
+def test_tidy_leaves_a_symbolic_branch_and_its_target_alone(primary: Path) -> None:
+    (primary / "log-only.txt").write_text("x\n")
+    only_logged = commit(primary, "held by the log of main only")
+    git(primary, "reset", "-q", "--hard", "HEAD~1")
+    git(primary, "symbolic-ref", "refs/heads/trunk", "refs/heads/main")
+    merged_branch(primary, "feat")
+    git(primary, "symbolic-ref", "refs/heads/alias", "refs/heads/feat")
+    for name in ("trunk", "main"):
+        age_branch(primary, name)
+    tidy(linked(primary, "session"))
+    assert {"main", "trunk", "feat", "alias"} <= branches(primary)
+    assert resolves(primary, only_logged)
+    assert git(primary, "symbolic-ref", "refs/heads/trunk") == "refs/heads/main"
