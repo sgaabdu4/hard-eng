@@ -15,11 +15,28 @@ UNQUOTE = str.maketrans("", "", "'\"\\")
 NONWORD = str.maketrans({c: " " for c in "!\"#$%&'()*+,-.:;<=>?@[\\]^`{|}~"})
 
 
-def has_gh(command: str) -> bool:
-    """Whether the command, with its quotes removed, has a word that is `gh` or a path to it, in any letter case."""
+WATCHED = ("merge", "enqueuepullrequest", "alias", "$", "`", "{", "<(")
+API_WRITES = ("--method", "--input", "--field", "--raw-field")
+
+
+def writes_api(words: list[str]) -> bool:
+    """Whether a `gh api` call has a method flag, a field or `--input`: anything but a plain read."""
+    return "api" in words and any(
+        word.startswith(API_WRITES)
+        or (word.startswith(("-f", "-x")) and not word.startswith("--"))
+        for word in words
+    )
+
+
+def watched_gh(command: str) -> bool:
+    """Whether the command, with its quotes removed, has a word that is `gh` or a path to it, in any letter case, and a word, mark or api write the merge guard must read."""
     bare = command.replace("\\\n", "").translate(UNQUOTE).lower()
-    return "gh" in bare and any(
-        word.rsplit("/", 1)[-1] == "gh" for word in bare.translate(NONWORD).split()
+    return (
+        "gh" in bare
+        and (any(mark in bare for mark in WATCHED) or writes_api(bare.split()))
+        and any(
+            word.rsplit("/", 1)[-1] == "gh" for word in bare.translate(NONWORD).split()
+        )
     )
 
 
@@ -40,12 +57,10 @@ def decision(payload: object) -> dict[str, object] | None:
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
-    if has_gh(command):
-        from pathlib import Path
-
+    if watched_gh(command):
         from merge_guard import merge_problem
 
-        if problem := merge_problem(command, Path(str(payload.get("cwd") or "."))):
+        if problem := merge_problem(command, str(payload.get("cwd") or ".")):
             return deny(f"Merge refused: {problem}")
     if payload.get("agent_id") or (
         isinstance(tool_input, dict) and tool_input.get("run_in_background") is True

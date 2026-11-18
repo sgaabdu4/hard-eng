@@ -3,9 +3,7 @@
 import json
 import re
 import shlex
-import subprocess
 from itertools import pairwise
-from pathlib import Path
 
 METHOD_FLAGS = {
     "--rebase": "rebase",
@@ -25,7 +23,10 @@ REFUSED_FLAGS = frozenset(("--admin", "--auto", "--disable-auto"))
 STEP = "Merge with `python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge`."
 
 
-def record_for(cwd: Path, number: int) -> dict[str, object] | None:
+def record_for(cwd: str, number: int) -> dict[str, object] | None:
+    import subprocess
+    from pathlib import Path
+
     done = subprocess.run(
         ["git", "rev-parse", "--git-path", "hard-eng/ship"],
         cwd=cwd,
@@ -36,7 +37,9 @@ def record_for(cwd: Path, number: int) -> dict[str, object] | None:
     if done.returncode:
         return None
     try:
-        record = json.loads((cwd / done.stdout.strip() / f"{number}.json").read_text())
+        record = json.loads(
+            (Path(cwd) / done.stdout.strip() / f"{number}.json").read_text()
+        )
     except (OSError, ValueError):
         return None
     return record if isinstance(record, dict) else None
@@ -62,7 +65,7 @@ def pr_flags(arguments: list[str]) -> tuple[str | None, set[str], str | None]:
     return selector, methods, head
 
 
-def pr_merge_problem(arguments: list[str], cwd: Path) -> str | None:
+def pr_merge_problem(arguments: list[str], cwd: str) -> str | None:
     selector, methods, head = pr_flags(arguments)
     found = PULL_NUMBER.search(selector or "")
     if found is None:
@@ -207,7 +210,7 @@ def segment_problem(segment: list[str]) -> tuple[str | None, bool]:
     return None, False
 
 
-def merge_problem(command: str, cwd: Path) -> str | None:
+def merge_problem(command: str, cwd: str) -> str | None:
     """The reason a command with a `gh` word is refused, or None when it is not a merge and holds nothing the guard cannot read, or is one plain `gh pr merge` with a passed record."""
     try:
         segments = command_segments(command)
