@@ -34,7 +34,9 @@ def relative_table(table: str, prefix: str) -> str | None:
 def present_keys(config: dict[str, object], keys: tuple[str, ...]) -> set[str]:
     lint = config.get("lint")
     return {
-        key for key in keys if key in config or (isinstance(lint, dict) and key in lint)
+        key
+        for key in keys
+        if config.get(key) or (isinstance(lint, dict) and lint.get(key))
     }
 
 
