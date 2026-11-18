@@ -257,6 +257,20 @@ class Tidy:
             commits |= set(tidy_git(cwd, "log", "-g", "--format=%H", ref).split())
         return commits
 
+    def unreachable(self, commits: set[str], *excluded: str) -> list[str]:
+        """The named commits that no excluded revision contains; rev-list walks, because --no-walk ignores --not."""
+        if not commits:
+            return []
+        walked = tidy_git(self.root, "rev-list", *commits, "--not", *excluded)
+        return [commit for commit in walked.split() if commit in commits]
+
+    def rescue_tips(self, commits: set[str]) -> list[str]:
+        """One tip for each line of commits that the base tip lacks; a ref keeps its ancestors."""
+        lacking = self.unreachable(commits, self.tip)
+        if not lacking:
+            return []
+        return tidy_git(self.root, "merge-base", "--independent", *lacking).split()
+
     def destroy(
         self,
         what: str,
@@ -265,18 +279,7 @@ class Tidy:
         *command: str,
     ) -> str | None:
         """The one act that deletes: name every commit by a rescue ref, read the checks last, write the record, then remove."""
-        dropped = (
-            tidy_git(
-                self.root,
-                "rev-list",
-                "--no-walk",
-                *commits,
-                "--not",
-                self.tip,
-            ).split()
-            if commits
-            else []
-        )
+        dropped = self.rescue_tips(commits)
         save_commits(self.root, dropped, time.time())
         reason = recheck()
         if reason is None:
@@ -291,16 +294,7 @@ class Tidy:
         commits = self.named_commits(cwd, refs, tips or [])
         if not commits:
             return False
-        unmerged = tidy_git(
-            self.root,
-            "rev-list",
-            "--no-walk",
-            *commits,
-            "--not",
-            self.tip,
-            head,
-            "--remotes",
-        ).split()
+        unmerged = self.unreachable(commits, self.tip, head, "--remotes")
         return not all(self.content_merged(commit) for commit in unmerged)
 
     def merged(self, state: dict[str, bool], head: str) -> bool:
