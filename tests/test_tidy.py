@@ -217,6 +217,16 @@ def test_tidy_removes_a_merged_idle_branch(
     assert branches(primary) == {"main", "current"}
 
 
+def test_tidy_keeps_a_merged_idle_codex_branch_and_removes_a_feature_branch(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    merged_branch(primary, "codex/x")
+    feature_tip = merged_branch(primary, "feature/x")
+    tidy(linked(primary, "current"))
+    assert f"removed branch feature/x at {feature_tip}" in capsys.readouterr().err
+    assert branches(primary) == {"main", "current", "codex/x"}
+
+
 def test_tidy_keeps_the_primary_checkout(primary: Path) -> None:
     git(primary, "switch", "-qc", "parking")
     age(primary)
