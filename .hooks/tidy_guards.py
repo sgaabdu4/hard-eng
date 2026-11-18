@@ -73,6 +73,7 @@ def tidy_run(
     limit: float,
     *command: str,
     env: dict[str, str] | None = None,
+    lines: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
@@ -83,7 +84,8 @@ def tidy_run(
             text=True,
             timeout=limit,
             check=False,
-            stdin=subprocess.DEVNULL,
+            input=lines,
+            stdin=None if lines is not None else subprocess.DEVNULL,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise TidyStop(f"`{' '.join(command[:3])}` did not run: {error}") from error
@@ -382,3 +384,46 @@ def module_holds_work(folder: Path) -> bool:
             folder, git_dir, "rev-list", "--no-walk", *commits, "--not", "--remotes"
         ).split()
     )
+
+
+RESCUE = "refs/hard-eng/tidy"
+RESCUE_DAYS = 30
+
+
+def rescue_stamp(now: float) -> str:
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now))
+
+
+def save_commits(root: Path, commits: list[str], now: float) -> None:
+    """One ref for each commit that a removal would leave unnamed, written together or not at all."""
+    stamp = rescue_stamp(now)
+    lines = "".join(
+        f"create {RESCUE}/{stamp}/{number} {commit}\n"
+        for number, commit in enumerate(commits)
+    )
+    if lines:
+        done = tidy_run(root, 120, "git", "update-ref", "--stdin", lines=lines)
+        if done.returncode:
+            raise TidyStop("the rescue refs could not be written")
+
+
+def expire_rescues(root: Path, now: float) -> None:
+    """Rescue refs go after the same days as the removal record."""
+    listing = tidy_git(root, "for-each-ref", "--format=%(refname)", RESCUE)
+    limit = rescue_stamp(now - RESCUE_DAYS * 86400)
+    old = [
+        name
+        for name in listing.split()
+        if name.removeprefix(f"{RESCUE}/").partition("/")[0] < limit
+    ]
+    if old:
+        done = tidy_run(
+            root,
+            120,
+            "git",
+            "update-ref",
+            "--stdin",
+            lines="".join(f"delete {n}\n" for n in old),
+        )
+        if done.returncode:
+            raise TidyStop("old rescue refs could not be removed")
