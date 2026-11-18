@@ -230,6 +230,34 @@ def test_near_misses_and_a_recorded_merge_stay_allowed(
     assert not denied(hook(bash(repo, command)))
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr view 12",
+        "gh api repos/o/r/pulls/12/comments",
+        "gh pr create --title x --body-file body.md",
+    ],
+)
+def test_a_gh_command_that_is_not_a_merge_loads_no_module(
+    command: str,
+) -> None:
+    script = (
+        "import json, sys; sys.path.insert(0, sys.argv[1]); import polling; "
+        "before = set(sys.modules); "
+        "polling.decision({'tool_name': 'Bash', 'cwd': '.', "
+        "'tool_input': {'command': sys.argv[2]}}); "
+        "print(json.dumps(sorted(set(sys.modules) - before)))"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script, str(SOURCE / ".hooks"), command],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    loaded = set(json.loads(done.stdout))
+    assert {"merge_guard", "shlex", "subprocess", "pathlib"}.isdisjoint(loaded)
+
+
 def test_a_merge_with_no_record_is_refused_even_with_the_flag(repo: Path) -> None:
     command = "gh pr merge 12 --rebase --match-head-commit " + HEAD
     assert denied(hook(bash(repo, command)))
