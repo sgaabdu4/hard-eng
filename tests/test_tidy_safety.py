@@ -14,7 +14,9 @@ from test_tidy import (
     branches,
     fake_gh,
     linked,
+    retire_after_merge,
     sparse_worktree,
+    squash_merged_steps,
     tidy,
     unmerged,
 )
@@ -60,11 +62,7 @@ def test_tidy_removes_a_merged_branch_whose_log_is_long(primary: Path) -> None:
     for number in range(120):
         git(long, "commit", "--allow-empty", "-qm", f"step {number}")
     git(primary, "merge", "-q", "--ff-only", "long")
-    git(primary, "push", "-q", "origin", "main")
-    git(primary, "worktree", "remove", "--force", str(long))
-    age_branch(primary, "long")
-    age(primary)
-    tidy(linked(primary, "session"))
+    retire_after_merge(primary, long, "long")
     assert "long" not in branches(primary)
 
 
@@ -72,17 +70,7 @@ def test_tidy_removes_a_squash_merged_branch_with_a_long_log(
     primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_gh(tmp_path, monkeypatch, {"open": {}})
-    long = linked(primary, "long")
-    for number in range(120):
-        (long / f"f{number}.txt").write_text("x\n")
-        commit(long, f"step {number}")
-    git(primary, "merge", "-q", "--squash", "long")
-    git(primary, "commit", "-qm", "squash of long")
-    git(primary, "push", "-q", "origin", "main")
-    git(primary, "worktree", "remove", "--force", str(long))
-    age_branch(primary, "long")
-    age(primary)
-    tidy(linked(primary, "session"))
+    squash_merged_steps(primary, "long", 120)
     assert "long" not in branches(primary)
 
 

@@ -29,7 +29,6 @@ from conftest import (
     old_log,
 )
 
-HOUR = 3600
 CARGO_TAG = "Signature: 8a477f597d28d172789f06886806bc55\n# cache\n"
 
 
@@ -178,6 +177,27 @@ def process_inside(
     finally:
         child.kill()
         child.wait()
+
+
+def retire_after_merge(primary: Path, work: Path, name: str) -> None:
+    """Remove the worktree of a branch that the base took, age what remains, and run the tidy from a new session."""
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "worktree", "remove", "--force", str(work))
+    age_branch(primary, name)
+    age(primary)
+    tidy(linked(primary, "session"))
+
+
+def squash_merged_steps(primary: Path, name: str, steps: int) -> str:
+    work = linked(primary, name)
+    for number in range(steps):
+        (work / f"f{number}.txt").write_text("x\n")
+        commit(work, f"step {number}")
+    tip = git(work, "rev-parse", "HEAD")
+    git(primary, "merge", "-q", "--squash", name)
+    git(primary, "commit", "-qm", f"squash of {name}")
+    retire_after_merge(primary, work, name)
+    return tip
 
 
 def merged_branch(root: Path, name: str) -> str:

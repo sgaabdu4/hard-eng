@@ -496,16 +496,15 @@ def kept_groups(kept: list[str]) -> list[str]:
     return list(dict.fromkeys("".join(name.partition("/")[:2]) for name in kept))
 
 
-def work_left(
-    target: Path,
-    main: Path,
-    generated: Callable[[str], bool] = lambda name: False,
-) -> list[str]:
-    """Paths a worktree holds that are not Hard Eng's own placements or `generated` names."""
+def unchanged_checkout(shipment: Shipment) -> None:
+    target = shipment.root.resolve()
+    index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
+    if (target / index_lock).exists():
+        raise ValueError("Cleanup preserves a task with an active Git index lock")
+    main = Path(worktrees(target)[0]["worktree"])
     own = placed_by_hard_eng(main, target)
     status = git(
         target,
-        "--no-optional-locks",
         "status",
         "--porcelain",
         "--untracked-files=all",
@@ -516,22 +515,10 @@ def work_left(
     kept = [
         line[3:]
         for line in status.splitlines()
-        if line not in own | {COMPILED_HOOKS}
-        and not line.startswith(folders)
-        and not (line.startswith("!! ") and generated(line[3:]))
+        if line not in own | {COMPILED_HOOKS} and not line.startswith(folders)
     ]
     for folder in folders:
         kept += changed_copies(main, target, folder[3:])
-    return kept
-
-
-def unchanged_checkout(shipment: Shipment) -> None:
-    target = shipment.root.resolve()
-    index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
-    if (target / index_lock).exists():
-        raise ValueError("Cleanup preserves a task with an active Git index lock")
-    main = Path(worktrees(target)[0]["worktree"])
-    kept = work_left(target, main)
     if kept:
         raise ValueError(
             "Cleanup preserves modified, untracked or ignored work: "

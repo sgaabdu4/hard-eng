@@ -17,6 +17,7 @@ from test_tidy import (
     linked,
     make_target,
     merged_branch,
+    squash_merged_steps,
     tidy,
     unmerged,
 )
@@ -254,18 +255,20 @@ def test_a_squash_merged_branch_of_forty_commits_leaves_one_rescue_ref(
     primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_gh(tmp_path, monkeypatch, {"open": {}})
-    long = linked(primary, "long")
-    for number in range(40):
-        (long / f"f{number}.txt").write_text("x\n")
-        commit(long, f"step {number}")
-    tip = git(long, "rev-parse", "HEAD")
-    git(primary, "merge", "-q", "--squash", "long")
-    git(primary, "commit", "-qm", "squash of long")
-    git(primary, "push", "-q", "origin", "main")
-    git(primary, "worktree", "remove", "--force", str(long))
-    age_branch(primary, "long")
-    age(primary)
-    tidy(linked(primary, "session"))
+    tip = squash_merged_steps(primary, "long", 40)
     assert "long" not in branches(primary)
     refs = git(primary, "for-each-ref", "--format=%(objectname)", "refs/hard-eng")
     assert refs.split() == [tip]
+
+
+def test_the_tidy_fetch_prunes_no_remote_tracking_branch_even_with_fetch_prune_set(
+    primary: Path, tmp_path: Path
+) -> None:
+    git(primary, "branch", "gone-upstream", "main")
+    git(primary, "push", "-q", "origin", "gone-upstream")
+    git(primary, "fetch", "-q", "origin")
+    git(tmp_path / "origin.git", "branch", "-D", "gone-upstream")
+    git(primary, "config", "fetch.prune", "true")
+    git(primary, "config", "remote.origin.prune", "true")
+    tidy(linked(primary, "session"))
+    git(primary, "rev-parse", "--verify", "refs/remotes/origin/gone-upstream")
