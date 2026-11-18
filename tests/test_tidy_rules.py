@@ -298,7 +298,7 @@ def test_tidy_keeps_every_branch_when_the_reflogs_are_not_plain_files(
     stand_in_git(
         tmp_path,
         monkeypatch,
-        '[ "$1 $2" = "rev-parse --show-ref-format" ]',
+        '[ "$1 $2 $3" = "config --get extensions.refstorage" ]',
         "echo reftable; exit 0",
     )
     tidy(linked(primary, "session"))
