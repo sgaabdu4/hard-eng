@@ -9,6 +9,7 @@ import pytest
 import stale_updates
 from conftest import commit, git
 from test_tidy import (
+    OLD,
     age,
     age_branch,
     branches,
@@ -330,3 +331,20 @@ def test_status_fetch_and_a_full_tidy_pass_leave_an_idle_worktree_idle(
     assert resting.is_dir()
     assert is_idle()
     assert resting.stat().st_mtime_ns == touched
+
+
+def test_tidy_keeps_a_worktree_whose_nested_tracked_file_was_touched_lately(
+    primary: Path,
+) -> None:
+    (primary / "src/app").mkdir(parents=True)
+    (primary / "src/app/file.py").write_text("value = 1\n")
+    commit(primary, "nested file")
+    git(primary, "push", "-q", "origin", "main")
+    used = linked(primary, "used")
+    gone = linked(primary, "gone")
+    (used / "src/app/file.py").write_text("value = 2\n")
+    (used / "src/app/file.py").write_text("value = 1\n")
+    for folder in (used / "src/app", used / "src", used):
+        os.utime(folder, (OLD, OLD))
+    tidy(primary)
+    assert used.is_dir() and not gone.exists()
