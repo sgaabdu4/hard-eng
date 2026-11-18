@@ -734,3 +734,54 @@ def test_session_start_loads_no_tidy_module(primary: Path) -> None:
         check=False,
     )
     assert ran.stdout.rstrip().endswith("[]"), ran.stdout + ran.stderr
+
+
+def test_tidy_keeps_a_branch_that_a_worktree_checks_out_during_the_checks(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git(primary, "branch", "late", "main")
+    git(primary, "branch", "plain", "main")
+    age_branch(primary, "late")
+    age_branch(primary, "plain")
+    session = linked(primary, "session")
+    late = tmp_path / "wt-late"
+    real = stale_updates.Tidy.branch_reason
+
+    def checking_out(
+        self: stale_updates.Tidy, name: str, tip: str, checked_out: set[str]
+    ) -> str | None:
+        reason = real(self, name, tip, checked_out)
+        if name == "late" and reason is None:
+            git(primary, "worktree", "add", "-q", str(late), "late")
+        return reason
+
+    monkeypatch.setattr(stale_updates.Tidy, "branch_reason", checking_out)
+    tidy(session)
+    assert late.is_dir()
+    assert "late" in branches(primary)
+    assert "plain" not in branches(primary)
+
+
+@pytest.mark.parametrize("foreign", [True, False], ids=["other-person", "system"])
+def test_an_unreadable_process_counts_as_unknown_only_for_another_person(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, foreign: bool
+) -> None:
+    proc = tmp_path / "proc"
+    for number in ("100", "200"):
+        (proc / number / "fd").mkdir(parents=True)
+        (proc / number / "cwd").symlink_to(f"/work/{number}")
+    real = os.readlink
+
+    def readlink(path: str | os.PathLike[str]) -> str:
+        if "200" in str(path):
+            raise PermissionError(path)
+        return real(path)
+
+    monkeypatch.setattr(stale_updates.os, "readlink", readlink)
+
+    def other_person(process: Path) -> bool:
+        return foreign
+
+    monkeypatch.setattr(stale_updates, "foreign_user", other_person)
+    found = stale_updates.proc_paths(proc)
+    assert found == (None if foreign else {"/work/100"})
