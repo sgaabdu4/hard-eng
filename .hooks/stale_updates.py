@@ -317,9 +317,20 @@ class Tidy:
         if branch is None or self.repository is None:
             return False
         pulls = tidy_gh(
-            self.root, "pr", "list", "--repo", self.repository, "--state", "merged",
-            "--head", branch, "--base", self.base, "--json", "headRefOid",
-        )  # fmt: skip
+            self.root,
+            "pr",
+            "list",
+            "--repo",
+            self.repository,
+            "--state",
+            "merged",
+            "--head",
+            branch,
+            "--base",
+            self.base,
+            "--json",
+            "headRefOid",
+        )
         return any(
             isinstance(pull, dict) and pull.get("headRefOid") == head
             for pull in pulls or []
@@ -332,9 +343,18 @@ class Tidy:
         if self.repository is None:
             return True
         pulls = tidy_gh(
-            self.root, "pr", "list", "--repo", self.repository, "--state", "open",
-            "--head", branch, "--json", "number",
-        )  # fmt: skip
+            self.root,
+            "pr",
+            "list",
+            "--repo",
+            self.repository,
+            "--state",
+            "open",
+            "--head",
+            branch,
+            "--json",
+            "number",
+        )
         return pulls is None or bool(pulls)
 
     def stashed(self, branch: str | None, head: str | None) -> bool:
@@ -370,10 +390,19 @@ class Tidy:
                 continue
             inner = path / found[2]
             if (
-                tidy_git(inner, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all", "--ignored=no")
+                tidy_git(
+                    inner,
+                    "--no-optional-locks",
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=all",
+                    "--ignored=no",
+                )
                 or tidy_git(inner, "stash", "list")
-                or tidy_git(inner, "rev-list", "HEAD", "--branches", "--not", "--remotes")
-            ):  # fmt: skip
+                or tidy_git(
+                    inner, "rev-list", "HEAD", "--branches", "--not", "--remotes"
+                )
+            ):
                 return False
         return True
 
@@ -405,11 +434,14 @@ class Tidy:
             ("used in the last 24 hours", lambda: not self.idle_worktree(path)),
             ("not merged", lambda: not self.merged(head, branch)),
             ("a stash names it", lambda: self.stashed(branch, head)),
-            ("its branch has an open PR or no PR answer", lambda: branch is not None and self.open_pr(branch)),
+            (
+                "its branch has an open PR or no PR answer",
+                lambda: branch is not None and self.open_pr(branch),
+            ),
             ("holds changes", lambda: bool(work_left(path, main, generated(path)))),
             ("a submodule holds work", lambda: not self.submodules_hold_nothing(path)),
             ("a process is inside", lambda: self.worktree_busy(path)),
-        ]  # fmt: skip
+        ]
         return next((reason for reason, kept in checks if kept()), None)
 
     def remove_worktrees(self) -> None:
@@ -433,11 +465,14 @@ class Tidy:
         checks: list[tuple[str, Callable[[], bool]]] = [
             ("protected", lambda: name in self.protected),
             ("checked out", lambda: name in checked_out),
-            ("used in the last 24 hours or no log", lambda: logged is None or not idle(logged)),
+            (
+                "used in the last 24 hours or no log",
+                lambda: logged is None or not idle(logged),
+            ),
             ("not merged", lambda: not self.merged(tip, name)),
             ("a stash names it", lambda: self.stashed(name, None)),
             ("open PR or no PR answer", lambda: self.open_pr(name)),
-        ]  # fmt: skip
+        ]
         return next((reason for reason, kept in checks if kept()), None)
 
     def remove_branches(self) -> None:
@@ -465,13 +500,33 @@ class Tidy:
     def target_reason(self, path: Path) -> str | None:
         target = path / "target"
         checks: list[tuple[str, Callable[[], bool]]] = [
-            ("no cargo build folder", lambda: not (path / "Cargo.toml").is_file() or not cargo_target(path)),
-            ("git does not ignore it", lambda: tidy_run(path, 120, "git", "check-ignore", "-q", "target").returncode != 0),
-            ("git tracks files in it", lambda: bool(tidy_git(path, "ls-files", "--", "target").strip())),
-            ("worktree used in the last 24 hours", lambda: not self.idle_worktree(path)),
-            ("build folder changed in the last 24 hours", lambda: not quiet_folders(target)),
+            (
+                "no cargo build folder",
+                lambda: not (path / "Cargo.toml").is_file() or not cargo_target(path),
+            ),
+            (
+                "git does not ignore it",
+                lambda: (
+                    tidy_run(
+                        path, 120, "git", "check-ignore", "-q", "target"
+                    ).returncode
+                    != 0
+                ),
+            ),
+            (
+                "git tracks files in it",
+                lambda: bool(tidy_git(path, "ls-files", "--", "target").strip()),
+            ),
+            (
+                "worktree used in the last 24 hours",
+                lambda: not self.idle_worktree(path),
+            ),
+            (
+                "build folder changed in the last 24 hours",
+                lambda: not quiet_folders(target),
+            ),
             ("a process is inside", lambda: self.worktree_busy(path)),
-        ]  # fmt: skip
+        ]
         return next((reason for reason, kept in checks if kept()), None)
 
     def trim_targets(self) -> None:

@@ -119,6 +119,17 @@ def update_as(*words: str) -> Callable[..., list[str]]:
     return command
 
 
+def tidy_running(root: Path) -> bool:
+    import fcntl
+
+    with (stale_updates.common_dir(root) / "hard-eng-tidy.lock").open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+    return False
+
+
 def tidy(root: Path) -> None:
     stale_updates.tidy(root)
 
@@ -453,6 +464,17 @@ def installed(primary: Path) -> Path:
     return primary
 
 
+def stop_when_ready() -> None:
+    """Send SIGTERM to this process once the update run has installed its handler."""
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        if signal.getsignal(signal.SIGTERM) is update_runner.interrupt_update:
+            time.sleep(0.5)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+        time.sleep(0.05)
+
+
 def test_tidy_uses_its_own_lock_and_skips_after_an_interrupt(
     primary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -467,20 +489,30 @@ def test_tidy_uses_its_own_lock_and_skips_after_an_interrupt(
 
     monkeypatch.setattr(update_runner, "update_command", update_as("sleep", "60"))
     previous = signal.getsignal(signal.SIGTERM)
-    timer = threading.Timer(1.5, os.kill, [os.getpid(), signal.SIGTERM])
-    timer.start()
+    stopper = threading.Thread(target=stop_when_ready, daemon=True)
+    stopper.start()
     try:
         update_runner.run_update(root)
     finally:
         signal.signal(signal.SIGTERM, previous)
-        timer.cancel()
+        stopper.join(timeout=60)
     assert gone.is_dir()
     assert not update_runner.update_running(root)
+
+    seen: list[bool] = []
+    real = stale_updates.tidy
+
+    def watching(checkout: Path) -> None:
+        seen.append(update_runner.update_running(checkout))
+        real(checkout)
+
+    monkeypatch.setattr(stale_updates, "tidy", watching)
     monkeypatch.setattr(update_runner, "update_command", update_as("true"))
     try:
         update_runner.run_update(root)
     finally:
         signal.signal(signal.SIGTERM, previous)
+    assert seen == [False]
     assert not gone.exists()
 
 
@@ -672,8 +704,11 @@ def test_session_start_tidies_in_the_background_and_reports_at_the_next_start(
     while "Tidy:" not in update_runner.last_result(root):
         assert time.monotonic() < deadline, "the background run did not finish"
         time.sleep(0.2)
-    assert "gone" not in branches(root)
+    assert not gone.exists() and "gone" not in branches(root)
     assert "Tidy: removed 1 worktrees, 1 branches" in start()
+    while update_runner.update_running(root) or tidy_running(root):
+        assert time.monotonic() < deadline, "the second background run did not finish"
+        time.sleep(0.2)
 
 
 def test_session_start_loads_no_tidy_module(primary: Path) -> None:
