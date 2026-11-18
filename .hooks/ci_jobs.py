@@ -394,7 +394,20 @@ def pull_request_filters(workflow: object) -> list[str]:
     )
     event = triggers.get("pull_request") if isinstance(triggers, dict) else None
     names = ("branches", "branches-ignore", "paths", "paths-ignore", "types")
-    return [name for name in names if isinstance(event, dict) and name in event]
+    return [
+        name
+        for name in names
+        if isinstance(event, dict)
+        and name in event
+        and not (name == "branches" and "**" in (event[name] or []))
+    ]
+
+
+def skips_a_run(node: dict[object, object]) -> str | None:
+    """The `if` of a job or step, or None when it has none or only `!cancelled()` or `always()`."""
+    condition = node.get("if")
+    text = str(condition).strip().removeprefix("${{").removesuffix("}}").strip()
+    return None if condition is None or text in {"!cancelled()", "always()"} else text
 
 
 def calling_jobs(workflow: object, called: str) -> list[object]:
@@ -438,7 +451,7 @@ def job_always_runs(
 ) -> bool:
     """A job with no `if`, whose `needs` jobs also always run."""
     job = jobs.get(name)
-    if not isinstance(job, dict) or "if" in job or name in seen:
+    if not isinstance(job, dict) or skips_a_run(job) or name in seen:
         return False
     needs = job.get("needs") or []
     return all(
@@ -465,7 +478,7 @@ def runs_whole_check(workflow: object) -> bool:
                 whole_check_arguments(m[0])
                 for m in HARD_ENG_CHECK_COMMAND.finditer(text)
             ):
-                conditions.add(step.get("if"))
+                conditions.add(skips_a_run(step))
         if None in conditions or any(
             isinstance(c, str)
             and PAIRED_CONDITION.fullmatch(c)

@@ -307,3 +307,28 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
     config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="`if` condition"):
         ci_jobs.load_checked_policy(root, config)
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        CHECK_WORKFLOW.replace(
+            "    runs-on", "    if: ${{ !cancelled() }}\n    runs-on"
+        ),
+        CHECK_WORKFLOW.replace("    runs-on", "    if: always()\n    runs-on"),
+        CHECK_WORKFLOW.replace(
+            "on: [pull_request]", "on:\n  pull_request:\n    branches: [main, '**']"
+        ),
+    ],
+    ids=["not-cancelled", "always", "branches-with-double-star"],
+)
+def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
+    tmp_path: Path, workflow: str
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(workflow)
+    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+    ci_jobs.load_checked_policy(root, config)
