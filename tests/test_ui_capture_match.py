@@ -22,12 +22,13 @@ def write_set(
     folder.mkdir(parents=True, exist_ok=True)
     for width in WIDTHS:
         name = f"{stem}-{width}.png"
-        (folder / name).write_bytes(IMAGE)
+        data = IMAGE if width == WIDTHS[-1] else IMAGE + str(width).encode()
+        (folder / name).write_bytes(data)
         (folder / f"{stem}-{width}.json").write_text(
             json.dumps(
                 {
                     "image": name,
-                    "sha256": sha256(IMAGE),
+                    "sha256": sha256(data),
                     "width": width,
                     "findings": findings or [],
                     "commit": commit,
