@@ -394,10 +394,12 @@ def refactored_source(text: str) -> str:
 
 
 RUFF_IGNORE = re.compile(r"^ignore = \[\n(?:[ \t]+.*\n)*?\]\n", re.MULTILINE)
+RUFF_FIX = re.compile(r"^fix = true\n", re.MULTILINE)
+RUFF_SELECT = re.compile(r"^select = \[", re.MULTILINE)
 
 
 def refactor_for_strict_checks(work: Path) -> None:
-    """The refactor a real adoption makes first: no type ignores, TODO markers, comment blocks or Ruff ignore list."""
+    """The refactor a real adoption makes first: no type ignores, TODO markers, comment blocks or Ruff ignore list, fix switch or narrowed rule set."""
     changed = 0
     for name in output(["git", "ls-files", "*.py"], work).splitlines():
         path = work / name
@@ -409,7 +411,9 @@ def refactor_for_strict_checks(work: Path) -> None:
     settings = work / "pyproject.toml"
     if settings.exists():
         text = settings.read_text()
-        kept = RUFF_IGNORE.sub("", text)
+        kept = RUFF_SELECT.sub(
+            "extend-select = [", RUFF_FIX.sub("", RUFF_IGNORE.sub("", text))
+        )
         if kept != text:
             settings.write_text(kept)
             changed += 1
