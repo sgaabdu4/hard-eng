@@ -1,0 +1,82 @@
+{
+ "experimental_config": {
+  "licenses": {
+   "allowlist": null,
+   "summary": false
+  }
+ },
+ "results": [
+  {
+   "packages": [
+    {
+     "groups": [
+      {
+       "aliases": [
+        "CVE-2022-21802",
+        "GHSA-589f-c66p-hxr4"
+       ],
+       "ids": [
+        "GHSA-589f-c66p-hxr4"
+       ],
+       "max_severity": "6.1"
+      }
+     ],
+     "package": {
+      "ecosystem": "npm",
+      "name": "grapesjs",
+      "purl": "pkg:npm/grapesjs@0.19.4?source=PUBLIC_REGISTRY",
+      "version": "0.19.4"
+     },
+     "vulnerabilities": [
+      {
+       "affected": [
+        {
+         "database_specific": {
+          "last_known_affected_version_range": "< 0.19.5",
+          "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2022/07/GHSA-589f-c66p-hxr4/GHSA-589f-c66p-hxr4.json"
+         },
+         "package": {
+          "ecosystem": "npm",
+          "name": "grapesjs",
+          "purl": "pkg:npm/grapesjs"
+         },
+         "ranges": [
+          {
+           "events": [
+            {
+             "introduced": "0"
+            }
+           ],
+           "type": "SEMVER"
+          }
+         ]
+        }
+       ],
+       "aliases": [
+        "CVE-2022-21802"
+       ],
+       "database_specific": {
+        "cwe_ids": [
+         "CWE-79"
+        ],
+        "github_reviewed": true,
+        "github_reviewed_at": "2022-08-06T09:34:28Z",
+        "nvd_published_at": "2022-07-25T14:15:00Z",
+        "severity": "MODERATE"
+       },
+       "id": "GHSA-589f-c66p-hxr4",
+       "modified": "2023-11-08T04:08:10.634255Z",
+       "published": "2022-07-26T00:01:08Z",
+       "schema_version": "1.9.0",
+       "summary": "grapesjs before 0.19.5 vulnerable to Cross-site Scripting"
+      }
+     ]
+    }
+   ],
+   "source": {
+    "path": "package-lock.json",
+    "type": "lockfile"
+   }
+  }
+ ]
+}

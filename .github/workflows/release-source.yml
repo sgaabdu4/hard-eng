@@ -17,13 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require main PRs to come from develop
+      - name: Require main PRs to come from develop or a hotfix branch
         env:
           HEAD: ${{ github.event.pull_request.head.ref }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           REPO: ${{ github.repository }}
         run: |
-          if [ "$HEAD" != develop ] || [ "$HEAD_REPO" != "$REPO" ]; then
-            echo "Only $REPO develop can merge into main; this PR comes from $HEAD_REPO $HEAD."
+          case "$HEAD" in develop | hotfix/?*) known=1 ;; *) known=0 ;; esac
+          if [ "$known" != 1 ] || [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "Only $REPO develop or hotfix/* can merge into main; this PR comes from $HEAD_REPO $HEAD."
             exit 1
           fi

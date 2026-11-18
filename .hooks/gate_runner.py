@@ -538,9 +538,10 @@ def run_limited_gate(
                     emit_dart_test_failure(result, tests, kind, report_path)
             validate_scanner_log(scanner, log)
         shard_reports(group, gate)
+        unfixed = False
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
-            scanner_result(result.returncode == 0, scanner, *report_args)
+            unfixed = scanner_result(result.returncode, scanner, *report_args)
         from process_group import parallel_hint, stopped_note
         from reports import check_coverage, completed_tests
 
@@ -556,13 +557,13 @@ def run_limited_gate(
             check_coverage(coverage_path, kind, directory, expected_sources)
         stop = stopped_note(result.returncode)
         print(
-            f"{'PASS' if result.returncode == 0 else 'FAIL'} {gate['name']} "
+            f"{'PASS' if result.returncode == 0 or unfixed else 'FAIL'} {gate['name']} "
             f"(exit {result.returncode}; elapsed {time.monotonic() - started:.3f}s)"
             f" @ {group['path']}"
             + (stop or parallel_hint(result.returncode, tests, command, report_path)),
             flush=True,
         )
-        return result.returncode != 0
+        return result.returncode != 0 and not unfixed
     except (
         ImportError,
         OSError,

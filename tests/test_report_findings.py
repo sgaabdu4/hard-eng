@@ -17,7 +17,7 @@ NO_GATE: Gate = {"name": "scan", "command": []}
 def failed(
     scanner: str, path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> str:
-    reports.scanner_result(False, scanner, NO_GATE, path, [], tmp_path, 1.0)
+    reports.scanner_result(1, scanner, NO_GATE, path, [], tmp_path, 1.0)
     return capsys.readouterr().out
 
 
