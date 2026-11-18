@@ -15,6 +15,7 @@ from pathlib import Path
 
 from tidy_guards import (
     ITEM_ERRORS,
+    Private,
     TidyStop,
     cargo_target,
     codex_folder,
@@ -23,11 +24,13 @@ from tidy_guards import (
     idle,
     idle_worktree,
     inside,
+    module_holds_work,
     note,
     open_paths,
     operation_pending,
     paused_branches,
     quiet_folders,
+    read_private,
     reflog_time,
     same_place,
     submodules_hold_nothing,
@@ -259,9 +262,11 @@ class Tidy:
         tree = tidy_git(self.root, "rev-parse", f"{self.tip}^{{tree}}").strip()
         return done.stdout.split()[0] == tree
 
-    def reflog_holds_work(self, cwd: Path, head: str, *refs: str) -> bool:
-        """A removal drops the logs; keep an item whose log names a commit that is merged nowhere."""
-        commits: set[str] = set()
+    def reflog_holds_work(
+        self, cwd: Path, head: str, refs: list[str], tips: list[str] | None = None
+    ) -> bool:
+        """A removal drops the logs and refs it owns; keep an item whose logs or refs name a commit that is merged nowhere."""
+        commits: set[str] = set(tips or [])
         for ref in refs:
             commits |= set(tidy_git(cwd, "log", "-g", "--format=%H", ref).split())
         if not commits:
@@ -386,8 +391,17 @@ class Tidy:
                 state["merged"] = self.local_merged(head)
             return state["merged"]
 
+        folder = Path(
+            tidy_git(path, "rev-parse", "--path-format=absolute", "--git-dir").strip()
+        )
+        found = read_private(folder)
+
+        def own() -> Private:
+            return found or Private([], [], [])
+
         checks: list[tuple[str, Callable[[], bool]]] = [
             ("used in the last 24 hours", lambda: not idle_worktree(path)),
+            ("its git folder holds an unknown entry", lambda: found is None),
             (
                 "not merged",
                 lambda: not merged() and self.fresh("unmerged", f"{branch}@{head}"),
@@ -398,8 +412,12 @@ class Tidy:
                 lambda: self.reflog_holds_work(
                     path,
                     head,
-                    "HEAD",
-                    *([f"refs/heads/{branch}"] if branch else []),
+                    [
+                        "HEAD",
+                        *([f"refs/heads/{branch}"] if branch else []),
+                        *own().logged,
+                    ],
+                    own().tips,
                 ),
             ),
             ("holds changes", lambda: bool(work_left(path, main, generated(path)))),
@@ -412,6 +430,10 @@ class Tidy:
                 lambda: operation_pending(path),
             ),
             ("a submodule holds work", lambda: not submodules_hold_nothing(path)),
+            (
+                "a submodule git folder holds work",
+                lambda: any(module_holds_work(m) for m in own().modules),
+            ),
             ("a process is inside", lambda: self.worktree_busy(path)),
         ]
         local = next((reason for reason, kept in checks if kept()), None)
@@ -480,7 +502,7 @@ class Tidy:
             ("a stash names it", lambda: self.stashed(name, None)),
             (
                 "its log holds commits that are merged nowhere",
-                lambda: self.reflog_holds_work(self.root, tip, f"refs/heads/{name}"),
+                lambda: self.reflog_holds_work(self.root, tip, [f"refs/heads/{name}"]),
             ),
         ]
         local = next((reason for reason, kept in checks if kept()), None)

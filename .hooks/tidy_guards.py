@@ -9,6 +9,7 @@ import time
 import unicodedata
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -33,6 +34,26 @@ PAUSED_BRANCH_FILES = (
     "rebase-apply/head-name",
     "BISECT_START",
 )
+PRIVATE_FILES = {
+    "HEAD",
+    "ORIG_HEAD",
+    "FETCH_HEAD",
+    "COMMIT_EDITMSG",
+    "AUTO_MERGE",
+    "index",
+    "gitdir",
+    "commondir",
+    "config.worktree",
+}
+PRIVATE_FOLDERS = {"logs", "refs", "modules", "info"}
+PRIVATE_PREFIXES = ("hard-eng", "fsmonitor--daemon", "sharedindex.")
+INFO_FILES = {"exclude", "sparse-checkout"}
+MODULE_ENTRIES = (
+    PRIVATE_FILES
+    | PRIVATE_FOLDERS
+    | {"config", "description", "hooks", "objects", "packed-refs", "shallow"}
+)
+OBJECT_ID = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 SUBMODULE_LINE = re.compile(r"(.)[0-9a-f]+ (.+?)(?: \(.*\))?")
 
 
@@ -280,3 +301,75 @@ def paused_branches(common: Path) -> set[str]:
                     (folder / name).read_text().strip().removeprefix("refs/heads/")
                 )
     return found
+
+
+@dataclass
+class Private:
+    """What a worktree removal deletes from its own git folder: ref tips, logged refs and submodule git folders."""
+
+    tips: list[str]
+    logged: list[str]
+    modules: list[Path]
+
+
+def relative_files(folder: Path) -> list[str]:
+    return [
+        str((Path(here) / name).relative_to(folder))
+        for here, _, names in os.walk(folder)
+        for name in names
+    ]
+
+
+def module_folders(modules: Path) -> list[Path]:
+    """Git folders below a modules folder, nested ones too; a submodule name may hold slashes."""
+    found: list[Path] = []
+    for here, names, _ in os.walk(modules):
+        if (Path(here) / "HEAD").is_file():
+            found.append(Path(here))
+            names[:] = [name for name in names if name == "modules"]
+    return found
+
+
+def read_private(gitdir: Path) -> Private | None:
+    """None when the folder holds anything that is not known to hold no work."""
+    tips: list[str] = []
+    for entry in os.scandir(gitdir):
+        known = entry.name in PRIVATE_FILES | PRIVATE_FOLDERS
+        if not known and not entry.name.startswith(PRIVATE_PREFIXES):
+            return None
+    if not INFO_FILES >= set(relative_files(gitdir / "info")):
+        return None
+    for name in relative_files(gitdir / "refs"):
+        tip = (gitdir / "refs" / name).read_text().strip()
+        if OBJECT_ID.fullmatch(tip) is None:
+            return None
+        tips.append(tip)
+    logged = [
+        name.removeprefix("logs/")
+        for name in relative_files(gitdir)
+        if name.startswith("logs/")
+    ]
+    return Private(tips, logged, module_folders(gitdir / "modules"))
+
+
+def module_holds_work(folder: Path) -> bool:
+    """A submodule git folder keeps a commit that no remote branch holds, in a ref, a log or the stash."""
+    names = {entry.name for entry in os.scandir(folder)}
+    if not names <= MODULE_ENTRIES or any(
+        not name.endswith(".sample") for name in relative_files(folder / "hooks")
+    ):
+        return True
+    git_dir = f"--git-dir={folder}"
+    commits = set(
+        tidy_git(folder, git_dir, "for-each-ref", "--format=%(objectname)").split()
+    )
+    for name in relative_files(folder / "logs"):
+        commits |= set(
+            tidy_git(folder, git_dir, "log", "-g", "--format=%H", name).split()
+        )
+    return bool(
+        commits
+        and tidy_git(
+            folder, git_dir, "rev-list", "--no-walk", *commits, "--not", "--remotes"
+        ).split()
+    )
