@@ -18,20 +18,19 @@ import ship_actions
 import stale_updates
 import update
 import update_runner
-from conftest import SOURCE, add_origin, commit, git, init
+from conftest import (
+    OLD,
+    SOURCE,
+    age_branch,
+    commit,
+    git,
+    git_path,
+    init,
+    old_log,
+)
 
-OLD = int(time.time()) - 3 * 86400
 HOUR = 3600
-GITIGNORE = "__pycache__/\nnode_modules/\n.hard-eng/\n.venv/\n.env\ntarget/\nbuild/\n"
 CARGO_TAG = "Signature: 8a477f597d28d172789f06886806bc55\n# cache\n"
-
-
-def old_log(log: Path) -> None:
-    log.write_text(re.sub(r"(> )\d+( [+-]\d{4})", rf"\g<1>{OLD}\g<2>", log.read_text()))
-
-
-def git_path(root: Path, name: str) -> Path:
-    return Path(git(root, "rev-parse", "--path-format=absolute", "--git-path", name))
 
 
 def age(path: Path) -> None:
@@ -47,34 +46,23 @@ def age(path: Path) -> None:
         old_log(git_path(path, f"logs/refs/heads/{branch}"))
 
 
-def age_branch(root: Path, name: str) -> None:
-    old_log(git_path(root, f"logs/refs/heads/{name}"))
-
-
 def age_folders(target: Path) -> None:
     for folder in [target, *(p for p in target.rglob("*") if p.is_dir())]:
         os.utime(folder, (OLD, OLD))
 
 
-def build_primary(
-    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
-    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
-    (repository / ".gitignore").write_text(GITIGNORE)
-    (repository / "tracked.txt").write_text("one\n")
-    (repository / "Cargo.toml").write_text("[package]\n")
-    commit(repository, "files")
-    remote = add_origin(repository)
-    web = "https://github.com/fixture/project.git"
-    git(repository, "remote", "set-url", "origin", web)
-    git(repository, "config", f"url.{remote}.insteadOf", web)
-    age_branch(repository, "main")
-    return repository
-
-
-@pytest.fixture
-def primary(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return build_primary(repository, tmp_path, monkeypatch)
+def add_vendor(primary: Path, tmp_path: Path) -> list[str]:
+    """Add a submodule at vendor/ and return the Git options that let a local clone work."""
+    library = tmp_path / "library"
+    init(library)
+    (library / "lib.txt").write_text("lib\n")
+    (library / ".gitignore").write_text("*.secret\n")
+    commit(library, "lib")
+    allow = ["-c", "protocol.file.allow=always"]
+    git(primary, *allow, "submodule", "add", "-q", str(library), "vendor")
+    commit(primary, "add vendor")
+    git(primary, "push", "-q", "origin", "main")
+    return allow
 
 
 def linked(primary: Path, name: str, where: str = "sibling") -> Path:
@@ -321,15 +309,7 @@ def test_tidy_keeps_locked_and_codex_app_worktrees(
 def test_tidy_removes_a_submodule_worktree_only_when_the_submodule_holds_no_work(
     primary: Path, tmp_path: Path, work: str
 ) -> None:
-    library = tmp_path / "library"
-    init(library)
-    (library / "lib.txt").write_text("lib\n")
-    (library / ".gitignore").write_text("*.secret\n")
-    commit(library, "lib")
-    allow = ["-c", "protocol.file.allow=always"]
-    git(primary, *allow, "submodule", "add", "-q", str(library), "vendor")
-    commit(primary, "add vendor")
-    git(primary, "push", "-q", "origin", "main")
+    allow = add_vendor(primary, tmp_path)
     path = linked(primary, "withsub")
     git(path, *allow, "submodule", "update", "--init", "-q")
     if work == "local-commit":

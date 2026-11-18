@@ -4,6 +4,7 @@ import atexit
 import importlib.util
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -575,3 +576,40 @@ def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     from test_browser import load_browser
 
     return load_browser(monkeypatch)
+
+
+OLD = int(time.time()) - 3 * 86400
+GITIGNORE = "__pycache__/\nnode_modules/\n.hard-eng/\n.venv/\n.env\ntarget/\nbuild/\n"
+
+
+def old_log(log: Path) -> None:
+    log.write_text(re.sub(r"(> )\d+( [+-]\d{4})", rf"\g<1>{OLD}\g<2>", log.read_text()))
+
+
+def git_path(root: Path, name: str) -> Path:
+    return Path(git(root, "rev-parse", "--path-format=absolute", "--git-path", name))
+
+
+def age_branch(root: Path, name: str) -> None:
+    old_log(git_path(root, f"logs/refs/heads/{name}"))
+
+
+def build_primary(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    (repository / ".gitignore").write_text(GITIGNORE)
+    (repository / "tracked.txt").write_text("one\n")
+    (repository / "Cargo.toml").write_text("[package]\n")
+    commit(repository, "files")
+    remote = add_origin(repository)
+    web = "https://github.com/fixture/project.git"
+    git(repository, "remote", "set-url", "origin", web)
+    git(repository, "config", f"url.{remote}.insteadOf", web)
+    age_branch(repository, "main")
+    return repository
+
+
+@pytest.fixture
+def primary(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    return build_primary(repository, tmp_path, monkeypatch)
