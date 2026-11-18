@@ -304,19 +304,20 @@ def run_gate(
         return False
     started = time.monotonic()
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
+    stopped_at_limit = failed and time.monotonic() - started >= limit
     if not RECORDING.is_set():
         from debt import judge
 
         failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
     note_install(install_key(group), gate.get("role"), failed)
+    if stopped_at_limit:
+        record_gate_timeout(ROOT, key)
     if failed:
         FAILED_GATES.append(key)
-        if time.monotonic() - started >= limit:
-            record_gate_timeout(ROOT, key)
         if note := lost_scanner_note(OUTPUTS.get(name, "")):
             with output_lock:
                 print(note, flush=True)
-    else:
+    elif not stopped_at_limit:
         record_gate_time(ROOT, key, time.monotonic() - started)
     return failed
 

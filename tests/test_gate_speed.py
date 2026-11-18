@@ -131,6 +131,34 @@ def test_a_gate_stopped_at_its_limit_gets_the_full_budget_next_time(
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
 
 
+def test_a_stop_at_the_limit_is_kept_when_the_debt_judge_calls_the_gate_a_pass(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+    configure(tmp_path, [gate("suite", "pass")])
+    assert runner.check(timeout=120) == 0
+    monkeypatch.setattr(debt, "judge", lambda *_: False)
+    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    runner.check(timeout=120)
+    assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
+
+
+def test_a_check_in_another_process_cannot_lose_a_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    gate_times.record_gate_time(tmp_path, "./suite", 2)
+    with gate_times.lock_gate_times(tmp_path):
+        writer = threading.Thread(
+            target=gate_times.record_gate_timeout, args=(tmp_path, "./suite")
+        )
+        writer.start()
+        writer.join(timeout=0.5)
+        assert writer.is_alive()
+    writer.join(timeout=60)
+    assert gate_times.gate_limit(tmp_path, "./suite", 100) == 100
+
+
 def watch_common_folder_asks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Path, list[Path]]:

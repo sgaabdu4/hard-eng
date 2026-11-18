@@ -1,9 +1,12 @@
 """Recent passing times of each gate, so a hung gate stops early."""
 
+import fcntl
 import json
 import os
 import subprocess
 import threading
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 from gate_config import JsonValue
@@ -11,7 +14,6 @@ from project_files import keep
 
 GATE_FLOOR_SECONDS = 600
 RECENT_PASSES = 5
-GATE_TIMES_LOCK = threading.Lock()
 COMMON_FOLDER_LOCK = threading.Lock()
 
 
@@ -58,9 +60,16 @@ def gate_limit(root: Path, key: str, budget: float) -> float:
     return min(budget, max(GATE_FLOOR_SECONDS, 3 * max(passes)))
 
 
+@contextmanager
+def lock_gate_times(root: Path) -> Generator[None]:
+    with gate_times(root).with_suffix(".lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
 def update_gate_record(root: Path, key: str, seconds: float | None) -> None:
     path = gate_times(root)
-    with GATE_TIMES_LOCK:
+    with lock_gate_times(root):
         try:
             loaded = json.loads(path.read_text())
         except (OSError, ValueError):
