@@ -26,6 +26,7 @@ from tidy_guards import (
     note,
     open_paths,
     operation_pending,
+    paused_branches,
     quiet_folders,
     reflog_time,
     submodules_hold_nothing,
@@ -124,6 +125,7 @@ def remove_stale_candidates(root: Path) -> None:
 STASH_SUBJECT = re.compile(r"(?:WIP on|On) ([^:]+):")
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 MERGE_REPOSITORY = "merge.git"
+ANSWERS = "hard-eng-tidy-gh.json"
 PROTECTED_BRANCHES = {"main", "master", "develop", "hard-eng/update"}
 
 
@@ -145,10 +147,6 @@ def fetch_tip(root: Path, base: str) -> str:
     tidy_git(root, "fetch", "--quiet", "--no-tags", "origin", base)
     tidy_git(root, "cat-file", "-e", f"{rows[0]}^{{commit}}")
     return rows[0]
-
-
-def answers_file(root: Path) -> Path:
-    return common_dir(root) / "hard-eng-tidy-gh.json"
 
 
 def load_answers(path: Path) -> dict[str, dict[str, float]]:
@@ -176,7 +174,7 @@ class Tidy:
     protected: set[str]
     removed: Counter[str]
     scratch: Path
-    answers_file: Path
+    common: Path
     answers: dict[str, dict[str, float]]
 
     @classmethod
@@ -213,6 +211,7 @@ class Tidy:
         (scratch / MERGE_REPOSITORY / "objects/info/alternates").write_text(
             f"{objects}\n"
         )
+        common = common_dir(root)
         return cls(
             root,
             root.resolve(),
@@ -223,8 +222,8 @@ class Tidy:
             {*PROTECTED_BRANCHES, base, named},
             removed,
             scratch,
-            answers_file(root),
-            load_answers(answers_file(root)),
+            common,
+            load_answers(common / ANSWERS),
         )
 
     def content_merged(self, head: str) -> bool:
@@ -491,7 +490,7 @@ class Tidy:
         return {
             record.get("branch", "").removeprefix("refs/heads/")
             for record in worktrees(self.root)
-        }
+        } | paused_branches(self.common)
 
     def remove_branch(self, line: str) -> None:
         tip, _, ref = line.partition(" ")
@@ -604,7 +603,7 @@ def tidy(root: Path) -> None:
             if opened is not None:
                 shutil.rmtree(opened.scratch, ignore_errors=True)
                 with suppress(OSError):
-                    opened.answers_file.write_text(json.dumps(opened.answers))
+                    (opened.common / ANSWERS).write_text(json.dumps(opened.answers))
     if removed:
         result = root / RESULT_FILE
         result.parent.mkdir(parents=True, exist_ok=True)
