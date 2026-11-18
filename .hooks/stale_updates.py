@@ -69,22 +69,11 @@ def stop_idle_watcher(worktree: Path) -> None:
             )
 
 
-def registered_worktrees(root: Path) -> list[dict[str, str]]:
-    listing = subprocess.check_output(
-        ["git", "worktree", "list", "--porcelain"], cwd=root, text=True
-    )
-    return [
-        {
-            key: value
-            for key, _, value in (line.partition(" ") for line in block.splitlines())
-        }
-        for block in listing.split("\n\n")
-    ]
-
-
 def remove_stale_candidates(root: Path) -> None:
     """Remove candidates whose update has exited; the caller holds the lock."""
-    for fields in registered_worktrees(root):
+    from ship_actions import worktrees
+
+    for fields in worktrees(root):
         path = Path(fields.get("worktree", ""))
         owner = OWNER.fullmatch(fields.get("locked", ""))
         if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}"):
