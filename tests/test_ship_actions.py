@@ -758,8 +758,9 @@ def test_interrupted_pre_push_removes_its_snapshot(
     revision = commit(root, "slow check").strip()
     for source in (SOURCE / ".hooks").glob("*.py"):
         (root / ".hooks" / source.name).write_bytes(source.read_bytes())
+    reset = "import os, signal, sys; signal.signal(signal.SIGHUP, signal.SIG_DFL); os.execv(sys.executable, [sys.executable, *sys.argv[1:]])"
     hook = subprocess.Popen(
-        [sys.executable, str(root / ".hooks/hard-eng.py"), "pre-push"],
+        [sys.executable, "-c", reset, str(root / ".hooks/hard-eng.py"), "pre-push"],
         cwd=root,
         stdin=subprocess.PIPE,
         text=True,
