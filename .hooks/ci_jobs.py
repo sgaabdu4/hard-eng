@@ -343,3 +343,181 @@ def migrate_runner_variable(content: str) -> str:
     ):
         content = content.replace(old, new, 1)
     return content
+
+
+def load_checked_policy(root: Path, config: GateConfig) -> None:
+    """Load the shipping policy; leaving the push check to CI needs that CI and a commit secret scan."""
+    from shipping import ShippingError, load_policy
+
+    policy = load_policy(root)
+    if policy is None or policy["pre_push_checks"] != "ci":
+        return
+    if config.get("scan_git_history", True) is False or not any(
+        gate.get("role") == "secrets-history" for gate in config["shared"]
+    ):
+        raise ShippingError(
+            'shipping pre_push_checks "ci" needs the secrets-history gate and '
+            "scan_git_history on: pre-push still scans the pushed commits for secrets"
+        )
+    if gap := ci_check_gap(root):
+        raise ShippingError(
+            f'shipping pre_push_checks "ci" needs a workflow that runs `hard-eng.py check` '
+            f"on every pull request: {gap}. Branch protection cannot be read offline, "
+            "so it is not checked"
+        )
+
+
+PAIRED_CONDITION = re.compile(r"[\w.\-]+ != 'true'")
+
+
+def workflow_jobs(workflow: object) -> dict[object, object]:
+    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+    return jobs if isinstance(jobs, dict) else {}
+
+
+def workflow_events(workflow: object) -> set[str]:
+    triggers = (
+        workflow.get("on", workflow.get(True)) if isinstance(workflow, dict) else None
+    )
+    if isinstance(triggers, str):
+        return {triggers}
+    return (
+        {e for e in triggers if isinstance(e, str)}
+        if isinstance(triggers, (list, dict))
+        else set()
+    )
+
+
+def pull_request_filters(workflow: object) -> list[str]:
+    from workflow_blocking import narrowing_filters
+
+    triggers = (
+        workflow.get("on", workflow.get(True)) if isinstance(workflow, dict) else None
+    )
+    return sorted(narrowing_filters(triggers))
+
+
+def skips_a_run(node: dict[object, object]) -> str | None:
+    """The `if` of a step, or None when it has none or only `${{ !cancelled() }}`."""
+    from workflow_blocking import JOB_IF
+
+    condition = node.get("if")
+    text = str(condition).strip()
+    return None if condition is None or JOB_IF.fullmatch(text) else text
+
+
+def calling_jobs(workflow: object, called: str) -> list[object]:
+    return [
+        name
+        for name, job in workflow_jobs(workflow).items()
+        if isinstance(job, dict) and job.get("uses") == called
+    ]
+
+
+def without_comment(line: str) -> str:
+    import shlex
+
+    try:
+        return " ".join(shlex.split(line, comments=True))
+    except ValueError:
+        return ""
+
+
+def whole_check_arguments(command: str) -> bool:
+    """Only --base, --shard and --plan-stage Complete leave the check whole."""
+    import shlex
+
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    stage = (
+        words[words.index("--plan-stage") + 1 :][:1]
+        if "--plan-stage" in words
+        else ["Complete"]
+    )
+    options = {
+        word for word in words[words.index("check") + 1 :] if word.startswith("-")
+    }
+    return options <= {"--base", "--shard", "--plan-stage"} and stage == ["Complete"]
+
+
+def job_always_runs(name: object, jobs: dict[object, object]) -> bool:
+    """A job that no condition, and no `needs` job with one, can skip."""
+    from workflow_blocking import skippable_jobs
+
+    return isinstance(jobs.get(name), dict) and name not in skippable_jobs(jobs)
+
+
+def runs_whole_check(workflow: object) -> bool:
+    """An always-running job whose check steps cover every case: one has no `if`, or two have the `== 'true'` and `!= 'true'` forms of one condition."""
+    from ci_setup import HARD_ENG_CHECK_COMMAND
+
+    jobs = workflow_jobs(workflow)
+    for name, job in jobs.items():
+        conditions: set[object] = set()
+        steps = job.get("steps") if isinstance(job, dict) else None
+        for step in (steps if job_always_runs(name, jobs) else None) or []:
+            run = step.get("run") if isinstance(step, dict) else None
+            text = "\n".join(
+                without_comment(line)
+                for line in str(run).replace("\\\n", " ").splitlines()
+            )
+            if any(
+                whole_check_arguments(m[0])
+                for m in HARD_ENG_CHECK_COMMAND.finditer(text)
+            ):
+                conditions.add(skips_a_run(step))
+        if None in conditions or any(
+            isinstance(c, str)
+            and PAIRED_CONDITION.fullmatch(c)
+            and c.replace("!= 'true'", "== 'true'") in conditions
+            for c in conditions
+        ):
+            return True
+    return False
+
+
+def ci_check_gap(root: Path) -> str | None:
+    """Why no workflow runs the check on every pull request, or None when one does."""
+    import yaml
+
+    from ci_setup import project_workflows
+
+    loaded: dict[str, object] = {}
+    for path in project_workflows(root):
+        try:
+            loaded[path.name] = yaml.safe_load(path.read_text())
+        except yaml.YAMLError:
+            continue
+    gap = "no workflow in .github/workflows runs it on every pull_request, directly or by calling the one that has only workflow_call"
+    for name, workflow in loaded.items():
+        if not runs_whole_check(workflow):
+            continue
+        if filters := pull_request_filters(workflow):
+            gap = f"the pull_request trigger of {name} has a `{filters[0]}` filter"
+        elif "pull_request" in workflow_events(workflow):
+            return None
+        if (called := called_gap(loaded, name)) is not None:
+            if not called:
+                return None
+            gap = called
+    return gap
+
+
+def called_gap(loaded: dict[str, object], name: str) -> str | None:
+    """None when no pull_request workflow calls `name`; "" when one calls it whole; else why not."""
+    found = None
+    for caller_name, caller in loaded.items():
+        jobs = calling_jobs(caller, f"./.github/workflows/{name}")
+        if not jobs or "pull_request" not in workflow_events(caller):
+            continue
+        if filters := pull_request_filters(caller):
+            found = (
+                f"the pull_request trigger of {caller_name} has a `{filters[0]}` filter"
+            )
+        elif not any(job_always_runs(job, workflow_jobs(caller)) for job in jobs):
+            found = f"the job in {caller_name} that calls {name} has an `if` condition, or needs a job that has one"
+        else:
+            return ""
+    return found

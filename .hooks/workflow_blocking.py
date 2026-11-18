@@ -166,8 +166,18 @@ def narrowing_filters(triggers: object) -> set[str]:
     return {
         str(key)
         for key, value in event.items()
-        if key != "branches" or value not in ("**", ["**"])
+        if key != "branches" or not covers_every_branch(value)
     }
+
+
+def covers_every_branch(patterns: object) -> bool:
+    """A branches list with `**` and no `!` entry matches every pull request."""
+    names = [patterns] if isinstance(patterns, str) else patterns
+    return (
+        isinstance(names, list)
+        and "**" in names
+        and not any(str(name).startswith("!") for name in names)
+    )
 
 
 def skip_hits(name: str, words: list[tuple[str, str, int]]) -> list[str]:
