@@ -9,13 +9,15 @@ import pytest
 from conftest import commit, git
 
 
-def work_branch(root: Path, plan: str, source: str) -> None:
+def work_branch(root: Path, plan: str, source: str, script: str = "") -> None:
     git(root, "branch", "-M", "main")
     (root / "a.py").write_text("".join(f"line {n}\n" for n in range(30)))
     commit(root, "base")
     git(root, "switch", "-qc", "work")
     (root / "a.py").write_text(source)
     (root / "PLAN.md").write_text(plan)
+    if script:
+        (root / "b.js").write_text(script)
     commit(root, "work")
 
 
@@ -52,9 +54,11 @@ def test_a_changed_line_text_finding_is_refused_before_the_push_when_ci_runs_the
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    work_branch(repository, completed_plan, "x = 1  # noqa: E501\n" + "line 1\n" * 29)
+    changed = "changed 0\n" + "line 1\n" * 29
+    script = "// eslint-disable-next-line\nf();\n"
+    work_branch(repository, completed_plan, changed, script)
     assert push_check(runner, repository, monkeypatch) == 1
-    assert "noqa" in capsys.readouterr().out
+    assert "eslint-disable" in capsys.readouterr().out
 
 
 def test_a_complete_plan_and_clean_lines_pass_without_any_gate_of_the_full_check(
