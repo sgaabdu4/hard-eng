@@ -17,16 +17,17 @@ from test_shipping import (
 )
 
 
-def _develop_policy(tmp_path: Path, branch: str) -> Fixture:
+def develop_policy(tmp_path: Path, branch: str, big: bool = True) -> Fixture:
     fixture = _fixture(tmp_path)
     git(fixture.root, "branch", "-M", branch)
     gates = json.loads((fixture.root / "hard-eng.gates.json").read_text())
     gates["shipping"]["base"] = "develop"
     (fixture.root / "hard-eng.gates.json").write_text(json.dumps(gates))
     git(fixture.root, "commit", "-qam", "base is develop")
-    (fixture.root / "added.txt").write_text("a big change\n")
-    git(fixture.root, "add", "added.txt")
-    git(fixture.root, "commit", "-qm", "big change")
+    if big:
+        (fixture.root / "added.txt").write_text("a big change\n")
+        git(fixture.root, "add", "added.txt")
+        git(fixture.root, "commit", "-qm", "big change")
     return fixture
 
 
@@ -71,7 +72,7 @@ def test_a_release_hotfix_or_join_passes_ship_with_a_merge_commit_beyond_the_com
     base_ref: str,
     behind: int,
 ) -> None:
-    fixture = _develop_policy(tmp_path, branch)
+    fixture = develop_policy(tmp_path, branch)
     pull = _route_pull(fixture, head_ref, base_ref, 156)
     shipment = _ship(monkeypatch, fixture, pull, behind)
     assert shipment.method == "merge"
@@ -82,7 +83,7 @@ def test_a_release_hotfix_or_join_passes_ship_with_a_merge_commit_beyond_the_com
 def test_a_task_pull_request_into_the_default_branch_stays_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fixture = _develop_policy(tmp_path, "feature/shipping")
+    fixture = develop_policy(tmp_path, "feature/shipping")
     pull = _route_pull(fixture, "feature/shipping", "main", 1)
     with pytest.raises(shipping.ShippingError, match="base branch does not match"):
         _ship(monkeypatch, fixture, pull, plan=fixture.plan)
@@ -91,7 +92,7 @@ def test_a_task_pull_request_into_the_default_branch_stays_refused(
 def test_a_rebase_pull_request_still_holds_the_commit_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fixture = _develop_policy(tmp_path, "feature/shipping")
+    fixture = develop_policy(tmp_path, "feature/shipping")
     pull = _route_pull(fixture, "feature/shipping", "develop", 156)
     with pytest.raises(shipping.ShippingError, match="HE-PR-COMMITS"):
         _ship(monkeypatch, fixture, pull, plan=fixture.plan)
@@ -100,7 +101,7 @@ def test_a_rebase_pull_request_still_holds_the_commit_limit(
 def test_the_base_branch_into_a_branch_that_is_not_the_default_stays_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fixture = _develop_policy(tmp_path, "develop")
+    fixture = develop_policy(tmp_path, "develop")
     pull = _route_pull(fixture, "develop", "staging", 1)
     with pytest.raises(shipping.ShippingError, match="base branch does not match"):
         _ship(monkeypatch, fixture, pull, plan=fixture.plan)

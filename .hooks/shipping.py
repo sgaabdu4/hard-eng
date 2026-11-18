@@ -893,8 +893,25 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
             )
 
 
+def _plan_scope(
+    root: Path,
+    plan: Path | None,
+    policy: ShippingPolicy,
+    identity: tuple[str, str, int],
+) -> tuple[Path | None, str]:
+    """The plan and delivery target; a release, hotfix or join needs no plan even when the branch is big."""
+    from ship_record import route
+
+    try:
+        return _delivery_scope(root, plan, policy["delivery"])
+    except ShippingError:
+        if plan is not None or route(_pull(root, *identity), policy["base"]) is None:
+            raise
+        return None, "Deploy" if policy["delivery"] else "Merge"
+
+
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
-    from ship_record import base_matches, route, ship_method
+    from ship_record import base_matches, ship_method
     from ui_proof import changed_files
 
     if stage not in {"ready", "delivered"}:
@@ -908,13 +925,9 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
     _clean(resolved_root)
-    try:
-        resolved_plan, target = _delivery_scope(resolved_root, plan, policy["delivery"])
-    except ShippingError:
-        pull = _pull(resolved_root, owner, name, number)
-        if plan is not None or route(pull, policy["base"]) is None:
-            raise
-        resolved_plan, target = None, "Deploy" if policy["delivery"] else "Merge"
+    resolved_plan, target = _plan_scope(
+        resolved_root, plan, policy, (owner, name, number)
+    )
     if problem := target_problem(target, policy["delivery"]):
         raise ShippingError(problem)
     pull = _pull(resolved_root, owner, name, number)
