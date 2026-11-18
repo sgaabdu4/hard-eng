@@ -185,7 +185,7 @@ Execution: One Sonnet builder in a Hard Eng worktree from develop, steps 1 to 6 
 - A shallow clone or a fetch without tags cannot find an entry's commit, so a good entry reads as stale. Recovery: CI already fetches with `fetch-depth: 0`; the refusal names a missing commit apart from a stale one and says to fetch.
 - A tag that only this Mac holds is scanned by the local full check but not seen by CI, so its hits fail locally and an entry for them would be refused in CI as a missing commit. Recovery: none in code; the tag is pushed or removed by its owner, never an entry. On this Mac 69 local-only tags hold 16 hits beyond the 9 entries.
 - Moving Dart nested files to an include chain could let a nested file override a strict setting. Recovery: the merged settings run through the same typing check, and `false` rules and `ignore` errors stay refused in every file of the chain.
-- A challenge can run forever on forms that text matching cannot stop. Recovery (stop rule for the next challenger): round 9 blocks only on (a) a false refusal or a crash on a sealed copy, (b) a regression of a closed route, or (c) a switch-off that a project can write in one plain line in a file it owns (a comment, a config key, a workflow line or an environment variable). A route that needs a forged tool is a stated limit; the stated limits are listed in the row "Stated limits of the switch-off checks".
+- A challenge can run forever on forms that text matching cannot stop. Recovery: a route that needs a forged tool is a stated limit and is listed in the row "Stated limits of the switch-off checks"; a finding is fixed when it is reachable by a plain line in a file the project owns.
 
 ## ux_reference
 
