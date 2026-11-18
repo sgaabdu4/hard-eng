@@ -148,6 +148,14 @@ REFUSED = [
     "Q='mutation{mergePullRequest(x)}'; gh api graphql -f query=\"$Q\"",
     "echo gh pr merge 12",
     "/usr/bin/time gh pr merge 12 --rebase",
+    "gh api repos/o/r/pulls/12/$(echo merge) -X PUT",
+    'gh api graphql --field=query="$(cat m.graphql)"',
+    'gh api graphql -fquery="$(cat m.graphql)"',
+    "Q='mutation{mergePullRequest(x)}'; gh api graphql --field=query=\"$Q\"",
+    "git config alias.m '!gh pr merge'",
+    "git config --global alias.m '!gh pr merge'",
+    "git config alias.m '!gh pr merge'; git m 12 --rebase",
+    'gh api graphql -f a="x\\"\'" -f query="$Q"',
 ]
 ALLOWED = [
     "gh pr view 12",
@@ -196,6 +204,16 @@ ALLOWED = [
     "gh api repos/{owner}/{repo}/pulls/12/comments",
     'gh api "repos/$REPO/pulls/$PR" --jq .body',
     "gh api repos/o/r/pulls/$PR/reviews",
+    "gh api graphql -F owner=o -F name=r -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){name}}'",
+    "gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id=T1",
+    'gh api graphql -f query=\'query($n:Int!){repository(owner:"o",name:"r"){pullRequest(number:$n){title}}}\' -F n=12',
+    "gh api repos/{owner}/{repo}/releases",
+    "gh api repos/{owner}/{repo}/issues/123/comments -f body='Hi from CLI'",
+    'gh api repos/{owner}/{repo}/issues/12/comments -f body="$(cat reply.md)"',
+    'gh api -X PATCH repos/{owner}/{repo}/pulls/12 -f body="$BODY"',
+    "gh api repos/{owner}/{repo}/pulls/12/comments -f body='Fixed' -F in_reply_to=99",
+    'gh api repos/o/r/issues/12/comments -f body="$MSG"',
+    'gh api repos/o/r/issues/12/labels -f labels[]="$LABEL"',
 ]
 
 
