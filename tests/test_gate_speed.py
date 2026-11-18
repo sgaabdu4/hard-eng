@@ -137,7 +137,11 @@ def test_a_stop_at_the_limit_is_kept_when_the_debt_judge_calls_the_gate_a_pass(
     monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
     configure(tmp_path, [gate("suite", "pass")])
     assert runner.check(timeout=120) == 0
-    monkeypatch.setattr(debt, "judge", lambda *_: False)
+
+    def pass_it(*_: object) -> bool:
+        return False
+
+    monkeypatch.setattr(debt, "judge", pass_it)
     configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
     runner.check(timeout=120)
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
