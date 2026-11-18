@@ -17,6 +17,7 @@ from test_tidy import (
     linked,
     make_target,
     merged_branch,
+    quick_git_limits,
     squash_merged_steps,
     stand_in_git,
     tidy,
@@ -372,18 +373,26 @@ def test_a_removed_branch_takes_its_config_section_with_it(primary: Path) -> Non
     assert shown.stdout == ""
 
 
-def test_a_failed_config_cleanup_is_reported_with_the_command_to_retry(
+@pytest.mark.parametrize("hangs", [False, True], ids=["fails", "hangs"])
+def test_a_failed_config_cleanup_is_reported_with_a_quoted_command_to_retry(
     primary: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    hangs: bool,
 ) -> None:
-    merged_branch(primary, "done")
+    merged_branch(primary, "feat/$USER")
+    if hangs:
+        quick_git_limits(monkeypatch)
     stand_in_git(
         tmp_path,
         monkeypatch,
         '[ "$1 $2" = "config --remove-section" ]',
+        "sleep 30" if hangs else "exit 1",
     )
     tidy(linked(primary, "session"))
-    assert "done" not in branches(primary)
-    assert "git config --remove-section branch.done" in capsys.readouterr().err
+    said = capsys.readouterr().err
+    assert "feat/$USER" not in branches(primary)
+    assert "git config --remove-section 'branch.feat/$USER'" in said
+    assert "removed branch feat/$USER" in said
+    assert "kept branch" not in said
