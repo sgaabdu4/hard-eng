@@ -434,12 +434,16 @@ def remembered_output(
     return note + remember(group, gate, text)
 
 
-def judge_fallow_run(
-    group: Group, gate: Gate, groups: list[Group] | None, timeout: float
-) -> None:
-    from resolved_settings import judge_before_run
+def prepared_command(
+    group: Group, gate: Gate, timeout: float, groups: list[Group] | None
+) -> list[str]:
+    """The command to run, after the settings its tool will read are judged."""
+    command = prepare_command(group, gate, timeout, groups)
+    if command:
+        from resolved_settings import judge_before_run
 
-    judge_before_run(ROOT, group, gate, groups, timeout)
+        judge_before_run(ROOT, group, gate, groups, timeout)
+    return command
 
 
 def run_limited_gate(
@@ -456,7 +460,7 @@ def run_limited_gate(
         report_path = coverage_path = None
         directory = ROOT / group["path"]
         expected_sources: set[Path] = set()
-        command = prepare_command(group, gate, timeout, groups)
+        command = prepared_command(group, gate, timeout, groups)
         if not command:
             reason = (
                 ": uv.lock locks no third-party package to scan"
@@ -467,7 +471,6 @@ def run_limited_gate(
                 f"COVERED {gate['name']}{reason}; elapsed {time.monotonic() - started:.3f}s"
             )
             return False
-        judge_fallow_run(group, gate, groups, timeout)
         from reports import (
             SCANNERS,
             emit_dart_test_failure,
