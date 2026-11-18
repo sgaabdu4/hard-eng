@@ -13,6 +13,7 @@ from test_tidy import (
     age,
     age_folders,
     branches,
+    fake_gh,
     linked,
     make_target,
     merged_branch,
@@ -247,3 +248,24 @@ def test_tidy_keeps_a_build_folder_that_holds_a_nested_repository(
     age_folders(target)
     tidy(linked(primary, "session"))
     assert (inner / ".git").is_dir()
+
+
+def test_a_squash_merged_branch_of_forty_commits_leaves_one_rescue_ref(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    long = linked(primary, "long")
+    for number in range(40):
+        (long / f"f{number}.txt").write_text("x\n")
+        commit(long, f"step {number}")
+    tip = git(long, "rev-parse", "HEAD")
+    git(primary, "merge", "-q", "--squash", "long")
+    git(primary, "commit", "-qm", "squash of long")
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "worktree", "remove", "--force", str(long))
+    age_branch(primary, "long")
+    age(primary)
+    tidy(linked(primary, "session"))
+    assert "long" not in branches(primary)
+    refs = git(primary, "for-each-ref", "--format=%(objectname)", "refs/hard-eng")
+    assert refs.split() == [tip]
