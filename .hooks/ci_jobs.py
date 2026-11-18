@@ -480,6 +480,7 @@ def ends_the_command(rest: str) -> bool:
 SHELL_OPEN = {"if", "case", "for", "while", "until"}
 SHELL_CLOSE = {"fi", "esac", "done"}
 SHELL_BRANCH = {"then", "else", "elif", "do"}
+CHAIN_OPERATORS = re.compile(r"[;&|]")
 FAILING_EXIT = re.compile(r"exit\s+[1-9]\d*")
 BODY_AFTER_KEYWORD = re.compile(r"\b(then|do)\s+\S|\b(fi|done|esac)\b")
 
@@ -503,7 +504,8 @@ def control_lines_only_fail(lines: list[str]) -> bool:
             if BODY_AFTER_KEYWORD.search(line):
                 return False
         elif depth and not (
-            words[0] in {"echo", "printf"} or FAILING_EXIT.fullmatch(line.strip())
+            (words[0] in {"echo", "printf"} and not CHAIN_OPERATORS.search(line))
+            or FAILING_EXIT.fullmatch(line.strip())
         ):
             return False
     return depth == 0
