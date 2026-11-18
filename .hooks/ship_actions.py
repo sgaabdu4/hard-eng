@@ -410,8 +410,7 @@ def push_checks(
             return returncode
         print(
             'Hard Eng: the full check is left to CI (shipping pre_push_checks "ci"); '
-            "the pushed commits passed the secret scan, the plan checks and the "
-            "changed-line text rules.",
+            "the pushed commits passed the secret scan.",
             flush=True,
         )
         # Mutation runs on installed dependencies, which the quick check installs.

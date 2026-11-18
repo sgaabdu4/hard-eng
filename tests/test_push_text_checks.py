@@ -66,6 +66,11 @@ def test_a_complete_plan_and_clean_lines_pass_without_any_gate_of_the_full_check
     repository: Path,
     completed_plan: str,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     work_branch(repository, completed_plan, "x = 1\n" + "line 1\n" * 29)
     assert push_check(runner, repository, monkeypatch) == 0
+    assert (
+        "the plan checks and the changed-line text rules passed"
+        in capsys.readouterr().out
+    )
