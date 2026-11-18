@@ -131,6 +131,8 @@ STASH_SUBJECT = re.compile(r"(?:WIP on|On) ([^:]+):")
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 MERGE_REPOSITORY = "merge.git"
 ANSWERS = "hard-eng-tidy-gh.json"
+REMOVED = "hard-eng-tidy-removed.log"
+REMOVED_DAYS = 30
 PROTECTED_BRANCHES = {"main", "master", "develop", "hard-eng/update"}
 
 
@@ -372,14 +374,12 @@ class Tidy:
         path = Path(record.get("worktree", ""))
         branch = record.get("branch", "").removeprefix("refs/heads/") or None
         head = record.get("HEAD", "")
-        if (
-            first
-            or "bare" in record
-            or "locked" in record
-            or "prunable" in record
-            or not path.is_dir()
-        ):
-            return "primary, bare, locked or missing"
+        if first or "bare" in record:
+            return "primary"
+        if "locked" in record:
+            return "locked"
+        if "prunable" in record or not path.is_dir():
+            return "its folder is gone"
         if same_place(path.resolve(), self.session):
             return "the session's worktree"
         if under(str(path.resolve()), codex_folder()):
@@ -439,6 +439,18 @@ class Tidy:
         local = next((reason for reason, kept in checks if kept()), None)
         return local or self.pr_reason(head, branch, merged())
 
+    def record_removal(self, what: str) -> None:
+        """What a removal drops is written first, so a lost branch or folder comes back from its commit within the pruning time."""
+        log = self.common / REMOVED
+        now = time.time()
+        kept: list[str] = []
+        with suppress(FileNotFoundError):
+            for row in log.read_text().splitlines():
+                stamp = row.partition(" ")[0]
+                if stamp.isdigit() and now - int(stamp) < REMOVED_DAYS * 86400:
+                    kept.append(row)
+        log.write_text("".join(f"{row}\n" for row in [*kept, f"{now:.0f} {what}"]))
+
     def remove_worktree(self, path: str, first: bool) -> None:
         from ship_actions import worktrees
 
@@ -464,6 +476,7 @@ class Tidy:
                 f"kept worktree {path}: its branch or commit changed during the checks"
             )
             return
+        self.record_removal(f"worktree {path} {record.get('HEAD')}")
         tidy_git(self.root, "worktree", "remove", "--force", path)
         note(f"removed worktree {path} at {record.get('HEAD')} (merged, idle, clean)")
         self.removed["worktrees"] += 1
@@ -526,6 +539,7 @@ class Tidy:
             if reason not in {"protected", "checked out"}:
                 note(f"kept branch {name}: {reason}")
             return
+        self.record_removal(f"branch {name} {tip}")
         tidy_git(self.root, "update-ref", "-d", ref, tip)
         note(f"removed branch {name} at {tip} (merged, idle)")
         self.removed["branches"] += 1
