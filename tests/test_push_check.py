@@ -778,3 +778,33 @@ def test_under_ci_a_gate_that_edits_a_tracked_file_fails_only_when_the_base_leav
     env = {"CI": "true"} | ({"PASS_EDITS": "1"} if edits else {})
     assert pushed.check(env=env) == int(fails)
     assert ("a gate changed pushed files: task.txt" in capfd.readouterr().out) is fails
+
+
+@pytest.mark.parametrize(
+    "row", ["no-base", "no-gates-file", "invalid-gates", "no-block", "absent-sha"]
+)
+def test_a_failed_base_lookup_in_ci_leaves_the_check_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, row: str
+) -> None:
+    from process_group import ci_edits, ci_owns_checks
+
+    root = project(tmp_path)
+    (root / "task.txt").write_text("edited")
+    base = {
+        "no-base": None,
+        "absent-sha": "f" * 40,
+        "no-gates-file": None,
+        "invalid-gates": None,
+        "no-block": None,
+    }[row]
+    if row in {"no-gates-file", "invalid-gates", "no-block"}:
+        gates = root / "hard-eng.gates.json"
+        if row == "no-gates-file":
+            gates.unlink()
+            (root / "other.txt").write_text("x")
+        else:
+            gates.write_text("{" if row == "invalid-gates" else '{"packages": []}')
+        base = commit(root, "base without a usable policy")
+    monkeypatch.setenv("CI", "true")
+    assert ci_owns_checks(root, base) is False
+    assert ci_edits(root, base) is False
