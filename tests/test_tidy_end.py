@@ -189,6 +189,21 @@ def log_message_option(separator: str, option: str) -> Fixture:
     return build
 
 
+def base_outside_refspec(primary: Path) -> None:
+    git(
+        primary,
+        "config",
+        "remote.origin.fetch",
+        "+refs/heads/session:refs/remotes/origin/session",
+    )
+    git(primary, "update-ref", "-d", "refs/remotes/origin/main")
+    git(primary, "switch", "-qc", "shipped")
+    (primary / "s.txt").write_text("shipped work\n")
+    commit(primary, "shipped work")
+    git(primary, "push", "-q", "origin", "shipped:main")
+    git(primary, "switch", "-q", "main")
+
+
 def orphan_legacy(primary: Path) -> str:
     git(primary, "switch", "-q", "--orphan", "legacy")
     (primary / "old.txt").write_text("legacy\n")
@@ -238,6 +253,7 @@ FIXTURES: dict[str, Fixture] = {
     "symbolic-branch": symbolic_branch,
     "reset-then-real-gc": reset_then_real_gc,
     "rewound": rewound,
+    "base-outside-refspec": base_outside_refspec,
     "log-form-feed-quiet": log_message_option("\x0c", "--quiet"),
     "log-line-separator-count": log_message_option("\u2028", "--count"),
     "graft-by-replace": graft_by_replace,

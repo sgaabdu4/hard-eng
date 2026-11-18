@@ -19,6 +19,7 @@ from tidy_guards import (
     TidyStop,
     cargo_target,
     expire_rescues,
+    foreign_folder,
     holds_repository,
     idle,
     idle_worktree,
@@ -288,15 +289,33 @@ class Tidy:
             self.root, "merge-base", "--independent", "--end-of-options", *lacking
         ).split()
 
+    def base_held(self, ignore: str) -> bool:
+        """Some local branch, remote-tracking ref or tag other than the one that goes holds the base tip that the checks used; a narrowed fetch refspec leaves none."""
+        held = tidy_git(
+            self.root,
+            "for-each-ref",
+            "--count=2",
+            "--format=%(refname)",
+            "--contains",
+            self.tip,
+            "refs/heads",
+            "refs/remotes",
+            "refs/tags",
+        )
+        return any(name != ignore for name in held.split())
+
     def destroy(
         self,
         what: str,
         commits: set[str],
         recheck: Callable[[], str | None],
+        ref: str,
         *command: str,
     ) -> str | None:
         """The one act that deletes: name every commit by a rescue ref, read the checks last, write the record, then remove."""
         dropped = self.rescue_tips(commits)
+        if not self.base_held(ref):
+            dropped = [*dropped, self.tip]
         save_commits(self.root, dropped, time.time())
         reason = recheck()
         if reason is None:
@@ -475,6 +494,7 @@ class Tidy:
             f"branch {name} {tip}",
             commits,
             lambda: self.branch_local(name, tip, self.checked_out(), {}),
+            ref,
             "update-ref",
             "-d",
             "--no-deref",
@@ -488,14 +508,35 @@ class Tidy:
         self.removed["branches"] += 1
         self.drop_config(name)
 
+    def config_names(self) -> set[str]:
+        """Every branch name that a `branch.<name>.<key>` config entry names."""
+        keys = tidy_run(
+            self.root, 120, "git", "config", "--name-only", "--get-regexp", r"^branch\."
+        ).stdout.split()
+        return {key[len("branch.") : key.rindex(".")] for key in keys}
+
     def drop_config(self, name: str) -> None:
-        """The branch is gone; its upstream and description go too, or the log names the command to run by hand."""
+        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, so another name that starts with `<name>]` keeps the section; any failure logs the command to run by hand."""
         section = f"branch.{name}"
         try:
-            cleaned = tidy_run(
-                self.root, 120, "git", "config", "--remove-section", section
-            )
-            failed = cleaned.returncode and "no such section" not in cleaned.stderr
+            others = {
+                line.split(" ")[1].removeprefix("refs/heads/")
+                for line in tidy_git(
+                    self.root,
+                    "for-each-ref",
+                    "--format=%(objectname) %(refname)",
+                    "refs/heads",
+                ).splitlines()
+            } | self.config_names()
+            failed = any(other.startswith(f"{name}]") for other in others)
+            if not failed:
+                done = tidy_run(
+                    self.root, 120, "git", "config", "--remove-section", section
+                )
+                failed = (
+                    bool(done.returncode and "no such section" not in done.stderr)
+                    or name in self.config_names()
+                )
         except ITEM_ERRORS:
             failed = True
         if failed:
@@ -532,6 +573,10 @@ class Tidy:
             (
                 "no cargo build folder",
                 lambda: not (path / "Cargo.toml").is_file() or not cargo_target(path),
+            ),
+            (
+                "the build folder is a link or a mount point",
+                lambda: foreign_folder(path, target),
             ),
             (
                 "git does not ignore it",

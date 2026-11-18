@@ -159,6 +159,15 @@ def inside(path: Path, names: set[str]) -> bool:
     )
 
 
+def foreign_folder(worktree: Path, target: Path) -> bool:
+    """The folder is a link, a mount point or on another device than its worktree, so removing it reaches something else."""
+    return (
+        target.is_symlink()
+        or os.path.ismount(target)
+        or target.stat().st_dev != worktree.stat().st_dev
+    )
+
+
 def holds_repository(folder: Path) -> bool:
     """A nested repository, with a `.git` entry or bare, is below the folder; the walk stops at the first one, follows no link, and counts an unreadable folder as one."""
     pending = [folder]
