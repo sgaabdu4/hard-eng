@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 
+import pytest
 import ui_proof
+from test_ui_quality import full_ship, ready
 from ui_proof import sha256
 
 HEAD = "h" * 40
@@ -73,3 +75,16 @@ def test_a_set_refreshed_at_one_width_with_a_finding_is_not_hidden_by_a_clean_se
     write_set(tmp_path, "b-current", HEAD)
     problem = ui_proof.measured_problem(tmp_path, HEAD, [IMAGE])
     assert problem is not None and "tap-size" in problem
+
+
+def test_an_older_capture_with_the_same_bytes_does_not_hide_the_fresh_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch)
+    folder = fixture.root / ".hard-eng/browser"
+    (folder / "aaa-390.png").write_bytes((folder / "after-390.png").read_bytes())
+    stale = json.loads((folder / "after-390.json").read_text())
+    (folder / "aaa-390.json").write_text(
+        json.dumps({**stale, "image": "aaa-390.png", "commit": "0" * 40})
+    )
+    ready(fixture.root, fixture)
