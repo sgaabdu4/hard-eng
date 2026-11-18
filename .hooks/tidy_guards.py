@@ -422,8 +422,7 @@ def save_commits(root: Path, commits: list[str], now: float) -> None:
     """One ref for each commit that a removal would leave unnamed, written together or not at all."""
     stamp = rescue_stamp(now)
     lines = "".join(
-        f"create {RESCUE}/{stamp}/{number} {commit}\n"
-        for number, commit in enumerate(commits)
+        f"create {RESCUE}/{stamp}/{commit} {commit}\n" for commit in commits
     )
     if lines:
         done = tidy_run(root, 120, "git", "update-ref", "--stdin", lines=lines)

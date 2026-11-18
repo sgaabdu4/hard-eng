@@ -320,6 +320,11 @@ class Tidy:
         ).split()
         return not all(self.content_merged(commit) for commit in unmerged)
 
+    def merged(self, state: dict[str, bool], head: str) -> bool:
+        if "merged" not in state:
+            state["merged"] = self.local_merged(head)
+        return state["merged"]
+
     def local_merged(self, head: str) -> bool:
         ancestor = tidy_run(
             self.root, 120, "git", "merge-base", "--is-ancestor", head, self.tip
@@ -404,6 +409,18 @@ class Tidy:
     def worktree_reason(
         self, record: dict[str, str], main: Path, first: bool
     ) -> str | None:
+        state: dict[str, bool] = {}
+        local = self.worktree_local(record, main, first, state)
+        return local or self.pr_reason(
+            record.get("HEAD", ""),
+            record.get("branch", "").removeprefix("refs/heads/") or None,
+            self.merged(state, record.get("HEAD", "")),
+        )
+
+    def worktree_local(
+        self, record: dict[str, str], main: Path, first: bool, state: dict[str, bool]
+    ) -> str | None:
+        """Every check that reads the disk or Git; the removal runs them again after the GitHub answers."""
         from ship_actions import work_left
 
         path = Path(record.get("worktree", ""))
@@ -419,13 +436,6 @@ class Tidy:
             return "the session's worktree"
         if under(str(path.resolve()), codex_folder()):
             return "kept by the Codex app"
-        state: dict[str, bool] = {}
-
-        def merged() -> bool:
-            if "merged" not in state:
-                state["merged"] = self.local_merged(head)
-            return state["merged"]
-
         folder = Path(
             tidy_git(path, "rev-parse", "--path-format=absolute", "--git-dir").strip()
         )
@@ -439,7 +449,10 @@ class Tidy:
             ("its git folder holds an unknown entry", lambda: found is None),
             (
                 "not merged",
-                lambda: not merged() and self.fresh("unmerged", f"{branch}@{head}"),
+                lambda: (
+                    not self.merged(state, head)
+                    and self.fresh("unmerged", f"{branch}@{head}")
+                ),
             ),
             ("a stash names it", lambda: self.stashed(branch, head)),
             (
@@ -471,8 +484,7 @@ class Tidy:
             ),
             ("a process is inside", lambda: self.worktree_busy(path)),
         ]
-        local = next((reason for reason, kept in checks if kept()), None)
-        return local or self.pr_reason(head, branch, merged())
+        return next((reason for reason, kept in checks if kept()), None)
 
     def record_removal(self, what: str) -> None:
         """What a removal drops is written first, so a lost branch or folder comes back from its commit within the pruning time."""
@@ -499,18 +511,19 @@ class Tidy:
             if not reason.startswith(("primary", "the session")):
                 note(f"kept worktree {path}: {reason}")
             return
-        now = next(
-            (r for r in worktrees(self.root) if r.get("worktree") == path),
-            dict[str, str](),
-        )
-        if (now.get("HEAD"), now.get("branch")) != (
-            record.get("HEAD"),
-            record.get("branch"),
-        ):
-            note(
-                f"kept worktree {path}: its branch or commit changed during the checks"
+
+        def last() -> str | None:
+            now = next(
+                (r for r in worktrees(self.root) if r.get("worktree") == path),
+                dict[str, str](),
             )
-            return
+            if (now.get("HEAD"), now.get("branch")) != (
+                record.get("HEAD"),
+                record.get("branch"),
+            ):
+                return "its branch or commit changed during the checks"
+            return self.worktree_local(record, main, first, {})
+
         branch = record.get("branch", "").removeprefix("refs/heads/") or None
         folder = Path(
             tidy_git(
@@ -526,7 +539,7 @@ class Tidy:
         late = self.destroy(
             f"worktree {path} {record.get('HEAD')}",
             commits,
-            lambda: None,
+            last,
             "worktree",
             "remove",
             "--force",
@@ -550,13 +563,14 @@ class Tidy:
                 note(f"kept worktree {path}: {error}")
 
     def branch_reason(self, name: str, tip: str, checked_out: set[str]) -> str | None:
-        logged = reflog_time(self.root, f"refs/heads/{name}")
         state: dict[str, bool] = {}
+        local = self.branch_local(name, tip, checked_out, state)
+        return local or self.pr_reason(tip, name, self.merged(state, tip))
 
-        def merged() -> bool:
-            if "merged" not in state:
-                state["merged"] = self.local_merged(tip)
-            return state["merged"]
+    def branch_local(
+        self, name: str, tip: str, checked_out: set[str], state: dict[str, bool]
+    ) -> str | None:
+        logged = reflog_time(self.root, f"refs/heads/{name}")
 
         checks: list[tuple[str, Callable[[], bool]]] = [
             ("protected", lambda: name in self.protected),
@@ -567,7 +581,10 @@ class Tidy:
             ),
             (
                 "not merged",
-                lambda: not merged() and self.fresh("unmerged", f"{name}@{tip}"),
+                lambda: (
+                    not self.merged(state, tip)
+                    and self.fresh("unmerged", f"{name}@{tip}")
+                ),
             ),
             ("a stash names it", lambda: self.stashed(name, None)),
             (
@@ -575,8 +592,7 @@ class Tidy:
                 lambda: self.reflog_holds_work(self.root, tip, [f"refs/heads/{name}"]),
             ),
         ]
-        local = next((reason for reason, kept in checks if kept()), None)
-        return local or self.pr_reason(tip, name, merged())
+        return next((reason for reason, kept in checks if kept()), None)
 
     def checked_out(self) -> set[str]:
         from ship_actions import worktrees
@@ -590,8 +606,6 @@ class Tidy:
         tip, _, ref = line.partition(" ")
         name = ref.removeprefix("refs/heads/")
         reason = self.branch_reason(name, tip, self.checked_out())
-        if reason is None and name in self.checked_out():
-            reason = "checked out"
         if reason is not None:
             if reason not in {"protected", "checked out"}:
                 note(f"kept branch {name}: {reason}")
@@ -600,7 +614,7 @@ class Tidy:
         late = self.destroy(
             f"branch {name} {tip}",
             commits,
-            lambda: None,
+            lambda: self.branch_local(name, tip, self.checked_out(), {}),
             "update-ref",
             "-d",
             ref,
@@ -683,10 +697,10 @@ class Tidy:
                 note(f"kept build folder of {record.get('worktree')}: {error}")
 
     def run(self) -> None:
-        expire_rescues(self.root, time.time())
         self.remove_worktrees()
         self.remove_branches()
         self.trim_targets()
+        expire_rescues(self.root, time.time())
 
 
 def tidy(root: Path) -> None:

@@ -10,7 +10,15 @@ import pytest
 import stale_updates
 import tidy_guards
 from conftest import OLD, age_branch, commit, git, git_path
-from test_tidy import add_vendor, age, branches, linked, sparse_worktree, tidy
+from test_tidy import (
+    add_vendor,
+    age,
+    branches,
+    fake_gh,
+    linked,
+    sparse_worktree,
+    tidy,
+)
 
 
 def diverge(primary: Path, how: str) -> None:
@@ -320,3 +328,21 @@ def test_tidy_tests_what_the_removal_deletes_in_every_untracked_or_ignored_path(
         (path / "node_modules/pkg/edited.js").write_text("edited a moment ago\n")
     tidy(primary)
     assert path.is_dir() == kept
+
+
+@pytest.mark.parametrize("name", ["late.txt", "tracked.txt"])
+def test_tidy_keeps_a_worktree_that_gets_work_while_it_waits_for_github(
+    primary: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    waiting = linked(primary, "waiting")
+    git(waiting, "push", "-q", "origin", "waiting")
+    real = stale_updates.tidy_gh
+
+    def slow(cwd: Path, *arguments: str) -> list[object] | None:
+        (waiting / name).write_text("written while gh answered\n")
+        return real(cwd, *arguments)
+
+    fake_gh(primary.parent, monkeypatch, {"open": {}})
+    monkeypatch.setattr(stale_updates, "tidy_gh", slow)
+    tidy(linked(primary, "session"))
+    assert (waiting / name).read_text() == "written while gh answered\n"
