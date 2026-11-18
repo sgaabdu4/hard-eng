@@ -423,21 +423,49 @@ def test_a_branch_whose_name_ends_the_section_name_of_a_kept_branch_keeps_that_s
     assert git(primary, "config", "branch.a.foo.description").startswith("notes")
 
 
-def test_a_section_that_the_cleanup_could_not_remove_is_reported(
+def test_a_section_that_git_refuses_to_remove_is_reported_with_per_key_commands(
     primary: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     merged_branch(primary, "a]b")
     git(primary, "config", "branch.a]b.description", "old notes")
     tidy(linked(primary, "session"))
+    said = capsys.readouterr().err
     assert "a]b" not in branches(primary)
-    shown = subprocess.run(
-        ["git", "config", "--get", "branch.a]b.description"],
-        cwd=primary,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert shown.stdout == "" or "settings stay" in capsys.readouterr().err
+    assert "git config --unset-all 'branch.a]b.description'" in said
+    assert "--remove-section" not in said
+
+
+def test_a_collision_says_nothing_when_the_removed_branch_has_no_settings(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    merged_branch(primary, "a")
+    git(primary, "branch", "a]b", "main")
+    git(primary, "config", "branch.a]b.description", "notes that exist nowhere else")
+    tidy(linked(primary, "session"))
+    said = capsys.readouterr().err
+    assert "a" not in branches(primary)
+    assert "settings stay" not in said
+    assert git(primary, "config", "branch.a]b.description").startswith("notes")
+
+
+def test_a_build_folder_on_another_device_than_its_worktree_is_foreign(
+    primary: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = linked(primary, "work")
+    target = make_target(path)
+    assert not tidy_guards.foreign_folder(path, target)
+    original = Path.stat
+
+    def other_device(self: Path, *, follow_symlinks: bool = True) -> os.stat_result:
+        found = original(self, follow_symlinks=follow_symlinks)
+        if self.name != "target":
+            return found
+        fields = list(found)
+        fields[2] += 1
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(Path, "stat", other_device)
+    assert tidy_guards.foreign_folder(path, target)
 
 
 @pytest.mark.parametrize("how", ["symlink", "mount-point"])

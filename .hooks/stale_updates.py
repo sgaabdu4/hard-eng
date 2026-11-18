@@ -516,10 +516,11 @@ class Tidy:
         return done.stdout.split()
 
     def drop_config(self, name: str) -> None:
-        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, so another name that starts with `<name>]` keeps the section and the keys are named for a hand cleanup; any failure logs the command to run by hand."""
+        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, and refuses `--remove-section` for a name that holds one, so such a name, or a collision with another name that starts with `<name>]`, is left to per-key commands for the removed branch's own keys; any failure logs a command to run by hand."""
         section = f"branch.{name}"
         try:
             keys = self.config_keys()
+            own = [key for key in keys if key[len("branch.") : key.rindex(".")] == name]
             others = {
                 line.split(" ")[1].removeprefix("refs/heads/")
                 for line in tidy_git(
@@ -529,16 +530,8 @@ class Tidy:
                     "refs/heads",
                 ).splitlines()
             } | {key[len("branch.") : key.rindex(".")] for key in keys}
-            if any(other.startswith(f"{name}]") for other in others):
-                own = [
-                    key for key in keys if key[len("branch.") : key.rindex(".")] == name
-                ]
-                note(
-                    f"branch {name} is gone but its settings stay, because another name starts with `{name}]` and `--remove-section` would remove that one too; run "
-                    + "; ".join(
-                        f"`git config --unset-all {shlex.quote(key)}`" for key in own
-                    )
-                )
+            if "]" in name or any(other.startswith(f"{name}]") for other in others):
+                self.advise_unset(name, own)
                 return
             done = tidy_run(
                 self.root, 120, "git", "config", "--remove-section", section
@@ -554,6 +547,16 @@ class Tidy:
         if failed:
             note(
                 f"branch {name} is gone but its settings stay; run `git config --remove-section {shlex.quote(section)}` before you reuse the name"
+            )
+
+    def advise_unset(self, name: str, own: list[str]) -> None:
+        """Per-key commands touch only the removed branch's section; no own key means nothing stays and nothing is said."""
+        if own:
+            note(
+                f"branch {name} is gone but its settings stay, because Git cannot remove a section of that name safely; run "
+                + "; ".join(
+                    f"`git config --unset-all {shlex.quote(key)}`" for key in own
+                )
             )
 
     def remove_branches(self) -> None:
