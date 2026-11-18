@@ -22,6 +22,7 @@ from tidy_guards import (
     idle,
     idle_worktree,
     inside,
+    logged_ids,
     note,
     open_paths,
     paused_branches,
@@ -264,24 +265,27 @@ class Tidy:
                     f"logs/{ref}",
                 ).strip()
             )
-            with suppress(FileNotFoundError):
-                for line in log.read_text().splitlines():
-                    commits |= set(line.split(" ")[:2])
+            commits |= logged_ids(log)
         return {commit for commit in commits if commit.strip("0")}
 
     def unreachable(self, commits: set[str], *excluded: str) -> list[str]:
         """The named commits that no excluded revision contains; rev-list walks, because --no-walk ignores --not."""
         if not commits:
             return []
-        walked = tidy_git(self.root, "rev-list", *commits, "--not", *excluded)
-        return [commit for commit in walked.split() if commit in commits]
+        listed = "\n".join([*sorted(commits), "--not", *excluded]) + "\n"
+        done = tidy_run(self.root, 120, "git", "rev-list", "--stdin", lines=listed)
+        if done.returncode:
+            raise TidyStop(f"`git rev-list` exited {done.returncode}")
+        return [commit for commit in done.stdout.split() if commit in commits]
 
     def rescue_tips(self, commits: set[str]) -> list[str]:
         """One tip for each line of commits that the base tip lacks; a ref keeps its ancestors."""
         lacking = self.unreachable(commits, self.tip)
         if not lacking:
             return []
-        return tidy_git(self.root, "merge-base", "--independent", *lacking).split()
+        return tidy_git(
+            self.root, "merge-base", "--independent", "--end-of-options", *lacking
+        ).split()
 
     def destroy(
         self,
@@ -479,6 +483,7 @@ class Tidy:
         if late is not None:
             note(f"kept branch {name}: {late}")
             return
+        tidy_run(self.root, 120, "git", "config", "--remove-section", f"branch.{name}")
         note(f"removed branch {name} at {tip} (merged, idle)")
         self.removed["branches"] += 1
 
