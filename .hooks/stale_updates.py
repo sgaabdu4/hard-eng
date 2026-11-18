@@ -509,11 +509,18 @@ class Tidy:
         self.drop_config(name)
 
     def config_keys(self) -> list[str]:
-        """Every `branch.<name>.<key>` config key."""
+        """Every `branch.<name>.<key>` config key; NUL separated, because a hand-edited subsection may hold a space."""
         done = tidy_run(
-            self.root, 120, "git", "config", "--name-only", "--get-regexp", r"^branch\."
+            self.root,
+            120,
+            "git",
+            "config",
+            "-z",
+            "--name-only",
+            "--get-regexp",
+            r"^branch\.",
         )
-        return done.stdout.split()
+        return [key for key in done.stdout.split("\0") if "." in key]
 
     def drop_config(self, name: str) -> None:
         """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, and refuses `--remove-section` for a name that holds one, so such a name, or a collision with another name that starts with `<name>]`, is left to per-key commands for the removed branch's own keys; any failure logs a command to run by hand."""

@@ -491,3 +491,19 @@ def test_tidy_keeps_a_build_folder_that_is_a_link_or_a_mount_point(
     tidy(linked(primary, "session"))
     assert real.is_dir() and (path / "target").exists()
     assert "link or a mount point" in capsys.readouterr().err
+
+
+def test_a_config_section_with_a_space_in_its_name_does_not_hide_a_collision(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    merged_branch(primary, "a")
+    git(primary, "config", "branch.a.description", "notes of a")
+    git(primary, "branch", "a]b", "main")
+    git(primary, "config", "branch.a]b.description", "notes that exist nowhere else")
+    git(primary, "config", "branch.feature old name.description", "hand edited")
+    tidy(linked(primary, "session"))
+    said = capsys.readouterr().err
+    assert "a" not in branches(primary)
+    assert "--remove-section" not in said
+    assert "git config --unset-all branch.a.description" in said
+    assert git(primary, "config", "branch.a]b.description").startswith("notes")
