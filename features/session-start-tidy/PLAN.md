@@ -1,0 +1,95 @@
+# Remove merged, unused worktrees and branches in the session-start background run
+
+Status: Ready
+
+## Outcome + scope
+
+The background run that each session start already launches also removes merged, idle worktrees and merged local branches of the same repository, and the idle Rust build folders of kept worktrees. It uses no model tokens and adds no hook time. Non-goals: remote branch deletion; a GitHub repository setting change; a new command or agent text; worktrees of other repositories; checkouts with no installed source revision (the Hard Eng source repository and installs from an uncommitted copy), because a launch there would add hook time; Windows hosts for the worktree and build folder steps.
+
+## Sources + coverage
+
+Sources: N/A — the user's request in this task is the only source; the coordinator's constraints restate it with the maintainer's settled rules.
+Deliverables: None
+
+## Repository context
+
+Owners: `.hooks/update_runner.py` (`start_update` launches the detached `hard-eng.py update`; `run_update` holds the per-repository lock, runs `update --apply`, then `remove_stale_candidates`; `record_result` writes `.hard-eng/update-result.txt`, which the next session start prints after `Last:`; the process output goes to `.hard-eng/update.log`). `.hooks/stale_updates.py` (removes ended update candidates and stops idle file watchers; owns the 24 hour idle rule in `stop_idle_watcher`). `.hooks/ship_actions.py` (`cleanup_guard`, `unchanged_checkout`, `placed_by_hard_eng`, `COMPILED_HOOKS`: the checks that a task worktree holds no work before `ship cleanup` removes it). `.hooks/update_runner.py::update_base` and `fetch_base` (the base branch and its fetch). `.hooks/shipping.py::origin_repository` and `gh` (GitHub repository name and calls). `.hooks/process_group.py::INSTALL_FOLDERS` (install folders). README lines on the session start hook. Git 2.56: `git worktree remove` without `--force` refuses a worktree with an initialized submodule; `--force` removes it and its submodule Git folder (tried on a scratch repository).
+Same cause: N/A — new behavior; no earlier fix. Searched `.hooks` for `worktree remove`, `update-ref -d` and `branch -d`: only `ship cleanup` (one verified task) and `remove_stale_candidates` (Hard Eng's own candidates) remove worktrees or branches.
+Single source: worktree listing has two copies, `stale_updates.registered_worktrees` (newline form) and `ship_actions.worktrees` (`-z` form); merged into `ship_actions.worktrees`, which the post-checkout and pre-push paths already load, and `stale_updates`, `update_pr` and `update_runner.free_step` import it at the point of use. The "worktree holds no work" list moves out of `ship_actions.unchanged_checkout` into one function that ship cleanup and the tidy both call; the tidy passes its allowed generated folders. The 24 hour idle rule moves out of `stop_idle_watcher` into one function that the watcher and the tidy both call. Searched `.hooks` for `worktree list`, `--git-path index`, `24 * 3600` and `!! `; no other copies.
+
+## Decisions + authorization
+
+Blockers: None.
+Handoff: Approval
+Authority: Autonomous — the user asked for a deterministic, token-free tidy at the very start of a session; design is the maintainer agent's call. This task is plan-only: commit the plan, no push, no code.
+
+Design, settled:
+
+- Where: `run_update`, after the update child ends and `remove_stale_candidates` runs, still under the repository lock. `start_update` and every hook path stay unchanged, so no hook does new work. The tidy runs even when the update child fails.
+- Report: the tidy prints one line per item, kept or removed with the reason, to the run's output, which is already `.hard-eng/update.log`. Only when it removed something, it adds one line to the result file, which the next session start already prints: `Tidy: removed N worktrees, N branches, N build folders (.hard-eng/update.log).` The line never holds the word `failed`, so the freshness and Stop notes read it as before. Nothing removed → no line, so no tokens.
+- Base: `update_base` (shipping base, else origin's default branch), fetched with `fetch_base`. A failed fetch stops the tidy; the log says why.
+- Merged: the head is an ancestor of `origin/<base>`, or `git cherry origin/<base> <head>` lists no `+` commit, or a merged PR of the origin repository has that exact head commit (one `gh pr list --state merged` call, only when the Git tests fail).
+- Open PR: one `git ls-remote --heads origin`. A branch that is still on origin needs an answer from `gh pr list --state open`; an open PR with that head name keeps it. No gh answer (missing, failed, not GitHub) → every branch still on origin is kept.
+- Idle: 24 hours, the existing rule. A worktree's index and HEAD reflog are older than that; a branch's newest reflog entry is older than that; no reflog → kept. Status runs with `--no-optional-locks`, so the tidy never refreshes the index it measures.
+- A worktree is removed only when all hold: not the session's worktree, not the primary checkout, not bare, not locked, not prunable; not inside the Codex app's worktree folder (`$CODEX_HOME/worktrees`, default `~/.codex/worktrees`), because the Codex app keeps its own record and archives its own worktrees; idle; HEAD merged; no stash whose subject names its branch or whose first parent is its HEAD; branch (if any) has no open PR; no process has its current folder or an open file inside it; status shows no change and no untracked file; ignored entries are only Hard Eng's own placements, `.hard-eng/` without a non-empty `browser/` folder, `__pycache__`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, the `INSTALL_FOLDERS`, and a `target/` that holds cargo's `CACHEDIR.TAG`. Anything else, such as `build/`, `dist/` or `.env` files, keeps it. No recovery copies.
+- Submodules: each initialized submodule must be clean, at the recorded commit, with no stash, and `git rev-list HEAD --branches --not --remotes` prints nothing in it. Then `git worktree remove --force` removes the worktree and its submodule Git folders.
+- Checks repeat right before removal, as `ship cleanup` does. A branch goes with `git update-ref -d refs/heads/<name> <tip>`, so a moved tip is never deleted.
+- Branches: a local branch is deleted only when merged, idle, not checked out in any worktree, without an open PR, without a stash that names it, and not `main`, `master`, `develop`, the base, origin's default branch or `hard-eng/update` (the updater owns it).
+- Busy check: Linux reads `/proc/<pid>/cwd` and `/proc/<pid>/fd/*`; macOS runs `lsof -n -P -w -F n` once. Neither available, or a non-POSIX host → no worktree or build folder is removed; branches without a worktree still are.
+- Rust: in each kept worktree except the session's own (the primary checkout included), `target/` goes when `Cargo.toml` is at the worktree root, `target/CACHEDIR.TAG` holds cargo's signature, Git ignores `target/` and tracks nothing in it, the worktree is idle, no folder in the top two levels of `target/` changed in 24 hours, and no process is inside the worktree. Cargo rebuilds it. A removed worktree takes its `target/` with it.
+- Remote branches: not deleted, and setup does not turn on GitHub's "automatically delete head branches". That setting needs admin rights, changes the repository for every person and tool, and GitHub's page says only protection rules stop it: an unprotected `develop` would go when a `develop` → `main` release PR merges. `ship cleanup` already deletes the remote task branch after a verified merge. A remote branch costs no local disk.
+- A machine storage tool outside Hard Eng may also remove build folders. The tidy depends on no such tool; whichever runs first removes, and the other finds nothing.
+- Code home: the tidy goes in `.hooks/stale_updates.py` (cleanup of what work left behind), so no new `.hooks` module adds work to each config load of an installed project. Tests go in a new `tests/test_tidy.py`, since `tests/test_update_runner.py` is at 988 lines.
+
+## Acceptance + steps
+
+Each new test fails on the base revision (no tidy exists) and passes after, unless the line says otherwise.
+
+- [ ] A merged, clean, idle worktree and its branch are removed; the session's worktree, the primary checkout and their branches stay → `tests/test_tidy.py::test_tidy_removes_a_merged_idle_worktree_and_its_branch`: parametrized over a sibling folder (T3 Code layout) and a folder inside the primary checkout (`.claude/worktrees/<name>`, Claude layout); after the run the folder, its admin folder and `refs/heads/<name>` are gone.
+- [ ] The primary checkout is kept even when it is merged, clean and idle → `tests/test_tidy.py::test_tidy_keeps_the_primary_checkout`.
+- [ ] The session's current worktree is kept even when merged, clean and idle → `tests/test_tidy.py::test_tidy_keeps_the_current_worktree`.
+- [ ] A worktree with a process inside is kept: one case with a process whose current folder is inside, one with a process that holds a file open inside → `tests/test_tidy.py::test_tidy_keeps_a_worktree_with_a_process_inside`: starts real processes and reads the real `lsof` or `/proc`, so it proves the busy check on the host that runs it (CI covers Linux, the Mac run covers macOS).
+- [ ] A dirty worktree is kept: one case with a changed tracked file, one with an untracked file, one with an unknown ignored file → `tests/test_tidy.py::test_tidy_keeps_a_worktree_with_changes`.
+- [ ] Known generated folders do not keep a worktree; `.hard-eng/browser/` output does → `tests/test_tidy.py::test_tidy_ignores_only_known_generated_folders`.
+- [ ] A worktree that a stash refers to is kept → `tests/test_tidy.py::test_tidy_keeps_a_worktree_that_a_stash_names`.
+- [ ] A worktree active in the last 24 hours is kept, including a new worktree at the base tip → `tests/test_tidy.py::test_tidy_keeps_a_recently_used_worktree`.
+- [ ] Locked worktrees and worktrees in the Codex app's folder are kept → `tests/test_tidy.py::test_tidy_keeps_locked_and_codex_app_worktrees`.
+- [ ] A clean merged worktree with an initialized submodule is removed; one whose submodule has a local commit not on a remote is kept → `tests/test_tidy.py::test_tidy_removes_a_submodule_worktree_only_when_the_submodule_holds_no_work`.
+- [ ] An unmerged branch is kept, with and without a worktree → `tests/test_tidy.py::test_tidy_keeps_an_unmerged_branch`.
+- [ ] Rebase-merged and squash-merged branches count as merged: `git cherry` for the rebase case, a fake gh merged PR with the same head for the squash case → `tests/test_tidy.py::test_tidy_deletes_rebase_and_squash_merged_branches`.
+- [ ] A merged branch with an open PR is kept; a merged branch still on origin is kept when gh gives no answer → `tests/test_tidy.py::test_tidy_keeps_a_branch_with_an_open_pr_or_no_pr_answer`.
+- [ ] `main`, `master`, `develop`, the base, origin's default branch and `hard-eng/update` are kept even when merged and idle → `tests/test_tidy.py::test_tidy_keeps_protected_branches`.
+- [ ] A worktree of another repository is never touched → `tests/test_tidy.py::test_tidy_touches_only_its_own_repository`.
+- [ ] Rust: an idle kept worktree loses its cargo `target/`; a busy one, the session's own and a `target/` without cargo's tag keep it → `tests/test_tidy.py::test_tidy_removes_idle_cargo_build_folders_only`.
+- [ ] The result file gets one tidy line with counts only when something was removed, and the freshness note still reads that result as a success → `tests/test_tidy.py::test_tidy_reports_one_line_only_when_it_removed_something`.
+- [ ] A failed fetch or a failed update child does not block the session; the tidy logs and stops or still runs → `tests/test_tidy.py::test_tidy_runs_after_a_failed_update_and_stops_on_a_failed_fetch`.
+- [ ] Journey: a real `hard-eng.py session claude` run in an installed fixture starts the background run, the merged worktree is gone after it ends, and the next session start prints the tidy line → `tests/test_tidy.py::test_session_start_tidies_in_the_background_and_reports_at_the_next_start`.
+- [ ] Ship cleanup keeps its refusals after the shared "no work" function moves → `tests/test_ship_cleanup.py::test_the_cleanup_refusal_names_every_kept_path_and_the_step` and `tests/test_ship_cleanup.py::test_cleanup_ignores_only_what_hard_eng_put_in_the_worktree` pass unchanged (existing; pass before and after).
+- [ ] Hook timing unchanged → `tests/test_gate_speed.py::test_the_session_start_modules_compile_no_more_patterns_at_import` (existing limit, unchanged) and `tests/test_tidy.py::test_session_start_loads_no_tidy_module` (passes before and after: a guard that fails if the session path imports `stale_updates` or `ship_actions`). Plus measured numbers: session start, a clean Stop and a Stop after one source edit, base against branch, compiled modules on both sides, alternating runs, medians; the imports of each hook (`-X importtime`), Python calls of a session start, and Python calls of one config load in an installed fixture. Any increase is offset in this change before Complete.
+
+Steps, one commit each: (1) merge the worktree listing copies into `ship_actions.worktrees`; (2) move the "no work" list into one shared function; (3) move the 24 hour idle rule into one function; (4) add the tidy to `stale_updates.py` with its tests; (5) call it from `run_update` and add the result line; (6) README: the session start lines (119 and the hook table) name the tidy; (7) measurements and offsets.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: develop `e2c41fe7`: the `Hard Eng` and `Canary` workflows passed on that commit. 2026-11-18, the affected test files on that commit (`tests/test_update_runner.py`, `tests/test_ship_cleanup.py`, `tests/test_gate_speed.py`, `tests/test_agent_hooks.py`, `tests/test_ship_actions.py`, `tests/test_submodules.py`): `250 passed in 172.33s`, exit 0.
+Execution: one Sonnet builder in this worktree, steps in order; step 4 starts with the busy check and the merged test, the main doubts. The brief lists every static gate of `hard-eng.gates.json` (format, lint, complexity, annotations, types, dead code, duplicates, security with HE-HOT-PATH) and HE-FILE-LENGTH. Then an Opus reviewer on the candidate commit, then the real service run, the timing runs and the Complete gate once.
+
+## Risks + recovery
+
+Data loss is the material risk. Recovery: every rule keeps a worktree or branch when a check cannot answer; checks repeat right before removal; branch deletion names the expected tip. A deleted local branch whose tip was merged is still on the base; its name comes back with `git branch <name> <tip>` from the log line. A removed `target/` is rebuilt by cargo. A wrong removal found later → revert the tidy call in `run_update` (one line) and fix the rule with a failing test first.
+
+## ux_reference
+
+N/A — no visible UI; the only output is one plain text line in the session start report.
+
+## Verification
+
+Result: Pending
+Evidence: Pending — the named tests, the timing numbers and the real service run.
+E2E: Required — `tests/test_tidy.py::test_session_start_tidies_in_the_background_and_reports_at_the_next_start`: a real session start hook, a real detached run and the next start's report.
+Real service: Required — GitHub: `git ls-remote --heads origin`, `git fetch origin <base>`, `gh pr list --state open` and `gh pr list --state merged` with the tidy's arguments, one time each against the public Hard Eng repository (read-only calls), and the replies compared with the test fakes in the fields the tidy reads (`headRefName`, `headRefOid`).
+Retro: Pending — at task end, per HE Learn.
+
+Delivery target: Merge
+Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
