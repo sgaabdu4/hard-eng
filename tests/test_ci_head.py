@@ -10,9 +10,9 @@ from conftest import commit, git, init
 EVENTS = ["pull_request", "push", "workflow_dispatch", "schedule"]
 
 
-def merge_commit(tmp_path: Path) -> tuple[Path, str, str, str]:
+def merge_commit(tmp_path: Path, name: str = "repo") -> tuple[Path, str, str, str]:
     """A pull request run starts on the merge commit of the base and the head."""
-    root = tmp_path / "repo"
+    root = tmp_path / name
     init(root)
     (root / "a.txt").write_text("base\n")
     base = commit(root, "base")
@@ -109,3 +109,68 @@ def test_the_workspace_repository_at_another_commit_is_still_refused(
         require_ci_base(base, workspace)
     with pytest.raises(ValueError, match="GITHUB_SHA"):
         require_ci_base(base, workspace / ".")
+
+
+OWN = "https://github.com/owner/hard-eng.git"
+
+
+def in_job_repository(
+    monkeypatch: pytest.MonkeyPatch, workspace: Path, sha: str
+) -> None:
+    in_ci(monkeypatch, "push", sha, workspace)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/hard-eng")
+
+
+def test_a_checkout_with_a_path_below_the_workspace_is_still_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`actions/checkout` with `path:` puts the job's repository in a subfolder of the workspace."""
+    workspace = tmp_path / "work"
+    (workspace / "src").mkdir(parents=True)
+    root, base, _, merge = merge_commit(workspace / "src", "hard-eng")
+    git(root, "remote", "add", "origin", OWN)
+    in_job_repository(monkeypatch, workspace, merge)
+    require_ci_base(base, root)
+    git(root, "checkout", "-q", "--detach", "HEAD~1")
+    with pytest.raises(ValueError, match="GITHUB_SHA"):
+        require_ci_base(base, root)
+
+
+def test_a_package_below_the_workspace_repository_is_still_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, base, _, merge = merge_commit(tmp_path)
+    package = workspace / "packages" / "app"
+    package.mkdir(parents=True)
+    in_job_repository(monkeypatch, workspace, merge)
+    git(workspace, "checkout", "-q", "--detach", "HEAD~1")
+    with pytest.raises(ValueError, match="GITHUB_SHA"):
+        require_ci_base(base, package)
+
+
+def test_another_repository_inside_the_workspace_is_judged_normally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, base, _, merge = merge_commit(tmp_path)
+    second = workspace / "vendor" / "tool"
+    second.parent.mkdir()
+    init(second)
+    (second / "a.txt").write_text("a\n")
+    commit(second, "a")
+    git(second, "remote", "add", "origin", "https://github.com/owner/tool.git")
+    in_job_repository(monkeypatch, workspace, merge)
+    require_ci_base(base, second)
+
+
+def test_a_clone_of_the_job_repository_outside_the_workspace_is_judged_normally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, base, _, merge = merge_commit(tmp_path)
+    git(workspace, "remote", "add", "origin", OWN)
+    clone = tmp_path / "elsewhere" / "clone"
+    clone.parent.mkdir()
+    git(tmp_path, "clone", "-q", str(workspace), str(clone))
+    git(clone, "remote", "set-url", "origin", OWN)
+    git(clone, "checkout", "-q", "--detach", "HEAD~1")
+    in_job_repository(monkeypatch, workspace, merge)
+    require_ci_base(base, clone)
