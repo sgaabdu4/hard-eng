@@ -346,8 +346,10 @@ def read_private(gitdir: Path) -> Private | None:
             return None
     if not INFO_FILES >= set(relative_files(gitdir / "info")):
         return None
-    for name in relative_files(gitdir / "refs"):
-        tip = (gitdir / "refs" / name).read_text().strip()
+    files = [gitdir / "ORIG_HEAD"] if (gitdir / "ORIG_HEAD").exists() else []
+    files += [gitdir / "refs" / name for name in relative_files(gitdir / "refs")]
+    for file in files:
+        tip = file.read_text().strip()
         if OBJECT_ID.fullmatch(tip) is None:
             return None
         tips.append(tip)
