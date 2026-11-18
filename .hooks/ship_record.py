@@ -28,7 +28,47 @@ def is_release(pull: Pull, base: str) -> bool:
     return pull.head_ref == base and pull.base_ref != base
 
 
-def route(pull: Pull, base: str) -> str | None:
+def _contains(root: Path, ancestor: str, commit: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", ancestor, commit],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def _remote_tip(root: Path, branch: str) -> str | None:
+    done = subprocess.run(
+        [
+            "git",
+            "rev-parse",
+            "--verify",
+            "-q",
+            f"refs/remotes/origin/{branch}^{{commit}}",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def is_join(root: Path, pull: Pull, default: str) -> bool:
+    """The head holds the default branch's tip, which the base lacks; local refs, so fetch first."""
+    tip, base_tip = _remote_tip(root, default), _remote_tip(root, pull.base_ref)
+    return (
+        tip is not None
+        and base_tip is not None
+        and _contains(root, tip, pull.head_sha)
+        and not _contains(root, tip, base_tip)
+    )
+
+
+def route(root: Path, pull: Pull, base: str) -> str | None:
     """release, hotfix or join when the pull request moves work between the base and the default branch; else None."""
     default = pull.default_branch
     if is_release(pull, base) and default in (None, pull.base_ref):
@@ -37,20 +77,20 @@ def route(pull: Pull, base: str) -> str | None:
         return None
     if pull.base_ref == default and pull.head_ref.startswith("hotfix/"):
         return "hotfix"
-    if pull.head_ref == default and pull.base_ref == base:
+    if pull.base_ref == base and is_join(root, pull, default):
         return "join"
     return None
 
 
-def base_matches(pull: Pull, base: str) -> bool:
-    return pull.base_ref == base or route(pull, base) is not None
+def base_matches(root: Path, pull: Pull, base: str) -> bool:
+    return pull.base_ref == base or route(root, pull, base) is not None
 
 
 def merge_method(root: Path, repository: str, pull: Pull, base: str) -> str:
     """rebase; a merge commit for a release, hotfix or join; or the method a rebase-forbidding repository allows."""
     from shipping import ShippingError, merge_settings
 
-    if route(pull, base) is not None:
+    if route(root, pull, base) is not None:
         return "merge"
     if pull.rebaseable is not False:
         return "rebase"

@@ -811,7 +811,7 @@ def _current_with_base(
 ) -> None:
     from ship_record import route
 
-    if route(pull, shipping_base) in ("release", "join"):
+    if route(root, pull, shipping_base) in ("release", "join"):
         return
     repository, base = "/".join(identity[:2]), pull.base_ref
     behind = _compare(root, repository, base, pull.head_sha).get("behind_by")
@@ -848,13 +848,13 @@ def _ready_state(
     from ship_actions import rebase_problem
     from ship_record import route
 
-    merged_by_commit = route(pull, policy["base"]) is not None
+    found = route(root, pull, policy["base"])
     if problem := (
         body_problem(pull.body)
-        or (None if merged_by_commit else commits_problem(pull.commits))
+        or (None if found in ("release", "join") else commits_problem(pull.commits))
         or (
             rebase_problem(root, "/".join(identity[:2]), pull.base_ref, pull.head_sha)
-            if pull.rebaseable is False and not merged_by_commit
+            if pull.rebaseable is False and found is None
             else None
         )
     ):
@@ -905,7 +905,8 @@ def _plan_scope(
     try:
         return _delivery_scope(root, plan, policy["delivery"])
     except ShippingError:
-        if plan is not None or route(_pull(root, *identity), policy["base"]) is None:
+        found = route(root, _pull(root, *identity), policy["base"])
+        if plan is not None or found not in ("release", "join"):
             raise
         return None, "Deploy" if policy["delivery"] else "Merge"
 
@@ -932,7 +933,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         raise ShippingError(problem)
     pull = _pull(resolved_root, owner, name, number)
     reject_attribution(resolved_root, "pr", pull.body, "PR body", ShippingError)
-    if not base_matches(pull, policy["base"]):
+    if not base_matches(resolved_root, pull, policy["base"]):
         raise ShippingError("PR base branch does not match shipping policy")
     if pull.base_repository != repository or pull.head_repository != repository:
         raise ShippingError("PR repository or head repository does not match origin")
