@@ -470,6 +470,17 @@ class Tidy:
                 if not reason.startswith(("primary", "the session")):
                     note(f"kept worktree {path}: {reason}")
                 continue
+            now = next(
+                (r for r in worktrees(self.root) if r.get("worktree") == path), {}
+            )
+            if (now.get("HEAD"), now.get("branch")) != (
+                record.get("HEAD"),
+                record.get("branch"),
+            ):
+                note(
+                    f"kept worktree {path}: its branch or commit changed during the checks"
+                )
+                continue
             tidy_git(self.root, "worktree", "remove", "--force", path)
             note(f"removed worktree {path} (merged, idle, clean)")
             self.removed["worktrees"] += 1
