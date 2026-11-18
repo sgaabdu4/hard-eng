@@ -58,6 +58,7 @@ Result: Passed
 Evidence: `pytest tests/test_push_check.py tests/test_shipping_policy.py tests/test_ship_actions.py`: 114 passed. `pytest tests/test_skill_links.py`: 11 passed.
 E2E: N/A — the secret test above runs the real pre-push path with real gitleaks and a real snapshot checkout; no user interface.
 Real service: N/A — no outside service is called; gitleaks runs locally.
+Reader: a subagent that did not write the paragraph in `.agents/skills/he-ship/references/checks.md` quoted 5 sentences (the pre-push steps, "It takes effect", the long key sentence, "Under CI", the branch protection sentence); all were reworded into shorter sentences.
 Retro: (1) Escaped bug: none found on the base branch. (2) The 1000-line file limit forced two moves (`gate_budget`, `plan_base`) → None — the gate named the files.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to main.
