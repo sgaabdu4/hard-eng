@@ -91,6 +91,17 @@ def test_load_policy_defaults_the_push_checks_to_local_and_accepts_ci(
 
 
 HISTORY_GATE = {"name": "history", "role": "secrets-history", "command": ["gitleaks"]}
+CI_CONFIG = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+
+
+def _ci_project(tmp_path: Path) -> tuple[Path, Path]:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    return root, workflows
+
+
 CHECK_WORKFLOW = (
     "on: [pull_request]\njobs:\n  c:\n    runs-on: ubuntu-latest\n"
     "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
@@ -110,10 +121,7 @@ CHECK_WORKFLOW = (
 def test_ci_push_checks_need_a_check_workflow_and_a_history_scan(
     tmp_path: Path, row: str, message: str | None
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     if row != "no-workflow":
         text = (
             "on: [push]\njobs: {}\n"
@@ -149,18 +157,14 @@ OTHER = "on:\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
 def test_a_workflow_with_only_workflow_call_counts_when_a_pull_request_workflow_calls_it(
     tmp_path: Path, caller: str, accepted: bool
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     (workflows / "hard-eng.yml").write_text(CALLED)
     (workflows / "pull-request.yml").write_text(caller)
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     if accepted:
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
         return
     with pytest.raises(shipping.ShippingError, match="calling the one that has only"):
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
 
 
 FILTERED_CALLER = (
@@ -183,34 +187,26 @@ FILTERED_CALLER = (
 def test_a_called_check_workflow_is_refused_when_the_caller_filters_or_conditions_the_run(
     tmp_path: Path, filter_line: str, gate: str, named: str
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     (workflows / "hard-eng.yml").write_text(CALLED)
     caller = FILTERED_CALLER.format(filter=filter_line, gate=gate)
     (workflows / "pull-request.yml").write_text(
         caller.replace("    \njobs", "jobs") if not filter_line else caller
     )
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match=rf"`{named}`"):
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
 
 
 def test_a_check_workflow_with_a_filtered_pull_request_trigger_is_refused(
     tmp_path: Path,
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     filtered = CHECK_WORKFLOW.replace(
         "on: [pull_request]", "on:\n  pull_request:\n    paths: ['src/**']"
     )
     (workflows / "hard-eng.yml").write_text(filtered)
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="`paths`"):
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
 
 
 STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
@@ -272,14 +268,10 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
     tmp_path: Path, workflow: str
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     (workflows / "ci.yml").write_text(workflow)
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="every pull request"):
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
 
 
 @pytest.mark.parametrize(
@@ -295,18 +287,14 @@ def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
 def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditional_job(
     tmp_path: Path,
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     (workflows / "hard-eng.yml").write_text(CALLED)
     (workflows / "pull-request.yml").write_text(
         "on:\n  pull_request:\njobs:\n  gate:\n    if: false\n    runs-on: x\n"
         "  check:\n    needs: gate\n    uses: ./.github/workflows/hard-eng.yml\n"
     )
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="`if` condition"):
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
 
 
 @pytest.mark.parametrize(
@@ -325,26 +313,18 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
 def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
     tmp_path: Path, workflow: str
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     (workflows / "ci.yml").write_text(workflow)
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
-    ci_jobs.load_checked_policy(root, config)
+    ci_jobs.load_checked_policy(root, CI_CONFIG)
 
 
 def test_a_branches_filter_with_double_star_and_an_exclusion_is_refused(
     tmp_path: Path,
 ) -> None:
-    root = tmp_path / "project"
-    _write(root, pre_push_checks="ci")
-    workflows = root / ".github/workflows"
-    workflows.mkdir(parents=True)
+    root, workflows = _ci_project(tmp_path)
     filtered = CHECK_WORKFLOW.replace(
         "on: [pull_request]", "on:\n  pull_request:\n    branches: ['**', '!main']"
     )
     (workflows / "ci.yml").write_text(filtered)
-    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="`branches`"):
-        ci_jobs.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
