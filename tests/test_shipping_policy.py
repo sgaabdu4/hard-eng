@@ -246,6 +246,12 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "      - if: x == 'true' && y\n        run: python3 .hooks/hard-eng.py check\n"
             "      - if: x != 'true' && y\n        run: python3 .hooks/hard-eng.py check\n",
         ),
+        CHECK_WORKFLOW.replace(
+            STEP,
+            "    steps:\n"
+            "      - if: y&&x == 'true'\n        run: python3 .hooks/hard-eng.py check\n"
+            "      - if: y&&x != 'true'\n        run: python3 .hooks/hard-eng.py check\n",
+        ),
     ],
     ids=[
         "push-only",
@@ -260,6 +266,7 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "needs-a-conditional-job",
         "inline-comment",
         "paired-conditions-with-and",
+        "paired-conditions-with-unspaced-and",
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(

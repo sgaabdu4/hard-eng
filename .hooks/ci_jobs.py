@@ -462,8 +462,7 @@ def runs_whole_check(workflow: object) -> bool:
                 conditions.add(step.get("if"))
         if None in conditions or any(
             isinstance(c, str)
-            and c.endswith(" != 'true'")
-            and not {"&&", "||"} & set(c.split())
+            and re.fullmatch(r"[\w.\-]+ != 'true'", c)
             and c.replace("!= 'true'", "== 'true'") in conditions
             for c in conditions
         ):
