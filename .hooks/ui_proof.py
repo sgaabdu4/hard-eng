@@ -96,6 +96,21 @@ def is_visible(change: Change) -> bool:
     )
 
 
+def matches(name: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+
+
+def ui_names(item: dict[str, object], patterns: list[str]) -> list[tuple[str, bool]]:
+    """The names of a changed file under `ui_paths`: its new name, or the old name of a file moved out (a removal, so no patch)."""
+    name = str(item["filename"])
+    if matches(name, patterns):
+        return [(name, True)]
+    previous = item.get("previous_filename")
+    if previous is not None and matches(str(previous), patterns):
+        return [(str(previous), False)]
+    return []
+
+
 def visible_files(changes: list[Change]) -> list[str]:
     return [change.path for change in changes if is_visible(change)]
 
@@ -217,7 +232,9 @@ def unchanged_problem(root: Path, reference: str, head: str, base: str) -> str |
 
 
 def on_route(captured: str, route: str) -> bool:
-    """Whether a captured page is the route itself or a path, query or fragment below it."""
+    """Whether a captured page is the route itself or a path, query or fragment below it; the home route `/` is the home page only."""
+    if route == "/":
+        return captured == "/" or captured[:2] in ("/?", "/#")
     rest = captured.removeprefix(route)
     return captured.startswith(route) and (
         not rest or route.endswith("/") or rest[0] in "/?#"
@@ -341,13 +358,13 @@ def ship_problem(
 
     changes = []
     for item in files:
-        name = str(item["filename"])
-        if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
-            continue
-        patch = item.get("patch")
-        local = root / name
-        text = local.read_text(errors="replace") if local.is_file() else None
-        changes.append(Change(name, patch if isinstance(patch, str) else None, text))
+        for name, is_new in ui_names(item, patterns):
+            patch = item.get("patch") if is_new else None
+            local = root / name
+            text = local.read_text(errors="replace") if local.is_file() else None
+            changes.append(
+                Change(name, patch if isinstance(patch, str) else None, text)
+            )
     visible = visible_files(changes)
     visible = [name for name in visible if name not in generated_sources(root, visible)]
     note = bool(UI_APPEARANCE_UNCHANGED.search(body))

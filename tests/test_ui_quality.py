@@ -425,6 +425,14 @@ VISIBLE_CHANGES = {
     "removal-only": (file_change("src/App.tsx", "-<button>Decline</button>"), NO_FILES),
     "style": (file_change("src/app.css", "-a{color:red}\n+a{color:blue}"), NO_FILES),
     "image": ({"filename": "src/logo.svg"}, NO_FILES),
+    "moved-out-of-ui-paths": (
+        {
+            "filename": "lib/App.tsx",
+            "previous_filename": "src/App.tsx",
+            "status": "renamed",
+        },
+        NO_FILES,
+    ),
     "theme": (
         file_change("src/theme/colors.ts", "-const a = 1\n+const a = 2"),
         NO_FILES,
@@ -950,6 +958,14 @@ def test_an_after_capture_of_a_page_with_the_same_prefix_is_refused(
     fixture, _ = captured_ship(
         tmp_path, site, browser, monkeypatch, "fixed", route="/shot"
     )
+    with pytest.raises(shipping.ShippingError, match="capture the changed screen"):
+        ready(fixture.root, fixture)
+
+
+def test_an_after_capture_of_a_page_is_not_the_home_screen(
+    tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _ = captured_ship(tmp_path, site, browser, monkeypatch, "fixed", route="/")
     with pytest.raises(shipping.ShippingError, match="capture the changed screen"):
         ready(fixture.root, fixture)
 
