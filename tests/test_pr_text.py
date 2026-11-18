@@ -284,6 +284,19 @@ def _ui_problem(
     return event_problem(_event(tmp_path, body), root), fake.calls
 
 
+def test_remote_check_reads_the_old_name_of_a_file_moved_out_of_ui_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moved: dict[str, object] = {
+        "filename": "lib/App.tsx",
+        "previous_filename": "src/App.tsx",
+        "status": "renamed",
+    }
+    problem, _ = _ui_problem(tmp_path, monkeypatch, _VALID, [moved])
+    assert problem is not None
+    assert problem.startswith("UI changes require distinct Before and After")
+
+
 def test_remote_check_refuses_a_ui_change_without_pictures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -640,7 +640,10 @@ CARD_CHANGE = file_change("app/lib/ui/card.dart", "-  Text('Old')\n+  Text('New'
 
 
 def flutter_ship(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tests: dict[str, str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tests: dict[str, str],
+    moved: list[dict[str, object]] | None = None,
 ) -> tuple[Fixture, FakeGitHub]:
     tmp_path.mkdir()
     committed = {
@@ -651,7 +654,7 @@ def flutter_ship(
     return ship_setup(
         tmp_path,
         monkeypatch,
-        files=[CARD_CHANGE],
+        files=[CARD_CHANGE, *(moved or [])],
         committed=committed,
         packages=FLUTTER_PACKAGE,
     )
@@ -664,6 +667,21 @@ def native_ready(
     record = write_look(fixture.root, fixture.head, after)
     fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
     serve_attachments(monkeypatch, after)
+
+
+def test_a_flutter_screen_moved_out_of_ui_paths_needs_no_test_for_its_old_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moved: dict[str, object] = {
+        "filename": "other/gone.dart",
+        "previous_filename": "app/lib/ui/gone.dart",
+        "status": "renamed",
+    }
+    fixture, fake = flutter_ship(
+        tmp_path / "a", monkeypatch, {"card_test.dart": GUIDELINE_TEST}, [moved]
+    )
+    native_ready(fixture, fake, monkeypatch)
+    ready(fixture.root, fixture)
 
 
 def test_flutter_screen_needs_guideline_test(
