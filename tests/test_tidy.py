@@ -76,6 +76,20 @@ def linked(primary: Path, name: str, where: str = "sibling") -> Path:
     return path
 
 
+def sparse_worktree(primary: Path) -> Path:
+    """A worktree that a sparse checkout left without its lib folder."""
+    (primary / "lib").mkdir()
+    (primary / "lib/b.txt").write_text("b\n")
+    commit(primary, "a folder")
+    git(primary, "push", "-q", "origin", "main")
+    sparse = linked(primary, "sparse")
+    git(sparse, "update-index", "--refresh")
+    git(sparse, "sparse-checkout", "set", "--cone")
+    assert not (sparse / "lib").exists()
+    age(sparse)
+    return sparse
+
+
 def unmerged(path: Path) -> None:
     (path / "own.txt").write_text("own\n")
     commit(path, "own work")
