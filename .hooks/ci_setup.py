@@ -864,7 +864,13 @@ def add_workflow_checks(config: GateConfig) -> None:
 
 def require_ci_base(base: str | None, root: Path) -> None:
     sha = os.environ.get("GITHUB_SHA", "")
-    if os.environ.get("GITHUB_ACTIONS") == "true" and sha:
+    workspace = os.environ.get("GITHUB_WORKSPACE", "")
+    if (
+        os.environ.get("GITHUB_ACTIONS") == "true"
+        and sha
+        and workspace
+        and Path(workspace).resolve() == root.resolve()
+    ):
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=root,
