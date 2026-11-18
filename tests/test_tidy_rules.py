@@ -305,6 +305,7 @@ def old_install(path: Path) -> None:
 def ordinary_git_files(path: Path) -> None:
     git_path(path, "COMMIT_EDITMSG").write_text("msg\n")
     git_path(path, "FETCH_HEAD").write_text("")
+    git_path(path, "MERGE_RR").write_text("")
 
 
 @pytest.mark.parametrize(
