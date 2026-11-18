@@ -19,6 +19,8 @@ class Pull(Protocol):
     def base_ref(self) -> str: ...
     @property
     def rebaseable(self) -> bool | None: ...
+    @property
+    def default_branch(self) -> str | None: ...
 
 
 def is_release(pull: Pull, base: str) -> bool:
@@ -26,15 +28,29 @@ def is_release(pull: Pull, base: str) -> bool:
     return pull.head_ref == base and pull.base_ref != base
 
 
+def route(pull: Pull, base: str) -> str | None:
+    """release, hotfix or join when the pull request moves work between the base and the default branch; else None."""
+    if is_release(pull, base):
+        return "release"
+    default = pull.default_branch
+    if default is None or default == base:
+        return None
+    if pull.base_ref == default and pull.head_ref.startswith("hotfix/"):
+        return "hotfix"
+    if pull.head_ref == default and pull.base_ref == base:
+        return "join"
+    return None
+
+
 def base_matches(pull: Pull, base: str) -> bool:
-    return pull.base_ref == base or is_release(pull, base)
+    return pull.base_ref == base or route(pull, base) is not None
 
 
 def merge_method(root: Path, repository: str, pull: Pull, base: str) -> str:
-    """rebase; a merge commit for a release; or the method a rebase-forbidding repository allows."""
+    """rebase; a merge commit for a release, hotfix or join; or the method a rebase-forbidding repository allows."""
     from shipping import ShippingError, merge_settings
 
-    if is_release(pull, base):
+    if route(pull, base) is not None:
         return "merge"
     if pull.rebaseable is not False:
         return "rebase"
