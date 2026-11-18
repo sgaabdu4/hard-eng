@@ -410,6 +410,7 @@ def module_holds_work(folder: Path) -> bool:
     )
 
 
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 RESCUE = "refs/hard-eng/tidy"
 RESCUE_DAYS = 30
 
@@ -450,3 +451,30 @@ def expire_rescues(root: Path, now: float) -> None:
         )
         if done.returncode:
             raise TidyStop("old rescue refs could not be removed")
+
+
+def scratch_git(
+    scratch: Path, *arguments: str, repository: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Every Git command of the scratch repository: nothing from the user's environment, settings, templates or attributes."""
+    env = {
+        "PATH": os.environ.get("PATH", os.defpath),
+        "HOME": str(scratch),
+        "TMPDIR": str(scratch),
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_ATTR_NOSYSTEM": "1",
+    }
+    if repository is not None:
+        env["GIT_DIR"] = str(repository)
+    return tidy_run(
+        scratch,
+        120,
+        "git",
+        f"--attr-source={EMPTY_TREE}",
+        "-c",
+        f"core.attributesFile={os.devnull}",
+        *arguments,
+        env=env,
+    )
