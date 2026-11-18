@@ -16,15 +16,19 @@ from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
 from gate_config import Group
-from process_group import exit_when_stopped, passed_minutes, passed_note
-from project_files import parse_project_text
+from process_group import (
+    exit_when_stopped,
+    passed_minutes,
+    passed_note,
+    policy_at,
+    report_gate_edits,
+)
 from shipping import (
     PendingCheck,
     Shipment,
     ShippingError,
     ShippingPolicy,
     _compare,
-    _policy_block,
     _pr_url,
     _pull,
     gh,
@@ -379,17 +383,43 @@ def base_leaves_checks_to_ci(root: Path, policy: ShippingPolicy) -> bool:
         return False
     try:
         tip = remote_base(root, policy["base"])
-        if tip is None:
-            return False
-        text = git(root, "cat-file", "blob", f"{tip}:hard-eng.gates.json")
-        held = _policy_block(parse_project_text(text, "hard-eng.gates.json"), False)
     except (ShippingError, ValueError):
         return False
+    held = None if tip is None else policy_at(root, tip)
     return (
         held is not None
         and held["pre_push_checks"] == "ci"
         and held["base"] == policy["base"]
     )
+
+
+def push_checks(
+    checkout: Path,
+    environment: dict[str, str],
+    base: str | None,
+    policy: ShippingPolicy,
+    ci: bool,
+    passed: bool,
+) -> int:
+    """The checks of one pushed revision; CI runs the full check when the base leaves it there, so only the commit secret scan stays."""
+    if ci:
+        scan = ["check", "--commit-secrets", *(["--base", base] if base else [])]
+        if returncode := run_hard_eng(checkout, scan, environment):
+            return returncode
+        print(
+            'Hard Eng: the full check is left to CI (shipping pre_push_checks "ci"); '
+            "the pushed commits passed the secret scan.",
+            flush=True,
+        )
+        # Mutation runs on installed dependencies, which the quick check installs.
+        if base is None or not policy["pre_push_mutation_seconds"]:
+            return 0
+        check = push_check("", base, True)
+    else:
+        check = push_check(runner_text(checkout), base, passed)
+    if returncode := run_hard_eng(checkout, check, environment):
+        return returncode
+    return int(report_gate_edits(checkout, environment))
 
 
 def pre_push(root: Path) -> int:
@@ -414,41 +444,12 @@ def pre_push(root: Path) -> int:
             continue
         warn_ssh(root)
         environment = snapshot_environment(root)
-        if base_leaves_checks_to_ci(root, policy):
-            with snapshot(root, revision, environment) as checkout:
-                scan = [
-                    "check",
-                    "--commit-secrets",
-                    *(["--base", base] if base else []),
-                ]
-                if returncode := run_hard_eng(checkout, scan, environment):
-                    return returncode
-            print(
-                'Hard Eng: the full check is left to CI (shipping pre_push_checks "ci"); '
-                "the pushed commits passed the secret scan.",
-                flush=True,
-            )
-            continue
+        ci = base_leaves_checks_to_ci(root, policy)
         with snapshot(root, revision, environment) as checkout:
-            check = push_check(runner_text(checkout), base, passed)
-            if returncode := run_hard_eng(checkout, check, environment):
+            if returncode := push_checks(
+                checkout, environment, base, policy, ci, passed
+            ):
                 return returncode
-            changed = subprocess.run(
-                ["git", "diff", "--name-only"],
-                cwd=checkout,
-                env=environment,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.split()
-            if changed:
-                print(
-                    "Hard Eng: a gate changed pushed files: "
-                    + ", ".join(changed)
-                    + ". The push differs from what passed; apply the change, commit it and push again.",
-                    flush=True,
-                )
-                return 1
             if base is not None and (limit := policy["pre_push_mutation_seconds"]):
                 began = time.monotonic()
                 arguments = ["mutation", "--base", base, "--in-place"]

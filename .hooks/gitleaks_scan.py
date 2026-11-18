@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import IO
 
+from gate_config import Group
 from process_group import run_in_group
 from project_files import GIT_LISTING
 
@@ -336,11 +337,14 @@ def zizmor_config(directory: Path, temporary: Path) -> str:
 
 def commit_secret_scan(root: Path, base: str | None, timeout: float) -> int:
     """Only the secret scan of the commits since base: the part of a push that CI cannot do, as it starts after the push."""
+    from ci_setup import push_base, require_ci_base
     from gate_config import load_groups
     from gate_runner import run_gates
     from tool_setup import provision_tools
 
-    groups = [
+    require_ci_base(base)
+    base = push_base(root, base)
+    groups: list[Group] = [
         {
             **group,
             "checks": [

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-import ci_setup
+import ci_jobs
 import pytest
 import shipping
 from gate_config import GateConfig
@@ -129,7 +129,34 @@ def test_ci_push_checks_need_a_check_workflow_and_a_history_scan(
         },
     )
     if message is None:
-        ci_setup.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, config)
         return
     with pytest.raises(shipping.ShippingError, match=message):
-        ci_setup.load_checked_policy(root, config)
+        ci_jobs.load_checked_policy(root, config)
+
+
+CALLER = "on:\n  pull_request:\njobs:\n  check:\n    uses: ./.github/workflows/hard-eng.yml\n"
+CALLED = CHECK_WORKFLOW.replace("on: [pull_request]", "on: workflow_call")
+OTHER = "on:\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n"
+
+
+@pytest.mark.parametrize(
+    ("caller", "accepted"),
+    [(CALLER, True), (OTHER, False), (CALLER.replace("pull_request", "push"), False)],
+    ids=["called-by-pull-request", "never-called", "called-by-push-only"],
+)
+def test_a_workflow_with_only_workflow_call_counts_when_a_pull_request_workflow_calls_it(
+    tmp_path: Path, caller: str, accepted: bool
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "hard-eng.yml").write_text(CALLED)
+    (workflows / "pull-request.yml").write_text(caller)
+    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+    if accepted:
+        ci_jobs.load_checked_policy(root, config)
+        return
+    with pytest.raises(shipping.ShippingError, match="calls one that has only"):
+        ci_jobs.load_checked_policy(root, config)

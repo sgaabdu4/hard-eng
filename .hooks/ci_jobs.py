@@ -343,3 +343,75 @@ def migrate_runner_variable(content: str) -> str:
     ):
         content = content.replace(old, new, 1)
     return content
+
+
+def load_checked_policy(root: Path, config: GateConfig) -> None:
+    """Load the shipping policy; leaving the push check to CI needs that CI and a commit secret scan."""
+    from shipping import ShippingError, load_policy
+
+    policy = load_policy(root)
+    if policy is None or policy["pre_push_checks"] != "ci":
+        return
+    if config.get("scan_git_history", True) is False or not any(
+        gate.get("role") == "secrets-history" for gate in config["shared"]
+    ):
+        raise ShippingError(
+            'shipping pre_push_checks "ci" needs the secrets-history gate and '
+            "scan_git_history on: pre-push still scans the pushed commits for secrets"
+        )
+    if not ci_runs_check(root):
+        raise ShippingError(
+            'shipping pre_push_checks "ci" needs a workflow in .github/workflows that runs '
+            "`hard-eng.py check` on pull requests or pushes, or a pull_request workflow that "
+            "calls one that has only workflow_call; branch protection cannot be read offline, "
+            "so it is not checked"
+        )
+
+
+def workflow_events(workflow: object) -> set[str]:
+    triggers = (
+        workflow.get("on", workflow.get(True)) if isinstance(workflow, dict) else None
+    )
+    if isinstance(triggers, str):
+        return {triggers}
+    return (
+        {e for e in triggers if isinstance(e, str)}
+        if isinstance(triggers, (list, dict))
+        else set()
+    )
+
+
+def ci_runs_check(root: Path) -> bool:
+    """A workflow that runs the check on more than maintenance events, or only on workflow_call and called by a pull_request workflow."""
+    import yaml
+
+    from ci_setup import MAINTENANCE_EVENTS, project_workflows, runs_hard_eng_check
+
+    loaded: dict[str, object] = {}
+    for path in project_workflows(root):
+        try:
+            loaded[path.name] = yaml.safe_load(path.read_text())
+        except yaml.YAMLError:
+            continue
+    for name, workflow in loaded.items():
+        if not runs_hard_eng_check(workflow):
+            continue
+        if workflow_events(workflow) - MAINTENANCE_EVENTS - {"workflow_call"}:
+            return True
+        called = f"./.github/workflows/{name}"
+        if any(
+            "pull_request" in workflow_events(caller)
+            and called in workflow_job_uses(caller)
+            for caller in loaded.values()
+        ):
+            return True
+    return False
+
+
+def workflow_job_uses(workflow: object) -> set[object]:
+    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+    return (
+        {job.get("uses") for job in jobs.values() if isinstance(job, dict)}
+        if isinstance(jobs, dict)
+        else set()
+    )

@@ -580,34 +580,6 @@ def runs_hard_eng_check(workflow: object, *, require_base: bool = False) -> bool
     )
 
 
-def load_checked_policy(root: Path, config: GateConfig) -> None:
-    """Load the shipping policy; leaving the push check to CI needs that CI and a commit secret scan."""
-    import yaml
-
-    from shipping import ShippingError, load_policy
-
-    policy = load_policy(root)
-    if policy is None or policy["pre_push_checks"] != "ci":
-        return
-    if config.get("scan_git_history", True) is False or not any(
-        gate.get("role") == "secrets-history" for gate in config["shared"]
-    ):
-        raise ShippingError(
-            'shipping pre_push_checks "ci" needs the secrets-history gate and '
-            "scan_git_history on: pre-push still scans the pushed commits for secrets"
-        )
-    for path in project_workflows(root):
-        try:
-            if runs_hard_eng_check(yaml.safe_load(path.read_text())):
-                return
-        except yaml.YAMLError:
-            continue
-    raise ShippingError(
-        'shipping pre_push_checks "ci" needs a workflow in .github/workflows that '
-        "runs `hard-eng.py check`; branch protection cannot be read offline, so it is not checked"
-    )
-
-
 def report_missing_bun(path: Path) -> None:
     if not BUN_RUNNER_USAGE.search(path.read_text()):
         print(

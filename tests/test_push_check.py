@@ -215,6 +215,8 @@ GATE_CODE = (
     "    sys.exit(1)\n"
     "if os.environ.get('PASS_LEAKS'):\n"
     "    pathlib.Path('leak.txt').write_text('x')\n"
+    "if os.environ.get('PASS_EDITS'):\n"
+    "    pathlib.Path('task.txt').write_text('edited by a gate')\n"
 )
 
 
@@ -614,11 +616,30 @@ def leaves_checks_to_ci(
     tmp_path: Path,
     shipping_policy: ShippingPolicy,
     monkeypatch: pytest.MonkeyPatch,
-    base_value: str = "ci",
+    mutation: float = 0.0,
+    key: str = "ci",
 ) -> Pushed:
-    shipping_policy["pre_push_checks"] = base_value
-    pushed = prepared(runner, tmp_path, shipping_policy, monkeypatch)
-    return pushed
+    """A project whose base commit holds the key, with the gates and the workflow that the key needs."""
+    shipping_policy["pre_push_checks"] = key
+    shipping_policy["pre_push_mutation_seconds"] = mutation
+    monkeypatch.delenv("CI", raising=False)
+    files_gate: dict[str, object] = {
+        "name": "secrets-files",
+        "role": "secrets-files",
+        "command": [
+            *("gitleaks", "dir", ".", "--redact=100", "--no-banner"),
+            *("--report-format", "sarif"),
+            *("--report-path", "coverage/gitleaks-files.sarif"),
+        ],
+        "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"},
+    }
+    return Pushed(
+        runner,
+        tmp_path,
+        shipping_policy,
+        [files_gate, HISTORY_SCAN, *WORKFLOW_GATES],
+        CI_WORKFLOW,
+    )
 
 
 def turn_key_on(pushed: Pushed, message: str = "turn the key on") -> str:
@@ -639,7 +660,7 @@ def test_a_policy_without_the_key_runs_the_same_commands_as_before(
     assert not [c for c in starts if c[1] in {"ls-remote", "fetch"}]
 
 
-def test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan(
+def test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan_when_mutation_is_off(
     runner: ModuleType,
     tmp_path: Path,
     shipping_policy: ShippingPolicy,
@@ -653,6 +674,25 @@ def test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan(
     assert calls == [["check", "--commit-secrets", "--base", pushed.base]]
     output = capsys.readouterr().out
     assert 'the full check is left to CI (shipping pre_push_checks "ci")' in output
+
+
+def test_a_base_that_leaves_checks_to_ci_still_runs_the_secret_scan_and_the_mutation_report(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pushed = leaves_checks_to_ci(
+        runner, tmp_path, shipping_policy, monkeypatch, mutation=30.0
+    )
+    revision = pushed.task()
+    calls = recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    assert calls == [
+        ["check", "--commit-secrets", "--base", pushed.base],
+        ["check", "--base", pushed.base, "--quick"],
+        ["mutation", "--base", pushed.base, "--in-place", "--seconds", "30.0"],
+    ]
 
 
 def test_a_pushed_commit_that_turns_the_key_on_still_runs_the_full_check(
@@ -718,29 +758,34 @@ def test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_c
     monkeypatch: pytest.MonkeyPatch,
     leaks: bool,
 ) -> None:
-    shipping_policy["pre_push_checks"] = "ci"
-    monkeypatch.delenv("CI", raising=False)
-    shipping_policy["pre_push_mutation_seconds"] = 0.0
-    files_gate: dict[str, object] = {
-        "name": "secrets-files",
-        "role": "secrets-files",
-        "command": [
-            *("gitleaks", "dir", ".", "--redact=100", "--no-banner"),
-            *("--report-format", "sarif"),
-            *("--report-path", "coverage/gitleaks-files.sarif"),
-        ],
-        "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"},
-    }
-    pushed = Pushed(
-        runner,
-        tmp_path,
-        shipping_policy,
-        [files_gate, HISTORY_SCAN, *WORKFLOW_GATES],
-        CI_WORKFLOW,
-    )
+    pushed = leaves_checks_to_ci(runner, tmp_path, shipping_policy, monkeypatch)
     (pushed.root / "token.txt").write_text(f"token = {a_secret()}\n" if leaks else "x")
     pushed.task("add a token")
     (pushed.root / "token.txt").unlink()
     revision = pushed.task("remove the token again")
     git(pushed.root, "switch", "-q", "main")
     assert (pushed.push(monkeypatch, revision, pushed.base) != 0) is leaks
+
+
+@pytest.mark.parametrize(
+    ("key", "edits", "fails"),
+    [("ci", True, True), ("local", True, False), ("ci", False, False)],
+)
+def test_under_ci_a_gate_that_edits_a_tracked_file_fails_only_when_the_base_leaves_checks_to_ci(
+    pushed: Pushed,
+    capfd: pytest.CaptureFixture[str],
+    key: str,
+    edits: bool,
+    fails: bool,
+) -> None:
+    pushed.policy["pre_push_checks"] = key
+    pushed.write_config()
+    git(pushed.root, "commit", "-qam", "base policy", "--allow-empty")
+    git(pushed.root, "push", "-q", "origin", "feature/pass:main")
+    pushed.base = git(pushed.root, "rev-parse", "HEAD").strip()
+    pushed.policy["pre_push_checks"] = "local"
+    pushed.write_config()
+    pushed.task()
+    env = {"CI": "true"} | ({"PASS_EDITS": "1"} if edits else {})
+    assert pushed.check(env=env) == int(fails)
+    assert ("a gate changed pushed files: task.txt" in capfd.readouterr().out) is fails

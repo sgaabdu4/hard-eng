@@ -950,7 +950,7 @@ def load_groups(
     if type(config.get("scan_git_history", True)) is not bool:
         raise TypeError("scan_git_history must be true or false")
     if "shipping" in config:
-        from ci_setup import load_checked_policy
+        from ci_jobs import load_checked_policy
 
         load_checked_policy(root, config)
     raw = listed_names(root)
