@@ -377,3 +377,20 @@ def test_the_scratch_repository_takes_no_template_from_the_users_settings(
     conflicting_branch(primary)
     tidy(linked(primary, "session"))
     assert "edge" in branches(primary)
+
+
+def test_a_commit_that_an_expiring_rescue_ref_holds_gets_a_fresh_ref_on_a_new_removal(
+    primary: Path,
+) -> None:
+    git(primary, "switch", "-qc", "zero")
+    (primary / "z.txt").write_text("z\n")
+    commit(primary, "add")
+    git(primary, "rm", "-q", "z.txt")
+    tip = commit(primary, "revert")
+    git(primary, "update-ref", "refs/hard-eng/tidy/20200101T000000Z/old", tip)
+    git(primary, "switch", "-qc", "parking", "main")
+    age_branch(primary, "zero")
+    tidy(linked(primary, "session"))
+    assert "zero" not in branches(primary)
+    gc_now(primary)
+    assert resolves(primary, tip)
