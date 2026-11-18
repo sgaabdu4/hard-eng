@@ -871,6 +871,7 @@ def test_setup_runs_the_verified_revisions_own_install_step(
         "import subprocess\nfrom pathlib import Path\n\n"
         "SOURCE_FILE = '.hooks/hard-eng-source.json'\n\n\n"
         "def latest_verified(previous: str) -> None:\n    return None\n\n\n"
+        "def require_current(*arguments: object) -> None:\n    return None\n\n\n"
         "def update(root: object, repair: bool = False, remember: object = None) -> str:\n"
         "    module = Path(__file__).parents[1] / 'component'\n"
         "    assert (module / 'contract.txt').read_text() == 'pinned'\n"
