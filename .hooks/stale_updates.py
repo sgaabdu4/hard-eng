@@ -517,22 +517,16 @@ class Tidy:
         return False
 
     def idle_worktree(self, path: Path) -> bool:
-        """The HEAD log, the top level and every tracked file are a day old; status, fetch and this tidy touch none of them."""
+        """The HEAD log, the top level and every tracked file, submodules too, are a day old; status, fetch and this tidy touch none of them."""
         logged = reflog_time(path, "HEAD")
-        names = [
-            path / name for name in tidy_git(path, "ls-files", "-z").split("\0") if name
-        ]
-        try:
-            used = max(
-                os.lstat(entry).st_mtime
-                for entry in (
-                    *names,
-                    *(path / e.name for e in os.scandir(path) if e.name != ".git"),
-                )
-            )
-        except (OSError, ValueError):
-            return False
-        return logged is not None and idle(used) and idle(logged)
+        listing = tidy_git(path, "ls-files", "-z", "--recurse-submodules")
+        names = [path / name for name in listing.split("\0") if name]
+        names += [path / e.name for e in os.scandir(path) if e.name != ".git"]
+        times = []
+        for name in names:
+            with suppress(FileNotFoundError):
+                times.append(os.lstat(name).st_mtime)
+        return logged is not None and idle(max(times, default=0)) and idle(logged)
 
     def submodules_hold_nothing(self, path: Path) -> bool:
         listing = tidy_git(path, "submodule", "status", "--recursive")

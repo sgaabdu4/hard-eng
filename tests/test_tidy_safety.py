@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import stale_updates
-from conftest import commit, git
+from conftest import commit, git, init
 from test_tidy import (
     OLD,
     age,
@@ -348,3 +348,42 @@ def test_tidy_keeps_a_worktree_whose_nested_tracked_file_was_touched_lately(
         os.utime(folder, (OLD, OLD))
     tidy(primary)
     assert used.is_dir() and not gone.exists()
+
+
+def test_tidy_keeps_a_worktree_whose_submodule_file_was_touched_lately(
+    primary: Path, tmp_path: Path
+) -> None:
+    library = tmp_path / "library"
+    init(library)
+    (library / "lib.txt").write_text("lib\n")
+    commit(library, "lib")
+    allow = ["-c", "protocol.file.allow=always"]
+    git(primary, *allow, "submodule", "add", "-q", str(library), "vendor")
+    commit(primary, "add vendor")
+    git(primary, "push", "-q", "origin", "main")
+    used = linked(primary, "used")
+    git(used, *allow, "submodule", "update", "--init", "-q")
+    age(used)
+    os.utime(used / "vendor/lib.txt", None)
+    gone = linked(primary, "gone")
+    tidy(primary)
+    assert used.is_dir() and not gone.exists()
+
+
+def test_a_tracked_path_that_a_sparse_checkout_left_out_does_not_make_a_worktree_busy(
+    primary: Path,
+) -> None:
+    (primary / "lib").mkdir()
+    (primary / "lib/b.txt").write_text("b\n")
+    commit(primary, "a folder")
+    git(primary, "push", "-q", "origin", "main")
+    sparse = linked(primary, "sparse")
+    git(sparse, "update-index", "--skip-worktree", "lib/b.txt")
+    (sparse / "lib/b.txt").unlink()
+    (sparse / "lib").rmdir()
+    age(sparse)
+    opened = stale_updates.Tidy.open(primary, stale_updates.Counter())
+    try:
+        assert opened.idle_worktree(sparse)
+    finally:
+        shutil.rmtree(opened.scratch, ignore_errors=True)
