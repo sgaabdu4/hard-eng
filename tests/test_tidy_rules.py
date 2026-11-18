@@ -1,5 +1,7 @@
 """The tidy keeps work that a repository setting, a paused operation or a path spelling could hide."""
 
+import shutil
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -150,3 +152,56 @@ def test_tidy_keeps_a_worktree_whose_private_git_folder_holds_work(
     age(path)
     tidy(primary)
     assert path.is_dir()
+
+
+def test_tidy_removes_a_sparse_worktree_whose_skipped_files_are_absent(
+    primary: Path,
+) -> None:
+    (primary / "lib").mkdir()
+    (primary / "lib/b.txt").write_text("b\n")
+    commit(primary, "a folder")
+    git(primary, "push", "-q", "origin", "main")
+    sparse = linked(primary, "sparse")
+    git(sparse, "update-index", "--refresh")
+    git(sparse, "sparse-checkout", "set", "--cone")
+    assert not (sparse / "lib").exists()
+    age(sparse)
+    tidy(primary)
+    assert not sparse.exists()
+
+
+def test_tidy_keeps_a_worktree_with_a_present_skip_worktree_file(primary: Path) -> None:
+    present = linked(primary, "present")
+    git(present, "update-index", "--skip-worktree", "tracked.txt")
+    age(present)
+    tidy(primary)
+    assert present.is_dir()
+
+
+def test_tidy_says_why_it_keeps_a_locked_or_gone_worktree(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    locked = linked(primary, "locked")
+    git(primary, "worktree", "lock", str(locked))
+    gone = linked(primary, "gone")
+    shutil.rmtree(gone)
+    tidy(linked(primary, "session"))
+    said = capsys.readouterr().err
+    assert f"kept worktree {locked}: locked" in said
+    assert f"kept worktree {gone}: its folder is gone" in said
+
+
+def test_tidy_writes_what_it_removes_to_a_file_in_the_common_git_folder(
+    primary: Path,
+) -> None:
+    done = linked(primary, "done")
+    head = git(done, "rev-parse", "HEAD")
+    log = (
+        Path(git(primary, "rev-parse", "--absolute-git-dir"))
+        / "hard-eng-tidy-removed.log"
+    )
+    log.write_text(f"{int(time.time()) - 40 * 86400} branch old {head}\n")
+    tidy(linked(primary, "session"))
+    rows = [row.partition(" ")[2] for row in log.read_text().splitlines()]
+    assert rows == [f"worktree {done} {head}", f"branch done {head}"]
+    git(primary, "branch", "done", head)

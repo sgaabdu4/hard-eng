@@ -238,8 +238,15 @@ def quiet_folders(target: Path) -> bool:
 
 
 def hidden_edits(path: Path) -> bool:
-    listing = tidy_git(path, "ls-files", "-v")
-    return any(not line.startswith("H ") for line in listing.splitlines())
+    """Assume-unchanged and skip-worktree files can hide edits; a skip-worktree file that is absent is sparse, with nothing to lose."""
+    for row in tidy_git(path, "ls-files", "-z", "-v").split("\0"):
+        if (
+            row
+            and row[0] != "H"
+            and not (row[0] == "S" and not os.path.lexists(path / row[2:]))
+        ):
+            return True
+    return False
 
 
 def operation_pending(path: Path) -> bool:
