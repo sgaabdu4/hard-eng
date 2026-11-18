@@ -35,10 +35,12 @@ def git_path(root: Path, name: str) -> Path:
 
 
 def age(path: Path) -> None:
-    """Make the worktree's top level, HEAD log and branch log three days old."""
-    for entry in path.iterdir():
-        if entry.name != ".git":
-            os.utime(entry, (OLD, OLD), follow_symlinks=False)
+    """Make every file of the worktree, its HEAD log and its branch log three days old."""
+    for folder, names, files in os.walk(path):
+        names[:] = [name for name in names if name != ".git"]
+        for name in [*names, *files]:
+            if name != ".git":
+                os.utime(Path(folder) / name, (OLD, OLD), follow_symlinks=False)
     old_log(git_path(path, "logs/HEAD"))
     branch = git(path, "branch", "--show-current")
     if branch:

@@ -517,13 +517,18 @@ class Tidy:
         return False
 
     def idle_worktree(self, path: Path) -> bool:
-        """The HEAD log and the top level of the folder are a day old; status, fetch and this tidy touch neither."""
+        """The HEAD log, the top level and every tracked file are a day old; status, fetch and this tidy touch none of them."""
         logged = reflog_time(path, "HEAD")
+        names = [
+            path / name for name in tidy_git(path, "ls-files", "-z").split("\0") if name
+        ]
         try:
             used = max(
-                entry.stat(follow_symlinks=False).st_mtime
-                for entry in os.scandir(path)
-                if entry.name != ".git"
+                os.lstat(entry).st_mtime
+                for entry in (
+                    *names,
+                    *(path / e.name for e in os.scandir(path) if e.name != ".git"),
+                )
             )
         except (OSError, ValueError):
             return False
