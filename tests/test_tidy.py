@@ -952,3 +952,24 @@ def test_tidy_removes_an_amended_branch_after_it_was_merged(
     tidy(session)
     assert not amended.exists()
     assert "amended" not in branches(primary)
+
+
+def test_tidy_keeps_a_branch_with_unrelated_history_and_goes_on(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    git(primary, "switch", "-q", "--orphan", "separate")
+    (primary / "other.txt").write_text("other\n")
+    commit(primary, "separate history")
+    git(primary, "switch", "-qc", "parking", "main")
+    age_branch(primary, "separate")
+    age_branch(primary, "parking")
+    age(primary)
+    gone = linked(primary, "gone")
+    tidy(primary)
+    assert "separate" in branches(primary)
+    assert not gone.exists()
+    assert "stopped" not in capsys.readouterr().err

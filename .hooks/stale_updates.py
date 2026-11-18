@@ -353,14 +353,22 @@ class Tidy:
         )
 
     def content_merged(self, head: str) -> bool:
-        """Merging the head into the base tip changes nothing, so the base holds every change."""
+        """Merging the head into the base tip changes nothing, so the base holds every change.
+
+        Git cannot merge some heads (unrelated history, an object missing here); those count as not merged.
+        """
         done = tidy_run(
-            self.root, 120, "git", "merge-tree", "--write-tree", self.tip, head
+            self.root,
+            120,
+            "git",
+            "merge-tree",
+            "--write-tree",
+            "--allow-unrelated-histories",
+            self.tip,
+            head,
         )
-        if done.returncode == 1:
-            return False
         if done.returncode:
-            raise TidyStop(f"`git merge-tree` exited {done.returncode}")
+            return False
         tree = tidy_git(self.root, "rev-parse", f"{self.tip}^{{tree}}").strip()
         return done.stdout.split()[0] == tree
 
