@@ -15,7 +15,12 @@ UNQUOTE = str.maketrans("", "", "'\"\\")
 NONWORD = str.maketrans({c: " " for c in "!\"#$%&'()*+,-.:;<=>?@[\\]^`{|}~"})
 
 
-WATCHED = ("merge", "enqueuepullrequest", "alias", "$", "`", "{", "<(")
+WATCHED_MARKS = ("$", "`", "{", "<(")
+WATCHED_WORDS = frozenset(
+    ("merge", "merges", "mergebranch", "mergepullrequest", "enqueuepullrequest")
+    + ("enablepullrequestautomerge", "alias")
+)
+SPLIT = str.maketrans({c: " " for c in "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"})
 API_WRITES = ("--method", "--input", "--field", "--raw-field")
 
 
@@ -33,7 +38,11 @@ def watched_gh(command: str) -> bool:
     bare = command.replace("\\\n", "").translate(UNQUOTE).lower()
     return (
         "gh" in bare
-        and (any(mark in bare for mark in WATCHED) or writes_api(bare.split()))
+        and (
+            any(mark in bare for mark in WATCHED_MARKS)
+            or not WATCHED_WORDS.isdisjoint(bare.translate(SPLIT).split())
+            or writes_api(bare.split())
+        )
         and any(
             word.rsplit("/", 1)[-1] == "gh" for word in bare.translate(NONWORD).split()
         )

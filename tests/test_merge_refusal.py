@@ -254,6 +254,7 @@ def test_near_misses_and_a_recorded_merge_stay_allowed(
         "gh pr view 12",
         "gh api repos/o/r/pulls/12/comments",
         "gh pr create --title x --body-file body.md",
+        "gh pr view 12 --json mergeStateStatus,mergeable",
     ],
 )
 def test_a_gh_command_that_is_not_a_merge_loads_no_module(
