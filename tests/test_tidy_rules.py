@@ -1,6 +1,7 @@
 """The tidy keeps work that a repository setting, a paused operation or a path spelling could hide."""
 
 import shutil
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -214,3 +215,50 @@ def test_tidy_keeps_a_worktree_whose_orig_head_is_the_last_reference_to_a_commit
     age(path)
     tidy(primary)
     assert path.is_dir()
+
+
+def gc_now(primary: Path) -> None:
+    git(primary, "reflog", "expire", "--expire=now", "--all")
+    git(primary, "gc", "-q", "--prune=now")
+
+
+def resolves(primary: Path, commit: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+            cwd=primary,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def test_a_removed_branch_with_a_net_change_of_zero_survives_a_garbage_collection(
+    primary: Path,
+) -> None:
+    git(primary, "switch", "-qc", "zero")
+    (primary / "z.txt").write_text("z\n")
+    first = commit(primary, "add")
+    git(primary, "rm", "-q", "z.txt")
+    tip = commit(primary, "revert")
+    git(primary, "switch", "-qc", "parking", "main")
+    age_branch(primary, "zero")
+    tidy(linked(primary, "session"))
+    assert "zero" not in branches(primary)
+    gc_now(primary)
+    assert resolves(primary, tip) and resolves(primary, first)
+
+
+def test_rescue_refs_expire_after_thirty_days_and_no_other_reader_lists_them(
+    primary: Path,
+) -> None:
+    head = git(primary, "rev-parse", "HEAD")
+    old = "refs/hard-eng/tidy/20200101T000000Z/0"
+    new = f"refs/hard-eng/tidy/{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}/0"
+    git(primary, "update-ref", old, head)
+    git(primary, "update-ref", new, head)
+    tidy(linked(primary, "session"))
+    names = git(primary, "for-each-ref", "--format=%(refname)", "refs/hard-eng").split()
+    assert names == [new]
+    assert branches(primary) == {"main", "session"}

@@ -15,10 +15,12 @@ from pathlib import Path
 
 from tidy_guards import (
     ITEM_ERRORS,
+    RESCUE,
     Private,
     TidyStop,
     cargo_target,
     codex_folder,
+    expire_rescues,
     generated,
     hidden_edits,
     idle,
@@ -33,6 +35,7 @@ from tidy_guards import (
     read_private,
     reflog_time,
     same_place,
+    save_commits,
     submodules_hold_nothing,
     tidy_git,
     tidy_run,
@@ -264,13 +267,45 @@ class Tidy:
         tree = tidy_git(self.root, "rev-parse", f"{self.tip}^{{tree}}").strip()
         return done.stdout.split()[0] == tree
 
+    def named_commits(self, cwd: Path, refs: list[str], tips: list[str]) -> set[str]:
+        commits = set(tips)
+        for ref in refs:
+            commits |= set(tidy_git(cwd, "log", "-g", "--format=%H", ref).split())
+        return commits
+
+    def destroy(
+        self,
+        what: str,
+        commits: set[str],
+        recheck: Callable[[], str | None],
+        *command: str,
+    ) -> str | None:
+        """The one act that deletes: name every commit by a rescue ref, read the checks last, write the record, then remove."""
+        unnamed = (
+            tidy_git(
+                self.root,
+                "rev-list",
+                "--no-walk",
+                *commits,
+                "--not",
+                self.tip,
+                f"--glob={RESCUE}/*",
+            ).split()
+            if commits
+            else []
+        )
+        save_commits(self.root, unnamed, time.time())
+        reason = recheck()
+        if reason is None:
+            self.record_removal(what)
+            tidy_git(self.root, *command)
+        return reason
+
     def reflog_holds_work(
         self, cwd: Path, head: str, refs: list[str], tips: list[str] | None = None
     ) -> bool:
         """A removal drops the logs and refs it owns; keep an item whose logs or refs name a commit that is merged nowhere."""
-        commits: set[str] = set(tips or [])
-        for ref in refs:
-            commits |= set(tidy_git(cwd, "log", "-g", "--format=%H", ref).split())
+        commits = self.named_commits(cwd, refs, tips or [])
         if not commits:
             return False
         unmerged = tidy_git(
@@ -476,8 +511,30 @@ class Tidy:
                 f"kept worktree {path}: its branch or commit changed during the checks"
             )
             return
-        self.record_removal(f"worktree {path} {record.get('HEAD')}")
-        tidy_git(self.root, "worktree", "remove", "--force", path)
+        branch = record.get("branch", "").removeprefix("refs/heads/") or None
+        folder = Path(
+            tidy_git(
+                Path(path), "rev-parse", "--path-format=absolute", "--git-dir"
+            ).strip()
+        )
+        found = read_private(folder) or Private([], [], [])
+        commits = self.named_commits(
+            Path(path),
+            ["HEAD", *([f"refs/heads/{branch}"] if branch else []), *found.logged],
+            [record.get("HEAD", ""), *found.tips],
+        )
+        late = self.destroy(
+            f"worktree {path} {record.get('HEAD')}",
+            commits,
+            lambda: None,
+            "worktree",
+            "remove",
+            "--force",
+            path,
+        )
+        if late is not None:
+            note(f"kept worktree {path}: {late}")
+            return
         note(f"removed worktree {path} at {record.get('HEAD')} (merged, idle, clean)")
         self.removed["worktrees"] += 1
 
@@ -539,8 +596,19 @@ class Tidy:
             if reason not in {"protected", "checked out"}:
                 note(f"kept branch {name}: {reason}")
             return
-        self.record_removal(f"branch {name} {tip}")
-        tidy_git(self.root, "update-ref", "-d", ref, tip)
+        commits = self.named_commits(self.root, [ref], [tip])
+        late = self.destroy(
+            f"branch {name} {tip}",
+            commits,
+            lambda: None,
+            "update-ref",
+            "-d",
+            ref,
+            tip,
+        )
+        if late is not None:
+            note(f"kept branch {name}: {late}")
+            return
         note(f"removed branch {name} at {tip} (merged, idle)")
         self.removed["branches"] += 1
 
@@ -615,6 +683,7 @@ class Tidy:
                 note(f"kept build folder of {record.get('worktree')}: {error}")
 
     def run(self) -> None:
+        expire_rescues(self.root, time.time())
         self.remove_worktrees()
         self.remove_branches()
         self.trim_targets()
