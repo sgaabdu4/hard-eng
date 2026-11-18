@@ -236,19 +236,20 @@ def test_tidy_leaves_a_symbolic_branch_and_its_target_alone(primary: Path) -> No
     assert git(primary, "symbolic-ref", "refs/heads/trunk") == "refs/heads/main"
 
 
+@pytest.mark.parametrize("bare", [False, True], ids=["with-git-folder", "bare"])
 @pytest.mark.parametrize("place", ["main-checkout", "linked-worktree"])
 def test_tidy_keeps_a_build_folder_that_holds_a_nested_repository(
-    primary: Path, place: str
+    primary: Path, place: str, bare: bool
 ) -> None:
     path = primary if place == "main-checkout" else linked(primary, "work")
     target = make_target(path)
     inner = target / "vendor/pkg"
     inner.mkdir(parents=True)
-    git(inner, "init", "-q")
+    git(inner, "init", "-q", *(["--bare"] if bare else []))
     age(path)
     age_folders(target)
     tidy(linked(primary, "session"))
-    assert (inner / ".git").is_dir()
+    assert (inner / ("HEAD" if bare else ".git")).exists()
 
 
 def test_a_squash_merged_branch_of_forty_commits_leaves_one_rescue_ref(
