@@ -454,26 +454,29 @@ class Tidy:
     def remember(self, kind: str, key: str) -> None:
         self.answers[kind][key] = time.time()
 
+    def pulls(self, state: str, branch: str, field: str) -> list[object] | None:
+        base = ("--base", self.base) if state == "merged" else ()
+        return tidy_gh(
+            self.root,
+            "pr",
+            "list",
+            "--repo",
+            self.repository or "",
+            "--state",
+            state,
+            "--head",
+            branch,
+            *base,
+            "--json",
+            field,
+        )
+
     def pr_merged(self, head: str, branch: str | None) -> bool:
         """gh finds a merged PR with this exact head; a no is remembered for a day."""
         key = f"{branch}@{head}"
         if branch is None or self.repository is None or self.fresh("unmerged", key):
             return False
-        pulls = tidy_gh(
-            self.root,
-            "pr",
-            "list",
-            "--repo",
-            self.repository,
-            "--state",
-            "merged",
-            "--head",
-            branch,
-            "--base",
-            self.base,
-            "--json",
-            "headRefOid",
-        )
+        pulls = self.pulls("merged", branch, "headRefOid")
         found = any(
             isinstance(pull, dict) and pull.get("headRefOid") == head
             for pull in pulls or []
@@ -488,19 +491,7 @@ class Tidy:
             return False
         if self.repository is None or self.fresh("open", branch):
             return True
-        pulls = tidy_gh(
-            self.root,
-            "pr",
-            "list",
-            "--repo",
-            self.repository,
-            "--state",
-            "open",
-            "--head",
-            branch,
-            "--json",
-            "number",
-        )
+        pulls = self.pulls("open", branch, "number")
         if pulls:
             self.remember("open", branch)
         return pulls is None or bool(pulls)
@@ -526,13 +517,15 @@ class Tidy:
         return False
 
     def idle_worktree(self, path: Path) -> bool:
-        index = tidy_git(
-            path, "rev-parse", "--path-format=absolute", "--git-path", "index"
-        ).strip()
+        """The HEAD log and the top level of the folder are a day old; status, fetch and this tidy touch neither."""
         logged = reflog_time(path, "HEAD")
         try:
-            used = Path(index).stat().st_mtime
-        except OSError:
+            used = max(
+                entry.stat(follow_symlinks=False).st_mtime
+                for entry in os.scandir(path)
+                if entry.name != ".git"
+            )
+        except (OSError, ValueError):
             return False
         return logged is not None and idle(used) and idle(logged)
 
