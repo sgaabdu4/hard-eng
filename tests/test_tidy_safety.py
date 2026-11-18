@@ -2,11 +2,11 @@
 
 import fcntl
 import os
-import shutil
 from pathlib import Path
 
 import pytest
 import stale_updates
+import tidy_guards
 from conftest import OLD, age_branch, commit, git, git_path
 from test_tidy import (
     add_vendor,
@@ -307,11 +307,7 @@ def test_status_fetch_and_a_full_tidy_pass_leave_an_idle_worktree_idle(
     session = linked(primary, "session")
 
     def is_idle() -> bool:
-        opened = stale_updates.Tidy.open(session, stale_updates.Counter())
-        try:
-            return opened.idle_worktree(resting)
-        finally:
-            shutil.rmtree(opened.scratch, ignore_errors=True)
+        return tidy_guards.idle_worktree(resting)
 
     touched = resting.stat().st_mtime_ns
     assert is_idle()
@@ -367,11 +363,7 @@ def test_a_tracked_path_that_a_sparse_checkout_left_out_does_not_make_a_worktree
     (sparse / "lib/b.txt").unlink()
     (sparse / "lib").rmdir()
     age(sparse)
-    opened = stale_updates.Tidy.open(primary, stale_updates.Counter())
-    try:
-        assert opened.idle_worktree(sparse)
-    finally:
-        shutil.rmtree(opened.scratch, ignore_errors=True)
+    assert tidy_guards.idle_worktree(sparse)
 
 
 def test_a_deleted_tracked_file_makes_a_worktree_count_as_used(primary: Path) -> None:
@@ -382,8 +374,4 @@ def test_a_deleted_tracked_file_makes_a_worktree_count_as_used(primary: Path) ->
     edited = linked(primary, "edited")
     (edited / "lib/b.txt").unlink()
     age(edited)
-    opened = stale_updates.Tidy.open(primary, stale_updates.Counter())
-    try:
-        assert not opened.idle_worktree(edited)
-    finally:
-        shutil.rmtree(opened.scratch, ignore_errors=True)
+    assert not tidy_guards.idle_worktree(edited)

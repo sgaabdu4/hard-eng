@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 import ship_actions
 import stale_updates
+import tidy_guards
 import update
 import update_runner
 from conftest import (
@@ -430,13 +431,14 @@ def stand_in_git(
 
 
 def quick_git_limits(monkeypatch: pytest.MonkeyPatch) -> None:
-    real = stale_updates.tidy_run
+    real = tidy_guards.tidy_run
 
     def quick_git(
         cwd: Path, limit: float, *command: str
     ) -> subprocess.CompletedProcess[str]:
         return real(cwd, 2 if command[0] == "git" else limit, *command)
 
+    monkeypatch.setattr(tidy_guards, "tidy_run", quick_git)
     monkeypatch.setattr(stale_updates, "tidy_run", quick_git)
 
 
@@ -588,10 +590,10 @@ def test_tidy_reads_real_worktree_record_shapes(primary: Path, tmp_path: Path) -
     git(primary, "clone", "-q", "--bare", str(primary), str(bare))
     assert "bare" in ship_actions.worktrees(bare)[0]
     with process_inside(detached, "cwd", tmp_path, False) as child:
-        names = stale_updates.open_paths()
+        names = tidy_guards.open_paths()
         assert names is not None
         assert str(detached.resolve()) in names
-        assert stale_updates.inside(detached, names)
+        assert tidy_guards.inside(detached, names)
         assert child.pid > 0
 
 
@@ -830,11 +832,11 @@ def test_an_unreadable_process_counts_as_unknown_only_for_another_person(
             raise PermissionError(path)
         return real(path)
 
-    monkeypatch.setattr(stale_updates.os, "readlink", readlink)
+    monkeypatch.setattr(tidy_guards.os, "readlink", readlink)
 
     def other_person(process: Path) -> bool:
         return foreign
 
-    monkeypatch.setattr(stale_updates, "foreign_user", other_person)
-    found = stale_updates.proc_paths(proc)
+    monkeypatch.setattr(tidy_guards, "foreign_user", other_person)
+    found = tidy_guards.proc_paths(proc)
     assert found == (None if foreign else {"/work/100"})
