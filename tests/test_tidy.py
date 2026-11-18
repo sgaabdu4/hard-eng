@@ -932,3 +932,23 @@ def test_tidy_keeps_a_file_that_only_an_earlier_logged_commit_holds(
     session = linked(primary, "session")
     tidy(session)
     assert holder.is_dir()
+
+
+def test_tidy_removes_an_amended_branch_after_it_was_merged(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    amended = linked(primary, "amended")
+    (amended / "a.txt").write_text("a\n")
+    commit(amended, "first version")
+    (amended / "b.txt").write_text("b\n")
+    git(amended, "add", "b.txt")
+    git(amended, "commit", "-q", "--amend", "--no-edit")
+    git(primary, "merge", "-q", "--ff-only", "amended")
+    git(primary, "push", "-q", "origin", "main")
+    age(amended)
+    age(primary)
+    session = linked(primary, "session")
+    tidy(session)
+    assert not amended.exists()
+    assert "amended" not in branches(primary)
