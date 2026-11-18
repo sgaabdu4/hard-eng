@@ -991,3 +991,21 @@ def test_a_crash_of_the_old_updater_shows_its_error_text_in_the_failure_and_the_
     ):
         release_canary.update_to("a" * 40, tmp_path / "source", work, log)
     assert "the old updater broke here" in log_path.read_text()
+
+
+def test_the_brownfield_refactor_deletes_a_ruff_ignore_list(tmp_path: Path) -> None:
+    """A real project fixes the cause of a Ruff `ignore` or deletes the setting; the canary deletes it, and adopt records what the rule then finds."""
+    git(tmp_path, "init", "-q")
+    (tmp_path / "pkg.py").write_text("# TODO later\nvalue = 1\n")
+    project = (
+        '[tool.ruff.lint]\nselect = [\n    "B",  # bugbear\n    "UP",  # pyupgrade\n]\n'
+        'ignore = [\n    "UP038",  # keep isinstance tuple\n]\n\n'
+        "[tool.ruff.lint.isort]\nforce-single-line = true\n"
+    )
+    (tmp_path / "pyproject.toml").write_text(project)
+    git(tmp_path, "add", "pkg.py", "pyproject.toml")
+    release_canary.refactor_for_strict_checks(tmp_path)
+    assert (tmp_path / "pyproject.toml").read_text() == (
+        '[tool.ruff.lint]\nselect = [\n    "B",  # bugbear\n    "UP",  # pyupgrade\n]\n\n'
+        "[tool.ruff.lint.isort]\nforce-single-line = true\n"
+    )
