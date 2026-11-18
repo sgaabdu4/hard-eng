@@ -125,3 +125,19 @@ def test_a_check_in_another_process_cannot_lose_a_record(
         assert writer.is_alive()
     writer.join(timeout=60)
     assert gate_times.gate_limit(tmp_path, "./suite", 100) == 100
+
+
+def test_a_record_waits_a_limited_time_for_the_lock_and_then_is_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    monkeypatch.setattr(gate_times, "LOCK_WAIT_SECONDS", 0.3)
+    gate_times.record_gate_time(tmp_path, "./suite", 2)
+    with gate_times.lock_gate_times(tmp_path):
+        writer = threading.Thread(
+            target=gate_times.record_gate_timeout, args=(tmp_path, "./suite")
+        )
+        writer.start()
+        writer.join(timeout=10)
+        assert not writer.is_alive()
+    assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
