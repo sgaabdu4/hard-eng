@@ -638,20 +638,6 @@ def proven_elsewhere(base: str | None, quick: bool = False) -> bool:
     return check_scaffold_update(ROOT, base, sources=not quick)
 
 
-def plan_base(base: str | None, plan_stage: str | None) -> str | None:
-    from shipping import passed_branch_point
-
-    if base is not None or plan_stage is None:
-        return base
-    if point := passed_branch_point(ROOT):
-        print(
-            f"Base-branch commit {point} passed the required CI checks; "
-            "checking only changes since it.",
-            flush=True,
-        )
-    return point
-
-
 def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
     """Gate chains of separate packages overlap; None when dependency setup failed."""
     from gate_config import parse_config
@@ -682,16 +668,22 @@ def check(
     quick: bool = False,
     languages: LanguageFilter = NO_LANGUAGES,
     shard: str | None = None,
+    commit_secrets: bool = False,
 ) -> int:
+    import plans
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
+    from gate_times import gate_budget
     from process_group import clean_start, read_installed, record_pass, save_installed
     from reports import quick_groups
-    from shipping import gate_budget
 
     require_ci_base(base)
     base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
+    if commit_secrets:
+        from gitleaks_scan import commit_secret_scan
+
+        return commit_secret_scan(ROOT, base, timeout or gate_budget(ROOT))
     if shard == "merge":
         from shards import proven_shard
 
@@ -714,7 +706,9 @@ def check(
             or shard is not None
         )
         start = clean_start(lock, ROOT, base, plan_stage, partial)
-        groups = load_groups(ROOT, plan_base(base, plan_stage), dependents=dependents)
+        groups = load_groups(
+            ROOT, plans.plan_base(ROOT, base, plan_stage), dependents=dependents
+        )
         groups = quick_groups(language_groups(groups, languages), quick, installed)
         if shard:
             from shards import shard_groups
@@ -725,7 +719,6 @@ def check(
         require_shrink(ROOT, base)
         timeout = timeout or gate_budget(ROOT)
         import change_size
-        import plans
         from comments import validate_comments, validate_suppressions
 
         if verify_plan:
@@ -811,7 +804,7 @@ def adopt() -> int:
     """Record the findings the existing code fails with as shrink-only debt."""
     from debt import record, settled_run
     from gate_config import load_groups
-    from shipping import gate_budget
+    from gate_times import gate_budget
     from tool_setup import ensure_python_runtime
 
     ensure_python_runtime()
@@ -842,6 +835,7 @@ def check_command(args: "Namespace") -> int:
         quick=args.quick,
         languages=language_filter(args),
         shard=args.shard,
+        commit_secrets=args.commit_secrets,
     )
 
 
@@ -877,6 +871,11 @@ def main() -> int:
         "--quick",
         action="store_true",
         help="Run only format, lint, types and the file secret scan; the Stop hook uses it",
+    )
+    checks.add_argument(
+        "--commit-secrets",
+        action="store_true",
+        help="Run only the secret scan of the commits since --base; pre-push uses it when CI runs the full check",
     )
     impacts = add_language_filters(
         commands.add_parser(

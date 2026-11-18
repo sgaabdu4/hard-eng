@@ -17,11 +17,14 @@ from xml.parsers.expat import ExpatError
 from challenge import shipping_note
 from gate_config import Group
 from process_group import exit_when_stopped, passed_minutes, passed_note
+from project_files import parse_project_text
 from shipping import (
     PendingCheck,
     Shipment,
     ShippingError,
+    ShippingPolicy,
     _compare,
+    _policy_block,
     _pr_url,
     _pull,
     gh,
@@ -359,6 +362,36 @@ def push_check(runner: str, base: str | None, quick: bool) -> list[str]:
     return ["check", *(["--base", base, *narrow] if base else [])]
 
 
+def warn_ssh(root: Path) -> None:
+    with suppress(ShippingError):
+        if GITHUB_SSH_PREFIX.match(git(root, "remote", "get-url", "--push", "origin")):
+            print(
+                "Hard Eng: origin pushes to GitHub over SSH, which can drop the idle "
+                "connection while these checks run (push exit 141 after they pass). "
+                "Switch to HTTPS: git remote set-url origin https://github.com/<owner>/<repo>.git",
+                flush=True,
+            )
+
+
+def base_leaves_checks_to_ci(root: Path, policy: ShippingPolicy) -> bool:
+    """True only when the remote base tip's own policy also says "ci" for this base; the pushed commit cannot switch itself on."""
+    if policy["pre_push_checks"] != "ci":
+        return False
+    try:
+        tip = remote_base(root, policy["base"])
+        if tip is None:
+            return False
+        text = git(root, "cat-file", "blob", f"{tip}:hard-eng.gates.json")
+        held = _policy_block(parse_project_text(text, "hard-eng.gates.json"), False)
+    except (ShippingError, ValueError):
+        return False
+    return (
+        held is not None
+        and held["pre_push_checks"] == "ci"
+        and held["base"] == policy["base"]
+    )
+
+
 def pre_push(root: Path) -> int:
     exit_when_stopped()
     started, mutating = time.monotonic(), 0.0
@@ -379,17 +412,23 @@ def pre_push(root: Path) -> int:
         passed = spared(root, revision, base)
         if passed and not policy["pre_push_mutation_seconds"]:
             continue
-        with suppress(ShippingError):
-            if GITHUB_SSH_PREFIX.match(
-                git(root, "remote", "get-url", "--push", "origin")
-            ):
-                print(
-                    "Hard Eng: origin pushes to GitHub over SSH, which can drop the idle "
-                    "connection while these checks run (push exit 141 after they pass). "
-                    "Switch to HTTPS: git remote set-url origin https://github.com/<owner>/<repo>.git",
-                    flush=True,
-                )
+        warn_ssh(root)
         environment = snapshot_environment(root)
+        if base_leaves_checks_to_ci(root, policy):
+            with snapshot(root, revision, environment) as checkout:
+                scan = [
+                    "check",
+                    "--commit-secrets",
+                    *(["--base", base] if base else []),
+                ]
+                if returncode := run_hard_eng(checkout, scan, environment):
+                    return returncode
+            print(
+                'Hard Eng: the full check is left to CI (shipping pre_push_checks "ci"); '
+                "the pushed commits passed the secret scan.",
+                flush=True,
+            )
+            continue
         with snapshot(root, revision, environment) as checkout:
             check = push_check(runner_text(checkout), base, passed)
             if returncode := run_hard_eng(checkout, check, environment):

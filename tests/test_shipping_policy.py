@@ -2,9 +2,12 @@
 
 import json
 from pathlib import Path
+from typing import cast
 
+import ci_setup
 import pytest
 import shipping
+from gate_config import GateConfig
 
 
 def _write(root: Path, **changes: object) -> None:
@@ -44,6 +47,8 @@ def test_load_policy_is_optional_only_when_absent(tmp_path: Path) -> None:
         {"pre_push_seconds": 0},
         {"pre_push_mutation_seconds": -1},
         {"pre_push_mutation_seconds": False},
+        {"pre_push_checks": "never"},
+        {"pre_push_checks": False},
         {"delivery": [{"name": "bad"}]},
     ],
 )
@@ -70,3 +75,61 @@ def test_load_policy_defaults_and_accepts_the_mutation_budget(
     loaded = shipping.load_policy(tmp_path / "project")
     assert loaded is not None
     assert loaded["pre_push_mutation_seconds"] == expected
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"), [({}, "local"), ({"pre_push_checks": "ci"}, "ci")]
+)
+def test_load_policy_defaults_the_push_checks_to_local_and_accepts_ci(
+    tmp_path: Path, configured: dict[str, object], expected: str
+) -> None:
+    _write(tmp_path / "project", **configured)
+    loaded = shipping.load_policy(tmp_path / "project")
+    assert loaded is not None
+    assert loaded["pre_push_checks"] == expected
+
+
+HISTORY_GATE = {"name": "history", "role": "secrets-history", "command": ["gitleaks"]}
+CHECK_WORKFLOW = (
+    "on: [pull_request]\njobs:\n  c:\n    runs-on: ubuntu-latest\n"
+    "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("row", "message"),
+    [
+        ("no-workflow", "runs `hard-eng.py check`"),
+        ("workflow-without-check", "runs `hard-eng.py check`"),
+        ("no-history-gate", "secrets-history gate"),
+        ("history-scan-off", "secrets-history gate"),
+        ("ready", None),
+    ],
+)
+def test_ci_push_checks_need_a_check_workflow_and_a_history_scan(
+    tmp_path: Path, row: str, message: str | None
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    if row != "no-workflow":
+        text = (
+            "on: [push]\njobs: {}\n"
+            if row == "workflow-without-check"
+            else CHECK_WORKFLOW
+        )
+        (workflows / "ci.yml").write_text(text)
+    config = cast(
+        GateConfig,
+        {
+            "packages": [],
+            "shared": [] if row == "no-history-gate" else [HISTORY_GATE],
+            "scan_git_history": row != "history-scan-off",
+        },
+    )
+    if message is None:
+        ci_setup.load_checked_policy(root, config)
+        return
+    with pytest.raises(shipping.ShippingError, match=message):
+        ci_setup.load_checked_policy(root, config)

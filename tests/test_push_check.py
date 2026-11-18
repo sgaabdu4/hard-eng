@@ -2,7 +2,9 @@
 
 import json
 import os
+import random
 import re
+import string
 import subprocess
 import sys
 import time
@@ -223,6 +225,7 @@ class Pushed:
         tmp_path: Path,
         policy: ShippingPolicy,
         extra: list[dict[str, object]] | None = None,
+        files: dict[str, str] | None = None,
     ) -> None:
         self.extra = extra or []
         self.root = tmp_path
@@ -239,6 +242,9 @@ class Pushed:
             (hooks / source.name).write_bytes(source.read_bytes())
         (self.root / ".gitignore").write_text("__pycache__/\ninstalled.flag\n")
         self.write_config()
+        for name, text in (files or {}).items():
+            (self.root / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / name).write_text(text)
         git(self.root, "add", ".")
         git(self.root, "commit", "-qm", "initial base")
         self.base = git(self.root, "rev-parse", "HEAD").strip()
@@ -552,3 +558,189 @@ def test_after_a_spared_check_the_mutation_report_runs_on_installed_dependencies
     assert [call[0] for call in calls] == ["check", "mutation"]
     assert installed == [True]
     assert pushed.runs() == runs
+
+
+CI_WORKFLOW = {
+    ".github/workflows/hard-eng.yml": (
+        "name: hard-eng\non: [pull_request]\njobs:\n  check:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: python3 .hooks/hard-eng.py check --base origin/main\n"
+    )
+}
+HISTORY_SCAN: dict[str, object] = {
+    "name": "secrets-history",
+    "role": "secrets-history",
+    "command": [
+        "gitleaks",
+        "git",
+        ".",
+        "--redact=100",
+        "--no-banner",
+        "--log-opts=--all",
+        "--report-format",
+        "sarif",
+        "--report-path",
+        "coverage/gitleaks-history.sarif",
+    ],
+    "report": {"type": "gitleaks", "path": "coverage/gitleaks-history.sarif"},
+}
+
+
+WORKFLOW_GATES: list[dict[str, object]] = [
+    {"name": "workflows", "role": "workflows", "command": ["actionlint", "-no-color"]},
+    {
+        "name": "ci-security",
+        "role": "ci-security",
+        "command": [
+            *("zizmor", "--strict-collection", "--persona=auditor"),
+            *("--format=plain", "."),
+        ],
+    },
+]
+
+
+def recorded_runs(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    calls: list[list[str]] = []
+
+    def run(_checkout: Path, arguments: list[str], _environment: object) -> int:
+        calls.append(arguments)
+        return 0
+
+    monkeypatch.setattr(ship_actions, "run_hard_eng", run)
+    return calls
+
+
+def leaves_checks_to_ci(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    base_value: str = "ci",
+) -> Pushed:
+    shipping_policy["pre_push_checks"] = base_value
+    pushed = prepared(runner, tmp_path, shipping_policy, monkeypatch)
+    return pushed
+
+
+def turn_key_on(pushed: Pushed, message: str = "turn the key on") -> str:
+    pushed.policy["pre_push_checks"] = "ci"
+    pushed.write_config()
+    return pushed.task(message)
+
+
+def test_a_policy_without_the_key_runs_the_same_commands_as_before(
+    pushed: Pushed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    revision = pushed.task()
+    calls = recorded_runs(monkeypatch)
+    starts = git_starts(lambda: pushed.push(monkeypatch, revision, pushed.base))
+    assert calls == [
+        ["check", "--base", pushed.base, "--without-dependents", "--related-tests"]
+    ]
+    assert not [c for c in starts if c[1] in {"ls-remote", "fetch"}]
+
+
+def test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pushed = leaves_checks_to_ci(runner, tmp_path, shipping_policy, monkeypatch)
+    revision = pushed.task()
+    calls = recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    assert calls == [["check", "--commit-secrets", "--base", pushed.base]]
+    output = capsys.readouterr().out
+    assert 'the full check is left to CI (shipping pre_push_checks "ci")' in output
+
+
+def test_a_pushed_commit_that_turns_the_key_on_still_runs_the_full_check(
+    pushed: Pushed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    revision = turn_key_on(pushed)
+    calls = recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    assert [call[0] for call in calls] == ["check"]
+    assert "--commit-secrets" not in calls[0]
+
+
+def test_a_second_push_after_a_commit_that_turned_the_key_on_runs_the_full_check(
+    pushed: Pushed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = turn_key_on(pushed)
+    git(pushed.root, "push", "-q", "origin", "feature/pass")
+    second = pushed.task("second")
+    calls = recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, second, first) == 0
+    assert [call[0] for call in calls] == ["check"]
+    assert "--commit-secrets" not in calls[0]
+
+
+def test_a_pushed_policy_naming_a_base_the_remote_does_not_name_runs_the_full_check(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pushed = leaves_checks_to_ci(runner, tmp_path, shipping_policy, monkeypatch)
+    git(pushed.root, "push", "-q", "origin", "main:refs/heads/release")
+    pushed.policy["base"] = "release"
+    pushed.write_config()
+    revision = pushed.task("name a base that the remote does not name")
+    calls = recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    assert "--commit-secrets" not in calls[0]
+
+
+def test_a_direct_base_push_is_still_refused_when_checks_are_left_to_ci(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path, pre_push_checks="ci")
+    revision = git(root, "rev-parse", "HEAD").strip()
+    started = no_snapshot(monkeypatch)
+    push_input(monkeypatch, update_line("main", revision, "2" * 40))
+    with pytest.raises(ValueError, match="use a PR"):
+        ship_actions.pre_push(root)
+    started.assert_not_called()
+
+
+def a_secret() -> str:
+    letters = string.ascii_letters + string.digits
+    return "ghp_" + "".join(random.Random(7).choices(letters, k=36))
+
+
+@pytest.mark.parametrize("leaks", [True, False])
+def test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+    leaks: bool,
+) -> None:
+    shipping_policy["pre_push_checks"] = "ci"
+    monkeypatch.delenv("CI", raising=False)
+    shipping_policy["pre_push_mutation_seconds"] = 0.0
+    files_gate: dict[str, object] = {
+        "name": "secrets-files",
+        "role": "secrets-files",
+        "command": [
+            *("gitleaks", "dir", ".", "--redact=100", "--no-banner"),
+            *("--report-format", "sarif"),
+            *("--report-path", "coverage/gitleaks-files.sarif"),
+        ],
+        "report": {"type": "gitleaks", "path": "coverage/gitleaks-files.sarif"},
+    }
+    pushed = Pushed(
+        runner,
+        tmp_path,
+        shipping_policy,
+        [files_gate, HISTORY_SCAN, *WORKFLOW_GATES],
+        CI_WORKFLOW,
+    )
+    (pushed.root / "token.txt").write_text(f"token = {a_secret()}\n" if leaks else "x")
+    pushed.task("add a token")
+    (pushed.root / "token.txt").unlink()
+    revision = pushed.task("remove the token again")
+    git(pushed.root, "switch", "-q", "main")
+    assert (pushed.push(monkeypatch, revision, pushed.base) != 0) is leaks
