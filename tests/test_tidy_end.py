@@ -9,18 +9,11 @@ from pathlib import Path
 
 import pytest
 from conftest import age_branch, commit, git
-from test_tidy import add_vendor, age, age_folders, linked, tidy, unmerged
+from test_tidy import age, age_folders, linked, merged_branch, tidy, unmerged
 from test_tidy_rules import (
     diverge,
-    dropped_in_submodule_folder,
-    fresh_file,
-    keep_stash_commit_in_a_worktree_ref,
-    leave_submodule_commit_in_log,
-    nested_repository,
-    old_install,
     pause_bisect,
     pause_rebase,
-    write_during_gh_answer,
 )
 
 COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
@@ -109,40 +102,7 @@ def may_vanish(place: Path, mtime: float, folder: Path, cargo: bool) -> bool:
 def merged_commit_in_a_removed_item(
     primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
 ) -> None:
-    linked(primary, "done")
-
-
-def with_vendor(
-    primary: Path, setup: Callable[[Path, Path, list[str]], None], tmp_path: Path
-) -> None:
-    allow = add_vendor(primary, tmp_path)
-    setup(primary, linked(primary, "work"), allow)
-
-
-def installs(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    old_install(linked(primary, "work"))
-
-
-def nested(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    nested_repository(linked(primary, "work"))
-
-
-def fresh(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> Callable[[], None]:
-    path = linked(primary, "work")
-    return lambda: fresh_file(path)
-
-
-def dropped(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    add_vendor(primary, tmp_path)
-    dropped_in_submodule_folder(linked(primary, "work"))
-
-
-def submodule_log(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    with_vendor(primary, leave_submodule_commit_in_log, tmp_path)
-
-
-def stash_ref(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    with_vendor(primary, keep_stash_commit_in_a_worktree_ref, tmp_path)
+    merged_branch(primary, "done")
 
 
 def net_zero(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
@@ -158,14 +118,7 @@ def reset_away(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
     path = linked(primary, "work")
     unmerged(path)
     git(path, "reset", "-q", "--hard", "main")
-
-
-def own_work(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    unmerged(linked(primary, "work"))
-
-
-def untracked_note(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    (linked(primary, "work") / "notes.txt").write_text("notes\n")
+    git(primary, "worktree", "remove", "--force", str(path))
 
 
 def paused_rebase(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
@@ -180,10 +133,6 @@ def merge_attributes(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> N
     diverge(primary, "info")
 
 
-def gap_while_waiting(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
-    write_during_gh_answer(primary, linked(primary, "waiting"), "late.txt", mp)
-
-
 def target_output(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
     path = linked(primary, "work")
     (path / "target/debug").mkdir(parents=True)
@@ -194,20 +143,11 @@ def target_output(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None
 
 FIXTURES: dict[str, Fixture] = {
     "merged": merged_commit_in_a_removed_item,
-    "installs": installs,
-    "nested-repository": nested,
-    "fresh-install-file": fresh,
-    "dropped-in-submodule-folder": dropped,
-    "submodule-commit-in-log": submodule_log,
-    "stash-in-worktree-ref": stash_ref,
     "net-zero-branch": net_zero,
     "reset-away": reset_away,
-    "own-work": own_work,
-    "untracked-note": untracked_note,
     "paused-rebase": paused_rebase,
     "paused-bisect": paused_bisect,
     "merge-attributes": merge_attributes,
-    "gap-while-waiting": gap_while_waiting,
     "cargo-target": target_output,
 }
 

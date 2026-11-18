@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import stale_updates
 import tidy_guards
-from conftest import OLD, age_branch, commit, git, git_path
+from conftest import OLD, age_branch, commit, git
 from test_tidy import (
     add_vendor,
     age,
@@ -42,92 +42,33 @@ def test_tidy_keeps_a_branch_whose_only_difference_is_whitespace(
     assert "reindent" in branches(primary)
 
 
-@pytest.mark.parametrize("kept_by", ["worktree-reset", "detached", "branch-only"])
-def test_tidy_keeps_work_that_only_a_reflog_holds(
-    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kept_by: str
+def test_tidy_keeps_a_branch_that_only_a_reflog_holds(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_gh(tmp_path, monkeypatch, {"open": {}})
     holder = linked(primary, "holder")
-    if kept_by == "detached":
-        git(holder, "switch", "-q", "--detach")
     unmerged(holder)
-    if kept_by == "branch-only":
-        git(primary, "worktree", "remove", "--force", str(holder))
-        git(primary, "branch", "-f", "holder", "main")
-        age_branch(primary, "holder")
-    elif kept_by == "detached":
-        git(holder, "checkout", "-q", "--detach", "main")
-        age(holder)
-    else:
-        git(holder, "reset", "-q", "--hard", "main")
-        age(holder)
-    session = linked(primary, "session")
-    tidy(session)
-    assert holder.is_dir() == (kept_by != "branch-only")
-    assert ("holder" in branches(primary)) == (kept_by != "detached")
+    git(primary, "worktree", "remove", "--force", str(holder))
+    git(primary, "branch", "-f", "holder", "main")
+    age_branch(primary, "holder")
+    tidy(linked(primary, "session"))
+    assert "holder" in branches(primary)
 
 
-@pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
-def test_tidy_keeps_a_worktree_with_hidden_edits(primary: Path, flag: str) -> None:
-    hidden = linked(primary, "hidden")
-    git(hidden, "update-index", flag, "tracked.txt")
-    (hidden / "tracked.txt").write_text("edited and hidden\n")
-    age(hidden)
-    gone = linked(primary, "gone")
-    tidy(primary)
-    assert hidden.is_dir() and not gone.exists()
-
-
-@pytest.mark.parametrize(
-    "marker",
-    [
-        "rebase-merge",
-        "rebase-apply",
-        "BISECT_LOG",
-        "MERGE_HEAD",
-        "CHERRY_PICK_HEAD",
-        "REVERT_HEAD",
-    ],
-)
-def test_tidy_keeps_a_worktree_in_the_middle_of_a_git_operation(
-    primary: Path, marker: str
-) -> None:
-    busy = linked(primary, "midway")
-    folder = git_path(busy, marker)
-    if marker.startswith("rebase"):
-        folder.mkdir()
-    else:
-        folder.write_text("x\n")
-    gone = linked(primary, "gone")
-    tidy(primary)
-    assert busy.is_dir() and not gone.exists()
-
-
-def test_tidy_goes_on_after_a_worktree_with_no_commits(
-    primary: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    empty = tmp_path / "wt-aaa-empty"
-    git(primary, "worktree", "add", "-q", "--orphan", "-b", "empty", str(empty))
-    gone = linked(primary, "zzz-gone")
-    tidy(primary)
-    assert empty.is_dir() and not gone.exists()
-    assert "stopped" not in capsys.readouterr().err
-
-
-def test_tidy_removes_a_merged_worktree_whose_log_is_long(primary: Path) -> None:
+def test_tidy_removes_a_merged_branch_whose_log_is_long(primary: Path) -> None:
     long = linked(primary, "long")
     for number in range(120):
         git(long, "commit", "--allow-empty", "-qm", f"step {number}")
     git(primary, "merge", "-q", "--ff-only", "long")
     git(primary, "push", "-q", "origin", "main")
-    age(long)
+    git(primary, "worktree", "remove", "--force", str(long))
+    age_branch(primary, "long")
     age(primary)
-    session = linked(primary, "session")
-    tidy(session)
-    assert not long.exists()
+    tidy(linked(primary, "session"))
+    assert "long" not in branches(primary)
 
 
-def test_tidy_removes_a_squash_merged_worktree_with_a_long_log(
+def test_tidy_removes_a_squash_merged_branch_with_a_long_log(
     primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_gh(tmp_path, monkeypatch, {"open": {}})
@@ -138,16 +79,14 @@ def test_tidy_removes_a_squash_merged_worktree_with_a_long_log(
     git(primary, "merge", "-q", "--squash", "long")
     git(primary, "commit", "-qm", "squash of long")
     git(primary, "push", "-q", "origin", "main")
-    git(long, "reset", "-q", "--hard", "main")
-    age(long)
+    git(primary, "worktree", "remove", "--force", str(long))
+    age_branch(primary, "long")
     age(primary)
-    session = linked(primary, "session")
-    tidy(session)
-    assert not long.exists()
+    tidy(linked(primary, "session"))
     assert "long" not in branches(primary)
 
 
-def test_tidy_keeps_a_file_that_only_an_earlier_logged_commit_holds(
+def test_tidy_keeps_a_branch_that_only_an_earlier_logged_commit_holds(
     primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_gh(tmp_path, monkeypatch, {"open": {}})
@@ -157,10 +96,10 @@ def test_tidy_keeps_a_file_that_only_an_earlier_logged_commit_holds(
     git(holder, "rm", "-q", "draft.txt")
     git(holder, "commit", "-qm", "remove the draft")
     git(holder, "reset", "-q", "--hard", "main")
-    age(holder)
-    session = linked(primary, "session")
-    tidy(session)
-    assert holder.is_dir()
+    git(primary, "worktree", "remove", "--force", str(holder))
+    age_branch(primary, "holder")
+    tidy(linked(primary, "session"))
+    assert "holder" in branches(primary)
 
 
 def test_tidy_removes_an_amended_branch_after_it_was_merged(
@@ -175,11 +114,10 @@ def test_tidy_removes_an_amended_branch_after_it_was_merged(
     git(amended, "commit", "-q", "--amend", "--no-edit")
     git(primary, "merge", "-q", "--ff-only", "amended")
     git(primary, "push", "-q", "origin", "main")
-    age(amended)
+    git(primary, "worktree", "remove", "--force", str(amended))
+    age_branch(primary, "amended")
     age(primary)
-    session = linked(primary, "session")
-    tidy(session)
-    assert not amended.exists()
+    tidy(linked(primary, "session"))
     assert "amended" not in branches(primary)
 
 
@@ -196,11 +134,12 @@ def test_tidy_keeps_a_branch_with_unrelated_history_and_goes_on(
     git(primary, "switch", "-qc", "parking", "main")
     age_branch(primary, "separate")
     age_branch(primary, "parking")
+    git(primary, "branch", "gone", "main")
+    age_branch(primary, "gone")
     age(primary)
-    gone = linked(primary, "gone")
     tidy(primary)
     assert "separate" in branches(primary)
-    assert not gone.exists()
+    assert "gone" not in branches(primary)
     assert "stopped" not in capsys.readouterr().err
 
 
@@ -240,17 +179,12 @@ def test_tidy_asks_gh_only_after_every_local_check_passed(
     primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls = fake_gh(tmp_path, monkeypatch, {"open": {}})
-    dirty = linked(primary, "dirty")
-    unmerged(dirty)
-    (dirty / "tracked.txt").write_text("changed\n")
     stashed = linked(primary, "stashed")
     unmerged(stashed)
     (stashed / "tracked.txt").write_text("changed\n")
     git(stashed, "stash")
-    age(stashed)
-    recent = linked(primary, "recent")
-    unmerged(recent)
-    os.utime(recent / "tracked.txt", None)
+    git(primary, "worktree", "remove", "--force", str(stashed))
+    git(primary, "branch", "recent", "main")
     control = linked(primary, "control")
     unmerged(control)
     git(primary, "worktree", "remove", "--force", str(control))
@@ -285,7 +219,8 @@ def test_the_tidy_lock_lives_in_the_common_git_folder_for_every_worktree(
 ) -> None:
 
     first, second = linked(primary, "first"), linked(primary, "second")
-    gone = linked(primary, "gone")
+    git(primary, "branch", "gone", "main")
+    age_branch(primary, "gone")
     assert (
         stale_updates.common_dir(first)
         == stale_updates.common_dir(second)
@@ -295,7 +230,7 @@ def test_the_tidy_lock_lives_in_the_common_git_folder_for_every_worktree(
         fcntl.flock(handle, fcntl.LOCK_EX)
         tidy(first)
         tidy(second)
-    assert gone.is_dir()
+    assert "gone" in branches(primary)
     assert capsys.readouterr().err.count("another tidy is running") == 2
 
 
@@ -322,7 +257,7 @@ def test_status_fetch_and_a_full_tidy_pass_leave_an_idle_worktree_idle(
     assert resting.stat().st_mtime_ns == touched
 
 
-def test_tidy_keeps_a_worktree_whose_nested_tracked_file_was_touched_lately(
+def test_a_worktree_whose_nested_tracked_file_was_touched_lately_counts_as_used(
     primary: Path,
 ) -> None:
     (primary / "src/app").mkdir(parents=True)
@@ -330,16 +265,14 @@ def test_tidy_keeps_a_worktree_whose_nested_tracked_file_was_touched_lately(
     commit(primary, "nested file")
     git(primary, "push", "-q", "origin", "main")
     used = linked(primary, "used")
-    gone = linked(primary, "gone")
     (used / "src/app/file.py").write_text("value = 2\n")
     (used / "src/app/file.py").write_text("value = 1\n")
     for folder in (used / "src/app", used / "src", used):
         os.utime(folder, (OLD, OLD))
-    tidy(primary)
-    assert used.is_dir() and not gone.exists()
+    assert not tidy_guards.idle_worktree(used)
 
 
-def test_tidy_keeps_a_worktree_whose_submodule_file_was_touched_lately(
+def test_a_worktree_whose_submodule_file_was_touched_lately_counts_as_used(
     primary: Path, tmp_path: Path
 ) -> None:
     allow = add_vendor(primary, tmp_path)
@@ -347,9 +280,7 @@ def test_tidy_keeps_a_worktree_whose_submodule_file_was_touched_lately(
     git(used, *allow, "submodule", "update", "--init", "-q")
     age(used)
     os.utime(used / "vendor/lib.txt", None)
-    gone = linked(primary, "gone")
-    tidy(primary)
-    assert used.is_dir() and not gone.exists()
+    assert not tidy_guards.idle_worktree(used)
 
 
 def test_a_tracked_path_that_a_sparse_checkout_left_out_does_not_make_a_worktree_busy(

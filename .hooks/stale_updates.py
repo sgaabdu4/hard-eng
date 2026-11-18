@@ -15,31 +15,22 @@ from pathlib import Path
 
 from tidy_guards import (
     ITEM_ERRORS,
-    Private,
     TidyStop,
     cargo_target,
-    codex_folder,
     expire_rescues,
-    generated,
-    hidden_edits,
     idle,
     idle_worktree,
     inside,
-    module_holds_work,
     note,
     open_paths,
-    operation_pending,
     paused_branches,
     quiet_folders,
-    read_private,
     reflog_time,
     same_place,
     save_commits,
     scratch_git,
-    submodules_hold_nothing,
     tidy_git,
     tidy_run,
-    under,
 )
 
 OWNER = re.compile(r"hard-eng-update (\d+)")
@@ -397,86 +388,6 @@ class Tidy:
         names = open_paths()
         return names is None or inside(path, names)
 
-    def worktree_reason(
-        self, record: dict[str, str], main: Path, first: bool
-    ) -> str | None:
-        state: dict[str, bool] = {}
-        local = self.worktree_local(record, main, first, state)
-        return local or self.pr_reason(
-            record.get("HEAD", ""),
-            record.get("branch", "").removeprefix("refs/heads/") or None,
-            self.merged(state, record.get("HEAD", "")),
-        )
-
-    def worktree_local(
-        self, record: dict[str, str], main: Path, first: bool, state: dict[str, bool]
-    ) -> str | None:
-        """Every check that reads the disk or Git; the removal runs them again after the GitHub answers."""
-        from ship_actions import work_left
-
-        path = Path(record.get("worktree", ""))
-        branch = record.get("branch", "").removeprefix("refs/heads/") or None
-        head = record.get("HEAD", "")
-        if first or "bare" in record:
-            return "primary"
-        if "locked" in record:
-            return "locked"
-        if "prunable" in record or not path.is_dir():
-            return "its folder is gone"
-        if same_place(path.resolve(), self.session):
-            return "the session's worktree"
-        if under(str(path.resolve()), codex_folder()):
-            return "kept by the Codex app"
-        folder = Path(
-            tidy_git(path, "rev-parse", "--path-format=absolute", "--git-dir").strip()
-        )
-        found = read_private(folder)
-
-        def own() -> Private:
-            return found or Private([], [], [])
-
-        checks: list[tuple[str, Callable[[], bool]]] = [
-            ("used in the last 24 hours", lambda: not idle_worktree(path)),
-            ("its git folder holds an unknown entry", lambda: found is None),
-            (
-                "not merged",
-                lambda: (
-                    not self.merged(state, head)
-                    and self.fresh("unmerged", f"{branch}@{head}")
-                ),
-            ),
-            ("a stash names it", lambda: self.stashed(branch, head)),
-            (
-                "its log holds commits that are merged nowhere",
-                lambda: self.reflog_holds_work(
-                    path,
-                    head,
-                    [
-                        "HEAD",
-                        *([f"refs/heads/{branch}"] if branch else []),
-                        *own().logged,
-                    ],
-                    own().tips,
-                ),
-            ),
-            ("holds changes", lambda: bool(work_left(path, main, generated(path)))),
-            (
-                "hidden edits (assume-unchanged or skip-worktree)",
-                lambda: hidden_edits(path),
-            ),
-            (
-                "a rebase, merge, bisect, pick or revert is in progress",
-                lambda: operation_pending(path),
-            ),
-            ("a submodule holds work", lambda: not submodules_hold_nothing(path)),
-            (
-                "a submodule git folder holds work",
-                lambda: any(module_holds_work(m) for m in own().modules),
-            ),
-            ("a process is inside", lambda: self.worktree_busy(path)),
-        ]
-        return next((reason for reason, kept in checks if kept()), None)
-
     def record_removal(self, what: str) -> None:
         """What a removal drops is written first, so a lost branch or folder comes back from its commit within the pruning time."""
         log = self.common / REMOVED
@@ -488,70 +399,6 @@ class Tidy:
                 if stamp.isdigit() and now - int(stamp) < REMOVED_DAYS * 86400:
                     kept.append(row)
         log.write_text("".join(f"{row}\n" for row in [*kept, f"{now:.0f} {what}"]))
-
-    def remove_worktree(self, path: str, first: bool) -> None:
-        from ship_actions import worktrees
-
-        fresh = worktrees(self.root)
-        main = Path(fresh[0]["worktree"])
-        record = next((r for r in fresh if r.get("worktree") == path), None)
-        if record is None:
-            return
-        reason = self.worktree_reason(record, main, first)
-        if reason is not None:
-            if not reason.startswith(("primary", "the session")):
-                note(f"kept worktree {path}: {reason}")
-            return
-
-        def last() -> str | None:
-            now = next(
-                (r for r in worktrees(self.root) if r.get("worktree") == path),
-                dict[str, str](),
-            )
-            if (now.get("HEAD"), now.get("branch")) != (
-                record.get("HEAD"),
-                record.get("branch"),
-            ):
-                return "its branch or commit changed during the checks"
-            return self.worktree_local(record, main, first, {})
-
-        branch = record.get("branch", "").removeprefix("refs/heads/") or None
-        folder = Path(
-            tidy_git(
-                Path(path), "rev-parse", "--path-format=absolute", "--git-dir"
-            ).strip()
-        )
-        found = read_private(folder) or Private([], [], [])
-        commits = self.named_commits(
-            Path(path),
-            ["HEAD", *([f"refs/heads/{branch}"] if branch else []), *found.logged],
-            [record.get("HEAD", ""), *found.tips],
-        )
-        late = self.destroy(
-            f"worktree {path} {record.get('HEAD')}",
-            commits,
-            last,
-            "worktree",
-            "remove",
-            "--force",
-            path,
-        )
-        if late is not None:
-            note(f"kept worktree {path}: {late}")
-            return
-        note(f"removed worktree {path} at {record.get('HEAD')} (merged, idle, clean)")
-        self.removed["worktrees"] += 1
-
-    def remove_worktrees(self) -> None:
-        """A failure on one worktree keeps it and goes on; a failed listing stops the repository."""
-        from ship_actions import worktrees
-
-        for index, first in enumerate(worktrees(self.root)):
-            path = first.get("worktree", "")
-            try:
-                self.remove_worktree(path, index == 0)
-            except ITEM_ERRORS as error:
-                note(f"kept worktree {path}: {error}")
 
     def branch_reason(self, name: str, tip: str, checked_out: set[str]) -> str | None:
         state: dict[str, bool] = {}
@@ -688,7 +535,6 @@ class Tidy:
                 note(f"kept build folder of {record.get('worktree')}: {error}")
 
     def run(self) -> None:
-        self.remove_worktrees()
         self.remove_branches()
         self.trim_targets()
         expire_rescues(self.root, time.time())
@@ -720,8 +566,7 @@ def tidy(root: Path) -> None:
         result = root / RESULT_FILE
         result.parent.mkdir(parents=True, exist_ok=True)
         counts = ", ".join(
-            f"{removed[kind]} {kind}"
-            for kind in ("worktrees", "branches", "build folders")
+            f"{removed[kind]} {kind}" for kind in ("branches", "build folders")
         )
         with result.open("a") as out:
             out.write(f"Tidy: removed {counts} ({LOG_FILE}).\n")
