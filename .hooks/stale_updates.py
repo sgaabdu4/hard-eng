@@ -508,17 +508,18 @@ class Tidy:
         self.removed["branches"] += 1
         self.drop_config(name)
 
-    def config_names(self) -> set[str]:
-        """Every branch name that a `branch.<name>.<key>` config entry names."""
-        keys = tidy_run(
+    def config_keys(self) -> list[str]:
+        """Every `branch.<name>.<key>` config key."""
+        done = tidy_run(
             self.root, 120, "git", "config", "--name-only", "--get-regexp", r"^branch\."
-        ).stdout.split()
-        return {key[len("branch.") : key.rindex(".")] for key in keys}
+        )
+        return done.stdout.split()
 
     def drop_config(self, name: str) -> None:
-        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, so another name that starts with `<name>]` keeps the section; any failure logs the command to run by hand."""
+        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, so another name that starts with `<name>]` keeps the section and the keys are named for a hand cleanup; any failure logs the command to run by hand."""
         section = f"branch.{name}"
         try:
+            keys = self.config_keys()
             others = {
                 line.split(" ")[1].removeprefix("refs/heads/")
                 for line in tidy_git(
@@ -527,16 +528,22 @@ class Tidy:
                     "--format=%(objectname) %(refname)",
                     "refs/heads",
                 ).splitlines()
-            } | self.config_names()
-            failed = any(other.startswith(f"{name}]") for other in others)
-            if not failed:
-                done = tidy_run(
-                    self.root, 120, "git", "config", "--remove-section", section
+            } | {key[len("branch.") : key.rindex(".")] for key in keys}
+            if any(other.startswith(f"{name}]") for other in others):
+                own = [key for key in keys if key.startswith(f"{section}.")]
+                note(
+                    f"branch {name} is gone but its settings stay, because another name starts with `{name}]` and `--remove-section` would remove that one too; run "
+                    + "; ".join(
+                        f"`git config --unset-all {shlex.quote(key)}`" for key in own
+                    )
                 )
-                failed = (
-                    bool(done.returncode and "no such section" not in done.stderr)
-                    or name in self.config_names()
-                )
+                return
+            done = tidy_run(
+                self.root, 120, "git", "config", "--remove-section", section
+            )
+            failed = bool(
+                done.returncode and "no such section" not in done.stderr
+            ) or any(key.startswith(f"{section}.") for key in self.config_keys())
         except ITEM_ERRORS:
             failed = True
         if failed:
