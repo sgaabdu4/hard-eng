@@ -18,7 +18,7 @@ import ship_actions
 import stale_updates
 import update
 import update_runner
-from conftest import add_origin, commit, git, init
+from conftest import SOURCE, add_origin, commit, git, init
 
 OLD = int(time.time()) - 3 * 86400
 HOUR = 3600
@@ -639,3 +639,60 @@ def test_tidy_runs_after_a_failed_update_and_stops_on_a_failed_fetch(
     tidy(root)
     assert second.is_dir()
     assert "fetch of the base branch failed" in capsys.readouterr().err
+
+
+def test_session_start_tidies_in_the_background_and_reports_at_the_next_start(
+    primary: Path,
+) -> None:
+    shutil.copytree(
+        SOURCE / ".hooks",
+        primary / ".hooks",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    root = installed(primary)
+    gone = linked(root, "gone")
+    payload = json.dumps({"session_id": "journey"})
+
+    def start() -> str:
+        started = subprocess.run(
+            [sys.executable, ".hooks/hard-eng.py", "session", "claude"],
+            cwd=root,
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert started.returncode == 0, started.stderr
+        return started.stdout
+
+    first = start()
+    assert "started in the background" in first
+    deadline = time.monotonic() + 120
+    while "Tidy:" not in update_runner.last_result(root):
+        assert time.monotonic() < deadline, "the background run did not finish"
+        time.sleep(0.2)
+    assert "gone" not in branches(root)
+    assert "Tidy: removed 1 worktrees, 1 branches" in start()
+
+
+def test_session_start_loads_no_tidy_module(primary: Path) -> None:
+    program = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(SOURCE / '.hooks')!r})\n"
+        "import agent_hooks, update_runner\n"
+        "update_runner.start_update = lambda root: 'started'\n"
+        "from pathlib import Path\n"
+        "agent_hooks.handle_event(Path.cwd(), 'session', 'claude')\n"
+        "print(sorted({'stale_updates', 'ship_actions'} & set(sys.modules)))\n"
+    )
+    ran = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=primary,
+        input=json.dumps({"session_id": "guard"}),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert ran.stdout.rstrip().endswith("[]"), ran.stdout + ran.stderr
