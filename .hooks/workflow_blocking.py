@@ -145,9 +145,23 @@ def trigger_hits(name: str, data: dict[object, object]) -> list[str]:
         if isinstance(triggers, (list, dict))
         else set()
     )
-    if events & TRIGGERS:
-        return []
-    return [f"{name}:1 runs on {sorted(map(str, events))} only: {FIX}"]
+    if not events & TRIGGERS:
+        return [f"{name}:1 runs on {sorted(map(str, events))} only: {FIX}"]
+    return [
+        f"{name}:1 filters pull_request by {key}, so some pull requests get no check: {FIX}"
+        for key in sorted(narrowing_filters(triggers))
+    ]
+
+
+def narrowing_filters(triggers: object) -> set[str]:
+    event = triggers.get("pull_request") if isinstance(triggers, dict) else None
+    if not isinstance(event, dict):
+        return set()
+    return {
+        str(key)
+        for key, value in event.items()
+        if key != "branches" or value not in ("**", ["**"])
+    }
 
 
 def skip_hits(name: str, words: list[tuple[str, str, int]]) -> list[str]:

@@ -101,6 +101,15 @@ REFUSED = {
     "check deleted": workflow("echo nothing"),
     "on narrowed": workflow(on="on:\n  workflow_dispatch:\n"),
     "on narrowed to a string": workflow(on="on: workflow_dispatch\n"),
+    "pull request branch filter": workflow(
+        on="on:\n  pull_request:\n    branches: [never-a-real-base]\n"
+    ),
+    "pull request paths filter": workflow(
+        on="on:\n  pull_request:\n    paths: ['docs/**']\n"
+    ),
+    "pull request types filter": workflow(
+        on="on:\n  pull_request:\n    types: [closed]\n"
+    ),
     "skip language alone": workflow(CHECK + " --skip-language python"),
     "skip language beside another only": workflow(
         CHECK + " --skip-language python", extra=second_job("--only-language swift")
@@ -165,6 +174,9 @@ PASSED = {
     ),
     "launcher variable set by an earlier step": workflow(launcher()),
     "workflow call only": workflow(on="on:\n  workflow_call:\n"),
+    "pull request on every branch": workflow(
+        on="on:\n  pull_request:\n    branches: ['**']\n"
+    ),
     "dispatch beside pull request": workflow(
         on="on:\n  pull_request:\n  workflow_dispatch:\n"
     ),
