@@ -123,6 +123,10 @@ REFUSED = {
         job="    needs: middle\n",
         extra="  middle:\n    needs: apple\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n  apple:\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n",
     ),
+    "check job after a job that never runs": workflow(
+        job="    needs: idle\n",
+        extra="  idle:\n    if: false\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n",
+    ),
     "apple job if on the main check job": workflow(
         job="    needs: impact\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n"
     ),

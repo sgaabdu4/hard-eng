@@ -180,11 +180,13 @@ def skip_hits(name: str, words: list[tuple[str, str, int]]) -> list[str]:
 
 
 def skippable_jobs(jobs: dict[object, object]) -> set[object]:
-    """The jobs a false apple output skips: the apple condition itself, and every job that needs a skipped job and does not run after any result."""
+    """The jobs a condition can skip: each job with a condition other than the run-after-any-result one, and every job that needs a skipped job and does not run after any result."""
     skipped = {
         name
         for name, job in jobs.items()
-        if isinstance(job, dict) and APPLE_IF.fullmatch(str(job.get("if", "")).strip())
+        if isinstance(job, dict)
+        and "if" in job
+        and not JOB_IF.fullmatch(str(job["if"]).strip())
     }
     while True:
         more = {
