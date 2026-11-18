@@ -64,6 +64,73 @@ def test_the_gate_limit_is_three_times_the_last_passing_time(
     assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
 
 
+def init_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+
+
+def test_one_fast_pass_does_not_shrink_the_limit_below_a_slower_recent_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    for seconds in (900, 180):
+        gate_times.record_gate_time(tmp_path, "./suite", seconds)
+    assert gate_times.gate_limit(tmp_path, "./suite", 5000) == 2700
+    assert gate_times.gate_limit(tmp_path, "./suite", 1000) == 1000
+
+
+def test_only_the_last_five_passing_times_set_the_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    for seconds in (900, 10, 10, 10, 10, 10):
+        gate_times.record_gate_time(tmp_path, "./suite", seconds)
+    assert gate_times.gate_limit(tmp_path, "./suite", 5000) == 30
+
+
+def test_a_gate_that_timed_out_gets_the_full_budget_until_it_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    gate_times.record_gate_time(tmp_path, "./suite", 2)
+    assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
+    gate_times.record_gate_timeout(tmp_path, "./suite")
+    assert gate_times.gate_limit(tmp_path, "./suite", 100) == 100
+    assert gate_times.gate_limit(tmp_path, "./other", 100) == 100
+    gate_times.record_gate_time(tmp_path, "./suite", 2)
+    assert gate_times.gate_limit(tmp_path, "./suite", 100) == 6
+
+
+def test_a_file_with_one_number_for_each_gate_still_loads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    path = tmp_path / ".git/hard-eng-gate-times.json"
+    path.write_text(json.dumps({"./suite": 20.5}))
+    assert gate_times.gate_limit(tmp_path, "./suite", 1000) == 61.5
+    gate_times.record_gate_time(tmp_path, "./suite", 40)
+    assert gate_times.gate_limit(tmp_path, "./suite", 1000) == 120
+
+
+def test_a_gate_with_no_record_gets_the_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    init_repository(tmp_path, monkeypatch)
+    gate_times.record_gate_time(tmp_path, "./suite", 2)
+    assert gate_times.gate_limit(tmp_path, "./other", 100) == 100
+
+
+def test_a_gate_stopped_at_its_limit_gets_the_full_budget_next_time(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+    configure(tmp_path, [gate("suite", "pass")])
+    assert runner.check(timeout=120) == 0
+    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    assert runner.check(timeout=120) == 1
+    assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
+
+
 def watch_common_folder_asks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Path, list[Path]]:

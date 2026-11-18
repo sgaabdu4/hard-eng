@@ -290,7 +290,7 @@ def run_gate(
     related_base: str | None = None,
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
-    from gate_times import gate_limit, record_gate_time
+    from gate_times import gate_limit, record_gate_time, record_gate_timeout
     from process_group import install_key, note_install
 
     key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
@@ -311,6 +311,8 @@ def run_gate(
     note_install(install_key(group), gate.get("role"), failed)
     if failed:
         FAILED_GATES.append(key)
+        if time.monotonic() - started >= limit:
+            record_gate_timeout(ROOT, key)
         if note := lost_scanner_note(OUTPUTS.get(name, "")):
             with output_lock:
                 print(note, flush=True)
