@@ -449,13 +449,16 @@ def job_always_runs(name: object, jobs: dict[object, object]) -> bool:
     return isinstance(jobs.get(name), dict) and name not in skippable_jobs(jobs)
 
 
+CHAIN_BREAK = re.compile(r"[|;]|(?<!&)&(?!&)")
+PRINTED_OR_CONDITIONAL = re.compile(r"^(echo|printf)\b|[|;!]|(?<!&)&(?!&)")
+
+
 def ends_the_command(rest: str) -> bool:
     """The check is the last command of the run: it ends its line or is followed by `&&` and a command with no pipe, `;` or lone `&`, and no later line follows, so the step takes the check's exit status."""
     line, _, later = rest.partition("\n")
     line = line.strip()
     return not later.strip() and (
-        not line
-        or (line.startswith("&&") and not re.search(r"[|;]|(?<!&)&(?!&)", line))
+        not line or (line.startswith("&&") and not CHAIN_BREAK.search(line))
     )
 
 
@@ -476,7 +479,7 @@ def shell_runs_it(raw: str, text: str, start: int) -> bool:
         ):
             return False
     before = text[text.rfind("\n", 0, start) + 1 : start].strip()
-    return not re.search(r"^(echo|printf)\b|[|;!]|(?<!&)&(?!&)", before)
+    return not PRINTED_OR_CONDITIONAL.search(before)
 
 
 def step_runs_check(job: object, step: object) -> bool:
