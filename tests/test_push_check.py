@@ -661,7 +661,7 @@ def test_a_policy_without_the_key_runs_the_same_commands_as_before(
     assert not [c for c in starts if c[1] in {"ls-remote", "fetch"}]
 
 
-def test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan_when_mutation_is_off(
+def test_a_base_that_leaves_checks_to_ci_runs_one_cheap_check_and_no_full_gate_when_mutation_is_off(
     runner: ModuleType,
     tmp_path: Path,
     shipping_policy: ShippingPolicy,
@@ -675,6 +675,7 @@ def test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan_when_m
     assert calls == [["check", "--commit-secrets", "--base", pushed.base]]
     output = capsys.readouterr().out
     assert 'the full check is left to CI (shipping pre_push_checks "ci")' in output
+    assert "the plan checks and the changed-line text rules" in output
 
 
 def test_a_base_that_leaves_checks_to_ci_still_runs_the_secret_scan_and_the_mutation_report(

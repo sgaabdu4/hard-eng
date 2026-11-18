@@ -803,8 +803,10 @@ def check_command(args: "Namespace") -> int:
     if args.commit_secrets:
         from gate_times import gate_budget
         from gitleaks_scan import commit_secret_scan
+        from push_text import push_text_checks
 
-        return commit_secret_scan(ROOT, args.base, gate_budget(ROOT))
+        judged = push_text_checks(ROOT, args.base)
+        return commit_secret_scan(ROOT, args.base, gate_budget(ROOT)) or judged
     return check(
         base=args.base,
         plan_stage=args.plan_stage,
@@ -835,7 +837,7 @@ def add_scope_options(checks: "ArgumentParser") -> None:
     checks.add_argument(
         "--commit-secrets",
         action="store_true",
-        help="Run only the secret scan of the commits since --base; pre-push uses it when CI runs the full check",
+        help="Run only the secret scan of the commits since --base, the plan checks and the changed-line text rules; pre-push uses it when CI runs the full check",
     )
 
 
