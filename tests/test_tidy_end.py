@@ -19,7 +19,7 @@ from test_tidy_rules import (
 COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
 REMOVED = "hard-eng-tidy-removed.log"
 CARGO = "Signature: 8a477f597d28d172789f06886806bc55"
-Fixture = Callable[[Path, Path, pytest.MonkeyPatch], Callable[[], None] | None]
+Fixture = Callable[[Path], None]
 
 
 def git_folders(primary: Path) -> list[Path]:
@@ -95,13 +95,11 @@ def ref_names(primary: Path) -> set[str]:
     return set(git(primary, "for-each-ref", "--format=%(refname)").split())
 
 
-def merged_commit_in_a_removed_item(
-    primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
-) -> None:
+def merged_commit_in_a_removed_item(primary: Path) -> None:
     merged_branch(primary, "done")
 
 
-def net_zero(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def net_zero(primary: Path) -> None:
     git(primary, "switch", "-qc", "zero")
     (primary / "z.txt").write_text("z\n")
     commit(primary, "add")
@@ -110,26 +108,26 @@ def net_zero(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
     git(primary, "switch", "-qc", "parking", "main")
 
 
-def reset_away(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def reset_away(primary: Path) -> None:
     path = linked(primary, "work")
     unmerged(path)
     git(path, "reset", "-q", "--hard", "main")
     git(primary, "worktree", "remove", "--force", str(path))
 
 
-def paused_rebase(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def paused_rebase(primary: Path) -> None:
     pause_rebase(primary)
 
 
-def paused_bisect(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def paused_bisect(primary: Path) -> None:
     pause_bisect(primary)
 
 
-def merge_attributes(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def merge_attributes(primary: Path) -> None:
     diverge(primary, "info")
 
 
-def symbolic_branch(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def symbolic_branch(primary: Path) -> None:
     (primary / "log-only.txt").write_text("x\n")
     commit(primary, "held by the log of main only")
     git(primary, "reset", "-q", "--hard", "HEAD~1")
@@ -143,19 +141,15 @@ def nested_in_target(path: Path) -> None:
     age_folders(path / "target")
 
 
-def nested_in_main_target(
-    primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
-) -> None:
+def nested_in_main_target(primary: Path) -> None:
     nested_in_target(primary)
 
 
-def nested_in_linked_target(
-    primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
-) -> None:
+def nested_in_linked_target(primary: Path) -> None:
     nested_in_target(linked(primary, "work"))
 
 
-def target_output(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+def target_output(primary: Path) -> None:
     path = linked(primary, "work")
     (path / "target/debug").mkdir(parents=True)
     (path / "target/CACHEDIR.TAG").write_text(f"{CARGO}\n")
@@ -190,13 +184,11 @@ def age_everything(primary: Path) -> None:
 
 @pytest.mark.parametrize("name", FIXTURES)
 def test_a_tidy_loses_nothing_that_a_plain_garbage_collection_keeps(
-    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+    primary: Path, tmp_path: Path, name: str
 ) -> None:
     session = linked(primary, "session")
-    later = FIXTURES[name](primary, tmp_path, monkeypatch)
+    FIXTURES[name](primary)
     age_everything(primary)
-    if later is not None:
-        later()
     git(primary, "reflog", "expire", "--expire=now", "HEAD")
     control = tmp_path / "control"
     shutil.copytree(primary, control, symlinks=True)

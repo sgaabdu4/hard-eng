@@ -116,7 +116,7 @@ After setup:
 
 ### Updates
 
-- At session start, a hook reports the last update result. It then starts the next update in the background, so a session never waits. When that run ends, it removes merged worktrees and branches that nobody has used for 24 hours, and idle Rust build folders. It keeps anything with changes, a stash, an open pull request or a running process, and it adds one line to the next report when it removed something.
+- At session start, a hook reports the last update result. It then starts the next update in the background, so a session never waits. When that run ends, it removes merged branches that nobody has used for 24 hours, and idle Rust build folders. It keeps anything with a stash, an open pull request or a running process, and it adds one line to the next report when it removed something.
 - One update runs per repository at a time. It writes `.hard-eng/update.log`.
 - The update builds in a separate worktree from the remote base branch. It leaves one commit on the local branch `hard-eng/update`. It never touches your current branch.
 - `python3 .hooks/hard-eng.py update-pr` pushes that branch and opens or reuses the "Update Hard Eng" PR.
@@ -396,7 +396,7 @@ Skills guide the agent. Hooks and checks enforce.
 
 | When | What runs |
 | --- | --- |
-| Session start | Reports the last update result. Starts the next update in the background, which also tidies merged idle worktrees, branches and Rust build folders. |
+| Session start | Reports the last update result. Starts the next update in the background, which also tidies merged idle branches and Rust build folders. |
 | Claude runs a shell command | Denies a main-session wait that sleeps in the foreground ([HE-NO-FOREGROUND-POLL](.agents/skills/he/references/requirements.md#he-no-foreground-poll)). The agent runs the job in the background and gets a notice when it exits. |
 | Agent stops | Checks the plan handoff. After code changes, runs [quick checks](#quick-checks) on this session's changes. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then gives a [mutation report](#mutation-report). |
