@@ -483,7 +483,13 @@ class Tidy:
         if late is not None:
             note(f"kept branch {name}: {late}")
             return
-        tidy_run(self.root, 120, "git", "config", "--remove-section", f"branch.{name}")
+        cleaned = tidy_run(
+            self.root, 120, "git", "config", "--remove-section", f"branch.{name}"
+        )
+        if cleaned.returncode and "no such section" not in cleaned.stderr:
+            note(
+                f"branch {name} is gone but its settings stay; run `git config --remove-section branch.{name}` before you reuse the name"
+            )
         note(f"removed branch {name} at {tip} (merged, idle)")
         self.removed["branches"] += 1
 

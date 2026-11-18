@@ -370,3 +370,20 @@ def test_a_removed_branch_takes_its_config_section_with_it(primary: Path) -> Non
         check=False,
     )
     assert shown.stdout == ""
+
+
+def test_a_failed_config_cleanup_is_reported_with_the_command_to_retry(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    merged_branch(primary, "done")
+    stand_in_git(
+        tmp_path,
+        monkeypatch,
+        '[ "$1 $2" = "config --remove-section" ]',
+    )
+    tidy(linked(primary, "session"))
+    assert "done" not in branches(primary)
+    assert "git config --remove-section branch.done" in capsys.readouterr().err
