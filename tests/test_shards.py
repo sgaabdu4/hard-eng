@@ -477,6 +477,17 @@ def test_the_gate_job_refuses_missing_shard_reports(
     )
 
 
+@pytest.mark.parametrize("mark", ["failure", "error"])
+def test_the_gate_job_refuses_a_shard_report_with_a_failed_test(
+    runner: ModuleType, merge_project: Path, mark: str
+) -> None:
+    coverage = cov_json({1, 2, 3, 4, 5, 6, 7, 8})
+    broken = junit_text("two").replace("</testcase>", f"<{mark}/></testcase>")
+    keep_shard(merge_project, 1, ".", ["a"], (junit_text("one"), coverage))
+    keep_shard(merge_project, 2, ".", ["b"], (broken, coverage))
+    assert run_merge(runner, merge_group(".", 2)) is True
+
+
 def test_the_gate_job_accepts_a_shard_that_had_no_files(
     runner: ModuleType, merge_project: Path
 ) -> None:
