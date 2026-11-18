@@ -31,6 +31,11 @@ def diverge(primary: Path, how: str) -> None:
         commit(primary, "attributes")
     if how != "union":
         git(primary, "config", "merge.ours.driver", "true")
+    conflicting_branch(primary)
+
+
+def conflicting_branch(primary: Path) -> None:
+    """An aged branch `edge` whose line the base changed another way."""
     git(primary, "switch", "-qc", "edge")
     (primary / "tracked.txt").write_text("feature\n")
     commit(primary, "feature")
@@ -331,11 +336,9 @@ def test_tidy_tests_what_the_removal_deletes_in_every_untracked_or_ignored_path(
     assert path.is_dir() == kept
 
 
-@pytest.mark.parametrize("name", ["late.txt", "tracked.txt"])
-def test_tidy_keeps_a_worktree_that_gets_work_while_it_waits_for_github(
-    primary: Path, monkeypatch: pytest.MonkeyPatch, name: str
+def write_during_gh_answer(
+    primary: Path, waiting: Path, name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    waiting = linked(primary, "waiting")
     git(waiting, "push", "-q", "origin", "waiting")
     real = stale_updates.tidy_gh
 
@@ -345,6 +348,14 @@ def test_tidy_keeps_a_worktree_that_gets_work_while_it_waits_for_github(
 
     fake_gh(primary.parent, monkeypatch, {"open": {}})
     monkeypatch.setattr(stale_updates, "tidy_gh", slow)
+
+
+@pytest.mark.parametrize("name", ["late.txt", "tracked.txt"])
+def test_tidy_keeps_a_worktree_that_gets_work_while_it_waits_for_github(
+    primary: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    waiting = linked(primary, "waiting")
+    write_during_gh_answer(primary, waiting, name, monkeypatch)
     tidy(linked(primary, "session"))
     assert (waiting / name).read_text() == "written while gh answered\n"
 
@@ -363,14 +374,6 @@ def test_the_scratch_repository_takes_no_template_from_the_users_settings(
         monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(settings))
     else:
         monkeypatch.setenv("GIT_TEMPLATE_DIR", str(template))
-    git(primary, "switch", "-qc", "edge")
-    (primary / "tracked.txt").write_text("feature\n")
-    commit(primary, "feature")
-    git(primary, "switch", "-q", "main")
-    (primary / "tracked.txt").write_text("other\n")
-    commit(primary, "other")
-    git(primary, "push", "-q", "origin", "main")
-    git(primary, "switch", "-qc", "parking")
-    age_branch(primary, "edge")
+    conflicting_branch(primary)
     tidy(linked(primary, "session"))
     assert "edge" in branches(primary)
