@@ -26,13 +26,14 @@ Authority: The coordinator asked for both checks and a fix where a test is red; 
 
 - [x] An earlier clean capture set with the same image does not hide a later set that has findings → `tests/test_ui_capture_match.py::test_an_earlier_clean_capture_with_the_same_image_does_not_hide_findings`
 - [x] A capture set of an older commit with the same image does not refuse the set taken at the head → `tests/test_ui_capture_match.py::test_a_capture_of_an_older_commit_with_the_same_image_does_not_refuse_the_current_one`
+- [x] A set refreshed at one width with a finding is not hidden by a clean set → `tests/test_ui_capture_match.py::test_a_set_refreshed_at_one_width_with_a_finding_is_not_hidden_by_a_clean_set`
 - [x] A capture set of an older commit alone is still refused → `tests/test_ui_capture_match.py::test_a_capture_of_an_older_commit_alone_is_still_refused`
 - [x] A repository that forbids rebase merges records its other method when GitHub reports the PR as not rebaseable → `tests/test_merge_refusal.py::test_release_and_squash_only_merges_stay_possible`
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: On `origin/develop` the first two new tests fail (the first returns no problem, the second refuses the current set as not taken at the head) and the third passes. After the change all three pass, with 166 UI tests.
+Evidence: On `origin/develop` the first, second and fourth new tests fail (the first returns no problem, the second refuses the current set as not taken at the head) and the third passes. After the change all four pass, with 156 UI tests.
 Execution: One builder; the merge-method check needed no code change.
 
 ## Risks + recovery
