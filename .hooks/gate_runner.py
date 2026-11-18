@@ -712,7 +712,7 @@ def check(
         failed |= verify_plan and change_size.plan_skips(
             ROOT, base, groups, int(started)
         )
-        failed |= ci_edits(ROOT, base)
+        failed |= not quick and ci_edits(ROOT, base)
         plans.report_stage(failed, plan_stage, FAILED_GATES, quick)
         record_pass(lock, ROOT, start, failed)
         if shard:
