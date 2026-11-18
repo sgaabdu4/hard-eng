@@ -916,3 +916,19 @@ def test_tidy_removes_a_squash_merged_worktree_with_a_long_log(
     tidy(session)
     assert not long.exists()
     assert "long" not in branches(primary)
+
+
+def test_tidy_keeps_a_file_that_only_an_earlier_logged_commit_holds(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    holder = linked(primary, "holder")
+    (holder / "draft.txt").write_text("only here\n")
+    commit(holder, "add a draft")
+    git(holder, "rm", "-q", "draft.txt")
+    git(holder, "commit", "-qm", "remove the draft")
+    git(holder, "reset", "-q", "--hard", "main")
+    age(holder)
+    session = linked(primary, "session")
+    tidy(session)
+    assert holder.is_dir()
