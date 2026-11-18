@@ -1,0 +1,136 @@
+{
+ "experimental_config": {
+  "licenses": {
+   "allowlist": null,
+   "summary": false
+  }
+ },
+ "results": [
+  {
+   "packages": [
+    {
+     "groups": [
+      {
+       "aliases": [
+        "MAL-2025-20690"
+       ],
+       "ids": [
+        "MAL-2025-20690"
+       ],
+       "max_severity": ""
+      },
+      {
+       "aliases": [
+        "GHSA-9x64-5r7x-2q53"
+       ],
+       "ids": [
+        "GHSA-9x64-5r7x-2q53"
+       ],
+       "max_severity": "9.8"
+      }
+     ],
+     "package": {
+      "ecosystem": "npm",
+      "name": "flatmap-stream",
+      "purl": "pkg:npm/flatmap-stream@0.1.1?source=PUBLIC_REGISTRY",
+      "version": "0.1.1"
+     },
+     "vulnerabilities": [
+      {
+       "affected": [
+        {
+         "database_specific": {
+          "source": "https://github.com/ossf/malicious-packages/blob/main/osv/malicious/npm/flatmap-stream/MAL-2025-20690.json"
+         },
+         "package": {
+          "ecosystem": "npm",
+          "name": "flatmap-stream",
+          "purl": "pkg:npm/flatmap-stream"
+         },
+         "ranges": [
+          {
+           "events": [
+            {
+             "introduced": "0"
+            }
+           ],
+           "type": "SEMVER"
+          }
+         ]
+        }
+       ],
+       "credits": [
+        {
+         "contact": [
+          "actran@amazon.com"
+         ],
+         "name": "Amazon Inspector",
+         "type": "FINDER"
+        }
+       ],
+       "database_specific": {
+        "malicious-packages-origins": null
+       },
+       "id": "MAL-2025-20690",
+       "modified": "2025-08-14T18:52:04Z",
+       "published": "2025-08-14T18:52:04Z",
+       "schema_version": "1.7.3",
+       "summary": "Malicious code in flatmap-stream (npm)"
+      },
+      {
+       "affected": [
+        {
+         "database_specific": {
+          "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2020/09/GHSA-9x64-5r7x-2q53/GHSA-9x64-5r7x-2q53.json"
+         },
+         "package": {
+          "ecosystem": "npm",
+          "name": "flatmap-stream",
+          "purl": "pkg:npm/flatmap-stream"
+         },
+         "versions": [
+          "0.1.1"
+         ]
+        }
+       ],
+       "database_specific": {
+        "cwe_ids": [
+         "CWE-506"
+        ],
+        "github_reviewed": true,
+        "github_reviewed_at": "2020-08-31T18:33:59Z",
+        "nvd_published_at": null,
+        "severity": "CRITICAL"
+       },
+       "id": "GHSA-9x64-5r7x-2q53",
+       "modified": "2021-10-01T13:30:04Z",
+       "published": "2020-09-01T21:21:32Z",
+       "references": [
+        {
+         "type": "WEB",
+         "url": "https://github.com/dominictarr/event-stream/issues/116"
+        },
+        {
+         "type": "WEB",
+         "url": "https://www.npmjs.com/advisories/737"
+        }
+       ],
+       "schema_version": "1.9.0",
+       "severity": [
+        {
+         "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+         "type": "CVSS_V3"
+        }
+       ],
+       "summary": "Malicious Package in flatmap-stream"
+      }
+     ]
+    }
+   ],
+   "source": {
+    "path": "package-lock.json",
+    "type": "lockfile"
+   }
+  }
+ ]
+}
