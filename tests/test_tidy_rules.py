@@ -449,9 +449,11 @@ def test_tidy_keeps_a_build_folder_that_is_a_link_or_a_mount_point(
         (path / "target").symlink_to(real, target_is_directory=True)
     else:
         real = make_target(path)
-        monkeypatch.setattr(
-            os.path, "ismount", lambda place: Path(place).name == "target"
-        )
+
+        def mounted(place: str | os.PathLike[str]) -> bool:
+            return Path(place).name == "target"
+
+        monkeypatch.setattr(os.path, "ismount", mounted)
     tidy(linked(primary, "session"))
     assert real.is_dir() and (path / "target").exists()
     assert "link or a mount point" in capsys.readouterr().err
