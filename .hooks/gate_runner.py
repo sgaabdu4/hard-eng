@@ -57,6 +57,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
+STOPPED_AT_LIMIT: set[str] = set()
 CONFIGURED: list[Group] = []
 CHANGED_DART: dict[str, list[str]] = {}
 RECORDING = threading.Event()
@@ -281,6 +282,13 @@ def prepare_reports(
     return report_path, coverage_path, directory, expected_sources
 
 
+def gate_key(group: Group, gate: Gate, related_base: str | None) -> str:
+    key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
+    if part := gate.get("part"):
+        key += "@shard" if part.isdecimal() else "@merge"
+    return key
+
+
 def run_gate(
     group: Group,
     gate: Gate,
@@ -293,18 +301,17 @@ def run_gate(
     from gate_times import gate_limit, record_gate_time, record_gate_timeout
     from process_group import install_key, note_install
 
-    key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
-    if part := gate.get("part"):
-        key += "@shard" if part.isdecimal() else "@merge"
+    key = gate_key(group, gate, related_base)
     limit = gate_limit(ROOT, key, timeout)
     name = f"{group['path']}/{gate['name']}"
     OUTPUTS.pop(name, None)
+    STOPPED_AT_LIMIT.discard(key)
     files = CHANGED_DART.get(name)
     if files is not None and changed_dart_pass(group, gate, files, limit, groups):
         return False
     started = time.monotonic()
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
-    stopped_at_limit = failed and time.monotonic() - started >= limit
+    stopped_at_limit = key in STOPPED_AT_LIMIT
     if not RECORDING.is_set():
         from debt import judge
 
@@ -566,6 +573,8 @@ def run_limited_gate(
         subprocess.CalledProcessError,
     ) as error:
         unrun = isinstance(error, (ImportError, OSError, subprocess.TimeoutExpired))
+        if isinstance(error, subprocess.TimeoutExpired):
+            STOPPED_AT_LIMIT.add(gate_key(group, gate, related_base))
         text = str(error) if unrun else remember(group, gate, str(error))
         print(
             f"FAIL {gate['name']}: {text}; "

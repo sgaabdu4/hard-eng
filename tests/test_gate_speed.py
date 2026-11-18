@@ -147,6 +147,27 @@ def test_a_stop_at_the_limit_fails_the_check_when_the_debt_judge_calls_the_gate_
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
 
 
+def test_a_slow_start_is_not_a_stop_at_the_limit(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+    gate_times.record_gate_time(tmp_path, "./suite", 0.1)
+    prepared = runner.prepared_command
+
+    def slow_start(*arguments: object) -> list[str]:
+        time.sleep(1.5)
+        return prepared(*arguments)
+
+    def pass_it(*_: object) -> bool:
+        return False
+
+    monkeypatch.setattr(runner, "prepared_command", slow_start)
+    monkeypatch.setattr(debt, "judge", pass_it)
+    configure(tmp_path, [gate("suite", "raise SystemExit(1)")])
+    assert runner.check(timeout=120) == 0
+    assert gate_times.gate_limit(tmp_path, "./suite", 120) < 120
+
+
 def test_a_check_in_another_process_cannot_lose_a_record(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
