@@ -673,9 +673,9 @@ def prepare_update(root: Path, repair: bool = False) -> str:
 
 
 def free_step(root: Path, worktree: Path) -> str:
-    from stale_updates import registered_worktrees
+    from ship_actions import worktrees
 
-    if worktree == Path(registered_worktrees(root)[0]["worktree"]):
+    if worktree == Path(worktrees(root)[0]["worktree"]):
         return f"switch the main checkout to another branch with `git -C {worktree} switch <branch>`"
     return (
         f"free it with `git -C {worktree} switch --detach` or "
@@ -877,7 +877,7 @@ def run_update(root: Path) -> int:
                 process_group=0,
                 pass_fds=(handle.fileno(),),
             )
-        except (OSError, subprocess.SubprocessError) as error:
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
             record_result(root, failed_update(error))
             print(last_result(root))
             return 1
@@ -890,7 +890,7 @@ def run_update(root: Path) -> int:
         stop_group(update)
         if update.returncode != 0:
             record_result(root, failed_update(f"update exited {update.returncode}"))
-        with suppress(OSError, subprocess.SubprocessError):
+        with suppress(OSError, ValueError, subprocess.SubprocessError):
             remove_stale_candidates(root)
     result = last_result(root)
     print(result)

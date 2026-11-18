@@ -10,7 +10,6 @@ from pathlib import Path
 from gate_config import SOURCE_FILE, JsonValue
 from review_bypass import author_only_review_block
 from shipping import ShippingError, _pr_url, gh, load_policy, merge_settings
-from stale_updates import registered_worktrees
 from update_runner import (
     REPAIR_SUBJECT,
     UPDATE_BRANCH,
@@ -134,7 +133,9 @@ def check_state(pull: dict[str, JsonValue], required: list[str] | None = None) -
 
 
 def branch_worktree(root: Path) -> Path | None:
-    for fields in registered_worktrees(root):
+    from ship_actions import worktrees
+
+    for fields in worktrees(root):
         if fields.get("branch") == f"refs/heads/{UPDATE_BRANCH}":
             return Path(fields["worktree"])
     return None
