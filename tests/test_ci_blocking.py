@@ -101,6 +101,10 @@ REFUSED = {
     "check deleted": workflow("echo nothing"),
     "on narrowed": workflow(on="on:\n  workflow_dispatch:\n"),
     "on narrowed to a string": workflow(on="on: workflow_dispatch\n"),
+    "job if false": workflow(job="    if: false\n"),
+    "job if false string": workflow(job="    if: 'false'\n"),
+    "job if false expression": workflow(job="    if: ${{ false }}\n"),
+    "job if event name": workflow(job="    if: github.event_name == 'push'\n"),
     "pull request branch filter": workflow(
         on="on:\n  pull_request:\n    branches: [never-a-real-base]\n"
     ),
@@ -174,6 +178,9 @@ PASSED = {
     ),
     "launcher variable set by an earlier step": workflow(launcher()),
     "workflow call only": workflow(on="on:\n  workflow_call:\n"),
+    "job if of the generated impact jobs": workflow(
+        job="    if: ${{ !cancelled() }}\n"
+    ),
     "pull request on every branch": workflow(
         on="on:\n  pull_request:\n    branches: ['**']\n"
     ),

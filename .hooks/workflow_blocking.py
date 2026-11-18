@@ -39,6 +39,9 @@ GENERATED_LINES = [
 STEP_IF = re.compile(
     r"steps\.impact\.outputs\.docs_only (?:==|!=) 'true'(?: && needs\.[\w-]+\.result == '(?:skipped|success)')?"
 )
+JOB_IF = re.compile(
+    r"\$\{\{ (?:!cancelled\(\)|needs\.impact\.outputs\.apple != 'false') \}\}"
+)
 STEP_ENV = {
     "GH_TOKEN",
     "GITHUB_TOKEN",
@@ -115,8 +118,8 @@ def job_hits(
     hits = []
     if job.get("continue-on-error", False) not in SAFE_FALSE:
         hits.append("the job sets continue-on-error")
-    if str(job.get("if", "")).strip() in {"false", "${{ false }}", "0", "''", '""'}:
-        hits.append("the job never runs")
+    if "if" in job and not JOB_IF.fullmatch(str(job["if"]).strip()):
+        hits.append(f"the job runs only when {job['if']!r}, so it can be skipped")
     for scope, holder in (("job", job), ("workflow", workflow)):
         defaults = holder.get("defaults")
         run = defaults.get("run") if isinstance(defaults, dict) else None
