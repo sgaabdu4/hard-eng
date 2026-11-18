@@ -450,13 +450,12 @@ def job_always_runs(name: object, jobs: dict[object, object]) -> bool:
 
 
 def ends_the_command(rest: str) -> bool:
-    """The check ends its line, or is followed on that line by `&&` and a command with no pipe, `;` or lone `&`, and no later line follows: those can hide its exit status."""
+    """The check is the last command of the run: it ends its line or is followed by `&&` and a command with no pipe, `;` or lone `&`, and no later line follows, so the step takes the check's exit status."""
     line, _, later = rest.partition("\n")
     line = line.strip()
-    return not line or (
-        line.startswith("&&")
-        and not re.search(r"[|;]|(?<!&)&(?!&)", line)
-        and not later.strip()
+    return not later.strip() and (
+        not line
+        or (line.startswith("&&") and not re.search(r"[|;]|(?<!&)&(?!&)", line))
     )
 
 
@@ -476,8 +475,6 @@ def shell_runs_it(raw: str, text: str, start: int) -> bool:
             and not LAUNCHER.fullmatch(SPACES.sub(" ", line.strip()))
         ):
             return False
-    if re.search(r"\bset\s+\+\w*e|\+o\s+errexit", raw):
-        return False
     before = text[text.rfind("\n", 0, start) + 1 : start].strip()
     return not re.search(r"^(echo|printf)\b|[|;!]|(?<!&)&(?!&)", before)
 

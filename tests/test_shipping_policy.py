@@ -283,6 +283,18 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "- run: python3 .hooks/hard-eng.py check\n",
             "- run: |\n          set +e\n          python3 .hooks/hard-eng.py check\n          echo done\n",
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          test -f flag && python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          set +u +e\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- shell: bash {0}\n        run: |\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
     ],
     ids=[
         "push-only",
@@ -310,6 +322,9 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "conditional-shell-lines",
         "or-before-the-check",
         "errexit-off-then-a-line",
+        "and-before-the-check-then-a-line",
+        "errexit-off-by-a-longer-set-then-a-line",
+        "unchecked-shell-then-a-line",
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
@@ -363,15 +378,15 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
         ),
         CHECK_WORKFLOW.replace(
             "- run: python3 .hooks/hard-eng.py check\n",
-            "- run: |\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+            "- run: |\n          # Do not use set +e here\n          python3 .hooks/hard-eng.py check\n",
         ),
     ],
     ids=[
         "not-cancelled",
         "branches-with-double-star",
         "and-then-a-command",
-        "a-line-after",
         "the-generated-launcher-line",
+        "a-comment-that-names-errexit",
     ],
 )
 def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
