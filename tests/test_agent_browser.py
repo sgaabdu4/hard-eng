@@ -293,3 +293,19 @@ def test_leftover_check_counts_only_the_browsers_of_this_run(tmp_path: Path) -> 
     finally:
         other.kill()
         other.wait()
+
+
+def test_a_listing_without_environments_still_finds_the_browsers_of_the_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Linux `ps` has no environment column; the namespace is then read from the process environment."""
+    listing = "101 /x/agent-browser serve\n102 /x/agent-browser serve\n"
+    done = subprocess.CompletedProcess([], 0, stdout=listing)
+    monkeypatch.setattr(agent_browser.subprocess, "run", lambda *_a, **_k: done)
+    monkeypatch.setattr(
+        agent_browser,
+        "process_environment",
+        lambda pid: "AGENT_BROWSER_NAMESPACE=mine" if pid == "101" else "",
+    )
+    found = agent_browser.browser_processes("mine")
+    assert [line.split()[0] for line in found] == ["101"]

@@ -148,10 +148,24 @@ class Finished(Protocol):
     def events(self) -> Path | None: ...
 
 
+def process_environment(pid: str) -> str:
+    """The environment of a process where `ps` cannot print it (Linux), as NAME=value words."""
+    try:
+        return (
+            Path(f"/proc/{pid}/environ")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode(errors="replace")
+        )
+    except OSError:
+        return ""
+
+
 def browser_processes(namespace: str | None = None) -> set[str]:
     """Browser processes; with a namespace, only those whose environment carries it."""
+    flags = "-axwwo" if Path("/proc/self/environ").exists() else "-axEwwo"
     listing = subprocess.run(
-        ["ps", "-axEwwo", "pid=,command="],
+        ["ps", flags, "pid=,command="],
         capture_output=True,
         text=True,
         check=False,
@@ -160,7 +174,8 @@ def browser_processes(namespace: str | None = None) -> set[str]:
     return {
         line.strip()
         for line in listing.splitlines()
-        if PROCESS.search(line) and mark in line
+        if PROCESS.search(line)
+        and (mark in line or mark in process_environment(line.split(maxsplit=1)[0]))
     }
 
 
