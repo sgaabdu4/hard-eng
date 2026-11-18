@@ -175,13 +175,43 @@ def reflog_time(cwd: Path, ref: str) -> float | None:
     return float(found[1]) if found else None
 
 
-def proc_paths() -> set[str]:
+def foreign_user(process: Path) -> bool:
+    """A person's account other than ours owns the process; system accounts cannot sit in a worktree."""
+    try:
+        owner = process.stat().st_uid
+    except OSError:
+        return False
+    return owner != os.getuid() and owner >= 1000
+
+
+def process_links(process: Path) -> set[str] | None:
+    """Where one process stands; None when a foreign user's process cannot be read."""
     found: set[str] = set()
-    for process in Path("/proc").iterdir():
+    try:
+        names = [process / "cwd"]
+        with suppress(FileNotFoundError):
+            names += [Path(entry.path) for entry in os.scandir(process / "fd")]
+    except PermissionError:
+        return None if foreign_user(process) else found
+    for link in names:
+        try:
+            found.add(os.readlink(link))
+        except PermissionError:
+            if foreign_user(process):
+                return None
+        except OSError:
+            continue
+    return found
+
+
+def proc_paths(proc: Path = Path("/proc")) -> set[str] | None:
+    found: set[str] = set()
+    for process in proc.iterdir():
         if process.name.isdigit() and int(process.name) != os.getpid():
-            for link in (process / "cwd", *(process / "fd").glob("*")):
-                with suppress(OSError):
-                    found.add(os.readlink(link))
+            links = process_links(process)
+            if links is None:
+                return None
+            found |= links
     return found
 
 
@@ -501,20 +531,24 @@ class Tidy:
         ]
         return next((reason for reason, kept in checks if kept()), None)
 
-    def remove_branches(self) -> None:
+    def checked_out(self) -> set[str]:
         from ship_actions import worktrees
 
+        return {
+            record.get("branch", "").removeprefix("refs/heads/")
+            for record in worktrees(self.root)
+        }
+
+    def remove_branches(self) -> None:
         listing = tidy_git(
             self.root, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads"
         )
         for line in listing.splitlines():
             tip, _, ref = line.partition(" ")
             name = ref.removeprefix("refs/heads/")
-            checked_out = {
-                record.get("branch", "").removeprefix("refs/heads/")
-                for record in worktrees(self.root)
-            }
-            reason = self.branch_reason(name, tip, checked_out)
+            reason = self.branch_reason(name, tip, self.checked_out())
+            if reason is None and name in self.checked_out():
+                reason = "checked out"
             if reason is not None:
                 if reason not in {"protected", "checked out"}:
                     note(f"kept branch {name}: {reason}")
