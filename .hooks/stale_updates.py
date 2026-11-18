@@ -131,6 +131,7 @@ ANSWERS = "hard-eng-tidy-gh.json"
 REMOVED = "hard-eng-tidy-removed.log"
 REMOVED_DAYS = 30
 PROTECTED_BRANCHES = {"main", "master", "develop", "hard-eng/update"}
+OWNED_PREFIXES = ("codex/",)
 
 
 def tidy_gh(cwd: Path, *arguments: str) -> list[object] | None:
@@ -442,7 +443,10 @@ class Tidy:
         logged = reflog_time(self.root, f"refs/heads/{name}")
 
         checks: list[tuple[str, Callable[[], bool]]] = [
-            ("protected", lambda: name in self.protected),
+            (
+                "protected",
+                lambda: name in self.protected or name.startswith(OWNED_PREFIXES),
+            ),
             ("checked out", lambda: name in checked_out),
             (
                 "used in the last 24 hours or no log",
