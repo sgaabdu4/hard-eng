@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol, cast
@@ -100,7 +100,7 @@ def matches(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
 
 
-def ui_names(item: dict[str, object], patterns: list[str]) -> list[tuple[str, bool]]:
+def ui_names(item: Mapping[str, object], patterns: list[str]) -> list[tuple[str, bool]]:
     """The names of a changed file under `ui_paths`: its new name, or the old name of a file moved out (a removal, so no patch)."""
     name = str(item["filename"])
     if matches(name, patterns):

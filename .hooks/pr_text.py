@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import json
 import re
 from pathlib import Path
@@ -144,6 +143,7 @@ def ui_problem(
         changed_files,
         file_names,
         reference_problem,
+        ui_names,
         visible_files,
     )
 
@@ -161,13 +161,11 @@ def ui_problem(
         return problem
     changes = [
         Change(
-            str(item["filename"]),
-            item["patch"] if isinstance(item.get("patch"), str) else None,
+            name,
+            item["patch"] if is_new and isinstance(item.get("patch"), str) else None,
         )
         for item in files
-        if any(
-            fnmatch.fnmatchcase(str(item["filename"]), pattern) for pattern in patterns
-        )
+        for name, is_new in ui_names(item, patterns)
     ]
     visible = visible_files(changes)
     note = bool(UI_APPEARANCE_UNCHANGED.search(body))
