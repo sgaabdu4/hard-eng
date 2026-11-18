@@ -220,6 +220,27 @@ def test_a_check_workflow_with_a_filtered_pull_request_trigger_is_refused(
 STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
 
 
+def _job(name: str, shard: str, extra: str = "") -> str:
+    return (
+        f"  {name}:\n    runs-on: x\n{extra}    steps:\n"
+        f"      - run: python3 .hooks/hard-eng.py check --shard {shard}\n"
+    )
+
+
+SHARD_HEAD = "on: [pull_request]\njobs:\n"
+MATRIX = "    strategy:\n      matrix:\n        shard: [1, 2]\n"
+SHARDED_WORKFLOWS = {
+    "rest-only": SHARD_HEAD + _job("c", "rest"),
+    "numbered-only": SHARD_HEAD + _job("t", '"$SHARD"', MATRIX),
+    "rest-and-numbered": SHARD_HEAD + _job("c", "rest") + _job("t", '"$SHARD"', MATRIX),
+    "merge-only": SHARD_HEAD + _job("m", "merge"),
+    "shards-with-a-condition-and-a-plain-merge": SHARD_HEAD
+    + _job("c", "rest")
+    + _job("t", '"$SHARD"', "    if: github.actor != 'x'\n" + MATRIX)
+    + _job("m", "merge", "    needs: t\n"),
+}
+
+
 @pytest.mark.parametrize(
     "workflow",
     [
@@ -310,6 +331,7 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "- run: python3 .hooks/hard-eng.py check\n",
             '- run: |\n          if [ -f flag ]; then\n            echo "nothing"; exit 0\n          fi\n          python3 .hooks/hard-eng.py check\n',
         ),
+        *SHARDED_WORKFLOWS.values(),
     ],
     ids=[
         "push-only",
@@ -342,6 +364,7 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "unchecked-shell-then-a-line",
         "a-closed-block-that-exits-zero-before-the-check",
         "a-closed-block-that-prints-then-exits-zero-before-the-check",
+        *SHARDED_WORKFLOWS,
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
@@ -349,8 +372,9 @@ def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_r
 ) -> None:
     root, workflows = _ci_project(tmp_path)
     (workflows / "ci.yml").write_text(workflow)
+    config = SHARDED_CONFIG if "--shard" in workflow else CI_CONFIG
     with pytest.raises(shipping.ShippingError, match="every pull request"):
-        ci_jobs.load_checked_policy(root, CI_CONFIG)
+        ci_jobs.load_checked_policy(root, config)
 
 
 @pytest.mark.parametrize(
@@ -361,39 +385,6 @@ def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
 ) -> None:
     source = Path(__file__).resolve().parents[1] / name
     assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()), sharded=True)
-
-
-def _job(name: str, shard: str, extra: str = "") -> str:
-    return (
-        f"  {name}:\n    runs-on: x\n{extra}    steps:\n"
-        f"      - run: python3 .hooks/hard-eng.py check --shard {shard}\n"
-    )
-
-
-SHARD_HEAD = "on: [pull_request]\njobs:\n"
-MATRIX = "    strategy:\n      matrix:\n        shard: [1, 2]\n"
-SHARDED_WORKFLOWS = {
-    "rest-only": SHARD_HEAD + _job("c", "rest"),
-    "numbered-only": SHARD_HEAD + _job("t", '"$SHARD"', MATRIX),
-    "rest-and-numbered": SHARD_HEAD + _job("c", "rest") + _job("t", '"$SHARD"', MATRIX),
-    "merge-only": SHARD_HEAD + _job("m", "merge"),
-    "shards-with-a-condition-and-a-plain-merge": SHARD_HEAD
-    + _job("c", "rest")
-    + _job("t", '"$SHARD"', "    if: github.actor != 'x'\n" + MATRIX)
-    + _job("m", "merge", "    needs: t\n"),
-}
-
-
-@pytest.mark.parametrize(
-    "workflow", SHARDED_WORKFLOWS.values(), ids=list(SHARDED_WORKFLOWS)
-)
-def test_with_a_sharded_gate_a_workflow_without_the_rest_and_merge_jobs_is_refused(
-    tmp_path: Path, workflow: str
-) -> None:
-    root, workflows = _ci_project(tmp_path)
-    (workflows / "ci.yml").write_text(workflow)
-    with pytest.raises(shipping.ShippingError, match="every pull request"):
-        ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
 
 
 def test_the_rest_job_alone_is_the_whole_check_when_no_gate_is_sharded(
