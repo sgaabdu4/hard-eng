@@ -122,6 +122,8 @@ def remove_stale_candidates(root: Path) -> None:
 
 
 STASH_SUBJECT = re.compile(r"(?:WIP on|On) ([^:]+):")
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+MERGE_REPOSITORY = "merge.git"
 PROTECTED_BRANCHES = {"main", "master", "develop", "hard-eng/update"}
 
 
@@ -174,7 +176,6 @@ class Tidy:
     protected: set[str]
     removed: Counter[str]
     scratch: Path
-    objects: Path
     answers_file: Path
     answers: dict[str, dict[str, float]]
 
@@ -208,6 +209,10 @@ class Tidy:
             root, "rev-parse", "--path-format=absolute", "--git-path", "objects"
         ).strip()
         scratch = Path(tempfile.mkdtemp(prefix="hard-eng-tidy-"))
+        tidy_git(scratch, "init", "--bare", "--quiet", MERGE_REPOSITORY)
+        (scratch / MERGE_REPOSITORY / "objects/info/alternates").write_text(
+            f"{objects}\n"
+        )
         return cls(
             root,
             root.resolve(),
@@ -218,25 +223,32 @@ class Tidy:
             {*PROTECTED_BRANCHES, base, named},
             removed,
             scratch,
-            Path(objects),
             answers_file(root),
             load_answers(answers_file(root)),
         )
 
     def content_merged(self, head: str) -> bool:
-        """Merging the head into the base tip changes nothing, so the base holds every change."""
+        """Merging the head into the base tip changes nothing, so the base holds every change.
+
+        The merge runs in an empty repository with no attributes and no merge drivers, so no setting can turn a change into nothing.
+        """
         done = tidy_run(
-            self.root,
+            self.scratch,
             120,
             "git",
+            f"--attr-source={EMPTY_TREE}",
+            "-c",
+            f"core.attributesFile={os.devnull}",
             "merge-tree",
             "--write-tree",
             self.tip,
             head,
             env={
                 **os.environ,
-                "GIT_OBJECT_DIRECTORY": str(self.scratch),
-                "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(self.objects),
+                "GIT_DIR": str(self.scratch / MERGE_REPOSITORY),
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_SYSTEM": os.devnull,
+                "GIT_ATTR_NOSYSTEM": "1",
             },
         )
         if done.returncode == 1:
