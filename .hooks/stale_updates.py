@@ -391,9 +391,7 @@ class Tidy:
         unmerged = left.stdout.split()
         if not unmerged:
             return False
-        return len(unmerged) > 300 or not all(
-            self.content_merged(commit) for commit in unmerged
-        )
+        return not all(self.content_merged(commit) for commit in unmerged)
 
     def hidden_edits(self, path: Path) -> bool:
         listing = tidy_git(path, "ls-files", "-v")
