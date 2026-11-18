@@ -301,11 +301,16 @@ def test_a_listing_without_environments_still_finds_the_browsers_of_the_namespac
     """Linux `ps` has no environment column; the namespace is then read from the process environment."""
     listing = "101 /x/agent-browser serve\n102 /x/agent-browser serve\n"
     done = subprocess.CompletedProcess([], 0, stdout=listing)
-    monkeypatch.setattr(agent_browser.subprocess, "run", lambda *_a, **_k: done)
-    monkeypatch.setattr(
-        agent_browser,
-        "process_environment",
-        lambda pid: "AGENT_BROWSER_NAMESPACE=mine" if pid == "101" else "",
-    )
+
+    def listed(
+        *_arguments: object, **_options: object
+    ) -> subprocess.CompletedProcess[str]:
+        return done
+
+    def environment(pid: str) -> str:
+        return "AGENT_BROWSER_NAMESPACE=mine" if pid == "101" else ""
+
+    monkeypatch.setattr(agent_browser.subprocess, "run", listed)
+    monkeypatch.setattr(agent_browser, "process_environment", environment)
     found = agent_browser.browser_processes("mine")
     assert [line.split()[0] for line in found] == ["101"]
