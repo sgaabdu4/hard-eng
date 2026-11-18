@@ -896,3 +896,23 @@ def test_tidy_removes_a_merged_worktree_whose_log_is_long(primary: Path) -> None
     session = linked(primary, "session")
     tidy(session)
     assert not long.exists()
+
+
+def test_tidy_removes_a_squash_merged_worktree_with_a_long_log(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    long = linked(primary, "long")
+    for number in range(120):
+        (long / f"f{number}.txt").write_text("x\n")
+        commit(long, f"step {number}")
+    git(primary, "merge", "-q", "--squash", "long")
+    git(primary, "commit", "-qm", "squash of long")
+    git(primary, "push", "-q", "origin", "main")
+    git(long, "reset", "-q", "--hard", "main")
+    age(long)
+    age(primary)
+    session = linked(primary, "session")
+    tidy(session)
+    assert not long.exists()
+    assert "long" not in branches(primary)
