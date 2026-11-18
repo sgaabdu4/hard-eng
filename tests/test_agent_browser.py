@@ -148,7 +148,9 @@ RUNNING: set[str] = set()
 @pytest.fixture
 def judged_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Run:
     RUNNING.clear()
-    monkeypatch.setattr(agent_browser, "browser_processes", lambda: set(RUNNING))
+    monkeypatch.setattr(
+        agent_browser, "browser_processes", lambda namespace=None: set(RUNNING)
+    )
     return browser_run(tmp_path)
 
 
