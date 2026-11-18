@@ -1,5 +1,6 @@
 """The tidy keeps work that a repository setting, a paused operation or a path spelling could hide."""
 
+import os
 import subprocess
 import time
 from collections.abc import Callable
@@ -396,3 +397,61 @@ def test_a_failed_config_cleanup_is_reported_with_a_quoted_command_to_retry(
     assert "git config --remove-section 'branch.feat/$USER'" in said
     assert "removed branch feat/$USER" in said
     assert "kept branch" not in said
+
+
+def test_a_branch_whose_name_ends_the_section_name_of_a_kept_branch_keeps_that_section(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    merged_branch(primary, "a")
+    git(primary, "branch", "a]b", "main")
+    git(primary, "switch", "-q", "a]b")
+    (primary / "k.txt").write_text("k\n")
+    commit(primary, "own work")
+    git(primary, "switch", "-qc", "parking", "main")
+    git(primary, "config", "branch.a]b.description", "notes that exist nowhere else")
+    tidy(linked(primary, "session"))
+    said = capsys.readouterr().err
+    assert "a" not in branches(primary)
+    assert "a]b" in branches(primary)
+    assert git(primary, "config", "branch.a]b.description").startswith("notes")
+    assert "git config --remove-section branch.a" in said
+
+
+def test_a_section_that_the_cleanup_could_not_remove_is_reported(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    merged_branch(primary, "a]b")
+    git(primary, "config", "branch.a]b.description", "old notes")
+    tidy(linked(primary, "session"))
+    assert "a]b" not in branches(primary)
+    shown = subprocess.run(
+        ["git", "config", "--get", "branch.a]b.description"],
+        cwd=primary,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert shown.stdout == "" or "settings stay" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("how", ["symlink", "mount-point"])
+def test_tidy_keeps_a_build_folder_that_is_a_link_or_a_mount_point(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    how: str,
+) -> None:
+    path = linked(primary, "work")
+    unmerged(path)
+    if how == "symlink":
+        real = make_target(tmp_path)
+        (path / "target").symlink_to(real, target_is_directory=True)
+    else:
+        real = make_target(path)
+        monkeypatch.setattr(
+            os.path, "ismount", lambda place: Path(place).name == "target"
+        )
+    tidy(linked(primary, "session"))
+    assert real.is_dir() and (path / "target").exists()
+    assert "link or a mount point" in capsys.readouterr().err
