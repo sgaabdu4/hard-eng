@@ -131,7 +131,7 @@ def test_a_gate_stopped_at_its_limit_gets_the_full_budget_next_time(
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
 
 
-def test_a_stop_at_the_limit_is_kept_when_the_debt_judge_calls_the_gate_a_pass(
+def test_a_stop_at_the_limit_fails_the_check_when_the_debt_judge_calls_the_gate_a_pass(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
@@ -143,7 +143,7 @@ def test_a_stop_at_the_limit_is_kept_when_the_debt_judge_calls_the_gate_a_pass(
 
     monkeypatch.setattr(debt, "judge", pass_it)
     configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
-    runner.check(timeout=120)
+    assert runner.check(timeout=120) == 1
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
 
 

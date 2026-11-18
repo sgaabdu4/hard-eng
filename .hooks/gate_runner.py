@@ -308,7 +308,9 @@ def run_gate(
     if not RECORDING.is_set():
         from debt import judge
 
-        failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
+        failed = (
+            judge(ROOT, group, gate, failed, OUTPUTS.get(name, "")) or stopped_at_limit
+        )
     note_install(install_key(group), gate.get("role"), failed)
     if stopped_at_limit:
         record_gate_timeout(ROOT, key)
