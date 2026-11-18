@@ -29,9 +29,11 @@ from tidy_guards import (
     paused_branches,
     quiet_folders,
     reflog_time,
+    same_place,
     submodules_hold_nothing,
     tidy_git,
     tidy_run,
+    under,
 )
 
 OWNER = re.compile(r"hard-eng-update (\d+)")
@@ -102,7 +104,7 @@ def remove_stale_candidates(root: Path) -> None:
         path = Path(fields.get("worktree", ""))
         owner = OWNER.fullmatch(fields.get("locked", ""))
         if not WORKTREE.fullmatch(f"{path.parent.name}/{path.name}"):
-            if path.is_dir() and path.resolve() != root.resolve():
+            if path.is_dir() and not same_place(path.resolve(), root.resolve()):
                 stop_idle_watcher(path)
             continue
         if not abandoned(path, owner):
@@ -373,9 +375,9 @@ class Tidy:
             or not path.is_dir()
         ):
             return "primary, bare, locked or missing"
-        if path.resolve() == self.session:
+        if same_place(path.resolve(), self.session):
             return "the session's worktree"
-        if path.resolve().is_relative_to(codex_folder()):
+        if under(str(path.resolve()), codex_folder()):
             return "kept by the Codex app"
         state: dict[str, bool] = {}
 
@@ -555,7 +557,7 @@ class Tidy:
             "bare" in record
             or "prunable" in record
             or not path.is_dir()
-            or path.resolve() == self.session
+            or same_place(path.resolve(), self.session)
         ):
             return
         reason = self.target_reason(path)
