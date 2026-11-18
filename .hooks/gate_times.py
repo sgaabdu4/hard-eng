@@ -9,12 +9,13 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
-from gate_config import JsonValue
+from gate_config import Gate, Group, JsonValue
 from project_files import keep
 
 GATE_FLOOR_SECONDS = 600
 RECENT_PASSES = 5
 COMMON_FOLDER_LOCK = threading.Lock()
+STOPPED_AT_LIMIT: set[str] = set()
 
 
 def times_file(root: Path) -> Path:
@@ -22,6 +23,13 @@ def times_file(root: Path) -> Path:
         ["git", "rev-parse", "--git-common-dir"], cwd=root, text=True
     ).strip()
     return root / common / "hard-eng-gate-times.json"
+
+
+def gate_key(group: Group, gate: Gate, related_base: str | None) -> str:
+    key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
+    if part := gate.get("part"):
+        key += "@shard" if part.isdecimal() else "@merge"
+    return key
 
 
 def gate_times(root: Path) -> Path:
@@ -91,3 +99,16 @@ def record_gate_time(root: Path, key: str, seconds: float) -> None:
 
 def record_gate_timeout(root: Path, key: str) -> None:
     update_gate_record(root, key, None)
+
+
+def note_stop(group: Group, gate: Gate, related_base: str | None) -> None:
+    STOPPED_AT_LIMIT.add(gate_key(group, gate, related_base))
+
+
+def settle_gate_time(root: Path, key: str, failed: bool, seconds: float) -> bool:
+    if key in STOPPED_AT_LIMIT:
+        record_gate_timeout(root, key)
+        return True
+    if not failed:
+        record_gate_time(root, key, seconds)
+    return failed

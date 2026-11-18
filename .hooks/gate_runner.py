@@ -57,7 +57,6 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
-STOPPED_AT_LIMIT: set[str] = set()
 CONFIGURED: list[Group] = []
 CHANGED_DART: dict[str, list[str]] = {}
 RECORDING = threading.Event()
@@ -282,13 +281,6 @@ def prepare_reports(
     return report_path, coverage_path, directory, expected_sources
 
 
-def gate_key(group: Group, gate: Gate, related_base: str | None) -> str:
-    key = f"{group['path']}/{gate['name']}" + ("@related" if related_base else "")
-    if part := gate.get("part"):
-        key += "@shard" if part.isdecimal() else "@merge"
-    return key
-
-
 def run_gate(
     group: Group,
     gate: Gate,
@@ -298,36 +290,30 @@ def run_gate(
     related_base: str | None = None,
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
-    from gate_times import gate_limit, record_gate_time, record_gate_timeout
+    import gate_times
     from process_group import install_key, note_install
 
-    key = gate_key(group, gate, related_base)
-    limit = gate_limit(ROOT, key, timeout)
+    key = gate_times.gate_key(group, gate, related_base)
+    limit = gate_times.gate_limit(ROOT, key, timeout)
     name = f"{group['path']}/{gate['name']}"
     OUTPUTS.pop(name, None)
-    STOPPED_AT_LIMIT.discard(key)
+    gate_times.STOPPED_AT_LIMIT.discard(key)
     files = CHANGED_DART.get(name)
     if files is not None and changed_dart_pass(group, gate, files, limit, groups):
         return False
     started = time.monotonic()
     failed = run_limited_gate(group, gate, limit, output_lock, groups, related_base)
-    stopped_at_limit = key in STOPPED_AT_LIMIT
     if not RECORDING.is_set():
         from debt import judge
 
-        failed = (
-            judge(ROOT, group, gate, failed, OUTPUTS.get(name, "")) or stopped_at_limit
-        )
+        failed = judge(ROOT, group, gate, failed, OUTPUTS.get(name, ""))
+    failed = gate_times.settle_gate_time(ROOT, key, failed, time.monotonic() - started)
     note_install(install_key(group), gate.get("role"), failed)
-    if stopped_at_limit:
-        record_gate_timeout(ROOT, key)
     if failed:
         FAILED_GATES.append(key)
         if note := lost_scanner_note(OUTPUTS.get(name, "")):
             with output_lock:
                 print(note, flush=True)
-    elif not stopped_at_limit:
-        record_gate_time(ROOT, key, time.monotonic() - started)
     return failed
 
 
@@ -574,7 +560,9 @@ def run_limited_gate(
     ) as error:
         unrun = isinstance(error, (ImportError, OSError, subprocess.TimeoutExpired))
         if isinstance(error, subprocess.TimeoutExpired):
-            STOPPED_AT_LIMIT.add(gate_key(group, gate, related_base))
+            from gate_times import note_stop
+
+            note_stop(group, gate, related_base)
         text = str(error) if unrun else remember(group, gate, str(error))
         print(
             f"FAIL {gate['name']}: {text}; "
