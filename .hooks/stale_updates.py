@@ -112,6 +112,14 @@ GENERATED_FOLDERS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache
 CARGO_SIGNATURE = "Signature: 8a477f597d28d172789f06886806bc55"
 STASH_SUBJECT = re.compile(r"(?:WIP on|On) ([^:]+):")
 REFLOG_SELECTOR = re.compile(r"@\{(\d+)\}$")
+OPERATIONS = (
+    "rebase-merge",
+    "rebase-apply",
+    "BISECT_LOG",
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+)
 SUBMODULE_LINE = re.compile(r"(.)[0-9a-f]+ (.+?)(?: \(.*\))?")
 
 
@@ -168,10 +176,13 @@ def fetch_tip(root: Path, base: str) -> str:
 
 
 def reflog_time(cwd: Path, ref: str) -> float | None:
-    selector = tidy_git(
-        cwd, "log", "-g", "-1", "--date=unix", "--format=%gd", ref
-    ).strip()
-    found = REFLOG_SELECTOR.search(selector)
+    """When the ref last moved; None when it has no log or no commit yet."""
+    done = tidy_run(
+        cwd, 120, "git", "log", "-g", "-1", "--date=unix", "--format=%gd", ref
+    )
+    found = (
+        REFLOG_SELECTOR.search(done.stdout.strip()) if done.returncode == 0 else None
+    )
     return float(found[1]) if found else None
 
 
@@ -341,6 +352,65 @@ class Tidy:
             removed,
         )
 
+    def content_merged(self, head: str) -> bool:
+        """Merging the head into the base tip changes nothing, so the base holds every change."""
+        done = tidy_run(
+            self.root, 120, "git", "merge-tree", "--write-tree", self.tip, head
+        )
+        if done.returncode == 1:
+            return False
+        if done.returncode:
+            raise TidyStop(f"`git merge-tree` exited {done.returncode}")
+        tree = tidy_git(self.root, "rev-parse", f"{self.tip}^{{tree}}").strip()
+        return done.stdout.split()[0] == tree
+
+    def safe_commit(self, commit: str, head: str) -> bool:
+        """The commit is part of the merged head, the base, a remote branch or the base's content."""
+        if tidy_run(
+            self.root, 120, "git", "cat-file", "-e", f"{commit}^{{commit}}"
+        ).returncode:
+            return False
+        for ancestor_of in (head, self.tip):
+            asked = tidy_run(
+                self.root,
+                120,
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                commit,
+                ancestor_of,
+            )
+            if asked.returncode == 0:
+                return True
+        remote = tidy_run(
+            self.root, 120, "git", "rev-list", "-1", commit, "--not", "--remotes"
+        )
+        return (
+            remote.returncode == 0 and not remote.stdout.strip()
+        ) or self.content_merged(commit)
+
+    def reflog_holds_work(self, cwd: Path, head: str, *refs: str) -> bool:
+        """A removal drops the logs; keep an item whose log names a commit that is merged nowhere."""
+        commits: set[str] = set()
+        for ref in refs:
+            done = tidy_run(cwd, 120, "git", "log", "-g", "--format=%H", ref)
+            if done.returncode:
+                return True
+            commits |= set(done.stdout.split())
+        return len(commits) > 100 or not all(
+            self.safe_commit(commit, head) for commit in commits
+        )
+
+    def hidden_edits(self, path: Path) -> bool:
+        listing = tidy_git(path, "ls-files", "-v")
+        return any(not line.startswith("H ") for line in listing.splitlines())
+
+    def operation_pending(self, path: Path) -> bool:
+        folder = Path(
+            tidy_git(path, "rev-parse", "--path-format=absolute", "--git-dir").strip()
+        )
+        return any((folder / name).exists() for name in OPERATIONS)
+
     def merged(self, head: str, branch: str | None) -> bool:
         ancestor = tidy_run(
             self.root, 120, "git", "merge-base", "--is-ancestor", head, self.tip
@@ -349,11 +419,8 @@ class Tidy:
             raise TidyStop("`git merge-base` failed")
         if ancestor == 0:
             return True
-        span = f"{self.tip}..{head}"
-        if not tidy_git(self.root, "rev-list", "--merges", span).strip():
-            cherry = tidy_git(self.root, "cherry", self.tip, head)
-            if not any(line.startswith("+") for line in cherry.splitlines()):
-                return True
+        if self.content_merged(head):
+            return True
         if branch is None or self.repository is None:
             return False
         pulls = tidy_gh(
@@ -478,7 +545,24 @@ class Tidy:
                 "its branch has an open PR or no PR answer",
                 lambda: branch is not None and self.open_pr(branch),
             ),
+            (
+                "its log holds commits that are merged nowhere",
+                lambda: self.reflog_holds_work(
+                    path,
+                    head,
+                    "HEAD",
+                    *([f"refs/heads/{branch}"] if branch else []),
+                ),
+            ),
             ("holds changes", lambda: bool(work_left(path, main, generated(path)))),
+            (
+                "hidden edits (assume-unchanged or skip-worktree)",
+                lambda: self.hidden_edits(path),
+            ),
+            (
+                "a rebase, merge, bisect, pick or revert is in progress",
+                lambda: self.operation_pending(path),
+            ),
             ("a submodule holds work", lambda: not self.submodules_hold_nothing(path)),
             ("a process is inside", lambda: self.worktree_busy(path)),
         ]
@@ -513,7 +597,9 @@ class Tidy:
                 )
                 continue
             tidy_git(self.root, "worktree", "remove", "--force", path)
-            note(f"removed worktree {path} (merged, idle, clean)")
+            note(
+                f"removed worktree {path} at {record.get('HEAD')} (merged, idle, clean)"
+            )
             self.removed["worktrees"] += 1
 
     def branch_reason(self, name: str, tip: str, checked_out: set[str]) -> str | None:
@@ -527,6 +613,10 @@ class Tidy:
             ),
             ("not merged", lambda: not self.merged(tip, name)),
             ("a stash names it", lambda: self.stashed(name, None)),
+            (
+                "its log holds commits that are merged nowhere",
+                lambda: self.reflog_holds_work(self.root, tip, f"refs/heads/{name}"),
+            ),
             ("open PR or no PR answer", lambda: self.open_pr(name)),
         ]
         return next((reason for reason, kept in checks if kept()), None)
