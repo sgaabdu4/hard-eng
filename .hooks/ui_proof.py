@@ -374,7 +374,9 @@ def ship_problem(
         return unchanged_problem(
             root, reference_section(plan_text), head, merge_base(root, base_ref)
         )
-    if problem := guideline_problem(root, visible):
+    if problem := guideline_problem(
+        root, [name for name in visible if (root / name).is_file()]
+    ):
         return problem
     if videos and not after_urls and visible and not is_native(visible):
         return "the After is a video only; a web change also needs a measured After image, which `browser capture` writes at every width"
