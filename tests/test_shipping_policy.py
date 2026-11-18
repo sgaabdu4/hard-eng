@@ -7,6 +7,7 @@ from typing import cast
 import ci_jobs
 import pytest
 import shipping
+import yaml
 from gate_config import GateConfig
 
 
@@ -228,8 +229,27 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         ),
         CHECK_WORKFLOW.replace("check\n", "check --quick\n"),
         CHECK_WORKFLOW.replace("check\n", "check --related-tests\n"),
+        CHECK_WORKFLOW.replace("check\n", "check --commit-secrets\n"),
+        CHECK_WORKFLOW.replace("check\n", "check --plan-stage Draft\n"),
+        CHECK_WORKFLOW.replace("- run: python3", "- run: '# python3").replace(
+            "check\n", "check'\n"
+        ),
+        CHECK_WORKFLOW.replace(
+            "  c:\n", "  gate:\n    if: false\n    runs-on: x\n  c:\n    needs: gate\n"
+        ),
     ],
-    ids=["push-only", "push-filtered", "job-if", "step-if", "quick", "related-tests"],
+    ids=[
+        "push-only",
+        "push-filtered",
+        "job-if",
+        "step-if",
+        "quick",
+        "related-tests",
+        "commit-secrets",
+        "plan-stage-draft",
+        "commented-out",
+        "needs-a-conditional-job",
+    ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
     tmp_path: Path, workflow: str
@@ -242,3 +262,13 @@ def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_r
     config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="every pull request"):
         ci_jobs.load_checked_policy(root, config)
+
+
+@pytest.mark.parametrize(
+    "name", [".github/hard-eng.yml", ".github/workflows/hard-eng.yml"]
+)
+def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
+    name: str,
+) -> None:
+    source = Path(__file__).resolve().parents[1] / name
+    assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()))

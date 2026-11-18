@@ -398,22 +398,68 @@ def calling_jobs(workflow: object, called: str) -> list[dict[str, object]]:
     )
 
 
+def whole_check_arguments(command: str) -> bool:
+    """Only --base, --shard and --plan-stage Complete leave the check whole."""
+    import shlex
+
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return False
+    stage = (
+        words[words.index("--plan-stage") + 1 :][:1]
+        if "--plan-stage" in words
+        else ["Complete"]
+    )
+    options = {
+        word for word in words[words.index("check") + 1 :] if word.startswith("-")
+    }
+    return options <= {"--base", "--shard", "--plan-stage"} and stage == ["Complete"]
+
+
+def job_always_runs(
+    name: object, jobs: dict[object, object], seen: tuple[object, ...] = ()
+) -> bool:
+    """A job with no `if`, whose `needs` jobs also always run."""
+    job = jobs.get(name)
+    if not isinstance(job, dict) or "if" in job or name in seen:
+        return False
+    needs = job.get("needs") or []
+    return all(
+        job_always_runs(n, jobs, (*seen, name))
+        for n in ([needs] if isinstance(needs, str) else needs)
+    )
+
+
 def runs_whole_check(workflow: object) -> bool:
-    """A step with no condition, in a job with no condition, runs `check` without an option that narrows it."""
+    """An always-running job whose check steps cover every case: one has no `if`, or two have the `== 'true'` and `!= 'true'` forms of one condition."""
     from ci_setup import HARD_ENG_CHECK_COMMAND
 
     jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
-    narrow = ("--quick", "--related-tests", "--without-dependents", "-language")
-    return any(
-        not any(option in match[0] for option in narrow)
-        for job in (jobs.values() if isinstance(jobs, dict) else [])
-        if isinstance(job, dict) and "if" not in job
-        for step in job.get("steps") or []
-        if isinstance(step, dict)
-        and "if" not in step
-        and isinstance(step.get("run"), str)
-        for match in HARD_ENG_CHECK_COMMAND.finditer(step["run"].replace("\\\n", " "))
-    )
+    for name in jobs if isinstance(jobs, dict) else []:
+        conditions: set[object] = set()
+        for step in (
+            jobs[name].get("steps") if job_always_runs(name, jobs) else None
+        ) or []:
+            run = step.get("run") if isinstance(step, dict) else None
+            text = "\n".join(
+                line
+                for line in str(run).replace("\\\n", " ").splitlines()
+                if not line.lstrip().startswith("#")
+            )
+            if any(
+                whole_check_arguments(m[0])
+                for m in HARD_ENG_CHECK_COMMAND.finditer(text)
+            ):
+                conditions.add(step.get("if"))
+        if None in conditions or any(
+            isinstance(c, str)
+            and c.replace("!= 'true'", "== 'true'") in conditions
+            and "!= 'true'" in c
+            for c in conditions
+        ):
+            return True
+    return False
 
 
 def ci_check_gap(root: Path) -> str | None:
