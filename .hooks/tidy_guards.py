@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
@@ -144,11 +145,25 @@ def open_paths() -> set[str] | None:
     return names or None
 
 
+def fold(path: str | Path) -> str:
+    """A path as text that ignores letter case and Unicode form, as macOS volumes do."""
+    return unicodedata.normalize("NFC", str(path)).casefold()
+
+
+def same_place(first: Path, second: Path) -> bool:
+    return fold(first) == fold(second)
+
+
+def under(name: str, folder: str | Path) -> bool:
+    place, prefix = fold(name), fold(folder)
+    return place == prefix or place.startswith(prefix + os.sep)
+
+
 def inside(path: Path, names: set[str]) -> bool:
-    prefixes = {str(path), str(path.resolve())}
+    prefixes = {fold(path), fold(path.resolve())}
     return any(
-        name == prefix or name.startswith(prefix + os.sep)
-        for name in names
+        folded == prefix or folded.startswith(prefix + os.sep)
+        for folded in map(fold, names)
         for prefix in prefixes
     )
 

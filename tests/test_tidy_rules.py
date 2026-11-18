@@ -4,6 +4,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+import stale_updates
+import tidy_guards
 from conftest import age_branch, commit, git, git_path
 from test_tidy import branches, linked, tidy
 
@@ -74,3 +76,36 @@ def test_tidy_keeps_a_branch_that_a_paused_operation_will_return_to(
     age_branch(primary, "feat")
     tidy(linked(primary, "session"))
     assert "feat" in branches(primary)
+
+
+def test_tidy_keeps_a_worktree_when_a_process_path_differs_only_in_letter_case(
+    primary: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    busy = linked(primary, "busy")
+    session = linked(primary, "session")
+    monkeypatch.setattr(
+        stale_updates, "open_paths", lambda: {str(busy.resolve()).swapcase() + "/x"}
+    )
+    tidy(session)
+    assert busy.is_dir()
+
+
+@pytest.mark.parametrize(
+    ("name", "inside"),
+    [
+        ("/Work/CAFÉ/file", True),
+        ("/work/café", True),
+        ("/work/cafés/file", False),
+        ("/other/café", False),
+    ],
+)
+def test_a_path_matches_after_letter_case_and_unicode_form_are_folded(
+    name: str, inside: bool
+) -> None:
+    assert tidy_guards.inside(Path("/work/café"), {name}) is inside
+    assert tidy_guards.under(name, "/work/café") is inside
+
+
+def test_the_codex_folder_and_session_match_in_any_letter_case() -> None:
+    assert tidy_guards.under("/HOME/me/.codex/worktrees/a", "/home/me/.codex/worktrees")
+    assert tidy_guards.same_place(Path("/Work/Tree"), Path("/work/tree"))
