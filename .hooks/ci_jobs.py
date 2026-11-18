@@ -359,11 +359,10 @@ def load_checked_policy(root: Path, config: GateConfig) -> None:
             'shipping pre_push_checks "ci" needs the secrets-history gate and '
             "scan_git_history on: pre-push still scans the pushed commits for secrets"
         )
-    if not ci_runs_check(root):
+    if gap := ci_check_gap(root):
         raise ShippingError(
-            'shipping pre_push_checks "ci" needs a workflow in .github/workflows that runs '
-            "`hard-eng.py check` on pull requests or pushes, or a pull_request workflow that "
-            "calls one that has only workflow_call; branch protection cannot be read offline, "
+            f'shipping pre_push_checks "ci" needs a workflow that runs `hard-eng.py check` '
+            f"on every pull request: {gap}. Branch protection cannot be read offline, "
             "so it is not checked"
         )
 
@@ -381,8 +380,26 @@ def workflow_events(workflow: object) -> set[str]:
     )
 
 
-def ci_runs_check(root: Path) -> bool:
-    """A workflow that runs the check on more than maintenance events, or only on workflow_call and called by a pull_request workflow."""
+def pull_request_filters(workflow: object) -> list[str]:
+    triggers = (
+        workflow.get("on", workflow.get(True)) if isinstance(workflow, dict) else None
+    )
+    event = triggers.get("pull_request") if isinstance(triggers, dict) else None
+    names = ("branches", "branches-ignore", "paths", "paths-ignore", "types")
+    return [name for name in names if isinstance(event, dict) and name in event]
+
+
+def calling_jobs(workflow: object, called: str) -> list[dict[str, object]]:
+    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+    return (
+        [j for j in jobs.values() if isinstance(j, dict) and j.get("uses") == called]
+        if isinstance(jobs, dict)
+        else []
+    )
+
+
+def ci_check_gap(root: Path) -> str | None:
+    """Why no workflow runs the check on every pull request, or None when one does."""
     import yaml
 
     from ci_setup import MAINTENANCE_EVENTS, project_workflows, runs_hard_eng_check
@@ -393,25 +410,24 @@ def ci_runs_check(root: Path) -> bool:
             loaded[path.name] = yaml.safe_load(path.read_text())
         except yaml.YAMLError:
             continue
+    gap = "no workflow in .github/workflows runs it, or calls the one that has only workflow_call, from a pull_request trigger"
     for name, workflow in loaded.items():
         if not runs_hard_eng_check(workflow):
             continue
-        if workflow_events(workflow) - MAINTENANCE_EVENTS - {"workflow_call"}:
-            return True
-        called = f"./.github/workflows/{name}"
-        if any(
-            "pull_request" in workflow_events(caller)
-            and called in workflow_job_uses(caller)
-            for caller in loaded.values()
-        ):
-            return True
-    return False
-
-
-def workflow_job_uses(workflow: object) -> set[object]:
-    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
-    return (
-        {job.get("uses") for job in jobs.values() if isinstance(job, dict)}
-        if isinstance(jobs, dict)
-        else set()
-    )
+        if filters := pull_request_filters(workflow):
+            gap = f"the pull_request trigger of {name} has a `{filters[0]}` filter"
+        elif workflow_events(workflow) - MAINTENANCE_EVENTS - {"workflow_call"}:
+            return None
+        for caller_name, caller in loaded.items():
+            jobs = calling_jobs(caller, f"./.github/workflows/{name}")
+            if not jobs or "pull_request" not in workflow_events(caller):
+                continue
+            if filters := pull_request_filters(caller):
+                gap = f"the pull_request trigger of {caller_name} has a `{filters[0]}` filter"
+            elif any("if" in job for job in jobs):
+                gap = (
+                    f"the job in {caller_name} that calls {name} has an `if` condition"
+                )
+            else:
+                return None
+    return gap

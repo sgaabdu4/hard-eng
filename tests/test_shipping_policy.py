@@ -158,5 +158,55 @@ def test_a_workflow_with_only_workflow_call_counts_when_a_pull_request_workflow_
     if accepted:
         ci_jobs.load_checked_policy(root, config)
         return
-    with pytest.raises(shipping.ShippingError, match="calls one that has only"):
+    with pytest.raises(shipping.ShippingError, match="calls the one that has only"):
+        ci_jobs.load_checked_policy(root, config)
+
+
+FILTERED_CALLER = (
+    "on:\n  pull_request:\n    {filter}\njobs:\n  check:\n    {gate}"
+    "uses: ./.github/workflows/hard-eng.yml\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("filter_line", "gate", "named"),
+    [
+        ("paths: ['src/**']", "", "paths"),
+        ("branches: [main]", "", "branches"),
+        ("types: [opened]", "", "types"),
+        ("branches-ignore: [wip]", "", "branches-ignore"),
+        ("paths-ignore: ['docs/**']", "", "paths-ignore"),
+        ("", "if: github.actor != 'bot'\n    ", "if"),
+    ],
+)
+def test_a_called_check_workflow_is_refused_when_the_caller_filters_or_conditions_the_run(
+    tmp_path: Path, filter_line: str, gate: str, named: str
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "hard-eng.yml").write_text(CALLED)
+    caller = FILTERED_CALLER.format(filter=filter_line, gate=gate)
+    (workflows / "pull-request.yml").write_text(
+        caller.replace("    \njobs", "jobs") if not filter_line else caller
+    )
+    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+    with pytest.raises(shipping.ShippingError, match=rf"`{named}`"):
+        ci_jobs.load_checked_policy(root, config)
+
+
+def test_a_check_workflow_with_a_filtered_pull_request_trigger_is_refused(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    filtered = CHECK_WORKFLOW.replace(
+        "on: [pull_request]", "on:\n  pull_request:\n    paths: ['src/**']"
+    )
+    (workflows / "hard-eng.yml").write_text(filtered)
+    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+    with pytest.raises(shipping.ShippingError, match="`paths`"):
         ci_jobs.load_checked_policy(root, config)
