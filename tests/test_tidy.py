@@ -420,33 +420,22 @@ def test_tidy_keeps_a_branch_with_an_open_pr_or_no_pr_answer(
     assert "silent" in branches(primary)
 
 
-def stand_in_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str) -> None:
+def stand_in_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, test: str, action: str = "exit 1"
+) -> None:
+    """A git that runs the action when the shell test holds, such as `[ "$1" = for-each-ref ]`."""
     folder = tmp_path / "stand-in"
     folder.mkdir()
-    count = folder / "removals"
     script = folder / "git"
     script.write_text(
-        "#!/bin/sh\n"
-        f'if [ "$1 $2" = "worktree remove" ]; then\n'
-        f"  echo x >> {count}\n"
-        f'  if [ "$(wc -l < {count})" -ge 2 ]; then {action}; fi\n'
-        "fi\n"
+        f'#!/bin/sh\nif {test}; then echo "injected failure" >&2; {action}; fi\n'
         f'exec {shutil.which("git")} "$@"\n'
     )
     script.chmod(0o755)
     monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
 
 
-@pytest.mark.parametrize("action", ["exit 1", "sleep 30"], ids=["fails", "hangs"])
-def test_tidy_stops_and_keeps_everything_when_a_command_fails_or_hangs(
-    primary: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    action: str,
-) -> None:
-    paths = [linked(primary, name) for name in ("a", "b", "c")]
-    stand_in_git(tmp_path, monkeypatch, action)
+def quick_git_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     real = stale_updates.tidy_run
 
     def quick_git(
@@ -455,10 +444,76 @@ def test_tidy_stops_and_keeps_everything_when_a_command_fails_or_hangs(
         return real(cwd, 2 if command[0] == "git" else limit, *command)
 
     monkeypatch.setattr(stale_updates, "tidy_run", quick_git)
+
+
+@pytest.mark.parametrize("hangs", [False, True], ids=["fails", "hangs"])
+def test_tidy_keeps_the_item_whose_command_fails_or_hangs_and_goes_on(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    hangs: bool,
+) -> None:
+    bad, good = linked(primary, "aaa-bad"), linked(primary, "zzz-good")
+    if hangs:
+        quick_git_limits(monkeypatch)
+        stand_in_git(
+            tmp_path,
+            monkeypatch,
+            '[ "$1" = "log" ] && pwd -P | grep -q aaa-bad',
+            "sleep 30",
+        )
+    else:
+        stand_in_git(
+            tmp_path,
+            monkeypatch,
+            '[ "$1 $2" = "worktree remove" ] && echo "$@" | grep -q aaa-bad',
+        )
     tidy(primary)
-    assert sum(path.is_dir() for path in paths) == 2
-    assert len({"a", "b", "c"} & branches(primary)) == 3
-    assert "stopped" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert bad.is_dir() and not good.exists()
+    assert "kept worktree" in err and "aaa-bad" in err and "stopped" not in err
+
+
+def test_tidy_keeps_the_item_whose_check_fails_and_removes_the_next(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bad, good = linked(primary, "aaa-bad"), linked(primary, "zzz-good")
+    stand_in_git(
+        tmp_path,
+        monkeypatch,
+        '[ "$1" = "--no-optional-locks" ] && pwd -P | grep -q aaa-bad',
+    )
+    tidy(primary)
+    err = capsys.readouterr().err
+    assert bad.is_dir() and not good.exists()
+    assert "kept worktree" in err and "aaa-bad" in err and "stopped" not in err
+
+
+def test_tidy_stops_the_repository_when_a_repository_level_command_fails(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    gone = linked(primary, "gone")
+    idle = linked(primary, "idle")
+    unmerged(idle)
+    target = make_target(idle)
+    age(primary)
+    git(primary, "branch", "extra", "main")
+    age_branch(primary, "extra")
+    path = os.environ["PATH"]
+    stand_in_git(tmp_path, monkeypatch, '[ "$1" = "for-each-ref" ]')
+    tidy(primary)
+    monkeypatch.setenv("PATH", path)
+    assert not gone.exists()
+    assert "extra" in branches(primary)
+    assert target.is_dir()
+    assert "stopped for this repository" in capsys.readouterr().err
 
 
 def installed(primary: Path) -> Path:
