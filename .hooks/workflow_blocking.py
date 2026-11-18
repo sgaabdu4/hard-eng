@@ -39,9 +39,8 @@ GENERATED_LINES = [
 STEP_IF = re.compile(
     r"steps\.impact\.outputs\.docs_only (?:==|!=) 'true'(?: && needs\.[\w-]+\.result == '(?:skipped|success)')?"
 )
-JOB_IF = re.compile(
-    r"\$\{\{ (?:!cancelled\(\)|needs\.impact\.outputs\.apple != 'false') \}\}"
-)
+JOB_IF = re.compile(r"\$\{\{ !cancelled\(\) \}\}")
+APPLE_IF = re.compile(r"\$\{\{ needs\.impact\.outputs\.apple != 'false' \}\}")
 STEP_ENV = {
     "GH_TOKEN",
     "GITHUB_TOKEN",
@@ -113,12 +112,16 @@ def launcher_names(step: dict[str, object]) -> set[str]:
 
 
 def job_hits(
-    job: dict[str, object], workflow: dict[str, object], names: set[str]
+    job: dict[str, object],
+    workflow: dict[str, object],
+    names: set[str],
+    job_id: object,
 ) -> list[str]:
     hits = []
     if job.get("continue-on-error", False) not in SAFE_FALSE:
         hits.append("the job sets continue-on-error")
-    if "if" in job and not JOB_IF.fullmatch(str(job["if"]).strip()):
+    allowed = APPLE_IF if job_id == "apple" else JOB_IF
+    if "if" in job and not allowed.fullmatch(str(job["if"]).strip()):
         hits.append(f"the job runs only when {job['if']!r}, so it can be skipped")
     for scope, holder in (("job", job), ("workflow", workflow)):
         defaults = holder.get("defaults")
@@ -216,7 +219,7 @@ def workflow_hits(name: str, text: str) -> list[str]:
     jobs = data.get("jobs")
     checks = 0
     words: list[tuple[str, str, int]] = []
-    for job in (jobs if isinstance(jobs, dict) else {}).values():
+    for job_id, job in (jobs if isinstance(jobs, dict) else {}).items():
         if not isinstance(job, dict):
             continue
         steps = check_steps(job)
@@ -224,7 +227,9 @@ def workflow_hits(name: str, text: str) -> list[str]:
             continue
         checks += sum(" check " in str(step["run"]) for step in steps)
         launchers = set().union(*map(launcher_names, steps))
-        found += [f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data, launchers)]
+        found += [
+            f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data, launchers, job_id)
+        ]
         step_found, step_words = step_findings(name, text, steps)
         found += step_found
         words += step_words
