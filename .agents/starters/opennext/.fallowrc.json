@@ -5,7 +5,7 @@
       { "name": "tests", "patterns": ["**/*.test.ts"] },
       {
         "name": "app",
-        "patterns": ["src/**", "next.config.ts", "open-next.config.ts", "postcss.config.mjs"]
+        "patterns": ["src/**", "next.config.ts", "open-next.config.ts", "postcss.config.mjs", "cloudflare-env.d.ts"]
       }
     ],
     "rules": [
