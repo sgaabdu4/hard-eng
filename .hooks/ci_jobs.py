@@ -449,25 +449,66 @@ def job_always_runs(name: object, jobs: dict[object, object]) -> bool:
     return isinstance(jobs.get(name), dict) and name not in skippable_jobs(jobs)
 
 
+def ends_the_command(rest: str) -> bool:
+    """The check ends its line, or is followed on that line by `&&` and a command with no pipe, `;` or lone `&`, and no later line follows: those can hide its exit status."""
+    line, _, later = rest.partition("\n")
+    line = line.strip()
+    return not line or (
+        line.startswith("&&")
+        and not re.search(r"[|;]|(?<!&)&(?!&)", line)
+        and not later.strip()
+    )
+
+
+SHELL_CONTROL = {"if", "then", "elif", "else", "fi", "case", "esac", "for", "while"}
+SHELL_LOOP_END = {"until", "do", "done"}
+
+
+def shell_runs_it(raw: str, text: str, start: int) -> bool:
+    """No shell condition or loop can skip the command, and its line does not only print it; the generated launcher line is allowed."""
+    from workflow_blocking import LAUNCHER, SPACES
+
+    for line in raw.splitlines():
+        words = line.split()
+        if (
+            words
+            and words[0] in SHELL_CONTROL | SHELL_LOOP_END
+            and not LAUNCHER.fullmatch(SPACES.sub(" ", line.strip()))
+        ):
+            return False
+    before = text[text.rfind("\n", 0, start) + 1 : start].split()
+    return not before or before[0] not in {"echo", "printf"}
+
+
+def step_runs_check(job: object, step: object) -> bool:
+    """The step runs `check` whole, and neither the job, the step nor the shell line turns a failure into a pass."""
+    from ci_setup import HARD_ENG_CHECK_COMMAND
+    from workflow_blocking import SAFE_FALSE
+
+    if not isinstance(job, dict) or not isinstance(step, dict):
+        return False
+    if any(n.get("continue-on-error", False) not in SAFE_FALSE for n in (job, step)):
+        return False
+    raw = str(step.get("run")).replace("\\\n", " ")
+    text = "\n".join(without_comment(line) for line in raw.splitlines())
+    return any(
+        whole_check_arguments(m[0])
+        and ends_the_command(text[m.end() :])
+        and shell_runs_it(raw, text, m.start())
+        for m in HARD_ENG_CHECK_COMMAND.finditer(text)
+    )
+
+
 def runs_whole_check(workflow: object) -> bool:
     """An always-running job whose check steps cover every case: one has no `if`, or two have the `== 'true'` and `!= 'true'` forms of one condition."""
-    from ci_setup import HARD_ENG_CHECK_COMMAND
-
     jobs = workflow_jobs(workflow)
     for name, job in jobs.items():
-        conditions: set[object] = set()
         steps = job.get("steps") if isinstance(job, dict) else None
-        for step in (steps if job_always_runs(name, jobs) else None) or []:
-            run = step.get("run") if isinstance(step, dict) else None
-            text = "\n".join(
-                without_comment(line)
-                for line in str(run).replace("\\\n", " ").splitlines()
-            )
-            if any(
-                whole_check_arguments(m[0])
-                for m in HARD_ENG_CHECK_COMMAND.finditer(text)
-            ):
-                conditions.add(skips_a_run(step))
+        conditions = {
+            skips_a_run(step)
+            for step in (steps if job_always_runs(name, jobs) else None) or []
+            if step_runs_check(job, step)
+        }
         if None in conditions or any(
             isinstance(c, str)
             and PAIRED_CONDITION.fullmatch(c)

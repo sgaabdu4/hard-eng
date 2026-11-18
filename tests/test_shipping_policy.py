@@ -243,11 +243,37 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "      - if: x == 'true' && y\n        run: python3 .hooks/hard-eng.py check\n"
             "      - if: x != 'true' && y\n        run: python3 .hooks/hard-eng.py check\n",
         ),
+        CHECK_WORKFLOW.replace("check\n", "check || true\n"),
+        CHECK_WORKFLOW.replace("check\n", "check | tee check.log\n"),
+        CHECK_WORKFLOW.replace("check\n", "check; echo done\n"),
+        CHECK_WORKFLOW.replace("check\n", "check && echo passed || true\n"),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          python3 .hooks/hard-eng.py check && echo passed\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3", "- continue-on-error: true\n        run: python3"
+        ),
+        CHECK_WORKFLOW.replace(
+            "    runs-on", "    continue-on-error: true\n    runs-on"
+        ),
         CHECK_WORKFLOW.replace(
             STEP,
             "    steps:\n"
             "      - if: y&&x == 'true'\n        run: python3 .hooks/hard-eng.py check\n"
             "      - if: y&&x != 'true'\n        run: python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: if [ -f flag ]; then python3 .hooks/hard-eng.py check; fi\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: echo python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          if [ -f flag ]; then\n            python3 .hooks/hard-eng.py check\n          fi\n",
         ),
     ],
     ids=[
@@ -263,7 +289,17 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "needs-a-conditional-job",
         "inline-comment",
         "paired-conditions-with-and",
+        "or-true",
+        "piped",
+        "semicolon",
+        "and-then-or",
+        "and-then-a-line",
+        "step-continue-on-error",
+        "job-continue-on-error",
         "paired-conditions-with-unspaced-and",
+        "conditional-shell",
+        "echo",
+        "conditional-shell-lines",
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
@@ -307,8 +343,26 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
         CHECK_WORKFLOW.replace(
             "on: [pull_request]", "on:\n  pull_request:\n    branches: [main, '**']"
         ),
+        CHECK_WORKFLOW.replace("check\n", "check && echo passed\n"),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n"
+            '          mise_command=(bun x --package="$P" mise)\n'
+            '          if [[ -n "$X_BIN" ]]; then mise_command=("$X_BIN"); fi\n'
+            '          "${mise_command[@]}" exec -- python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
     ],
-    ids=["not-cancelled", "branches-with-double-star"],
+    ids=[
+        "not-cancelled",
+        "branches-with-double-star",
+        "and-then-a-command",
+        "a-line-after",
+        "the-generated-launcher-line",
+    ],
 )
 def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
     tmp_path: Path, workflow: str
