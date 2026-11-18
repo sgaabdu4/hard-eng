@@ -10,6 +10,8 @@ import stale_updates
 import tidy_guards
 from conftest import age_branch, commit, git, git_path
 from test_tidy import (
+    age,
+    age_folders,
     branches,
     linked,
     make_target,
@@ -230,3 +232,18 @@ def test_tidy_leaves_a_symbolic_branch_and_its_target_alone(primary: Path) -> No
     assert {"main", "trunk", "feat", "alias"} <= branches(primary)
     assert resolves(primary, only_logged)
     assert git(primary, "symbolic-ref", "refs/heads/trunk") == "refs/heads/main"
+
+
+@pytest.mark.parametrize("place", ["main-checkout", "linked-worktree"])
+def test_tidy_keeps_a_build_folder_that_holds_a_nested_repository(
+    primary: Path, place: str
+) -> None:
+    path = primary if place == "main-checkout" else linked(primary, "work")
+    target = make_target(path)
+    inner = target / "vendor/pkg"
+    inner.mkdir(parents=True)
+    git(inner, "init", "-q")
+    age(path)
+    age_folders(target)
+    tidy(linked(primary, "session"))
+    assert (inner / ".git").is_dir()

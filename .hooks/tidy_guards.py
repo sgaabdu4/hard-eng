@@ -154,22 +154,20 @@ def inside(path: Path, names: set[str]) -> bool:
     )
 
 
-def quiet_tree(folder: Path) -> bool:
-    """No nested repository and no file changed within a day below the folder; the walk stops at the first hit and follows no link."""
+def holds_repository(folder: Path) -> bool:
+    """A nested repository is below the folder; the walk stops at the first one, follows no link, and counts an unreadable folder as one."""
     pending = [folder]
     try:
         while pending:
             with os.scandir(pending.pop()) as entries:
                 for entry in entries:
                     if entry.name == ".git":
-                        return False
+                        return True
                     if entry.is_dir(follow_symlinks=False):
                         pending.append(Path(entry.path))
-                    elif not idle(entry.stat(follow_symlinks=False).st_mtime):
-                        return False
     except OSError:
-        return False
-    return True
+        return True
+    return False
 
 
 def cargo_target(worktree: Path) -> bool:
