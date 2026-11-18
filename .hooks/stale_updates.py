@@ -127,6 +127,9 @@ class TidyStop(Exception):
     pass
 
 
+ITEM_ERRORS = (TidyStop, ValueError, OSError, subprocess.SubprocessError)
+
+
 def note(text: str) -> None:
     print(f"Tidy {text}", file=sys.stderr, flush=True)
 
@@ -176,13 +179,11 @@ def fetch_tip(root: Path, base: str) -> str:
 
 
 def reflog_time(cwd: Path, ref: str) -> float | None:
-    """When the ref last moved; None when it has no log or no commit yet."""
-    done = tidy_run(
-        cwd, 120, "git", "log", "-g", "-1", "--date=unix", "--format=%gd", ref
-    )
-    found = (
-        REFLOG_SELECTOR.search(done.stdout.strip()) if done.returncode == 0 else None
-    )
+    """When the ref last moved; None when it has no log."""
+    selector = tidy_git(
+        cwd, "log", "-g", "-1", "--date=unix", "--format=%gd", ref
+    ).strip()
+    found = REFLOG_SELECTOR.search(selector)
     return float(found[1]) if found else None
 
 
@@ -353,22 +354,14 @@ class Tidy:
         )
 
     def content_merged(self, head: str) -> bool:
-        """Merging the head into the base tip changes nothing, so the base holds every change.
-
-        Git cannot merge some heads (unrelated history, an object missing here); those count as not merged.
-        """
+        """Merging the head into the base tip changes nothing, so the base holds every change."""
         done = tidy_run(
-            self.root,
-            120,
-            "git",
-            "merge-tree",
-            "--write-tree",
-            "--allow-unrelated-histories",
-            self.tip,
-            head,
+            self.root, 120, "git", "merge-tree", "--write-tree", self.tip, head
         )
-        if done.returncode:
+        if done.returncode == 1:
             return False
+        if done.returncode:
+            raise TidyStop(f"`git merge-tree` exited {done.returncode}")
         tree = tidy_git(self.root, "rev-parse", f"{self.tip}^{{tree}}").strip()
         return done.stdout.split()[0] == tree
 
@@ -376,16 +369,11 @@ class Tidy:
         """A removal drops the logs; keep an item whose log names a commit that is merged nowhere."""
         commits: set[str] = set()
         for ref in refs:
-            done = tidy_run(cwd, 120, "git", "log", "-g", "--format=%H", ref)
-            if done.returncode:
-                return True
-            commits |= set(done.stdout.split())
+            commits |= set(tidy_git(cwd, "log", "-g", "--format=%H", ref).split())
         if not commits:
             return False
-        left = tidy_run(
+        unmerged = tidy_git(
             self.root,
-            120,
-            "git",
             "rev-list",
             "--no-walk",
             *commits,
@@ -393,12 +381,7 @@ class Tidy:
             self.tip,
             head,
             "--remotes",
-        )
-        if left.returncode != 0:
-            return True
-        unmerged = left.stdout.split()
-        if not unmerged:
-            return False
+        ).split()
         return not all(self.content_merged(commit) for commit in unmerged)
 
     def hidden_edits(self, path: Path) -> bool:
@@ -568,39 +551,45 @@ class Tidy:
         ]
         return next((reason for reason, kept in checks if kept()), None)
 
-    def remove_worktrees(self) -> None:
+    def remove_worktree(self, path: str, first: bool) -> None:
         from ship_actions import worktrees
 
-        listed = worktrees(self.root)
-        for index, first in enumerate(listed):
-            path = first.get("worktree", "")
-            fresh = worktrees(self.root)
-            main = Path(fresh[0]["worktree"])
-            record = next((r for r in fresh if r.get("worktree") == path), None)
-            if record is None:
-                continue
-            reason = self.worktree_reason(record, main, index == 0)
-            if reason is not None:
-                if not reason.startswith(("primary", "the session")):
-                    note(f"kept worktree {path}: {reason}")
-                continue
-            now = next(
-                (r for r in worktrees(self.root) if r.get("worktree") == path),
-                dict[str, str](),
-            )
-            if (now.get("HEAD"), now.get("branch")) != (
-                record.get("HEAD"),
-                record.get("branch"),
-            ):
-                note(
-                    f"kept worktree {path}: its branch or commit changed during the checks"
-                )
-                continue
-            tidy_git(self.root, "worktree", "remove", "--force", path)
+        fresh = worktrees(self.root)
+        main = Path(fresh[0]["worktree"])
+        record = next((r for r in fresh if r.get("worktree") == path), None)
+        if record is None:
+            return
+        reason = self.worktree_reason(record, main, first)
+        if reason is not None:
+            if not reason.startswith(("primary", "the session")):
+                note(f"kept worktree {path}: {reason}")
+            return
+        now = next(
+            (r for r in worktrees(self.root) if r.get("worktree") == path),
+            dict[str, str](),
+        )
+        if (now.get("HEAD"), now.get("branch")) != (
+            record.get("HEAD"),
+            record.get("branch"),
+        ):
             note(
-                f"removed worktree {path} at {record.get('HEAD')} (merged, idle, clean)"
+                f"kept worktree {path}: its branch or commit changed during the checks"
             )
-            self.removed["worktrees"] += 1
+            return
+        tidy_git(self.root, "worktree", "remove", "--force", path)
+        note(f"removed worktree {path} at {record.get('HEAD')} (merged, idle, clean)")
+        self.removed["worktrees"] += 1
+
+    def remove_worktrees(self) -> None:
+        """A failure on one worktree keeps it and goes on; a failed listing stops the repository."""
+        from ship_actions import worktrees
+
+        for index, first in enumerate(worktrees(self.root)):
+            path = first.get("worktree", "")
+            try:
+                self.remove_worktree(path, index == 0)
+            except ITEM_ERRORS as error:
+                note(f"kept worktree {path}: {error}")
 
     def branch_reason(self, name: str, tip: str, checked_out: set[str]) -> str | None:
         logged = reflog_time(self.root, f"refs/heads/{name}")
@@ -629,23 +618,30 @@ class Tidy:
             for record in worktrees(self.root)
         }
 
+    def remove_branch(self, line: str) -> None:
+        tip, _, ref = line.partition(" ")
+        name = ref.removeprefix("refs/heads/")
+        reason = self.branch_reason(name, tip, self.checked_out())
+        if reason is None and name in self.checked_out():
+            reason = "checked out"
+        if reason is not None:
+            if reason not in {"protected", "checked out"}:
+                note(f"kept branch {name}: {reason}")
+            return
+        tidy_git(self.root, "update-ref", "-d", ref, tip)
+        note(f"removed branch {name} at {tip} (merged, idle)")
+        self.removed["branches"] += 1
+
     def remove_branches(self) -> None:
+        """A failure on one branch keeps it and goes on; a failed listing stops the repository."""
         listing = tidy_git(
             self.root, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads"
         )
         for line in listing.splitlines():
-            tip, _, ref = line.partition(" ")
-            name = ref.removeprefix("refs/heads/")
-            reason = self.branch_reason(name, tip, self.checked_out())
-            if reason is None and name in self.checked_out():
-                reason = "checked out"
-            if reason is not None:
-                if reason not in {"protected", "checked out"}:
-                    note(f"kept branch {name}: {reason}")
-                continue
-            tidy_git(self.root, "update-ref", "-d", ref, tip)
-            note(f"removed branch {name} at {tip} (merged, idle)")
-            self.removed["branches"] += 1
+            try:
+                self.remove_branch(line)
+            except ITEM_ERRORS as error:
+                note(f"kept branch {line.partition(' ')[2]}: {error}")
 
     def target_reason(self, path: Path) -> str | None:
         target = path / "target"
@@ -679,25 +675,32 @@ class Tidy:
         ]
         return next((reason for reason, kept in checks if kept()), None)
 
+    def trim_target(self, record: dict[str, str]) -> None:
+        path = Path(record.get("worktree", ""))
+        if (
+            "bare" in record
+            or "prunable" in record
+            or not path.is_dir()
+            or path.resolve() == self.session
+        ):
+            return
+        reason = self.target_reason(path)
+        if reason is None:
+            shutil.rmtree(path / "target")
+            note(f"removed build folder {path / 'target'} (idle cargo target)")
+            self.removed["build folders"] += 1
+        elif not reason.startswith("no cargo"):
+            note(f"kept build folder {path / 'target'}: {reason}")
+
     def trim_targets(self) -> None:
+        """A failure on one build folder keeps it and goes on; a failed listing stops the repository."""
         from ship_actions import worktrees
 
         for record in worktrees(self.root):
-            path = Path(record.get("worktree", ""))
-            if (
-                "bare" in record
-                or "prunable" in record
-                or not path.is_dir()
-                or path.resolve() == self.session
-            ):
-                continue
-            reason = self.target_reason(path)
-            if reason is None:
-                shutil.rmtree(path / "target")
-                note(f"removed build folder {path / 'target'} (idle cargo target)")
-                self.removed["build folders"] += 1
-            elif not reason.startswith("no cargo"):
-                note(f"kept build folder {path / 'target'}: {reason}")
+            try:
+                self.trim_target(record)
+            except ITEM_ERRORS as error:
+                note(f"kept build folder of {record.get('worktree')}: {error}")
 
     def run(self) -> None:
         self.remove_worktrees()
@@ -706,7 +709,7 @@ class Tidy:
 
 
 def tidy(root: Path) -> None:
-    """Remove merged idle worktrees and branches and idle cargo build folders; any failed command stops it."""
+    """Remove merged idle worktrees and branches and idle cargo build folders. One item that fails is kept and the next goes on; a failure for the whole repository stops it."""
     from update_runner import LOG_FILE, RESULT_FILE, exclusive
 
     removed: Counter[str] = Counter()
@@ -717,7 +720,9 @@ def tidy(root: Path) -> None:
         try:
             Tidy.open(root, removed).run()
         except (TidyStop, OSError, ValueError, subprocess.SubprocessError) as error:
-            note(f"stopped, everything not yet removed is kept: {error}")
+            note(
+                f"stopped for this repository, what is not yet removed is kept: {error}"
+            )
     if removed:
         result = root / RESULT_FILE
         result.parent.mkdir(parents=True, exist_ok=True)
