@@ -208,7 +208,7 @@ for (const heading of document.querySelectorAll(HEADINGS)) {
   if (top !== heading) roots.push(top);
   else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
   const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
-  if (lines.length > 8 || lines.some((l) => l.px < LIMITS.text_px)) continue;
+  if (lines.some((l) => l.px < LIMITS.text_px)) continue;
   if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
   for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
 }
