@@ -35,8 +35,10 @@ def git_path(root: Path, name: str) -> Path:
 
 
 def age(path: Path) -> None:
-    """Make the worktree's index, HEAD log and branch log three days old."""
-    os.utime(git_path(path, "index"), (OLD, OLD))
+    """Make the worktree's top level, HEAD log and branch log three days old."""
+    for entry in path.iterdir():
+        if entry.name != ".git":
+            os.utime(entry, (OLD, OLD), follow_symlinks=False)
     old_log(git_path(path, "logs/HEAD"))
     branch = git(path, "branch", "--show-current")
     if branch:
@@ -226,6 +228,7 @@ def test_tidy_keeps_a_worktree_with_changes(primary: Path, change: str) -> None:
             (dirty / "new.txt").write_text("x\n")
         case _:
             (dirty / ".env").write_text("SECRET=1\n")
+    age(dirty)
     clean = linked(primary, "clean")
     tidy(primary)
     assert dirty.is_dir() and not clean.exists()
@@ -241,12 +244,15 @@ def test_tidy_ignores_only_known_generated_folders(primary: Path) -> None:
     ):
         (generated / name).parent.mkdir(parents=True, exist_ok=True)
         (generated / name).write_text("x\n")
+    age(generated)
     browser = linked(primary, "browser")
     (browser / ".hard-eng/browser").mkdir(parents=True)
     (browser / ".hard-eng/browser/shot.png").write_text("x\n")
+    age(browser)
     built = linked(primary, "built")
     (built / "build").mkdir()
     (built / "build/out.bin").write_text("x\n")
+    age(built)
     tidy(primary)
     assert not generated.exists()
     assert browser.is_dir() and built.is_dir()
@@ -271,12 +277,12 @@ def test_tidy_keeps_a_worktree_that_a_stash_names(
     assert stashed.is_dir() and not gone.exists()
 
 
-@pytest.mark.parametrize("fresh", ["index", "head-log", "both"])
+@pytest.mark.parametrize("fresh", ["top-level", "head-log", "both"])
 def test_tidy_keeps_a_recently_used_worktree(primary: Path, fresh: str) -> None:
     recent = linked(primary, "recent")
     if fresh != "head-log":
-        os.utime(git_path(recent, "index"), None)
-    if fresh != "index":
+        os.utime(recent / "tracked.txt", None)
+    if fresh != "top-level":
         log = git_path(recent, "logs/HEAD")
         log.write_text(
             re.sub(
@@ -1076,7 +1082,7 @@ def test_tidy_asks_gh_only_after_every_local_check_passed(
     age(stashed)
     recent = linked(primary, "recent")
     unmerged(recent)
-    os.utime(git_path(recent, "index"), None)
+    os.utime(recent / "tracked.txt", None)
     control = linked(primary, "control")
     unmerged(control)
     git(primary, "worktree", "remove", "--force", str(control))
@@ -1124,3 +1130,30 @@ def test_the_tidy_lock_lives_in_the_common_git_folder_for_every_worktree(
         tidy(second)
     assert gone.is_dir()
     assert capsys.readouterr().err.count("another tidy is running") == 2
+
+
+def test_status_fetch_and_a_full_tidy_pass_leave_an_idle_worktree_idle(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    resting = linked(primary, "resting")
+    unmerged(resting)
+    session = linked(primary, "session")
+
+    def is_idle() -> bool:
+        opened = stale_updates.Tidy.open(session, stale_updates.Counter())
+        try:
+            return opened.idle_worktree(resting)
+        finally:
+            shutil.rmtree(opened.scratch, ignore_errors=True)
+
+    touched = resting.stat().st_mtime_ns
+    assert is_idle()
+    git(resting, "status")
+    assert is_idle()
+    git(resting, "fetch", "-q", "origin")
+    assert is_idle()
+    tidy(session)
+    assert resting.is_dir()
+    assert is_idle()
+    assert resting.stat().st_mtime_ns == touched
