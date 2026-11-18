@@ -36,6 +36,7 @@ from tidy_guards import (
     reflog_time,
     same_place,
     save_commits,
+    scratch_git,
     submodules_hold_nothing,
     tidy_git,
     tidy_run,
@@ -131,7 +132,6 @@ def remove_stale_candidates(root: Path) -> None:
 
 
 STASH_SUBJECT = re.compile(r"(?:WIP on|On) ([^:]+):")
-EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 MERGE_REPOSITORY = "merge.git"
 ANSWERS = "hard-eng-tidy-gh.json"
 REMOVED = "hard-eng-tidy-removed.log"
@@ -217,7 +217,11 @@ class Tidy:
             root, "rev-parse", "--path-format=absolute", "--git-path", "objects"
         ).strip()
         scratch = Path(tempfile.mkdtemp(prefix="hard-eng-tidy-"))
-        tidy_git(scratch, "init", "--bare", "--quiet", MERGE_REPOSITORY)
+        made = scratch_git(
+            scratch, "init", "--bare", "--quiet", "--template=", MERGE_REPOSITORY
+        )
+        if made.returncode:
+            raise TidyStop("the scratch repository could not be made")
         (scratch / MERGE_REPOSITORY / "objects/info/alternates").write_text(
             f"{objects}\n"
         )
@@ -241,24 +245,13 @@ class Tidy:
 
         The merge runs in an empty repository with no attributes and no merge drivers, so no setting can turn a change into nothing.
         """
-        done = tidy_run(
+        done = scratch_git(
             self.scratch,
-            120,
-            "git",
-            f"--attr-source={EMPTY_TREE}",
-            "-c",
-            f"core.attributesFile={os.devnull}",
             "merge-tree",
             "--write-tree",
             self.tip,
             head,
-            env={
-                **os.environ,
-                "GIT_DIR": str(self.scratch / MERGE_REPOSITORY),
-                "GIT_CONFIG_GLOBAL": os.devnull,
-                "GIT_CONFIG_SYSTEM": os.devnull,
-                "GIT_ATTR_NOSYSTEM": "1",
-            },
+            repository=self.scratch / MERGE_REPOSITORY,
         )
         if done.returncode == 1:
             return False

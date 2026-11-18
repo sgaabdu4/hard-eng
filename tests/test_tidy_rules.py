@@ -346,3 +346,30 @@ def test_tidy_keeps_a_worktree_that_gets_work_while_it_waits_for_github(
     monkeypatch.setattr(stale_updates, "tidy_gh", slow)
     tidy(linked(primary, "session"))
     assert (waiting / name).read_text() == "written while gh answered\n"
+
+
+@pytest.mark.parametrize("through", ["global-config", "environment"])
+def test_the_scratch_repository_takes_no_template_from_the_users_settings(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, through: str
+) -> None:
+    template = tmp_path / "template"
+    (template / "info").mkdir(parents=True)
+    (template / "info/attributes").write_text("tracked.txt merge=ours\n")
+    (template / "config").write_text('[merge "ours"]\n\tdriver = true\n')
+    if through == "global-config":
+        settings = tmp_path / "settings"
+        settings.write_text(f"[init]\n\ttemplateDir = {template}\n")
+        monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(settings))
+    else:
+        monkeypatch.setenv("GIT_TEMPLATE_DIR", str(template))
+    git(primary, "switch", "-qc", "edge")
+    (primary / "tracked.txt").write_text("feature\n")
+    commit(primary, "feature")
+    git(primary, "switch", "-q", "main")
+    (primary / "tracked.txt").write_text("other\n")
+    commit(primary, "other")
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "switch", "-qc", "parking")
+    age_branch(primary, "edge")
+    tidy(linked(primary, "session"))
+    assert "edge" in branches(primary)
