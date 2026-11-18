@@ -471,7 +471,8 @@ class Tidy:
                     note(f"kept worktree {path}: {reason}")
                 continue
             now = next(
-                (r for r in worktrees(self.root) if r.get("worktree") == path), {}
+                (r for r in worktrees(self.root) if r.get("worktree") == path),
+                dict[str, str](),
             )
             if (now.get("HEAD"), now.get("branch")) != (
                 record.get("HEAD"),
