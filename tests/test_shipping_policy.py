@@ -93,6 +93,13 @@ def test_load_policy_defaults_the_push_checks_to_local_and_accepts_ci(
 
 HISTORY_GATE = {"name": "history", "role": "secrets-history", "command": ["gitleaks"]}
 CI_CONFIG = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+SHARDED_CONFIG = cast(
+    GateConfig,
+    {
+        "packages": [{"path": ".", "checks": [{"name": "tests", "shards": 2}]}],
+        "shared": [HISTORY_GATE],
+    },
+)
 
 
 def _ci_project(tmp_path: Path) -> tuple[Path, Path]:
@@ -295,6 +302,10 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "- run: python3 .hooks/hard-eng.py check\n",
             "- shell: bash {0}\n        run: |\n          python3 .hooks/hard-eng.py check\n          echo done\n",
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          if [ -f flag ]; then\n            exit 0\n          fi\n          python3 .hooks/hard-eng.py check\n",
+        ),
     ],
     ids=[
         "push-only",
@@ -325,6 +336,7 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "and-before-the-check-then-a-line",
         "errexit-off-by-a-longer-set-then-a-line",
         "unchecked-shell-then-a-line",
+        "a-closed-block-that-exits-zero-before-the-check",
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
@@ -343,7 +355,64 @@ def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
     name: str,
 ) -> None:
     source = Path(__file__).resolve().parents[1] / name
-    assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()))
+    assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()), sharded=True)
+
+
+def _job(name: str, shard: str, extra: str = "") -> str:
+    return (
+        f"  {name}:\n    runs-on: x\n{extra}    steps:\n"
+        f"      - run: python3 .hooks/hard-eng.py check --shard {shard}\n"
+    )
+
+
+SHARD_HEAD = "on: [pull_request]\njobs:\n"
+MATRIX = "    strategy:\n      matrix:\n        shard: [1, 2]\n"
+SHARDED_WORKFLOWS = {
+    "rest-only": SHARD_HEAD + _job("c", "rest"),
+    "numbered-only": SHARD_HEAD + _job("t", '"$SHARD"', MATRIX),
+    "rest-and-numbered": SHARD_HEAD + _job("c", "rest") + _job("t", '"$SHARD"', MATRIX),
+    "merge-only": SHARD_HEAD + _job("m", "merge"),
+    "shards-with-a-condition-and-a-plain-merge": SHARD_HEAD
+    + _job("c", "rest")
+    + _job("t", '"$SHARD"', "    if: github.actor != 'x'\n" + MATRIX)
+    + _job("m", "merge", "    needs: t\n"),
+}
+
+
+@pytest.mark.parametrize(
+    "workflow", SHARDED_WORKFLOWS.values(), ids=list(SHARDED_WORKFLOWS)
+)
+def test_with_a_sharded_gate_a_workflow_without_the_rest_and_merge_jobs_is_refused(
+    tmp_path: Path, workflow: str
+) -> None:
+    root, workflows = _ci_project(tmp_path)
+    (workflows / "ci.yml").write_text(workflow)
+    with pytest.raises(shipping.ShippingError, match="every pull request"):
+        ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
+
+
+def test_the_rest_job_alone_is_the_whole_check_when_no_gate_is_sharded(
+    tmp_path: Path,
+) -> None:
+    root, workflows = _ci_project(tmp_path)
+    (workflows / "ci.yml").write_text(SHARD_HEAD + _job("c", "rest"))
+    ci_jobs.load_checked_policy(root, CI_CONFIG)
+    with pytest.raises(shipping.ShippingError, match="every pull request"):
+        (workflows / "ci.yml").write_text(SHARD_HEAD + _job("t", '"$SHARD"', MATRIX))
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
+
+
+def test_with_a_sharded_gate_the_rest_and_merge_jobs_are_the_whole_check(
+    tmp_path: Path,
+) -> None:
+    root, workflows = _ci_project(tmp_path)
+    (workflows / "ci.yml").write_text(
+        SHARD_HEAD
+        + _job("c", "rest")
+        + _job("t", '"$SHARD"', MATRIX)
+        + _job("m", "merge", "    needs: t\n    if: ${{ !cancelled() }}\n")
+    )
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
 
 
 def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditional_job(
@@ -380,6 +449,10 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
             "- run: python3 .hooks/hard-eng.py check\n",
             "- run: |\n          # Do not use set +e here\n          python3 .hooks/hard-eng.py check\n",
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          if [ -f flag ]; then\n            echo no\n            exit 1\n          fi\n          python3 .hooks/hard-eng.py check\n",
+        ),
     ],
     ids=[
         "not-cancelled",
@@ -387,6 +460,7 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
         "and-then-a-command",
         "the-generated-launcher-line",
         "a-comment-that-names-errexit",
+        "a-closed-block-that-only-fails-before-the-check",
     ],
 )
 def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
