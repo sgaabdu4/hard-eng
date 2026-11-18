@@ -386,12 +386,13 @@ class Tidy:
             head,
             "--remotes",
         )
+        if left.returncode != 0:
+            return True
         unmerged = left.stdout.split()
-        return (
-            left.returncode != 0
-            or len(unmerged) > 100
-            or not all(self.content_merged(commit) for commit in unmerged)
-        )
+        if not unmerged:
+            return False
+        tips = tidy_git(self.root, "merge-base", "--independent", *unmerged).split()
+        return len(tips) > 100 or not all(self.content_merged(tip) for tip in tips)
 
     def hidden_edits(self, path: Path) -> bool:
         listing = tidy_git(path, "ls-files", "-v")
