@@ -25,7 +25,7 @@ Authority: Autonomous — baseline repair. The failure blocks the Complete check
 ## Acceptance + steps
 
 - [x] The SIGHUP case passes when the runner ignores SIGHUP → `tests/test_ship_actions.py::test_interrupted_pre_push_removes_its_snapshot`: under `perl -e '$SIG{HUP}="IGNORE"; exec @ARGV'` it gave `1 failed, 1 passed` before the change (`[1]` timed out after 30 seconds) and `2 passed` after it.
-- [x] The SIGTERM case still passes → the `[15]` case of the same test passes before and after.
+- [x] The SIGTERM case still passes → `tests/test_ship_actions.py::test_interrupted_pre_push_removes_its_snapshot`: its `[15]` case passes before and after the change.
 
 ## Baseline + execution
 
