@@ -108,6 +108,17 @@ REFUSED = {
     "apple job is the only check": workflow(
         job="    needs: impact\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n"
     ).replace("hard-eng:", "apple:", 1),
+    "check job that needs the apple job": workflow(
+        job="    needs: apple\n",
+        extra=second_job(""),
+    ).replace(
+        "  apple:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          "
+        + CHECK
+        + " \n",
+        "  apple:\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          "
+        + CHECK
+        + "\n",
+    ),
     "apple job if on the main check job": workflow(
         job="    needs: impact\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n"
     ),

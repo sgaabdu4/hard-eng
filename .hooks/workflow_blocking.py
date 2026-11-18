@@ -179,6 +179,17 @@ def skip_hits(name: str, words: list[tuple[str, str, int]]) -> list[str]:
     ]
 
 
+def cannot_be_skipped(job: dict[str, object]) -> bool:
+    """No condition of its own skips the job, and a skipped Apple job it needs skips it too unless it runs after any result."""
+    condition = str(job.get("if", "")).strip()
+    needs = job.get("needs")
+    waits = [needs] if isinstance(needs, str) else needs
+    after_apple = isinstance(waits, list) and "apple" in waits
+    if after_apple:
+        return bool(JOB_IF.fullmatch(condition))
+    return not APPLE_IF.fullmatch(condition)
+
+
 def check_steps(job: dict[str, object]) -> list[dict[str, object]]:
     steps = job.get("steps")
     return [
@@ -225,7 +236,7 @@ def workflow_hits(name: str, text: str) -> list[str]:
         steps = check_steps(job)
         if not steps:
             continue
-        if not APPLE_IF.fullmatch(str(job.get("if", "")).strip()):
+        if cannot_be_skipped(job):
             checks += sum(" check " in str(step["run"]) for step in steps)
         launchers = set().union(*map(launcher_names, steps))
         found += [
