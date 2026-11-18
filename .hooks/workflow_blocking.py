@@ -225,7 +225,8 @@ def workflow_hits(name: str, text: str) -> list[str]:
         steps = check_steps(job)
         if not steps:
             continue
-        checks += sum(" check " in str(step["run"]) for step in steps)
+        if not APPLE_IF.fullmatch(str(job.get("if", "")).strip()):
+            checks += sum(" check " in str(step["run"]) for step in steps)
         launchers = set().union(*map(launcher_names, steps))
         found += [
             f"{name}:1 {hit}: {FIX}" for hit in job_hits(job, data, launchers, job_id)

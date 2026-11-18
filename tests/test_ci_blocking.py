@@ -105,6 +105,9 @@ REFUSED = {
     "job if false string": workflow(job="    if: 'false'\n"),
     "job if false expression": workflow(job="    if: ${{ false }}\n"),
     "job if event name": workflow(job="    if: github.event_name == 'push'\n"),
+    "apple job is the only check": workflow(
+        job="    needs: impact\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n"
+    ).replace("hard-eng:", "apple:", 1),
     "apple job if on the main check job": workflow(
         job="    needs: impact\n    if: ${{ needs.impact.outputs.apple != 'false' }}\n"
     ),
