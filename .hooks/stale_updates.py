@@ -1,12 +1,17 @@
 """Remove what an ended update or push check left behind: candidate worktrees and temporary folders."""
 
+import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
+from collections import Counter
+from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 OWNER = re.compile(r"hard-eng-update (\d+)")
@@ -100,6 +105,423 @@ def remove_stale_candidates(root: Path) -> None:
             shutil.rmtree(path.parent, ignore_errors=True)
     sweep_temporary()
     subprocess.run(["git", "worktree", "prune"], cwd=root, check=True, timeout=60)
+
+
+PROTECTED_BRANCHES = {"main", "master", "develop", "hard-eng/update"}
+GENERATED_FOLDERS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
+CARGO_SIGNATURE = "Signature: 8a477f597d28d172789f06886806bc55"
+STASH_SUBJECT = re.compile(r"(?:WIP on|On) ([^:]+):")
+REFLOG_SELECTOR = re.compile(r"@\{(\d+)\}$")
+SUBMODULE_LINE = re.compile(r"(.)[0-9a-f]+ (.+?)(?: \(.*\))?")
+
+
+class TidyStop(Exception):
+    pass
+
+
+def note(text: str) -> None:
+    print(f"Tidy {text}", file=sys.stderr, flush=True)
+
+
+def tidy_run(
+    cwd: Path, limit: float, *command: str
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=limit,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise TidyStop(f"`{' '.join(command[:3])}` did not run: {error}") from error
+
+
+def tidy_git(cwd: Path, *arguments: str) -> str:
+    done = tidy_run(cwd, 120, "git", *arguments)
+    if done.returncode:
+        raise TidyStop(f"`git {' '.join(arguments[:3])}` exited {done.returncode}")
+    return done.stdout
+
+
+def tidy_gh(cwd: Path, *arguments: str) -> list[object] | None:
+    """The JSON list gh printed, or None when gh gave no usable answer."""
+    try:
+        done = tidy_run(cwd, 60, "gh", *arguments)
+        found = json.loads(done.stdout) if done.returncode == 0 else None
+    except (TidyStop, ValueError):
+        return None
+    return found if isinstance(found, list) else None
+
+
+def reflog_time(cwd: Path, ref: str) -> float | None:
+    selector = tidy_git(
+        cwd, "log", "-g", "-1", "--date=unix", "--format=%gd", ref
+    ).strip()
+    found = REFLOG_SELECTOR.search(selector)
+    return float(found[1]) if found else None
+
+
+def proc_paths() -> set[str]:
+    found: set[str] = set()
+    for process in Path("/proc").iterdir():
+        if process.name.isdigit() and int(process.name) != os.getpid():
+            for link in (process / "cwd", *(process / "fd").glob("*")):
+                with suppress(OSError):
+                    found.add(os.readlink(link))
+    return found
+
+
+def open_paths() -> set[str] | None:
+    """Every path a process has as its folder or open file; None when the host cannot say."""
+    if os.name != "posix":
+        return None
+    if Path("/proc/self/cwd").exists():
+        return proc_paths()
+    if shutil.which("lsof") is None:
+        return None
+    done = tidy_run(Path("/"), 60, "lsof", "-n", "-P", "-w", "-F", "pn")
+    if done.returncode not in {0, 1}:
+        raise TidyStop(f"`lsof` exited {done.returncode}")
+    names: set[str] = set()
+    mine = False
+    for line in done.stdout.splitlines():
+        if line.startswith("p"):
+            mine = line[1:] == str(os.getpid())
+        elif line.startswith("n/") and not mine:
+            names.add(line[1:])
+    return names or None
+
+
+def inside(path: Path, names: set[str]) -> bool:
+    prefixes = {str(path), str(path.resolve())}
+    return any(
+        name == prefix or name.startswith(prefix + os.sep)
+        for name in names
+        for prefix in prefixes
+    )
+
+
+def codex_folder() -> Path:
+    home = os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")
+    return (Path(home) / "worktrees").resolve()
+
+
+def generated(worktree: Path) -> Callable[[str], bool]:
+    """Names of ignored entries that only a tool run leaves behind."""
+
+    def known(name: str) -> bool:
+        from process_group import INSTALL_FOLDERS
+
+        parts = name.rstrip("/").split("/")
+        if parts[0] == ".hard-eng":
+            browser = worktree / ".hard-eng/browser"
+            return not (browser.is_dir() and any(browser.iterdir()))
+        if name == "target/":
+            return cargo_target(worktree)
+        return name.endswith("/") and (
+            parts[-1] in GENERATED_FOLDERS or parts[-1] in INSTALL_FOLDERS
+        )
+
+    return known
+
+
+def cargo_target(worktree: Path) -> bool:
+    tag = worktree / "target/CACHEDIR.TAG"
+    with suppress(OSError):
+        return tag.read_text().startswith(CARGO_SIGNATURE)
+    return False
+
+
+def quiet_folders(target: Path) -> bool:
+    """No folder in the top two levels of a build folder changed within a day."""
+    try:
+        level, seen = [target], [target]
+        for _ in range(2):
+            level = [
+                Path(entry.path)
+                for folder in level
+                for entry in os.scandir(folder)
+                if entry.is_dir(follow_symlinks=False)
+            ]
+            seen += level
+        return all(idle(folder.stat().st_mtime) for folder in seen)
+    except OSError:
+        return False
+
+
+@dataclass
+class Tidy:
+    root: Path
+    session: Path
+    base: str
+    tip: str
+    repository: str | None
+    on_origin: set[str]
+    protected: set[str]
+    removed: Counter[str]
+
+    @classmethod
+    def open(cls, root: Path, removed: Counter[str]) -> "Tidy":
+        from shipping import ShippingError, origin_repository
+        from update_runner import fetch_base, update_base
+
+        try:
+            base = update_base(root)
+            tip = fetch_base(root, base)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            raise TidyStop(f"fetch of the base branch failed: {error}") from error
+        try:
+            repository = origin_repository(
+                tidy_git(root, "config", "--get", "remote.origin.url").strip()
+            )
+        except ShippingError:
+            repository = None
+        heads = tidy_git(root, "ls-remote", "--heads", "origin")
+        on_origin = {
+            line.split("\t")[1].removeprefix("refs/heads/")
+            for line in heads.splitlines()
+            if "\t" in line
+        }
+        default = tidy_run(
+            root, 120, "git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"
+        )
+        named = default.stdout.strip().removeprefix("origin/")
+        return cls(
+            root,
+            root.resolve(),
+            base,
+            tip,
+            repository,
+            on_origin,
+            {*PROTECTED_BRANCHES, base, named},
+            removed,
+        )
+
+    def merged(self, head: str, branch: str | None) -> bool:
+        ancestor = tidy_run(
+            self.root, 120, "git", "merge-base", "--is-ancestor", head, self.tip
+        ).returncode
+        if ancestor not in {0, 1}:
+            raise TidyStop("`git merge-base` failed")
+        if ancestor == 0:
+            return True
+        span = f"{self.tip}..{head}"
+        if not tidy_git(self.root, "rev-list", "--merges", span).strip():
+            cherry = tidy_git(self.root, "cherry", self.tip, head)
+            if not any(line.startswith("+") for line in cherry.splitlines()):
+                return True
+        if branch is None or self.repository is None:
+            return False
+        pulls = tidy_gh(
+            self.root, "pr", "list", "--repo", self.repository, "--state", "merged",
+            "--head", branch, "--base", self.base, "--json", "headRefOid",
+        )  # fmt: skip
+        return any(
+            isinstance(pull, dict) and pull.get("headRefOid") == head
+            for pull in pulls or []
+        )
+
+    def open_pr(self, branch: str) -> bool:
+        """True when the branch has an open PR, or when no answer can say that it has none."""
+        if branch not in self.on_origin:
+            return False
+        if self.repository is None:
+            return True
+        pulls = tidy_gh(
+            self.root, "pr", "list", "--repo", self.repository, "--state", "open",
+            "--head", branch, "--json", "number",
+        )  # fmt: skip
+        return pulls is None or bool(pulls)
+
+    def stashed(self, branch: str | None, head: str | None) -> bool:
+        listing = tidy_git(self.root, "stash", "list", "--format=%P%x09%gs")
+        for line in listing.splitlines():
+            parents, _, subject = line.partition("\t")
+            parent = parents.split(" ")[0]
+            named = STASH_SUBJECT.match(subject)
+            if (head is not None and parent == head) or (
+                branch is not None and named is not None and named[1] == branch
+            ):
+                return True
+        return False
+
+    def idle_worktree(self, path: Path) -> bool:
+        index = tidy_git(
+            path, "rev-parse", "--path-format=absolute", "--git-path", "index"
+        ).strip()
+        logged = reflog_time(path, "HEAD")
+        try:
+            used = Path(index).stat().st_mtime
+        except OSError:
+            return False
+        return logged is not None and idle(used) and idle(logged)
+
+    def submodules_hold_nothing(self, path: Path) -> bool:
+        listing = tidy_git(path, "submodule", "status", "--recursive")
+        for line in listing.splitlines():
+            found = SUBMODULE_LINE.fullmatch(line)
+            if found is None or found[1] in "+U":
+                return False
+            if found[1] == "-":
+                continue
+            inner = path / found[2]
+            if (
+                tidy_git(inner, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all", "--ignored=no")
+                or tidy_git(inner, "stash", "list")
+                or tidy_git(inner, "rev-list", "HEAD", "--branches", "--not", "--remotes")
+            ):  # fmt: skip
+                return False
+        return True
+
+    def worktree_busy(self, path: Path) -> bool:
+        names = open_paths()
+        return names is None or inside(path, names)
+
+    def worktree_reason(
+        self, record: dict[str, str], main: Path, first: bool
+    ) -> str | None:
+        from ship_actions import work_left
+
+        path = Path(record.get("worktree", ""))
+        branch = record.get("branch", "").removeprefix("refs/heads/") or None
+        head = record.get("HEAD", "")
+        if (
+            first
+            or "bare" in record
+            or "locked" in record
+            or "prunable" in record
+            or not path.is_dir()
+        ):
+            return "primary, bare, locked or missing"
+        if path.resolve() == self.session:
+            return "the session's worktree"
+        if path.resolve().is_relative_to(codex_folder()):
+            return "kept by the Codex app"
+        checks: list[tuple[str, Callable[[], bool]]] = [
+            ("used in the last 24 hours", lambda: not self.idle_worktree(path)),
+            ("not merged", lambda: not self.merged(head, branch)),
+            ("a stash names it", lambda: self.stashed(branch, head)),
+            ("its branch has an open PR or no PR answer", lambda: branch is not None and self.open_pr(branch)),
+            ("holds changes", lambda: bool(work_left(path, main, generated(path)))),
+            ("a submodule holds work", lambda: not self.submodules_hold_nothing(path)),
+            ("a process is inside", lambda: self.worktree_busy(path)),
+        ]  # fmt: skip
+        return next((reason for reason, kept in checks if kept()), None)
+
+    def remove_worktrees(self) -> None:
+        from ship_actions import worktrees
+
+        records = worktrees(self.root)
+        main = Path(records[0]["worktree"])
+        for index, record in enumerate(records):
+            reason = self.worktree_reason(record, main, index == 0)
+            path = record.get("worktree", "")
+            if reason is not None:
+                if not reason.startswith(("primary", "the session")):
+                    note(f"kept worktree {path}: {reason}")
+                continue
+            tidy_git(self.root, "worktree", "remove", "--force", path)
+            note(f"removed worktree {path} (merged, idle, clean)")
+            self.removed["worktrees"] += 1
+
+    def branch_reason(self, name: str, tip: str, checked_out: set[str]) -> str | None:
+        logged = reflog_time(self.root, f"refs/heads/{name}")
+        checks: list[tuple[str, Callable[[], bool]]] = [
+            ("protected", lambda: name in self.protected),
+            ("checked out", lambda: name in checked_out),
+            ("used in the last 24 hours or no log", lambda: logged is None or not idle(logged)),
+            ("not merged", lambda: not self.merged(tip, name)),
+            ("a stash names it", lambda: self.stashed(name, None)),
+            ("open PR or no PR answer", lambda: self.open_pr(name)),
+        ]  # fmt: skip
+        return next((reason for reason, kept in checks if kept()), None)
+
+    def remove_branches(self) -> None:
+        from ship_actions import worktrees
+
+        checked_out = {
+            record.get("branch", "").removeprefix("refs/heads/")
+            for record in worktrees(self.root)
+        }
+        listing = tidy_git(
+            self.root, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads"
+        )
+        for line in listing.splitlines():
+            tip, _, ref = line.partition(" ")
+            name = ref.removeprefix("refs/heads/")
+            reason = self.branch_reason(name, tip, checked_out)
+            if reason is not None:
+                if reason not in {"protected", "checked out"}:
+                    note(f"kept branch {name}: {reason}")
+                continue
+            tidy_git(self.root, "update-ref", "-d", ref, tip)
+            note(f"removed branch {name} at {tip} (merged, idle)")
+            self.removed["branches"] += 1
+
+    def target_reason(self, path: Path) -> str | None:
+        target = path / "target"
+        checks: list[tuple[str, Callable[[], bool]]] = [
+            ("no cargo build folder", lambda: not (path / "Cargo.toml").is_file() or not cargo_target(path)),
+            ("git does not ignore it", lambda: tidy_run(path, 120, "git", "check-ignore", "-q", "target").returncode != 0),
+            ("git tracks files in it", lambda: bool(tidy_git(path, "ls-files", "--", "target").strip())),
+            ("worktree used in the last 24 hours", lambda: not self.idle_worktree(path)),
+            ("build folder changed in the last 24 hours", lambda: not quiet_folders(target)),
+            ("a process is inside", lambda: self.worktree_busy(path)),
+        ]  # fmt: skip
+        return next((reason for reason, kept in checks if kept()), None)
+
+    def trim_targets(self) -> None:
+        from ship_actions import worktrees
+
+        for record in worktrees(self.root):
+            path = Path(record.get("worktree", ""))
+            if (
+                "bare" in record
+                or "prunable" in record
+                or not path.is_dir()
+                or path.resolve() == self.session
+            ):
+                continue
+            reason = self.target_reason(path)
+            if reason is None:
+                shutil.rmtree(path / "target")
+                note(f"removed build folder {path / 'target'} (idle cargo target)")
+                self.removed["build folders"] += 1
+            elif not reason.startswith("no cargo"):
+                note(f"kept build folder {path / 'target'}: {reason}")
+
+    def run(self) -> None:
+        self.remove_worktrees()
+        self.remove_branches()
+        self.trim_targets()
+
+
+def tidy(root: Path) -> None:
+    """Remove merged idle worktrees and branches and idle cargo build folders; any failed command stops it."""
+    from update_runner import LOG_FILE, RESULT_FILE, exclusive
+
+    removed: Counter[str] = Counter()
+    with (common_dir(root) / "hard-eng-tidy.lock").open("a") as handle:
+        if not exclusive(handle):
+            note("skipped: another tidy is running")
+            return
+        try:
+            Tidy.open(root, removed).run()
+        except (TidyStop, OSError, ValueError, subprocess.SubprocessError) as error:
+            note(f"stopped, everything not yet removed is kept: {error}")
+    if removed:
+        result = root / RESULT_FILE
+        result.parent.mkdir(parents=True, exist_ok=True)
+        counts = ", ".join(
+            f"{removed[kind]} {kind}"
+            for kind in ("worktrees", "branches", "build folders")
+        )
+        with result.open("a") as out:
+            out.write(f"Tidy: removed {counts} ({LOG_FILE}).\n")
 
 
 MARKER = "# Hard Eng worktree launcher, local to this checkout"
