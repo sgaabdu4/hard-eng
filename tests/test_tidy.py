@@ -301,13 +301,14 @@ def test_tidy_keeps_locked_and_codex_app_worktrees(
     assert locked.is_dir() and codex.is_dir() and not gone.exists()
 
 
-@pytest.mark.parametrize("local_commit", [False, True], ids=["clean", "local-commit"])
+@pytest.mark.parametrize("work", ["none", "local-commit", "ignored-file"])
 def test_tidy_removes_a_submodule_worktree_only_when_the_submodule_holds_no_work(
-    primary: Path, tmp_path: Path, local_commit: bool
+    primary: Path, tmp_path: Path, work: str
 ) -> None:
     library = tmp_path / "library"
     init(library)
     (library / "lib.txt").write_text("lib\n")
+    (library / ".gitignore").write_text("*.secret\n")
     commit(library, "lib")
     allow = ["-c", "protocol.file.allow=always"]
     git(primary, *allow, "submodule", "add", "-q", str(library), "vendor")
@@ -315,12 +316,14 @@ def test_tidy_removes_a_submodule_worktree_only_when_the_submodule_holds_no_work
     git(primary, "push", "-q", "origin", "main")
     path = linked(primary, "withsub")
     git(path, *allow, "submodule", "update", "--init", "-q")
-    if local_commit:
+    if work == "local-commit":
         who = ["-c", "user.name=T", "-c", "user.email=t@example.invalid"]
         git(path / "vendor", *who, "commit", "--allow-empty", "-qm", "local")
+    if work == "ignored-file":
+        (path / "vendor/data.secret").write_text("keep\n")
     age(path)
     tidy(primary)
-    assert path.is_dir() == local_commit
+    assert path.is_dir() == (work != "none")
 
 
 def test_tidy_keeps_an_unmerged_branch(primary: Path) -> None:
