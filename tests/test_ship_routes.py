@@ -55,16 +55,19 @@ def _ship(
     return shipping.verify(fixture.root, plan, _PR_URL, "ready")
 
 
-def _origin_refs(fixture: Fixture, main_in_head: bool) -> None:
-    """origin/develop at the first commit; origin/main inside the head or on a side commit that the head lacks."""
+def _origin_refs(fixture: Fixture, tip: str) -> None:
+    """origin/develop at the first commit; origin/main at the head, at its parent or on a side commit that the head lacks."""
     first = git(fixture.root, "rev-list", "--max-parents=0", "HEAD")
-    head = git(fixture.root, "rev-parse", "HEAD")
     tree = git(fixture.root, "rev-parse", "HEAD^{tree}")
     side = git(fixture.root, "commit-tree", tree, "-p", first, "-m", "main tip")
-    main_tip = git(fixture.root, "rev-parse", "HEAD~1") if main_in_head else side
+    tips = {"head": "HEAD", "parent": "HEAD~1", "side": side}
     git(fixture.root, "update-ref", "refs/remotes/origin/develop", first)
-    git(fixture.root, "update-ref", "refs/remotes/origin/main", main_tip)
-    assert head != main_tip
+    git(
+        fixture.root,
+        "update-ref",
+        "refs/remotes/origin/main",
+        git(fixture.root, "rev-parse", tips[tip]),
+    )
 
 
 def _recorded_method(fixture: Fixture) -> str:
@@ -85,7 +88,7 @@ def test_a_release_or_join_passes_ship_with_a_merge_commit_beyond_the_commit_lim
     behind: int,
 ) -> None:
     fixture = develop_policy(tmp_path, head_ref)
-    _origin_refs(fixture, main_in_head=True)
+    _origin_refs(fixture, "head")
     pull = _route_pull(fixture, head_ref, base_ref, 156)
     shipment = _ship(monkeypatch, fixture, pull, behind)
     assert shipment.method == "merge"
@@ -96,12 +99,25 @@ def test_a_task_branch_into_the_base_that_lacks_the_default_tip_is_not_a_join(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = develop_policy(tmp_path, "chore/join-main-hotfix")
-    _origin_refs(fixture, main_in_head=False)
+    _origin_refs(fixture, "side")
     pull = _route_pull(fixture, "chore/join-main-hotfix", "develop", 156)
     with pytest.raises(shipping.ShippingError, match="HE-PR-COMMITS"):
         _ship(monkeypatch, fixture, pull, plan=fixture.plan)
     small = _route_pull(fixture, "chore/join-main-hotfix", "develop", 1)
     assert _ship(monkeypatch, fixture, small, plan=fixture.plan).method == "rebase"
+
+
+def test_a_task_branch_with_its_own_commit_that_merged_the_default_branch_is_not_a_join(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = develop_policy(tmp_path, "feature/merged-main")
+    _origin_refs(fixture, "parent")
+    pull = _route_pull(fixture, "feature/merged-main", "develop", 156)
+    with pytest.raises(shipping.ShippingError, match="HE-PR-COMMITS"):
+        _ship(monkeypatch, fixture, pull, plan=fixture.plan)
+    small = _route_pull(fixture, "feature/merged-main", "develop", 1)
+    with pytest.raises(shipping.ShippingError, match="big change needs a plan"):
+        _ship(monkeypatch, fixture, small)
 
 
 def test_a_hotfix_passes_ship_with_a_merge_commit_and_keeps_its_plan(
