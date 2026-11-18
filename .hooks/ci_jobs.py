@@ -481,6 +481,9 @@ SHELL_OPEN = {"if", "case", "for", "while", "until"}
 SHELL_CLOSE = {"fi", "esac", "done"}
 SHELL_BRANCH = {"then", "else", "elif", "do"}
 CHAIN_OPERATORS = re.compile(r"[;&|]")
+STEP_ENDING = re.compile(
+    r"(?<![\w$.-])(?:exit|return)(?![\w-])(?!\s+[1-9]\d*(?![\w$]))"
+)
 FAILING_EXIT = re.compile(r"exit\s+[1-9]\d*")
 BODY_AFTER_KEYWORD = re.compile(r"\b(then|do)\s+\S|\b(fi|done|esac)\b")
 
@@ -512,7 +515,9 @@ def control_lines_only_fail(lines: list[str]) -> bool:
 
 
 def shell_runs_it(raw: str, text: str, start: int) -> bool:
-    """No shell condition or loop can skip the command, and its line does not only print it."""
+    """No shell condition, loop or earlier `exit` or `return` that can end the step with success can skip the command, and its line does not only print it."""
+    if STEP_ENDING.search(text[:start]):
+        return False
     lines = raw.splitlines()
     index = text.count("\n", 0, start)
     if not control_lines_only_fail(lines[: index + 1]):
