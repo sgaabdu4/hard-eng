@@ -40,6 +40,7 @@ PRIVATE_FILES = {
     "FETCH_HEAD",
     "COMMIT_EDITMSG",
     "AUTO_MERGE",
+    "MERGE_RR",
     "index",
     "gitdir",
     "commondir",
