@@ -7,24 +7,16 @@ from pathlib import Path
 
 import pytest
 import stale_updates
-from conftest import commit, git, init
+from conftest import OLD, age_branch, commit, git, git_path
 from test_tidy import (
-    OLD,
+    add_vendor,
     age,
-    age_branch,
     branches,
-    build_primary,
     fake_gh,
-    git_path,
     linked,
     tidy,
     unmerged,
 )
-
-
-@pytest.fixture
-def primary(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return build_primary(repository, tmp_path, monkeypatch)
 
 
 def test_tidy_keeps_a_branch_whose_only_difference_is_whitespace(
@@ -353,14 +345,7 @@ def test_tidy_keeps_a_worktree_whose_nested_tracked_file_was_touched_lately(
 def test_tidy_keeps_a_worktree_whose_submodule_file_was_touched_lately(
     primary: Path, tmp_path: Path
 ) -> None:
-    library = tmp_path / "library"
-    init(library)
-    (library / "lib.txt").write_text("lib\n")
-    commit(library, "lib")
-    allow = ["-c", "protocol.file.allow=always"]
-    git(primary, *allow, "submodule", "add", "-q", str(library), "vendor")
-    commit(primary, "add vendor")
-    git(primary, "push", "-q", "origin", "main")
+    allow = add_vendor(primary, tmp_path)
     used = linked(primary, "used")
     git(used, *allow, "submodule", "update", "--init", "-q")
     age(used)
