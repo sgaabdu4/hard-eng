@@ -882,16 +882,23 @@ def run_update(root: Path) -> int:
             print(last_result(root))
             return 1
         signal.signal(signal.SIGTERM, interrupt_update)
-        with suppress(subprocess.SubprocessError):
-            try:
-                update.wait()
-            finally:
-                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        interrupted = False
+        try:
+            update.wait()
+        except subprocess.SubprocessError:
+            interrupted = True
+        finally:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
         stop_group(update)
         if update.returncode != 0:
             record_result(root, failed_update(f"update exited {update.returncode}"))
         with suppress(OSError, ValueError, subprocess.SubprocessError):
             remove_stale_candidates(root)
+    if not interrupted and update_blocker(root) is None:
+        from stale_updates import tidy
+
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        tidy(root)
     result = last_result(root)
     print(result)
     return 1 if "Hard Eng update failed" in result else 0
