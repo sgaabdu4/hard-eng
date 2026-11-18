@@ -476,8 +476,10 @@ def shell_runs_it(raw: str, text: str, start: int) -> bool:
             and not LAUNCHER.fullmatch(SPACES.sub(" ", line.strip()))
         ):
             return False
-    before = text[text.rfind("\n", 0, start) + 1 : start].split()
-    return not before or before[0] not in {"echo", "printf"}
+    if re.search(r"\bset\s+\+\w*e|\+o\s+errexit", raw):
+        return False
+    before = text[text.rfind("\n", 0, start) + 1 : start].strip()
+    return not re.search(r"^(echo|printf)\b|[|;!]|(?<!&)&(?!&)", before)
 
 
 def step_runs_check(job: object, step: object) -> bool:

@@ -275,6 +275,14 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "- run: python3 .hooks/hard-eng.py check\n",
             "- run: |\n          if [ -f flag ]; then\n            python3 .hooks/hard-eng.py check\n          fi\n",
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: test -f flag || python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          set +e\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
     ],
     ids=[
         "push-only",
@@ -300,6 +308,8 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "conditional-shell",
         "echo",
         "conditional-shell-lines",
+        "or-before-the-check",
+        "errexit-off-then-a-line",
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
