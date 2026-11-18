@@ -389,13 +389,22 @@ def pull_request_filters(workflow: object) -> list[str]:
     return [name for name in names if isinstance(event, dict) and name in event]
 
 
-def calling_jobs(workflow: object, called: str) -> list[dict[str, object]]:
+def calling_jobs(workflow: object, called: str) -> list[str]:
     jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
-    return (
-        [j for j in jobs.values() if isinstance(j, dict) and j.get("uses") == called]
-        if isinstance(jobs, dict)
-        else []
-    )
+    return [
+        str(name)
+        for name, job in (jobs.items() if isinstance(jobs, dict) else [])
+        if isinstance(job, dict) and job.get("uses") == called
+    ]
+
+
+def without_comment(line: str) -> str:
+    import shlex
+
+    try:
+        return " ".join(shlex.split(line, comments=True))
+    except ValueError:
+        return ""
 
 
 def whole_check_arguments(command: str) -> bool:
@@ -443,9 +452,8 @@ def runs_whole_check(workflow: object) -> bool:
         ) or []:
             run = step.get("run") if isinstance(step, dict) else None
             text = "\n".join(
-                line
+                without_comment(line)
                 for line in str(run).replace("\\\n", " ").splitlines()
-                if not line.lstrip().startswith("#")
             )
             if any(
                 whole_check_arguments(m[0])
@@ -454,8 +462,9 @@ def runs_whole_check(workflow: object) -> bool:
                 conditions.add(step.get("if"))
         if None in conditions or any(
             isinstance(c, str)
+            and c.endswith(" != 'true'")
+            and not {"&&", "||"} & set(c.split())
             and c.replace("!= 'true'", "== 'true'") in conditions
-            and "!= 'true'" in c
             for c in conditions
         ):
             return True
@@ -488,10 +497,8 @@ def ci_check_gap(root: Path) -> str | None:
                 continue
             if filters := pull_request_filters(caller):
                 gap = f"the pull_request trigger of {caller_name} has a `{filters[0]}` filter"
-            elif any("if" in job for job in jobs):
-                gap = (
-                    f"the job in {caller_name} that calls {name} has an `if` condition"
-                )
+            elif not any(job_always_runs(job, caller["jobs"]) for job in jobs):
+                gap = f"the job in {caller_name} that calls {name} has an `if` condition, or needs a job that has one"
             else:
                 return None
     return gap

@@ -237,6 +237,15 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         CHECK_WORKFLOW.replace(
             "  c:\n", "  gate:\n    if: false\n    runs-on: x\n  c:\n    needs: gate\n"
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3", "- run: 'echo skipping # python3"
+        ).replace("check\n", "check'\n"),
+        CHECK_WORKFLOW.replace(
+            STEP,
+            "    steps:\n"
+            "      - if: x == 'true' && y\n        run: python3 .hooks/hard-eng.py check\n"
+            "      - if: x != 'true' && y\n        run: python3 .hooks/hard-eng.py check\n",
+        ),
     ],
     ids=[
         "push-only",
@@ -249,6 +258,8 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "plan-stage-draft",
         "commented-out",
         "needs-a-conditional-job",
+        "inline-comment",
+        "paired-conditions-with-and",
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
@@ -272,3 +283,20 @@ def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
 ) -> None:
     source = Path(__file__).resolve().parents[1] / name
     assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()))
+
+
+def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditional_job(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "hard-eng.yml").write_text(CALLED)
+    (workflows / "pull-request.yml").write_text(
+        "on:\n  pull_request:\njobs:\n  gate:\n    if: false\n    runs-on: x\n"
+        "  check:\n    needs: gate\n    uses: ./.github/workflows/hard-eng.yml\n"
+    )
+    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+    with pytest.raises(shipping.ShippingError, match="`if` condition"):
+        ci_jobs.load_checked_policy(root, config)
