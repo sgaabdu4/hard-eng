@@ -85,6 +85,10 @@ Data loss is the material risk. Recovery: every rule keeps a worktree or branch 
 
 Review declined: a worktree that switches to unmerged work between the last branch and commit comparison and the removal. The worktree must be idle for 24 hours, the comparison runs immediately before the removal, and Git offers no lock that a remover can hold against a checkout, so the window is the length of one Git call.
 
+Review declined: a branch that a worktree checks out between the final checkout re-read and the `update-ref` call. The re-read runs immediately before the deletion, a branch idle for 24 hours is checked out by a person in the same Git call window only, and a deleted merged branch comes back with `git branch <name> <tip>` from the log line. `git branch -D` would drop the tip guard instead.
+
+Review declined: unreadable processes of root and system accounts counting as unknown. Only a process of another person's account (user id from 1000, not ours) makes a worktree unknown. On Linux every system service is unreadable from a user account, so counting those as unknown would keep every worktree and make the tidy do nothing there, and a system service cannot stand in a folder under a user's account.
+
 ## ux_reference
 
 N/A — no visible UI; the only output is one plain text line in the session start report.
