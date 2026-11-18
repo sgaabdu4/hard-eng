@@ -1056,3 +1056,71 @@ def test_tidy_writes_no_objects_into_the_repository_and_leaves_no_scratch_folder
     assert "diverged" in branches(primary)
     assert loose_objects(primary) == before
     assert not list((tmp_path / "tmp").glob("hard-eng-tidy-*"))
+
+
+def gh_calls(calls: Path) -> list[str]:
+    return calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_tidy_asks_gh_only_after_every_local_check_passed(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = fake_gh(tmp_path, monkeypatch, {"open": {}})
+    dirty = linked(primary, "dirty")
+    unmerged(dirty)
+    (dirty / "tracked.txt").write_text("changed\n")
+    stashed = linked(primary, "stashed")
+    unmerged(stashed)
+    (stashed / "tracked.txt").write_text("changed\n")
+    git(stashed, "stash")
+    age(stashed)
+    recent = linked(primary, "recent")
+    unmerged(recent)
+    os.utime(git_path(recent, "index"), None)
+    control = linked(primary, "control")
+    unmerged(control)
+    git(primary, "worktree", "remove", "--force", str(control))
+    tidy(primary)
+    assert gh_calls(calls) == [
+        "pr list --repo fixture/project --state merged --head control --base main --json headRefOid"
+    ]
+
+
+def test_a_kept_branch_costs_no_gh_call_on_the_next_pass(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = fake_gh(tmp_path, monkeypatch, {"open": {"with-pr": [{"number": 7}]}})
+    lasting = linked(primary, "lasting")
+    unmerged(lasting)
+    git(primary, "worktree", "remove", "--force", str(lasting))
+    git(primary, "branch", "with-pr", "main")
+    age_branch(primary, "with-pr")
+    git(primary, "push", "-q", "origin", "with-pr")
+    session = linked(primary, "session")
+    tidy(session)
+    first = gh_calls(calls)
+    assert len(first) == 2
+    tidy(session)
+    assert gh_calls(calls) == first
+    assert {"lasting", "with-pr"} <= branches(primary)
+    assert (primary / ".git/hard-eng-tidy-gh.json").is_file()
+
+
+def test_the_tidy_lock_lives_in_the_common_git_folder_for_every_worktree(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import fcntl
+
+    first, second = linked(primary, "first"), linked(primary, "second")
+    gone = linked(primary, "gone")
+    assert (
+        stale_updates.common_dir(first)
+        == stale_updates.common_dir(second)
+        == (primary / ".git").resolve()
+    )
+    with (primary / ".git/hard-eng-tidy.lock").open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        tidy(first)
+        tidy(second)
+    assert gone.is_dir()
+    assert capsys.readouterr().err.count("another tidy is running") == 2

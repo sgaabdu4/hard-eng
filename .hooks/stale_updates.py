@@ -182,6 +182,24 @@ def fetch_tip(root: Path, base: str) -> str:
     return rows[0]
 
 
+def answers_file(root: Path) -> Path:
+    return common_dir(root) / "hard-eng-tidy-gh.json"
+
+
+def load_answers(path: Path) -> dict[str, dict[str, float]]:
+    """What gh said in the last day, so a kept branch costs no call at each session start."""
+    found: dict[str, dict[str, float]] = {"unmerged": {}, "open": {}}
+    with suppress(OSError, ValueError, AttributeError):
+        for kind, entries in json.loads(path.read_text()).items():
+            if kind in found:
+                found[kind] = {
+                    key: stamp
+                    for key, stamp in entries.items()
+                    if isinstance(stamp, (int, float)) and not idle(stamp)
+                }
+    return found
+
+
 def reflog_time(cwd: Path, ref: str) -> float | None:
     """When the ref last moved; None when it has no log."""
     selector = tidy_git(
@@ -321,6 +339,8 @@ class Tidy:
     removed: Counter[str]
     scratch: Path
     objects: Path
+    answers_file: Path
+    answers: dict[str, dict[str, float]]
 
     @classmethod
     def open(cls, root: Path, removed: Counter[str]) -> "Tidy":
@@ -363,6 +383,8 @@ class Tidy:
             removed,
             scratch,
             Path(objects),
+            answers_file(root),
+            load_answers(answers_file(root)),
         )
 
     def content_merged(self, head: str) -> bool:
@@ -417,17 +439,25 @@ class Tidy:
         )
         return any((folder / name).exists() for name in OPERATIONS)
 
-    def merged(self, head: str, branch: str | None) -> bool:
+    def local_merged(self, head: str) -> bool:
         ancestor = tidy_run(
             self.root, 120, "git", "merge-base", "--is-ancestor", head, self.tip
         ).returncode
         if ancestor not in {0, 1}:
             raise TidyStop("`git merge-base` failed")
-        if ancestor == 0:
-            return True
-        if self.content_merged(head):
-            return True
-        if branch is None or self.repository is None:
+        return ancestor == 0 or self.content_merged(head)
+
+    def fresh(self, kind: str, key: str) -> bool:
+        stamp = self.answers[kind].get(key)
+        return stamp is not None and not idle(stamp)
+
+    def remember(self, kind: str, key: str) -> None:
+        self.answers[kind][key] = time.time()
+
+    def pr_merged(self, head: str, branch: str | None) -> bool:
+        """gh finds a merged PR with this exact head; a no is remembered for a day."""
+        key = f"{branch}@{head}"
+        if branch is None or self.repository is None or self.fresh("unmerged", key):
             return False
         pulls = tidy_gh(
             self.root,
@@ -444,16 +474,19 @@ class Tidy:
             "--json",
             "headRefOid",
         )
-        return any(
+        found = any(
             isinstance(pull, dict) and pull.get("headRefOid") == head
             for pull in pulls or []
         )
+        if pulls is not None and not found:
+            self.remember("unmerged", key)
+        return found
 
     def open_pr(self, branch: str) -> bool:
-        """True when the branch has an open PR, or when no answer can say that it has none."""
+        """True when the branch has an open PR, or when no answer can say that it has none; a yes is remembered for a day."""
         if branch not in self.on_origin:
             return False
-        if self.repository is None:
+        if self.repository is None or self.fresh("open", branch):
             return True
         pulls = tidy_gh(
             self.root,
@@ -468,7 +501,17 @@ class Tidy:
             "--json",
             "number",
         )
+        if pulls:
+            self.remember("open", branch)
         return pulls is None or bool(pulls)
+
+    def pr_reason(self, head: str, branch: str | None, merged: bool) -> str | None:
+        """The checks that ask gh, after every local check passed."""
+        if not merged and not self.pr_merged(head, branch):
+            return "not merged"
+        if branch is not None and self.open_pr(branch):
+            return "open PR or no PR answer"
+        return None
 
     def stashed(self, branch: str | None, head: str | None) -> bool:
         listing = tidy_git(self.root, "stash", "list", "--format=%P%x09%gs")
@@ -543,14 +586,20 @@ class Tidy:
             return "the session's worktree"
         if path.resolve().is_relative_to(codex_folder()):
             return "kept by the Codex app"
+        state: dict[str, bool] = {}
+
+        def merged() -> bool:
+            if "merged" not in state:
+                state["merged"] = self.local_merged(head)
+            return state["merged"]
+
         checks: list[tuple[str, Callable[[], bool]]] = [
             ("used in the last 24 hours", lambda: not self.idle_worktree(path)),
-            ("not merged", lambda: not self.merged(head, branch)),
-            ("a stash names it", lambda: self.stashed(branch, head)),
             (
-                "its branch has an open PR or no PR answer",
-                lambda: branch is not None and self.open_pr(branch),
+                "not merged",
+                lambda: not merged() and self.fresh("unmerged", f"{branch}@{head}"),
             ),
+            ("a stash names it", lambda: self.stashed(branch, head)),
             (
                 "its log holds commits that are merged nowhere",
                 lambda: self.reflog_holds_work(
@@ -572,7 +621,8 @@ class Tidy:
             ("a submodule holds work", lambda: not self.submodules_hold_nothing(path)),
             ("a process is inside", lambda: self.worktree_busy(path)),
         ]
-        return next((reason for reason, kept in checks if kept()), None)
+        local = next((reason for reason, kept in checks if kept()), None)
+        return local or self.pr_reason(head, branch, merged())
 
     def remove_worktree(self, path: str, first: bool) -> None:
         from ship_actions import worktrees
@@ -616,6 +666,13 @@ class Tidy:
 
     def branch_reason(self, name: str, tip: str, checked_out: set[str]) -> str | None:
         logged = reflog_time(self.root, f"refs/heads/{name}")
+        state: dict[str, bool] = {}
+
+        def merged() -> bool:
+            if "merged" not in state:
+                state["merged"] = self.local_merged(tip)
+            return state["merged"]
+
         checks: list[tuple[str, Callable[[], bool]]] = [
             ("protected", lambda: name in self.protected),
             ("checked out", lambda: name in checked_out),
@@ -623,15 +680,18 @@ class Tidy:
                 "used in the last 24 hours or no log",
                 lambda: logged is None or not idle(logged),
             ),
-            ("not merged", lambda: not self.merged(tip, name)),
+            (
+                "not merged",
+                lambda: not merged() and self.fresh("unmerged", f"{name}@{tip}"),
+            ),
             ("a stash names it", lambda: self.stashed(name, None)),
             (
                 "its log holds commits that are merged nowhere",
                 lambda: self.reflog_holds_work(self.root, tip, f"refs/heads/{name}"),
             ),
-            ("open PR or no PR answer", lambda: self.open_pr(name)),
         ]
-        return next((reason for reason, kept in checks if kept()), None)
+        local = next((reason for reason, kept in checks if kept()), None)
+        return local or self.pr_reason(tip, name, merged())
 
     def checked_out(self) -> set[str]:
         from ship_actions import worktrees
@@ -751,6 +811,8 @@ def tidy(root: Path) -> None:
         finally:
             if opened is not None:
                 shutil.rmtree(opened.scratch, ignore_errors=True)
+                with suppress(OSError):
+                    opened.answers_file.write_text(json.dumps(opened.answers))
     if removed:
         result = root / RESULT_FILE
         result.parent.mkdir(parents=True, exist_ok=True)
