@@ -409,12 +409,14 @@ def test_a_branch_whose_name_ends_the_section_name_of_a_kept_branch_keeps_that_s
     commit(primary, "own work")
     git(primary, "switch", "-qc", "parking", "main")
     git(primary, "config", "branch.a]b.description", "notes that exist nowhere else")
+    git(primary, "config", "branch.a.description", "notes of a")
     tidy(linked(primary, "session"))
     said = capsys.readouterr().err
     assert "a" not in branches(primary)
     assert "a]b" in branches(primary)
     assert git(primary, "config", "branch.a]b.description").startswith("notes")
-    assert "git config --remove-section branch.a" in said
+    assert "git config --unset-all branch.a.description" in said
+    assert "--remove-section branch.a" not in said
 
 
 def test_a_section_that_the_cleanup_could_not_remove_is_reported(
