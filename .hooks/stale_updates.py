@@ -252,10 +252,22 @@ class Tidy:
         return done.stdout.split()[0] == tree
 
     def named_commits(self, cwd: Path, refs: list[str], tips: list[str]) -> set[str]:
+        """The tips and both commit ids of every line in the logs of the refs; a zero id is no commit."""
         commits = set(tips)
         for ref in refs:
-            commits |= set(tidy_git(cwd, "log", "-g", "--format=%H", ref).split())
-        return commits
+            log = Path(
+                tidy_git(
+                    cwd,
+                    "rev-parse",
+                    "--path-format=absolute",
+                    "--git-path",
+                    f"logs/{ref}",
+                ).strip()
+            )
+            with suppress(FileNotFoundError):
+                for line in log.read_text().splitlines():
+                    commits |= set(line.split(" ")[:2])
+        return {commit for commit in commits if commit.strip("0")}
 
     def unreachable(self, commits: set[str], *excluded: str) -> list[str]:
         """The named commits that no excluded revision contains; rev-list walks, because --no-walk ignores --not."""
@@ -472,6 +484,9 @@ class Tidy:
 
     def remove_branches(self) -> None:
         """A failure on one branch keeps it and goes on; a failed listing stops the repository."""
+        if (self.common / "info/grafts").exists():
+            note("kept every branch: info/grafts changes what counts as an ancestor")
+            return
         listing = tidy_git(
             self.root,
             "for-each-ref",
