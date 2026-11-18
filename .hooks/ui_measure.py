@@ -32,13 +32,17 @@ PROOF_KINDS = {
     "Performance": ("test",),
 }
 DECORATION = '[aria-hidden="true"],[role=img]'
+COLOUR_JS = (
+    "const rgb = (() => { const cv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true }); "
+    "return (c) => { cv.clearRect(0, 0, 1, 1); cv.fillStyle = 'rgba(0, 0, 0, 0)'; cv.fillStyle = c; cv.fillRect(0, 0, 1, 1); const d = cv.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; }; })(); "
+)
 DECORATED_JS = (
     "((el) => { const root = el.closest(DECORATION_JSON); if (!root) return false; "
-    "const num = (c) => (c.match(/[\\d.]+/g) || []).map(Number); "
-    "const fill = (c) => { const v = num(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); }; "
+    "const fill = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); }; "
     "const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }; "
-    "const behind = (e) => { for (let n = e.parentElement; n; n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (fill(c)) return c; } return 'rgb(255, 255, 255)'; }; "
-    "const apart = (c, e) => { if (!fill(c)) return false; const a = lum(num(c)), b = lum(num(behind(e))); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= LIMITS.frame_ratio; }; "
+    "const covers = (s, r) => { const q = s.getBoundingClientRect(); return q.left <= r.left + 1 && q.top <= r.top + 1 && q.right >= r.right - 1 && q.bottom >= r.bottom - 1; }; "
+    "const behind = (e) => { const r = e.getBoundingClientRect(); for (let n = e; n.parentElement; n = n.parentElement) { for (let s = n.previousElementSibling; s; s = s.previousElementSibling) { const c = getComputedStyle(s).backgroundColor; if (fill(c) && covers(s, r)) return c; } const c = getComputedStyle(n.parentElement).backgroundColor; if (fill(c)) return c; } return 'rgb(255, 255, 255)'; }; "
+    "const apart = (c, e) => { if (!fill(c)) return false; const a = lum(rgb(c)), b = lum(rgb(behind(e))); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= LIMITS.frame_ratio; }; "
     "const boxed = (e) => { const s = getComputedStyle(e); return e.namespaceURI === 'http://www.w3.org/2000/svg' "
     "|| apart(s.backgroundColor, e) || /\\d+px \\d+px [1-9]/.test(s.boxShadow) "
     "|| (parseFloat(s.borderTopWidth) >= 1 && s.borderTopStyle !== 'none' && apart(s.borderTopColor, e)); }; "
@@ -67,7 +71,7 @@ const shown = (el) => {
 };
 const decorated = DECORATED_JSFN;
 const visible = (el) => !decorated(el) && shown(el);
-const rgb = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
+COLOUR_JSFN
 const opaque = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); };
 const hue = ([r, g, b]) => {
   r /= 255; g /= 255; b /= 255;
@@ -221,6 +225,7 @@ return JSON.stringify(found);
 
 def measure_script() -> str:
     script = MEASURE_SCRIPT.replace("LIMITS_JSON", json.dumps(LIMITS))
+    script = script.replace("COLOUR_JSFN", COLOUR_JS)
     script = script.replace("DECORATED_JSFN", DECORATED_JS)
     return script.replace("DECORATION_JSON", json.dumps(DECORATION))
 
@@ -228,7 +233,7 @@ def measure_script() -> str:
 def decoration_script(selectors: list[str]) -> str:
     decorated = DECORATED_JS.replace("DECORATION_JSON", json.dumps(DECORATION))
     return (
-        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; const decorated = {decorated}; "
+        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; {COLOUR_JS}const decorated = {decorated}; "
         f"return JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
         "const el = document.querySelector(s); return Boolean(el && decorated(el)); "
         "} catch { return false; } })); })()"
