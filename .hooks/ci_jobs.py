@@ -398,11 +398,29 @@ def calling_jobs(workflow: object, called: str) -> list[dict[str, object]]:
     )
 
 
+def runs_whole_check(workflow: object) -> bool:
+    """A step with no condition, in a job with no condition, runs `check` without an option that narrows it."""
+    from ci_setup import HARD_ENG_CHECK_COMMAND
+
+    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+    narrow = ("--quick", "--related-tests", "--without-dependents", "-language")
+    return any(
+        not any(option in match[0] for option in narrow)
+        for job in (jobs.values() if isinstance(jobs, dict) else [])
+        if isinstance(job, dict) and "if" not in job
+        for step in job.get("steps") or []
+        if isinstance(step, dict)
+        and "if" not in step
+        and isinstance(step.get("run"), str)
+        for match in HARD_ENG_CHECK_COMMAND.finditer(step["run"].replace("\\\n", " "))
+    )
+
+
 def ci_check_gap(root: Path) -> str | None:
     """Why no workflow runs the check on every pull request, or None when one does."""
     import yaml
 
-    from ci_setup import MAINTENANCE_EVENTS, project_workflows, runs_hard_eng_check
+    from ci_setup import project_workflows
 
     loaded: dict[str, object] = {}
     for path in project_workflows(root):
@@ -410,13 +428,13 @@ def ci_check_gap(root: Path) -> str | None:
             loaded[path.name] = yaml.safe_load(path.read_text())
         except yaml.YAMLError:
             continue
-    gap = "no workflow in .github/workflows runs it, or calls the one that has only workflow_call, from a pull_request trigger"
+    gap = "no workflow in .github/workflows runs it on every pull_request, directly or by calling the one that has only workflow_call"
     for name, workflow in loaded.items():
-        if not runs_hard_eng_check(workflow):
+        if not runs_whole_check(workflow):
             continue
         if filters := pull_request_filters(workflow):
             gap = f"the pull_request trigger of {name} has a `{filters[0]}` filter"
-        elif workflow_events(workflow) - MAINTENANCE_EVENTS - {"workflow_call"}:
+        elif "pull_request" in workflow_events(workflow):
             return None
         for caller_name, caller in loaded.items():
             jobs = calling_jobs(caller, f"./.github/workflows/{name}")

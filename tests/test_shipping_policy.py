@@ -158,7 +158,7 @@ def test_a_workflow_with_only_workflow_call_counts_when_a_pull_request_workflow_
     if accepted:
         ci_jobs.load_checked_policy(root, config)
         return
-    with pytest.raises(shipping.ShippingError, match="calls the one that has only"):
+    with pytest.raises(shipping.ShippingError, match="calling the one that has only"):
         ci_jobs.load_checked_policy(root, config)
 
 
@@ -209,4 +209,36 @@ def test_a_check_workflow_with_a_filtered_pull_request_trigger_is_refused(
     (workflows / "hard-eng.yml").write_text(filtered)
     config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
     with pytest.raises(shipping.ShippingError, match="`paths`"):
+        ci_jobs.load_checked_policy(root, config)
+
+
+STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        CHECK_WORKFLOW.replace("on: [pull_request]", "on: [push]"),
+        CHECK_WORKFLOW.replace(
+            "on: [pull_request]", "on:\n  push:\n    branches: [main]"
+        ),
+        CHECK_WORKFLOW.replace("    runs-on", "    if: false\n    runs-on"),
+        CHECK_WORKFLOW.replace(
+            STEP, STEP.replace("- run:", "- if: false\n        run:")
+        ),
+        CHECK_WORKFLOW.replace("check\n", "check --quick\n"),
+        CHECK_WORKFLOW.replace("check\n", "check --related-tests\n"),
+    ],
+    ids=["push-only", "push-filtered", "job-if", "step-if", "quick", "related-tests"],
+)
+def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
+    tmp_path: Path, workflow: str
+) -> None:
+    root = tmp_path / "project"
+    _write(root, pre_push_checks="ci")
+    workflows = root / ".github/workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(workflow)
+    config = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+    with pytest.raises(shipping.ShippingError, match="every pull request"):
         ci_jobs.load_checked_policy(root, config)
