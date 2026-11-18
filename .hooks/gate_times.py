@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import threading
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,6 +15,7 @@ from project_files import keep
 
 GATE_FLOOR_SECONDS = 600
 RECENT_PASSES = 5
+LOCK_WAIT_SECONDS = 5.0
 COMMON_FOLDER_LOCK = threading.Lock()
 STOPPED_AT_LIMIT: set[str] = set()
 
@@ -69,15 +71,26 @@ def gate_limit(root: Path, key: str, budget: float) -> float:
 
 
 @contextmanager
-def lock_gate_times(root: Path) -> Generator[None]:
+def lock_gate_times(root: Path) -> Generator[bool]:
     with gate_times(root).with_suffix(".lock").open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        yield
+        deadline = time.monotonic() + LOCK_WAIT_SECONDS
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    yield False
+                    return
+                time.sleep(0.05)
+        yield True
 
 
 def update_gate_record(root: Path, key: str, seconds: float | None) -> None:
     path = gate_times(root)
-    with lock_gate_times(root):
+    with lock_gate_times(root) as locked:
+        if not locked:
+            return
         try:
             loaded = json.loads(path.read_text())
         except (OSError, ValueError):
