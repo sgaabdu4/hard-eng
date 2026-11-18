@@ -314,3 +314,18 @@ def test_a_listing_without_environments_still_finds_the_browsers_of_the_namespac
     monkeypatch.setattr(agent_browser, "process_environment", environment)
     found = agent_browser.browser_processes("mine")
     assert [line.split()[0] for line in found] == ["101"]
+
+
+@pytest.mark.parametrize(
+    "error", [PermissionError, FileNotFoundError, ProcessLookupError]
+)
+def test_a_process_whose_environment_cannot_be_read_is_not_counted(
+    monkeypatch: pytest.MonkeyPatch, error: type[OSError]
+) -> None:
+    """Another user's process, and one that exited after the listing, have no readable environment."""
+
+    def refuse(self: Path) -> bytes:
+        raise error
+
+    monkeypatch.setattr(Path, "read_bytes", refuse)
+    assert agent_browser.process_environment("1") == ""

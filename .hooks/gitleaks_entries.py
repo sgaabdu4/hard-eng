@@ -77,11 +77,11 @@ def past_findings(
 
 
 def named_path(entry: str) -> str:
-    """The path that an entry names, or an empty string."""
+    """The path that an entry names, with `/` as the separator as Gitleaks reads it, or an empty string."""
     if commit := COMMIT_ENTRY.fullmatch(entry):
-        return commit[2]
+        return commit[2].replace("\\", "/")
     if current := CURRENT_ENTRY.fullmatch(entry):
-        return current[1]
+        return current[1].replace("\\", "/")
     return ""
 
 
