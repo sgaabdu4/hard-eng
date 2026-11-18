@@ -33,7 +33,7 @@ Authority: Autonomous — the maintainer asked for the setting. A hotfix may car
 - [x] A pushed policy that names a base the remote does not name keeps the full check → `tests/test_push_check.py::test_a_pushed_policy_naming_a_base_the_remote_does_not_name_runs_the_full_check`.
 - [x] The key is refused without a workflow that runs the check, without the history secret gate, or with `scan_git_history` off → `tests/test_shipping_policy.py::test_ci_push_checks_need_a_check_workflow_and_a_history_scan`.
 - [x] A bad value is refused and the default is `"local"` → `tests/test_shipping_policy.py::test_load_policy_rejects_malformed_values` and `::test_load_policy_defaults_the_push_checks_to_local_and_accepts_ci`.
-- [x] A direct base push is still refused with the key on → `tests/test_push_check.py::test_a_direct_base_push_is_still_refused_when_checks_are_left_to_ci`.
+- [x] A direct base push is still refused with the key on → `tests/test_push_check.py::test_a_direct_base_push_is_refused_before_any_snapshot[ci]`.
 - [x] A secret in a pushed commit that a later commit removes still blocks the push, with real gitleaks and the checkout on another branch; a clean push passes → `tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci`.
 
 ## Baseline + execution

@@ -196,10 +196,11 @@ def test_a_pushed_commit_with_a_policy_passes_from_a_checkout_without_one(
     assert hard_eng.call_args_list[0].args[1][0] == "check"
 
 
+@pytest.mark.parametrize("key", ["local", "ci"])
 def test_a_direct_base_push_is_refused_before_any_snapshot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str
 ) -> None:
-    root = project(tmp_path)
+    root = project(tmp_path, pre_push_checks=key)
     revision = git(root, "rev-parse", "HEAD").strip()
     started = no_snapshot(monkeypatch)
     push_input(monkeypatch, update_line("main", revision, "2" * 40))
@@ -731,18 +732,6 @@ def test_a_pushed_policy_naming_a_base_the_remote_does_not_name_runs_the_full_ch
     calls = recorded_runs(monkeypatch)
     assert pushed.push(monkeypatch, revision, pushed.base) == 0
     assert "--commit-secrets" not in calls[0]
-
-
-def test_a_direct_base_push_is_still_refused_when_checks_are_left_to_ci(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = project(tmp_path, pre_push_checks="ci")
-    revision = git(root, "rev-parse", "HEAD").strip()
-    started = no_snapshot(monkeypatch)
-    push_input(monkeypatch, update_line("main", revision, "2" * 40))
-    with pytest.raises(ValueError, match="use a PR"):
-        ship_actions.pre_push(root)
-    started.assert_not_called()
 
 
 def a_secret() -> str:
