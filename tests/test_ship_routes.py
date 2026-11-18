@@ -95,3 +95,12 @@ def test_a_rebase_pull_request_still_holds_the_commit_limit(
     pull = _route_pull(fixture, "feature/shipping", "develop", 156)
     with pytest.raises(shipping.ShippingError, match="HE-PR-COMMITS"):
         _ship(monkeypatch, fixture, pull, plan=fixture.plan)
+
+
+def test_the_base_branch_into_a_branch_that_is_not_the_default_stays_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _develop_policy(tmp_path, "develop")
+    pull = _route_pull(fixture, "develop", "staging", 1)
+    with pytest.raises(shipping.ShippingError, match="base branch does not match"):
+        _ship(monkeypatch, fixture, pull, plan=fixture.plan)

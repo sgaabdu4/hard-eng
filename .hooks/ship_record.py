@@ -30,9 +30,9 @@ def is_release(pull: Pull, base: str) -> bool:
 
 def route(pull: Pull, base: str) -> str | None:
     """release, hotfix or join when the pull request moves work between the base and the default branch; else None."""
-    if is_release(pull, base):
-        return "release"
     default = pull.default_branch
+    if is_release(pull, base) and default in (None, pull.base_ref):
+        return "release"
     if default is None or default == base:
         return None
     if pull.base_ref == default and pull.head_ref.startswith("hotfix/"):

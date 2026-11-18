@@ -563,6 +563,7 @@ def _checks(
     *,
     completed_only: bool = False,
     push_only: bool = False,
+    branch: str | None = None,
 ) -> None:
     endpoint = (
         f"repos/{repository}/commits/{revision}/check-runs?per_page=100&filter=all"
@@ -582,7 +583,7 @@ def _checks(
             and (finished or not completed_only)
         ):
             by_name[name].append(item)
-    base = policy["base"]
+    base = branch or policy["base"]
     suites = _push_suites(root, repository, revision, base) if push_only else set()
     for name, candidates in by_name.items():
         if not candidates:
@@ -935,7 +936,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
             )
             revision, merged_sha = pull.head_sha, None
         else:
-            revision = _delivered(resolved_root, pull, policy["base"], origin_url)
+            revision = _delivered(resolved_root, pull, pull.base_ref, origin_url)
             merged_sha = revision
         if policy["ui_paths"]:
             files = changed_files(resolved_root, owner, name, number)
@@ -947,6 +948,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
             policy,
             True,
             push_only=stage == "delivered",
+            branch=pull.base_ref,
         )
         if stage == "delivered" and target == "Deploy":
             _delivery(resolved_root, policy, revision, url)
