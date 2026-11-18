@@ -372,3 +372,18 @@ def test_a_tracked_path_that_a_sparse_checkout_left_out_does_not_make_a_worktree
         assert opened.idle_worktree(sparse)
     finally:
         shutil.rmtree(opened.scratch, ignore_errors=True)
+
+
+def test_a_deleted_tracked_file_makes_a_worktree_count_as_used(primary: Path) -> None:
+    (primary / "lib").mkdir()
+    (primary / "lib/b.txt").write_text("b\n")
+    commit(primary, "a folder")
+    git(primary, "push", "-q", "origin", "main")
+    edited = linked(primary, "edited")
+    (edited / "lib/b.txt").unlink()
+    age(edited)
+    opened = stale_updates.Tidy.open(primary, stale_updates.Counter())
+    try:
+        assert not opened.idle_worktree(edited)
+    finally:
+        shutil.rmtree(opened.scratch, ignore_errors=True)
