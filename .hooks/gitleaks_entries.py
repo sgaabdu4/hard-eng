@@ -147,6 +147,8 @@ def validate_entries(root: Path, timeout: float = 900.0) -> None:
 def judged_entries(
     root: Path, entries: list[tuple[int, str]], timeout: float
 ) -> list[str]:
+    shown = dict(entries)
+    entries = [(number, entry.replace("\\", "/")) for number, entry in entries]
     ensure_gitleaks(timeout)
     config = [".gitleaks.toml"] if (root / ".gitleaks.toml").is_file() else []
     config = ["--config", str((root / config[0]).resolve())] if config else []
@@ -166,7 +168,7 @@ def judged_entries(
     now = {item["Fingerprint"] for item in current}
     in_tree = {(item["File"], item["RuleID"]) for item in current}
     return [
-        f".gitleaksignore:{number} holds {entry!r}: {reason}"
+        f".gitleaksignore:{number} holds {shown[number]!r}: {reason}"
         for number, entry in entries
         if (reason := entry_reason(entry, present, past, now, in_tree, generated))
     ]
