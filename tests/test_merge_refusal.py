@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import shipping
 from conftest import SOURCE, git, init
+from test_ship_routes import develop_policy
 from test_shipping import (
     _PR_URL,
     FakeGitHub,
@@ -391,12 +392,7 @@ def test_ship_merge_uses_the_recorded_method(
 def test_a_release_pull_request_records_a_merge_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, behind: int
 ) -> None:
-    fixture = _fixture(tmp_path)
-    git(fixture.root, "branch", "-M", "develop")
-    gates = json.loads((fixture.root / "hard-eng.gates.json").read_text())
-    gates["shipping"]["base"] = "develop"
-    (fixture.root / "hard-eng.gates.json").write_text(json.dumps(gates))
-    git(fixture.root, "commit", "-qam", "base is develop")
+    fixture = develop_policy(tmp_path, "develop", big=False)
     head = git(fixture.root, "rev-parse", "HEAD")
     pull = _pull(
         fixture,
