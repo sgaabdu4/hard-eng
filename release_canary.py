@@ -393,8 +393,11 @@ def refactored_source(text: str) -> str:
     return "".join(line for row, line in enumerate(lines, 1) if row not in dropped)
 
 
+RUFF_IGNORE = re.compile(r"^ignore = \[\n(?:[ \t]+.*\n)*?\]\n", re.MULTILINE)
+
+
 def refactor_for_strict_checks(work: Path) -> None:
-    """The refactor a real adoption makes first: no type ignores, TODO markers or comment blocks."""
+    """The refactor a real adoption makes first: no type ignores, TODO markers, comment blocks or Ruff ignore list."""
     changed = 0
     for name in output(["git", "ls-files", "*.py"], work).splitlines():
         path = work / name
@@ -402,6 +405,13 @@ def refactor_for_strict_checks(work: Path) -> None:
         refactored = refactored_source(text)
         if refactored != text:
             path.write_text(refactored)
+            changed += 1
+    settings = work / "pyproject.toml"
+    if settings.exists():
+        text = settings.read_text()
+        kept = RUFF_IGNORE.sub("", text)
+        if kept != text:
+            settings.write_text(kept)
             changed += 1
     if not changed:
         raise RuntimeError("the brownfield snapshot has nothing left to refactor")
