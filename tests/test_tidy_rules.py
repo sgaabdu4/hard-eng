@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import stale_updates
 import tidy_guards
-from conftest import age_branch, commit, git, git_path
+from conftest import OLD, age_branch, commit, git, git_path
 from test_tidy import add_vendor, age, branches, linked, sparse_worktree, tidy
 
 
@@ -197,3 +197,20 @@ def test_tidy_writes_what_it_removes_to_a_file_in_the_common_git_folder(
     rows = [row.partition(" ")[2] for row in log.read_text().splitlines()]
     assert rows == [f"worktree {done} {head}", f"branch done {head}"]
     git(primary, "branch", "done", head)
+
+
+def test_tidy_keeps_a_worktree_whose_orig_head_is_the_last_reference_to_a_commit(
+    primary: Path,
+) -> None:
+    path = linked(primary, "reset")
+    git(path, "switch", "-q", "--detach")
+    (path / "own.txt").write_text("own\n")
+    commit(path, "own work")
+    git(path, "reset", "-q", "--hard", "main")
+    main = git(path, "rev-parse", "HEAD")
+    git_path(path, "logs/HEAD").write_text(
+        f"{main} {main} T <t@example.invalid> {OLD} +0000\treset: moving to main\n"
+    )
+    age(path)
+    tidy(primary)
+    assert path.is_dir()
