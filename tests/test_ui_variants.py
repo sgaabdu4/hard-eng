@@ -139,9 +139,16 @@ FRAMES = {
     "background": "background:#f2f4f8;padding:12px",
     "shadow": "box-shadow:0 2px 8px rgba(0,0,0,.3);padding:12px",
     "border": "border:1px solid #888;padding:12px",
+    "lab": "background:lab(90 0 0);padding:12px",
 }
 SUB = f"<p style='{META}'>Posted yesterday</p><p style='{META}'>Ends in three days</p>"
 HIDDEN = "aria-hidden='true'"
+LAYER = "position:absolute;inset:0;background:#f2f4f8"
+FAINT = "position:relative;background:#f2f4f9;padding:12px"
+LAYERED = (
+    f"<div style='position:relative'><div style='{LAYER}'></div>"
+    f"<div {HIDDEN} style='{FAINT}'>{SUB}</div></div>"
+)
 SUB_HIDDEN = SUB.replace("<p ", f"<p {HIDDEN} ")
 DODGES = {
     "hidden-div": (f"<h2>Offer</h2><div {HIDDEN}>{SUB}</div>", "extra-text"),
@@ -156,6 +163,11 @@ DODGES = {
         f"<h2>Offer</h2><div {HIDDEN} style='background:#fefefe'>{SUB}</div>",
         "extra-text",
     ),
+    "faint-lab-frame": (
+        f"<h2>Offer</h2><div {HIDDEN} style='background:lab(99.5 0 0)'>{SUB}</div>",
+        "extra-text",
+    ),
+    "faint-over-layer": (f"<h2>Offer</h2>{LAYERED}", "extra-text"),
     "presentation-main": (
         f"<main role=presentation><p style='{SMALL}'>Tiny line</p></main>",
         "text-size",
