@@ -883,3 +883,16 @@ def test_tidy_goes_on_after_a_worktree_with_no_commits(
     tidy(primary)
     assert empty.is_dir() and not gone.exists()
     assert "stopped" not in capsys.readouterr().err
+
+
+def test_tidy_removes_a_merged_worktree_whose_log_is_long(primary: Path) -> None:
+    long = linked(primary, "long")
+    for number in range(120):
+        git(long, "commit", "--allow-empty", "-qm", f"step {number}")
+    git(primary, "merge", "-q", "--ff-only", "long")
+    git(primary, "push", "-q", "origin", "main")
+    age(long)
+    age(primary)
+    session = linked(primary, "session")
+    tidy(session)
+    assert not long.exists()

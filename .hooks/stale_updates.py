@@ -364,31 +364,6 @@ class Tidy:
         tree = tidy_git(self.root, "rev-parse", f"{self.tip}^{{tree}}").strip()
         return done.stdout.split()[0] == tree
 
-    def safe_commit(self, commit: str, head: str) -> bool:
-        """The commit is part of the merged head, the base, a remote branch or the base's content."""
-        if tidy_run(
-            self.root, 120, "git", "cat-file", "-e", f"{commit}^{{commit}}"
-        ).returncode:
-            return False
-        for ancestor_of in (head, self.tip):
-            asked = tidy_run(
-                self.root,
-                120,
-                "git",
-                "merge-base",
-                "--is-ancestor",
-                commit,
-                ancestor_of,
-            )
-            if asked.returncode == 0:
-                return True
-        remote = tidy_run(
-            self.root, 120, "git", "rev-list", "-1", commit, "--not", "--remotes"
-        )
-        return (
-            remote.returncode == 0 and not remote.stdout.strip()
-        ) or self.content_merged(commit)
-
     def reflog_holds_work(self, cwd: Path, head: str, *refs: str) -> bool:
         """A removal drops the logs; keep an item whose log names a commit that is merged nowhere."""
         commits: set[str] = set()
@@ -397,8 +372,25 @@ class Tidy:
             if done.returncode:
                 return True
             commits |= set(done.stdout.split())
-        return len(commits) > 100 or not all(
-            self.safe_commit(commit, head) for commit in commits
+        if not commits:
+            return False
+        left = tidy_run(
+            self.root,
+            120,
+            "git",
+            "rev-list",
+            "--no-walk",
+            *commits,
+            "--not",
+            self.tip,
+            head,
+            "--remotes",
+        )
+        unmerged = left.stdout.split()
+        return (
+            left.returncode != 0
+            or len(unmerged) > 100
+            or not all(self.content_merged(commit) for commit in unmerged)
         )
 
     def hidden_edits(self, path: Path) -> bool:
