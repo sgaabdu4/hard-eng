@@ -14,6 +14,7 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
+import gate_times
 import swift_setup
 from browser import add_browser_command
 from ci_jobs import (
@@ -290,7 +291,6 @@ def run_gate(
     related_base: str | None = None,
 ) -> bool:
     """Run a gate under its own limit and record how long a pass took."""
-    import gate_times
     from process_group import install_key, note_install
 
     key = gate_times.gate_key(group, gate, related_base)
@@ -558,11 +558,7 @@ def run_limited_gate(
         subprocess.TimeoutExpired,
         subprocess.CalledProcessError,
     ) as error:
-        unrun = isinstance(error, (ImportError, OSError, subprocess.TimeoutExpired))
-        if isinstance(error, subprocess.TimeoutExpired):
-            from gate_times import note_stop
-
-            note_stop(group, gate, related_base)
+        unrun = gate_times.run_not_finished(error, group, gate, related_base)
         text = str(error) if unrun else remember(group, gate, str(error))
         print(
             f"FAIL {gate['name']}: {text}; "

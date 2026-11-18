@@ -101,8 +101,12 @@ def record_gate_timeout(root: Path, key: str) -> None:
     update_gate_record(root, key, None)
 
 
-def note_stop(group: Group, gate: Gate, related_base: str | None) -> None:
-    STOPPED_AT_LIMIT.add(gate_key(group, gate, related_base))
+def run_not_finished(
+    error: Exception, group: Group, gate: Gate, related_base: str | None
+) -> bool:
+    if isinstance(error, subprocess.TimeoutExpired):
+        STOPPED_AT_LIMIT.add(gate_key(group, gate, related_base))
+    return isinstance(error, ImportError | OSError | subprocess.TimeoutExpired)
 
 
 def settle_gate_time(root: Path, key: str, failed: bool, seconds: float) -> bool:
