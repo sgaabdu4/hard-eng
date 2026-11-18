@@ -30,8 +30,10 @@ from conftest import (
     configure,
     gate,
     git,
+    hang_one_check,
     init,
     load_module,
+    pass_one_check,
     plan_document,
     running,
     spawner,
@@ -44,12 +46,10 @@ from project_files import keeping
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
-    configure(tmp_path, [gate("suite", "pass")])
-    assert runner.check(timeout=120) == 0
+    pass_one_check(runner, tmp_path, monkeypatch)
     times = json.loads((tmp_path / ".git/hard-eng-gate-times.json").read_text())
     assert set(times) == {"./suite"}
-    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    hang_one_check(tmp_path)
     started = time.monotonic()
     assert runner.check(timeout=120) == 1
     assert time.monotonic() - started < 30

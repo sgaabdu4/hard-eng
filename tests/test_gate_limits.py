@@ -10,7 +10,7 @@ from types import ModuleType
 import debt
 import gate_times
 import pytest
-from conftest import configure, gate
+from conftest import configure, gate, hang_one_check, pass_one_check
 
 
 def init_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,26 +72,23 @@ def test_a_gate_with_no_record_gets_the_budget(
 def test_a_gate_stopped_at_its_limit_gets_the_full_budget_next_time(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
-    configure(tmp_path, [gate("suite", "pass")])
-    assert runner.check(timeout=120) == 0
-    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    pass_one_check(runner, tmp_path, monkeypatch)
+    hang_one_check(tmp_path)
     assert runner.check(timeout=120) == 1
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
+
+
+def pass_it(*_: object) -> bool:
+    return False
 
 
 def test_a_stop_at_the_limit_fails_the_check_when_the_debt_judge_calls_the_gate_a_pass(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
-    configure(tmp_path, [gate("suite", "pass")])
-    assert runner.check(timeout=120) == 0
-
-    def pass_it(*_: object) -> bool:
-        return False
+    pass_one_check(runner, tmp_path, monkeypatch)
 
     monkeypatch.setattr(debt, "judge", pass_it)
-    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    hang_one_check(tmp_path)
     assert runner.check(timeout=120) == 1
     assert gate_times.gate_limit(tmp_path, "./suite", 120) == 120
 
@@ -106,9 +103,6 @@ def test_a_slow_start_is_not_a_stop_at_the_limit(
     def slow_start(*arguments: object) -> list[str]:
         time.sleep(1.5)
         return prepared(*arguments)
-
-    def pass_it(*_: object) -> bool:
-        return False
 
     monkeypatch.setattr(runner, "prepared_command", slow_start)
     monkeypatch.setattr(debt, "judge", pass_it)

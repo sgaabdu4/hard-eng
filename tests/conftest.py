@@ -541,6 +541,20 @@ def gate(name: str, code: str, **options: object) -> dict[str, object]:
     return {"name": name, "command": [sys.executable, "-c", code], **options}
 
 
+def pass_one_check(
+    runner: ModuleType, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import gate_times
+
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+    configure(root, [gate("suite", "pass")])
+    assert runner.check(timeout=120) == 0
+
+
+def hang_one_check(root: Path) -> None:
+    configure(root, [gate("suite", "import time; time.sleep(60)")])
+
+
 def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
