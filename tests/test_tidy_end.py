@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -19,7 +20,8 @@ from test_tidy_rules import (
 COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
 REMOVED = "hard-eng-tidy-removed.log"
 CARGO = "Signature: 8a477f597d28d172789f06886806bc55"
-Fixture = Callable[[Path], None]
+Finish = Callable[[Path], None]
+Fixture = Callable[[Path], Finish | None]
 
 
 def git_folders(primary: Path) -> list[Path]:
@@ -149,6 +151,64 @@ def nested_in_linked_target(primary: Path) -> None:
     nested_in_target(linked(primary, "work"))
 
 
+def dated(root: Path, days: int, *arguments: str) -> None:
+    stamp = f"{int(time.time()) - days * 86400} +0000"
+    env = {**os.environ, "GIT_COMMITTER_DATE": stamp, "GIT_AUTHOR_DATE": stamp}
+    subprocess.run(
+        ["git", *arguments], cwd=root, env=env, check=True, capture_output=True
+    )
+
+
+def reset_then_real_gc(primary: Path) -> None:
+    path = linked(primary, "work")
+    (path / "w.txt").write_text("work kept nowhere else\n")
+    dated(path, 40, "add", "w.txt")
+    dated(path, 40, "commit", "-qm", "work W")
+    dated(path, 20, "reset", "-q", "--hard", "main")
+    git(primary, "worktree", "remove", "--force", str(path))
+    git(primary, "gc", "-q")
+
+
+def rewound(primary: Path) -> None:
+    git(primary, "switch", "-qc", "rewound")
+    (primary / "w.txt").write_text("work kept nowhere else\n")
+    commit(primary, "work W")
+    git(primary, "switch", "-qc", "parking", "main")
+    git(primary, "reflog", "expire", "--expire=now", "refs/heads/rewound")
+    git(primary, "branch", "-f", "rewound", "main")
+
+
+def orphan_legacy(primary: Path) -> str:
+    git(primary, "switch", "-q", "--orphan", "legacy")
+    (primary / "old.txt").write_text("legacy\n")
+    legacy = commit(primary, "legacy history")
+    git(primary, "switch", "-qc", "parking", "main")
+    return legacy
+
+
+def main_root(primary: Path) -> str:
+    return git(primary, "rev-list", "--max-parents=0", "main")
+
+
+def graft_by_replace(primary: Path) -> Finish:
+    legacy = orphan_legacy(primary)
+    root = main_root(primary)
+    git(primary, "replace", "--graft", root, legacy)
+
+    def drop(repo: Path) -> None:
+        git(repo, "replace", "-d", root)
+
+    return drop
+
+
+def graft_by_file(primary: Path) -> Finish:
+    legacy = orphan_legacy(primary)
+    grafts = primary / ".git/info/grafts"
+    grafts.parent.mkdir(exist_ok=True)
+    grafts.write_text(f"{main_root(primary)} {legacy}\n")
+    return lambda repo: (repo / ".git/info/grafts").unlink()
+
+
 def target_output(primary: Path) -> None:
     path = linked(primary, "work")
     (path / "target/debug").mkdir(parents=True)
@@ -165,6 +225,10 @@ FIXTURES: dict[str, Fixture] = {
     "paused-bisect": paused_bisect,
     "merge-attributes": merge_attributes,
     "symbolic-branch": symbolic_branch,
+    "reset-then-real-gc": reset_then_real_gc,
+    "rewound": rewound,
+    "graft-by-replace": graft_by_replace,
+    "graft-by-file": graft_by_file,
     "cargo-target": target_output,
     "nested-repository-in-main-target": nested_in_main_target,
     "nested-repository-in-linked-target": nested_in_linked_target,
@@ -187,16 +251,21 @@ def test_a_tidy_loses_nothing_that_a_plain_garbage_collection_keeps(
     primary: Path, tmp_path: Path, name: str
 ) -> None:
     session = linked(primary, "session")
-    FIXTURES[name](primary)
+    finish = FIXTURES[name](primary)
     age_everything(primary)
     git(primary, "reflog", "expire", "--expire=now", "HEAD")
     control = tmp_path / "control"
     shutil.copytree(primary, control, symlinks=True)
+    if finish is not None:
+        finish(control)
     git(control, "gc", "-q", "--prune=now")
     commits = named_commits(primary)
     files = untracked_files(primary)
     refs = ref_names(primary)
     tidy(session)
+    kept_refs = ref_names(primary)
+    if finish is not None:
+        finish(primary)
     git(primary, "gc", "-q", "--prune=now")
     for sha in commits:
         assert resolves(primary, sha) or not resolves(control, sha), f"{sha} is lost"
@@ -208,6 +277,6 @@ def test_a_tidy_loses_nothing_that_a_plain_garbage_collection_keeps(
         f"refs/heads/{row.split(' ')[2]}"
         for row in (record.read_text().splitlines() if record.exists() else [])
     }
-    assert refs - ref_names(primary) <= removed
+    assert refs - kept_refs <= removed
     for checkout in checkouts(primary):
         assert resolves(checkout, "HEAD"), f"HEAD of {checkout} does not resolve"

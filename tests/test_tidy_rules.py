@@ -273,3 +273,15 @@ def test_the_tidy_fetch_prunes_no_remote_tracking_branch_even_with_fetch_prune_s
     git(primary, "config", "remote.origin.prune", "true")
     tidy(linked(primary, "session"))
     git(primary, "rev-parse", "--verify", "refs/remotes/origin/gone-upstream")
+
+
+def test_tidy_keeps_every_branch_and_says_why_when_info_grafts_exists(
+    primary: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    merged_branch(primary, "done")
+    grafts = primary / ".git/info/grafts"
+    grafts.parent.mkdir(exist_ok=True)
+    grafts.write_text("")
+    tidy(linked(primary, "session"))
+    assert "done" in branches(primary)
+    assert "info/grafts" in capsys.readouterr().err

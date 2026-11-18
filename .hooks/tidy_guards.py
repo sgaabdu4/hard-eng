@@ -43,6 +43,11 @@ def tidy_run(
     env: dict[str, str] | None = None,
     lines: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    if command[0] == "git":
+        env = {
+            **(os.environ if env is None else env),
+            "GIT_NO_REPLACE_OBJECTS": "1",
+        }
     try:
         return subprocess.run(
             command,
