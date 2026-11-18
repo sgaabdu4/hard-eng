@@ -179,15 +179,32 @@ def skip_hits(name: str, words: list[tuple[str, str, int]]) -> list[str]:
     ]
 
 
-def cannot_be_skipped(job: dict[str, object]) -> bool:
-    """No condition of its own skips the job, and a skipped Apple job it needs skips it too unless it runs after any result."""
-    condition = str(job.get("if", "")).strip()
+def skippable_jobs(jobs: dict[object, object]) -> set[object]:
+    """The jobs a false apple output skips: the apple condition itself, and every job that needs a skipped job and does not run after any result."""
+    skipped = {
+        name
+        for name, job in jobs.items()
+        if isinstance(job, dict) and APPLE_IF.fullmatch(str(job.get("if", "")).strip())
+    }
+    while True:
+        more = {
+            name
+            for name, job in jobs.items()
+            if isinstance(job, dict)
+            and name not in skipped
+            and not JOB_IF.fullmatch(str(job.get("if", "")).strip())
+            and skipped.intersection(waited(job))
+        }
+        if not more:
+            return skipped
+        skipped |= more
+
+
+def waited(job: dict[object, object]) -> list[object]:
     needs = job.get("needs")
-    waits = [needs] if isinstance(needs, str) else needs
-    after_apple = isinstance(waits, list) and "apple" in waits
-    if after_apple:
-        return bool(JOB_IF.fullmatch(condition))
-    return not APPLE_IF.fullmatch(condition)
+    return (
+        [needs] if isinstance(needs, str) else needs if isinstance(needs, list) else []
+    )
 
 
 def check_steps(job: dict[str, object]) -> list[dict[str, object]]:
@@ -230,13 +247,14 @@ def workflow_hits(name: str, text: str) -> list[str]:
     jobs = data.get("jobs")
     checks = 0
     words: list[tuple[str, str, int]] = []
+    skipped = skippable_jobs(jobs) if isinstance(jobs, dict) else set()
     for job_id, job in (jobs if isinstance(jobs, dict) else {}).items():
         if not isinstance(job, dict):
             continue
         steps = check_steps(job)
         if not steps:
             continue
-        if cannot_be_skipped(job):
+        if job_id not in skipped:
             checks += sum(" check " in str(step["run"]) for step in steps)
         launchers = set().union(*map(launcher_names, steps))
         found += [
