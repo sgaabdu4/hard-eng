@@ -136,6 +136,25 @@ def symbolic_branch(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> No
     git(primary, "symbolic-ref", "refs/heads/trunk", "refs/heads/main")
 
 
+def nested_in_target(path: Path) -> None:
+    (path / "target/vendor/pkg").mkdir(parents=True)
+    (path / "target/CACHEDIR.TAG").write_text(f"{CARGO}\n")
+    git(path / "target/vendor/pkg", "init", "-q")
+    age_folders(path / "target")
+
+
+def nested_in_main_target(
+    primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
+) -> None:
+    nested_in_target(primary)
+
+
+def nested_in_linked_target(
+    primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
+) -> None:
+    nested_in_target(linked(primary, "work"))
+
+
 def target_output(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
     path = linked(primary, "work")
     (path / "target/debug").mkdir(parents=True)
@@ -153,6 +172,8 @@ FIXTURES: dict[str, Fixture] = {
     "merge-attributes": merge_attributes,
     "symbolic-branch": symbolic_branch,
     "cargo-target": target_output,
+    "nested-repository-in-main-target": nested_in_main_target,
+    "nested-repository-in-linked-target": nested_in_linked_target,
 }
 
 

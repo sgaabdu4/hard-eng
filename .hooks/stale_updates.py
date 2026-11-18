@@ -18,6 +18,7 @@ from tidy_guards import (
     TidyStop,
     cargo_target,
     expire_rescues,
+    holds_repository,
     idle,
     idle_worktree,
     inside,
@@ -518,6 +519,10 @@ class Tidy:
                 lambda: not quiet_folders(target),
             ),
             ("a process is inside", lambda: self.worktree_busy(path)),
+            (
+                "a nested repository is inside it",
+                lambda: holds_repository(target),
+            ),
         ]
         return next((reason for reason, kept in checks if kept()), None)
 
