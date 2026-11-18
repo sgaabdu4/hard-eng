@@ -52,14 +52,28 @@ def _remote_tip(root: Path, branch: str) -> str | None:
     return done.stdout.strip() if done.returncode == 0 else None
 
 
+def _carries_own_work(root: Path, pull: Pull, tip: str, base_tip: str) -> bool:
+    """Whether a non-merge commit between the base and the head is not on the default branch."""
+    span = base_tip + ".." + pull.head_sha
+    done = subprocess.run(
+        ["git", "rev-list", "--no-merges", span, "--not", tip],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.returncode != 0 or bool(done.stdout.strip())
+
+
 def is_join(root: Path, pull: Pull, default: str) -> bool:
-    """The head holds the default branch's tip, which the base lacks; local refs, so fetch first."""
+    """The head holds the default branch's tip, which the base lacks, and adds no work of its own; local refs, so fetch first."""
     tip, base_tip = _remote_tip(root, default), _remote_tip(root, pull.base_ref)
     return (
         tip is not None
         and base_tip is not None
         and _contains(root, tip, pull.head_sha)
         and not _contains(root, tip, base_tip)
+        and not _carries_own_work(root, pull, tip, base_tip)
     )
 
 
