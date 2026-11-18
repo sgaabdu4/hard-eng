@@ -367,6 +367,14 @@ def load_checked_policy(root: Path, config: GateConfig) -> None:
         )
 
 
+PAIRED_CONDITION = re.compile(r"[\w.\-]+ != 'true'")
+
+
+def workflow_jobs(workflow: object) -> dict[object, object]:
+    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+    return jobs if isinstance(jobs, dict) else {}
+
+
 def workflow_events(workflow: object) -> set[str]:
     triggers = (
         workflow.get("on", workflow.get(True)) if isinstance(workflow, dict) else None
@@ -389,11 +397,10 @@ def pull_request_filters(workflow: object) -> list[str]:
     return [name for name in names if isinstance(event, dict) and name in event]
 
 
-def calling_jobs(workflow: object, called: str) -> list[str]:
-    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
+def calling_jobs(workflow: object, called: str) -> list[object]:
     return [
-        str(name)
-        for name, job in (jobs.items() if isinstance(jobs, dict) else [])
+        name
+        for name, job in workflow_jobs(workflow).items()
         if isinstance(job, dict) and job.get("uses") == called
     ]
 
@@ -444,12 +451,11 @@ def runs_whole_check(workflow: object) -> bool:
     """An always-running job whose check steps cover every case: one has no `if`, or two have the `== 'true'` and `!= 'true'` forms of one condition."""
     from ci_setup import HARD_ENG_CHECK_COMMAND
 
-    jobs = workflow.get("jobs") if isinstance(workflow, dict) else None
-    for name in jobs if isinstance(jobs, dict) else []:
+    jobs = workflow_jobs(workflow)
+    for name, job in jobs.items():
         conditions: set[object] = set()
-        for step in (
-            jobs[name].get("steps") if job_always_runs(name, jobs) else None
-        ) or []:
+        steps = job.get("steps") if isinstance(job, dict) else None
+        for step in (steps if job_always_runs(name, jobs) else None) or []:
             run = step.get("run") if isinstance(step, dict) else None
             text = "\n".join(
                 without_comment(line)
@@ -462,7 +468,7 @@ def runs_whole_check(workflow: object) -> bool:
                 conditions.add(step.get("if"))
         if None in conditions or any(
             isinstance(c, str)
-            and re.fullmatch(r"[\w.\-]+ != 'true'", c)
+            and PAIRED_CONDITION.fullmatch(c)
             and c.replace("!= 'true'", "== 'true'") in conditions
             for c in conditions
         ):
@@ -490,14 +496,26 @@ def ci_check_gap(root: Path) -> str | None:
             gap = f"the pull_request trigger of {name} has a `{filters[0]}` filter"
         elif "pull_request" in workflow_events(workflow):
             return None
-        for caller_name, caller in loaded.items():
-            jobs = calling_jobs(caller, f"./.github/workflows/{name}")
-            if not jobs or "pull_request" not in workflow_events(caller):
-                continue
-            if filters := pull_request_filters(caller):
-                gap = f"the pull_request trigger of {caller_name} has a `{filters[0]}` filter"
-            elif not any(job_always_runs(job, caller["jobs"]) for job in jobs):
-                gap = f"the job in {caller_name} that calls {name} has an `if` condition, or needs a job that has one"
-            else:
+        if (called := called_gap(loaded, name)) is not None:
+            if not called:
                 return None
+            gap = called
     return gap
+
+
+def called_gap(loaded: dict[str, object], name: str) -> str | None:
+    """None when no pull_request workflow calls `name`; "" when one calls it whole; else why not."""
+    found = None
+    for caller_name, caller in loaded.items():
+        jobs = calling_jobs(caller, f"./.github/workflows/{name}")
+        if not jobs or "pull_request" not in workflow_events(caller):
+            continue
+        if filters := pull_request_filters(caller):
+            found = (
+                f"the pull_request trigger of {caller_name} has a `{filters[0]}` filter"
+            )
+        elif not any(job_always_runs(job, workflow_jobs(caller)) for job in jobs):
+            found = f"the job in {caller_name} that calls {name} has an `if` condition, or needs a job that has one"
+        else:
+            return ""
+    return found
