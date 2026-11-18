@@ -293,8 +293,10 @@ def measured_problem(
         current = [
             stem
             for stem in stems
-            if all(
-                item.get("commit") == head and not item.get("dirty")
+            if any(
+                item["sha256"] == digest
+                and item.get("commit") == head
+                and not item.get("dirty")
                 for item in records
                 if _stem(item) == stem
             )
