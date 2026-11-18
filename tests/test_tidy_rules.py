@@ -18,6 +18,7 @@ from test_tidy import (
     make_target,
     merged_branch,
     squash_merged_steps,
+    stand_in_git,
     tidy,
     unmerged,
 )
@@ -285,3 +286,21 @@ def test_tidy_keeps_every_branch_and_says_why_when_info_grafts_exists(
     tidy(linked(primary, "session"))
     assert "done" in branches(primary)
     assert "info/grafts" in capsys.readouterr().err
+
+
+def test_tidy_keeps_every_branch_when_the_reflogs_are_not_plain_files(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    merged_branch(primary, "done")
+    stand_in_git(
+        tmp_path,
+        monkeypatch,
+        '[ "$1 $2" = "rev-parse --show-ref-format" ]',
+        "echo reftable; exit 0",
+    )
+    tidy(linked(primary, "session"))
+    assert "done" in branches(primary)
+    assert "reftable" in capsys.readouterr().err

@@ -487,6 +487,9 @@ class Tidy:
         if (self.common / "info/grafts").exists():
             note("kept every branch: info/grafts changes what counts as an ancestor")
             return
+        if tidy_git(self.root, "rev-parse", "--show-ref-format").strip() != "files":
+            note("kept every branch: the reflogs are not plain files (reftable)")
+            return
         listing = tidy_git(
             self.root,
             "for-each-ref",
