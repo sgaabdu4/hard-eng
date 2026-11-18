@@ -19,4 +19,5 @@ def push_text_checks(root: Path, base: str | None) -> int:
     except ValueError as error:
         print(f"Hard Eng: {error}")
         return 1
+    print("Hard Eng: the plan checks and the changed-line text rules passed.")
     return 0
