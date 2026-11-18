@@ -20,6 +20,12 @@ VALUE_FLAGS = frozenset(
 SHELL_MARKS = re.compile(r"[;&|<>`$(){}\n]")
 PULL_NUMBER = re.compile(r"(?:^|/pull/)(\d+)/?$")
 REFUSED_FLAGS = frozenset(("--admin", "--auto", "--disable-auto"))
+REBASE_STEP = (
+    "A typed rebase merge cannot see that the base moved since `ship ready`, so two "
+    "ready PRs can turn the base red. Run `python3 .hooks/hard-eng.py ship --stage "
+    "merge --merge-method rebase --pr <PR URL> --plan <plan>`, which checks base "
+    "currency right before it merges."
+)
 STEP = "Merge with `python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge`."
 
 
@@ -67,6 +73,8 @@ def pr_flags(arguments: list[str]) -> tuple[str | None, set[str], str | None]:
 
 def pr_merge_problem(arguments: list[str], cwd: str) -> str | None:
     selector, methods, head = pr_flags(arguments)
+    if "rebase" in methods:
+        return REBASE_STEP
     found = PULL_NUMBER.search(selector or "")
     if found is None:
         return f"gh pr merge must name the pull request by number or URL. {STEP}"

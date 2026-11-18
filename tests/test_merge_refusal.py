@@ -170,8 +170,6 @@ ALLOWED = [
     "gh pr checks 12; git merge --ff-only origin/develop",
     "gh run list --branch merge-queue",
     'gh pr view 12 --json "mergeStateStatus"',
-    "gh pr merge 12 --rebase --match-head-commit " + HEAD,
-    "gh pr merge https://github.com/o/r/pull/12 --rebase --match-head-commit " + HEAD,
     "ls",
     "gh -R o/r pr view 12",
     "gh api graphql -f query='query { viewer { login } }'",
@@ -278,13 +276,29 @@ def test_a_gh_command_that_is_not_a_merge_loads_no_module(
     assert {"merge_guard", "shlex", "subprocess", "pathlib"}.isdisjoint(loaded)
 
 
-def test_a_merge_with_no_record_is_refused_even_with_the_flag(repo: Path) -> None:
+def test_a_merge_with_no_record_or_another_method_is_refused_even_with_the_flag(
+    repo: Path,
+) -> None:
     command = "gh pr merge 12 --rebase --match-head-commit " + HEAD
     assert denied(hook(bash(repo, command)))
-    record_ship(repo, 12, HEAD, "rebase")
-    assert not denied(hook(bash(repo, command)))
-    record_ship(repo, 12, "f" * 40, "rebase")
+    record_ship(repo, 12, HEAD, "merge")
     assert denied(hook(bash(repo, command)))
+    record_ship(repo, 12, HEAD, "squash")
+    assert denied(hook(bash(repo, command)))
+
+
+@pytest.mark.parametrize("flag", ["--rebase", "-r"])
+@pytest.mark.parametrize("number", ["12", "https://github.com/o/r/pull/12"])
+def test_a_typed_rebase_merge_with_a_passed_record_is_refused_and_names_the_ship_merge_command(
+    repo: Path, flag: str, number: str
+) -> None:
+    record_ship(repo, 12, HEAD, "rebase")
+    output = hook(bash(repo, f"gh pr merge {number} {flag} --match-head-commit {HEAD}"))
+    assert denied(output)
+    assert (
+        "python3 .hooks/hard-eng.py ship --stage merge --merge-method rebase "
+        "--pr <PR URL> --plan <plan>"
+    ) in output
 
 
 @pytest.mark.parametrize(
