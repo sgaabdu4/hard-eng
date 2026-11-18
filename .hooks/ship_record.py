@@ -41,14 +41,9 @@ def _contains(root: Path, ancestor: str, commit: str) -> bool:
 
 
 def _remote_tip(root: Path, branch: str) -> str | None:
+    ref = "refs/remotes/origin/" + branch + "^{commit}"
     done = subprocess.run(
-        [
-            "git",
-            "rev-parse",
-            "--verify",
-            "-q",
-            f"refs/remotes/origin/{branch}^{{commit}}",
-        ],
+        ["git", "rev-parse", "--verify", "-q", ref],
         cwd=root,
         capture_output=True,
         text=True,
