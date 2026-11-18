@@ -27,6 +27,11 @@ OPERATIONS = (
     "CHERRY_PICK_HEAD",
     "REVERT_HEAD",
 )
+PAUSED_BRANCH_FILES = (
+    "rebase-merge/head-name",
+    "rebase-apply/head-name",
+    "BISECT_START",
+)
 SUBMODULE_LINE = re.compile(r"(.)[0-9a-f]+ (.+?)(?: \(.*\))?")
 
 
@@ -247,3 +252,16 @@ def submodules_hold_nothing(path: Path) -> bool:
         ):
             return False
     return True
+
+
+def paused_branches(common: Path) -> set[str]:
+    """Branches that a rebase or bisect in any worktree will return to, though HEAD is detached now."""
+    folders = [common, *sorted((common / "worktrees").glob("*"))]
+    found: set[str] = set()
+    for folder in folders:
+        for name in PAUSED_BRANCH_FILES:
+            with suppress(FileNotFoundError, NotADirectoryError):
+                found.add(
+                    (folder / name).read_text().strip().removeprefix("refs/heads/")
+                )
+    return found
