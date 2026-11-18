@@ -354,6 +354,7 @@ def default_policy() -> "ShippingPolicy":
         "ci_seconds": 180.0,
         "pre_push_seconds": 180.0,
         "pre_push_mutation_seconds": 120.0,
+        "pre_push_checks": "local",
         "delivery": [],
     }
 
