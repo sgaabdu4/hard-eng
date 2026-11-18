@@ -448,9 +448,15 @@ def quick_git_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     real = tidy_guards.tidy_run
 
     def quick_git(
-        cwd: Path, limit: float, *command: str
+        cwd: Path,
+        limit: float,
+        *command: str,
+        env: dict[str, str] | None = None,
+        lines: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        return real(cwd, 2 if command[0] == "git" else limit, *command)
+        return real(
+            cwd, 2 if command[0] == "git" else limit, *command, env=env, lines=lines
+        )
 
     monkeypatch.setattr(tidy_guards, "tidy_run", quick_git)
     monkeypatch.setattr(stale_updates, "tidy_run", quick_git)
