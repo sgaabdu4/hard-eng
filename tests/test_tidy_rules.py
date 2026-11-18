@@ -507,3 +507,28 @@ def test_a_config_section_with_a_space_in_its_name_does_not_hide_a_collision(
     assert "--remove-section" not in said
     assert "git config --unset-all branch.a.description" in said
     assert git(primary, "config", "branch.a]b.description").startswith("notes")
+
+
+def test_a_failed_collision_check_names_no_removal_command(
+    primary: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    merged_branch(primary, "a")
+    git(primary, "config", "branch.a.description", "notes of a")
+    git(primary, "branch", "a]b", "main")
+    git(primary, "config", "branch.a]b.description", "notes that exist nowhere else")
+    quick_git_limits(monkeypatch)
+    stand_in_git(
+        tmp_path,
+        monkeypatch,
+        '[ "$1 $2" = "config -z" ]',
+        "sleep 30",
+    )
+    tidy(linked(primary, "session"))
+    said = capsys.readouterr().err
+    assert "a" not in branches(primary)
+    assert "--remove-section" not in said
+    assert "not checked" in said
+    assert git(primary, "config", "branch.a]b.description").startswith("notes")

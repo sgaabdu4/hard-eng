@@ -523,7 +523,7 @@ class Tidy:
         return [key for key in done.stdout.split("\0") if "." in key]
 
     def drop_config(self, name: str) -> None:
-        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, and refuses `--remove-section` for a name that holds one, so such a name, or a collision with another name that starts with `<name>]`, is left to per-key commands for the removed branch's own keys; any failure logs a command to run by hand."""
+        """The branch is gone; its upstream and description go too. Git matches the section name up to a `]`, and refuses `--remove-section` for a name that holds one, so such a name, or a collision with another name that starts with `<name>]`, is left to per-key commands for the removed branch's own keys. When the collision check itself fails, the log asks for a look and names no removal command."""
         section = f"branch.{name}"
         try:
             keys = self.config_keys()
@@ -537,9 +537,15 @@ class Tidy:
                     "refs/heads",
                 ).splitlines()
             } | {key[len("branch.") : key.rindex(".")] for key in keys}
-            if "]" in name or any(other.startswith(f"{name}]") for other in others):
-                self.advise_unset(name, own)
-                return
+        except ITEM_ERRORS:
+            note(
+                f"branch {name} is gone; its settings were not checked, so look at `git config --get-regexp '^branch'` before you reuse the name"
+            )
+            return
+        if "]" in name or any(other.startswith(f"{name}]") for other in others):
+            self.advise_unset(name, own)
+            return
+        try:
             done = tidy_run(
                 self.root, 120, "git", "config", "--remove-section", section
             )
