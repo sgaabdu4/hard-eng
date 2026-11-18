@@ -216,6 +216,14 @@ def unchanged_problem(root: Path, reference: str, head: str, base: str) -> str |
     return None
 
 
+def on_route(captured: str, route: str) -> bool:
+    """Whether a captured page is the route itself or a path, query or fragment below it."""
+    rest = captured.removeprefix(route)
+    return captured.startswith(route) and (
+        not rest or route.endswith("/") or rest[0] in "/?#"
+    )
+
+
 def measured_problem(
     root: Path, head: str, after: list[bytes], route: str = ""
 ) -> str | None:
@@ -239,7 +247,7 @@ def measured_problem(
             )
             if peer is None:
                 return f"the After capture {stem} has no measured record at {width} px; capture it at every width"
-            if route and not str(peer.get("route", "")).startswith(route):
+            if route and not on_route(str(peer.get("route", "")), route):
                 return f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {route}; capture the changed screen"
             if peer.get("commit") != head or peer.get("dirty"):
                 return f"the After capture {peer['image']} was not taken at the head ({head[:12]}) from a clean tree; commit, then capture again"

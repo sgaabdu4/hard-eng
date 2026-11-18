@@ -944,6 +944,16 @@ def test_ci_refuses_the_unchanged_note_on_a_visible_change_with_no_plan(
     assert "UI appearance: unchanged" in str(problem)
 
 
+def test_an_after_capture_of_a_page_with_the_same_prefix_is_refused(
+    tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _ = captured_ship(
+        tmp_path, site, browser, monkeypatch, "fixed", route="/shot"
+    )
+    with pytest.raises(shipping.ShippingError, match="capture the changed screen"):
+        ready(fixture.root, fixture)
+
+
 def test_an_after_capture_of_another_page_than_the_surface_is_refused(
     tmp_path: Path, site: str, browser: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
