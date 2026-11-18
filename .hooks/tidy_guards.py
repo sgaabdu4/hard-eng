@@ -219,6 +219,24 @@ def idle_worktree(path: Path) -> bool:
     return logged is not None and idle(max(times, default=0)) and idle(logged)
 
 
+OBJECT_ID = re.compile(rb"[0-9a-f]{40}|[0-9a-f]{64}")
+
+
+def logged_ids(log: Path) -> set[str]:
+    """Both commit ids of every line of a log file; a line ends only at a newline, and a field that is no full lowercase id stops the check."""
+    found: set[str] = set()
+    with suppress(FileNotFoundError):
+        for line in log.read_bytes().split(b"\n"):
+            if line:
+                for field in line.split(b" ", 2)[:2]:
+                    if OBJECT_ID.fullmatch(field) is None:
+                        raise TidyStop(
+                            f"{log.name} has a line that starts with no commit ids"
+                        )
+                    found.add(field.decode())
+    return found
+
+
 def paused_branches(common: Path) -> set[str]:
     """Branches that a rebase or bisect in any worktree will return to, though HEAD is detached now."""
     folders = [common, *sorted((common / "worktrees").glob("*"))]
@@ -229,6 +247,10 @@ def paused_branches(common: Path) -> set[str]:
                 found.add(
                     (folder / name).read_text().strip().removeprefix("refs/heads/")
                 )
+        with suppress(FileNotFoundError, NotADirectoryError):
+            for line in (folder / "rebase-merge/update-refs").read_text().splitlines():
+                if line.startswith("refs/heads/"):
+                    found.add(line.removeprefix("refs/heads/"))
     return found
 
 

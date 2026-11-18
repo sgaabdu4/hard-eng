@@ -178,6 +178,17 @@ def rewound(primary: Path) -> None:
     git(primary, "branch", "-f", "rewound", "main")
 
 
+def log_message_option(separator: str, option: str) -> Fixture:
+    def build(primary: Path) -> None:
+        git(primary, "switch", "-qc", "rewound")
+        (primary / "w.txt").write_text("work kept nowhere else\n")
+        commit(primary, f"ship it{separator}{option}")
+        git(primary, "switch", "-qc", "parking", "main")
+        git(primary, "branch", "-f", "rewound", "main")
+
+    return build
+
+
 def orphan_legacy(primary: Path) -> str:
     git(primary, "switch", "-q", "--orphan", "legacy")
     (primary / "old.txt").write_text("legacy\n")
@@ -227,6 +238,8 @@ FIXTURES: dict[str, Fixture] = {
     "symbolic-branch": symbolic_branch,
     "reset-then-real-gc": reset_then_real_gc,
     "rewound": rewound,
+    "log-form-feed-quiet": log_message_option("\x0c", "--quiet"),
+    "log-line-separator-count": log_message_option("\u2028", "--count"),
     "graft-by-replace": graft_by_replace,
     "graft-by-file": graft_by_file,
     "cargo-target": target_output,

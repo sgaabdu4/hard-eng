@@ -304,3 +304,69 @@ def test_tidy_keeps_every_branch_when_the_reflogs_are_not_plain_files(
     tidy(linked(primary, "session"))
     assert "done" in branches(primary)
     assert "reftable" in capsys.readouterr().err
+
+
+def test_tidy_removes_a_merged_branch_whose_log_message_holds_a_form_feed(
+    primary: Path,
+) -> None:
+    git(primary, "switch", "-qc", "odd")
+    (primary / "o.txt").write_text("o\n")
+    commit(primary, "first\x0csecond word")
+    git(primary, "switch", "-q", "main")
+    git(primary, "merge", "-q", "--ff-only", "odd")
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "switch", "-qc", "parking")
+    age_branch(primary, "odd")
+    tidy(linked(primary, "session"))
+    assert "odd" not in branches(primary)
+
+
+def test_tidy_keeps_a_branch_that_a_rebase_with_update_refs_will_move(
+    primary: Path,
+) -> None:
+    git(primary, "branch", "side", "main")
+    git(primary, "switch", "-qc", "stack-base")
+    (primary / "b.txt").write_text("b\n")
+    commit(primary, "b")
+    git(primary, "switch", "-qc", "stack-top")
+    (primary / "t.txt").write_text("t\n")
+    commit(primary, "t")
+    git(primary, "switch", "-q", "main")
+    git(primary, "cherry-pick", "stack-base")
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "switch", "-q", "stack-top")
+    editor = primary.parent / "break-editor"
+    editor.write_text(
+        '#!/bin/sh\n{ echo break; cat "$1"; } > "$1.new"; mv "$1.new" "$1"\n'
+    )
+    editor.chmod(0o755)
+    git(
+        primary,
+        "-c",
+        f"sequence.editor={editor}",
+        "rebase",
+        "-i",
+        "--update-refs",
+        "side",
+    )
+    assert "stack-base" in git_path(primary, "rebase-merge/update-refs").read_text()
+    age_branch(primary, "stack-base")
+    tidy(linked(primary, "session"))
+    assert "stack-base" in branches(primary)
+
+
+def test_a_removed_branch_takes_its_config_section_with_it(primary: Path) -> None:
+    merged_branch(primary, "done")
+    git(primary, "config", "branch.done.description", "old notes")
+    git(primary, "config", "branch.done.remote", "origin")
+    tidy(linked(primary, "session"))
+    assert "done" not in branches(primary)
+    git(primary, "branch", "done", "main")
+    shown = subprocess.run(
+        ["git", "config", "--get-regexp", r"^branch\.done\."],
+        cwd=primary,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert shown.stdout == ""
