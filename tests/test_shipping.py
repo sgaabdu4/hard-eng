@@ -85,7 +85,7 @@ def _pull(fixture: Fixture, **changes: object) -> dict[str, object]:
         "base": {
             "ref": "main",
             "sha": "a" * 40,
-            "repo": {"full_name": "acme/widget"},
+            "repo": {"full_name": "acme/widget", "default_branch": "main"},
         },
         "body": _UNDO,
         "mergeable": True,

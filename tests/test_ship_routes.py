@@ -6,7 +6,15 @@ from pathlib import Path
 import pytest
 import shipping
 from conftest import git
-from test_shipping import _PR_URL, FakeGitHub, Fixture, _check, _fixture, _patch_gh, _pull
+from test_shipping import (
+    _PR_URL,
+    FakeGitHub,
+    Fixture,
+    _check,
+    _fixture,
+    _patch_gh,
+    _pull,
+)
 
 
 def _develop_policy(tmp_path: Path, branch: str) -> Fixture:
@@ -16,25 +24,34 @@ def _develop_policy(tmp_path: Path, branch: str) -> Fixture:
     gates["shipping"]["base"] = "develop"
     (fixture.root / "hard-eng.gates.json").write_text(json.dumps(gates))
     git(fixture.root, "commit", "-qam", "base is develop")
+    (fixture.root / "added.txt").write_text("a big change\n")
+    git(fixture.root, "add", "added.txt")
+    git(fixture.root, "commit", "-qm", "big change")
     return fixture
 
 
-def _route_pull(fixture: Fixture, head_ref: str, base_ref: str, commits: int) -> dict[str, object]:
+def _route_pull(
+    fixture: Fixture, head_ref: str, base_ref: str, commits: int
+) -> dict[str, object]:
     head = git(fixture.root, "rev-parse", "HEAD")
     repo = {"full_name": "acme/widget", "default_branch": "main"}
-    pull = _pull(fixture, commits=commits)
+    pull = _pull(fixture, commits=commits, rebaseable=commits < 100)
     pull["head"] = {"ref": head_ref, "sha": head, "repo": repo}
     pull["base"] = {"ref": base_ref, "sha": "a" * 40, "repo": repo}
     return pull
 
 
 def _ship(
-    monkeypatch: pytest.MonkeyPatch, fixture: Fixture, pull: dict[str, object], behind: int = 0
+    monkeypatch: pytest.MonkeyPatch,
+    fixture: Fixture,
+    pull: dict[str, object],
+    behind: int = 0,
+    plan: Path | None = None,
 ) -> shipping.Shipment:
     fake = FakeGitHub(pull, [_check(git(fixture.root, "rev-parse", "HEAD"))])
     fake.comparison = {"behind_by": behind}
     _patch_gh(monkeypatch, fake)
-    return shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
+    return shipping.verify(fixture.root, plan, _PR_URL, "ready")
 
 
 @pytest.mark.parametrize(
@@ -68,7 +85,7 @@ def test_a_task_pull_request_into_the_default_branch_stays_refused(
     fixture = _develop_policy(tmp_path, "feature/shipping")
     pull = _route_pull(fixture, "feature/shipping", "main", 1)
     with pytest.raises(shipping.ShippingError, match="base branch does not match"):
-        _ship(monkeypatch, fixture, pull)
+        _ship(monkeypatch, fixture, pull, plan=fixture.plan)
 
 
 def test_a_rebase_pull_request_still_holds_the_commit_limit(
@@ -77,4 +94,4 @@ def test_a_rebase_pull_request_still_holds_the_commit_limit(
     fixture = _develop_policy(tmp_path, "feature/shipping")
     pull = _route_pull(fixture, "feature/shipping", "develop", 156)
     with pytest.raises(shipping.ShippingError, match="HE-PR-COMMITS"):
-        _ship(monkeypatch, fixture, pull)
+        _ship(monkeypatch, fixture, pull, plan=fixture.plan)
