@@ -240,7 +240,7 @@ def test_the_template_annotations_gate_bans_each_any_for_real(
     """HE-NO-SWITCH-OFF: real Ruff runs the template's own words and fails on each banned `Any`, not only the first entry."""
     import subprocess
 
-    command = template_annotations()
+    command = ["uvx", *template_annotations()]
     (tmp_path / "a.py").write_text(
         f"from {module} import Any\n\n\ndef f(x: dict[str, Any]) -> None:\n    return None\n"
     )
