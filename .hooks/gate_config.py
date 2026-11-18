@@ -869,9 +869,9 @@ def load_groups(
 
         browser_roles(config)
     if "shipping" in config:
-        from shipping import load_policy
+        from ci_jobs import load_checked_policy
 
-        load_policy(root)
+        load_checked_policy(root, config)
     raw = listed_names(root)
     listed = repository_files(root, raw)
     start = len(str(root)) + 1

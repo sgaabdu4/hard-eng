@@ -129,3 +129,13 @@ def settle_gate_time(root: Path, key: str, failed: bool, seconds: float) -> bool
     if not failed:
         record_gate_time(root, key, seconds)
     return failed
+
+
+def gate_budget(root: Path) -> float:
+    """Each gate's ceiling: CI's budget in CI, pre-push's elsewhere."""
+    from shipping import load_policy
+
+    policy = load_policy(root, required=False)
+    if policy is None:
+        return 600
+    return policy["ci_seconds" if os.environ.get("CI") else "pre_push_seconds"]
