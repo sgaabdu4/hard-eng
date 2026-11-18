@@ -399,8 +399,16 @@ def pull_request_filters(workflow: object) -> list[str]:
         for name in names
         if isinstance(event, dict)
         and name in event
-        and not (name == "branches" and "**" in (event[name] or []))
+        and not (name == "branches" and covers_every_branch(event[name]))
     ]
+
+
+def covers_every_branch(patterns: object) -> bool:
+    return (
+        isinstance(patterns, list)
+        and "**" in patterns
+        and not any(str(p).startswith("!") for p in patterns)
+    )
 
 
 def skips_a_run(node: dict[object, object]) -> str | None:
