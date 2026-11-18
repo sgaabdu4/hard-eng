@@ -15,7 +15,6 @@ from pathlib import Path
 
 from tidy_guards import (
     ITEM_ERRORS,
-    RESCUE,
     Private,
     TidyStop,
     cargo_target,
@@ -274,7 +273,7 @@ class Tidy:
         *command: str,
     ) -> str | None:
         """The one act that deletes: name every commit by a rescue ref, read the checks last, write the record, then remove."""
-        unnamed = (
+        dropped = (
             tidy_git(
                 self.root,
                 "rev-list",
@@ -282,12 +281,11 @@ class Tidy:
                 *commits,
                 "--not",
                 self.tip,
-                f"--glob={RESCUE}/*",
             ).split()
             if commits
             else []
         )
-        save_commits(self.root, unnamed, time.time())
+        save_commits(self.root, dropped, time.time())
         reason = recheck()
         if reason is None:
             self.record_removal(what)
