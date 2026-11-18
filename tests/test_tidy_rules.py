@@ -7,7 +7,7 @@ import pytest
 import stale_updates
 import tidy_guards
 from conftest import age_branch, commit, git, git_path
-from test_tidy import branches, linked, tidy
+from test_tidy import add_vendor, age, branches, linked, tidy
 
 
 def diverge(primary: Path, how: str) -> None:
@@ -109,3 +109,44 @@ def test_a_path_matches_after_letter_case_and_unicode_form_are_folded(
 def test_the_codex_folder_and_session_match_in_any_letter_case() -> None:
     assert tidy_guards.under("/HOME/me/.codex/worktrees/a", "/home/me/.codex/worktrees")
     assert tidy_guards.same_place(Path("/Work/Tree"), Path("/work/tree"))
+
+
+WHO = ["-c", "user.name=T", "-c", "user.email=t@example.invalid"]
+
+
+def leave_submodule_commit_in_log(primary: Path, path: Path, allow: list[str]) -> None:
+    git(path, *allow, "submodule", "update", "--init", "-q")
+    git(path / "vendor", *WHO, "commit", "--allow-empty", "-qm", "left behind")
+    git(path, *allow, "submodule", "update", "-q", "--force")
+
+
+def keep_stash_commit_in_a_worktree_ref(
+    primary: Path, path: Path, allow: list[str]
+) -> None:
+    (path / "tracked.txt").write_text("edited\n")
+    saved = git(path, "stash", "create")
+    git(path, "update-ref", "refs/worktree/keep", saved)
+    git(path, "checkout", "--", "tracked.txt")
+
+
+def leave_a_note_in_the_git_folder(primary: Path, path: Path, allow: list[str]) -> None:
+    (Path(git(path, "rev-parse", "--absolute-git-dir")) / "NOTES.md").write_text("n\n")
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        leave_submodule_commit_in_log,
+        keep_stash_commit_in_a_worktree_ref,
+        leave_a_note_in_the_git_folder,
+    ],
+)
+def test_tidy_keeps_a_worktree_whose_private_git_folder_holds_work(
+    primary: Path, tmp_path: Path, setup: Callable[[Path, Path, list[str]], None]
+) -> None:
+    allow = add_vendor(primary, tmp_path)
+    path = linked(primary, "private")
+    setup(primary, path, allow)
+    age(path)
+    tidy(primary)
+    assert path.is_dir()
