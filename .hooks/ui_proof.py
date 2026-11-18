@@ -245,41 +245,63 @@ def on_route(captured: str, route: str) -> bool:
     )
 
 
+def _stem(record: dict[str, object]) -> str:
+    name = CAPTURE_NAME.fullmatch(str(record["image"]))
+    return name[1] if name else str(record["image"])
+
+
+def _set_problem(
+    records: list[dict[str, object]], stem: str, head: str, route: str
+) -> str | None:
+    """Why one capture set is not a clean measured set of the head, or None."""
+    from browser import WIDTHS
+
+    for width in WIDTHS:
+        peer = next((r for r in records if r["image"] == f"{stem}-{width}.png"), None)
+        if peer is None:
+            return f"the After capture {stem} has no measured record at {width} px; capture it at every width"
+        if route and not on_route(str(peer.get("route", "")), route):
+            return f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {route}; capture the changed screen"
+        if peer.get("commit") != head or peer.get("dirty"):
+            return f"the After capture {peer['image']} was not taken at the head ({head[:12]}) from a clean tree; commit, then capture again"
+        if peer.get("findings"):
+            rules = sorted(
+                {
+                    str(item.get("rule"))
+                    for item in cast(list[dict[str, object]], peer["findings"])
+                }
+            )
+            return f"the measured capture {peer['image']} has findings ({', '.join(rules)}); fix the screen and capture it again"
+    return None
+
+
 def measured_problem(
     root: Path, head: str, after: list[bytes], route: str = ""
 ) -> str | None:
-    """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width."""
-    from browser import WIDTHS
-
+    """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width; of several sets with the same image, those taken at the head all count."""
     records = browser_records(root)
     for data in after:
         digest = sha256(data)
-        match = next((item for item in records if item["sha256"] == digest), None)
-        if match is None:
+        stems = list(
+            dict.fromkeys(_stem(item) for item in records if item["sha256"] == digest)
+        )
+        if not stems:
             return (
                 f"an After image (sha256 {digest[:12]}) matches no measured capture in .hard-eng/browser; "
                 "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
             )
-        name = CAPTURE_NAME.fullmatch(str(match["image"]))
-        stem = name[1] if name else str(match["image"])
-        for width in WIDTHS:
-            peer = next(
-                (r for r in records if r["image"] == f"{stem}-{width}.png"), None
+        current = [
+            stem
+            for stem in stems
+            if all(
+                item.get("commit") == head and not item.get("dirty")
+                for item in records
+                if _stem(item) == stem
             )
-            if peer is None:
-                return f"the After capture {stem} has no measured record at {width} px; capture it at every width"
-            if route and not on_route(str(peer.get("route", "")), route):
-                return f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {route}; capture the changed screen"
-            if peer.get("commit") != head or peer.get("dirty"):
-                return f"the After capture {peer['image']} was not taken at the head ({head[:12]}) from a clean tree; commit, then capture again"
-            if peer.get("findings"):
-                rules = sorted(
-                    {
-                        str(item.get("rule"))
-                        for item in cast(list[dict[str, object]], peer["findings"])
-                    }
-                )
-                return f"the measured capture {peer['image']} has findings ({', '.join(rules)}); fix the screen and capture it again"
+        ]
+        for stem in current or stems:
+            if problem := _set_problem(records, stem, head, route):
+                return problem
     return None
 
 
