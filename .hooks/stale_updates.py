@@ -50,6 +50,11 @@ def sweep_temporary() -> None:
                 shutil.rmtree(path)
 
 
+def idle(stamp: float) -> bool:
+    """Nothing touched the thing for a day."""
+    return time.time() - stamp > 24 * 3600
+
+
 def stop_idle_watcher(worktree: Path) -> None:
     """Git restarts a file watcher on the next command, so stopping an idle one loses nothing."""
     with suppress(OSError, subprocess.SubprocessError):
@@ -59,7 +64,7 @@ def stop_idle_watcher(worktree: Path) -> None:
             text=True,
             timeout=30,
         ).strip()
-        if time.time() - Path(index).stat().st_mtime > 24 * 3600:
+        if idle(Path(index).stat().st_mtime):
             subprocess.run(
                 ["git", "fsmonitor--daemon", "stop"],
                 cwd=worktree,
