@@ -8,9 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-import stale_updates
 from conftest import age_branch, commit, git
-from test_tidy import add_vendor, age, age_folders, fake_gh, linked, tidy, unmerged
+from test_tidy import add_vendor, age, age_folders, linked, tidy, unmerged
 from test_tidy_rules import (
     diverge,
     dropped_in_submodule_folder,
@@ -21,6 +20,7 @@ from test_tidy_rules import (
     old_install,
     pause_bisect,
     pause_rebase,
+    write_during_gh_answer,
 )
 
 COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
@@ -180,19 +180,8 @@ def merge_attributes(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> N
     diverge(primary, "info")
 
 
-def gap_while_waiting(
-    primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch
-) -> Callable[[], None]:
-    waiting = linked(primary, "waiting")
-    git(waiting, "push", "-q", "origin", "waiting")
-    real = stale_updates.tidy_gh
-
-    def slow(cwd: Path, *arguments: str) -> list[object] | None:
-        (waiting / "late.txt").write_text("late\n")
-        return real(cwd, *arguments)
-
-    fake_gh(tmp_path, mp, {"open": {}})
-    return lambda: mp.setattr(stale_updates, "tidy_gh", slow)
+def gap_while_waiting(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
+    write_during_gh_answer(primary, linked(primary, "waiting"), "late.txt", mp)
 
 
 def target_output(primary: Path, tmp_path: Path, mp: pytest.MonkeyPatch) -> None:
