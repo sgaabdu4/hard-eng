@@ -1,6 +1,5 @@
 """The tidy keeps work that a repository setting, a paused operation or a path spelling could hide."""
 
-import shutil
 import subprocess
 import time
 from collections.abc import Callable
@@ -9,15 +8,14 @@ from pathlib import Path
 import pytest
 import stale_updates
 import tidy_guards
-from conftest import OLD, age_branch, commit, git, git_path
+from conftest import age_branch, commit, git, git_path
 from test_tidy import (
-    add_vendor,
-    age,
     branches,
-    fake_gh,
     linked,
-    sparse_worktree,
+    make_target,
+    merged_branch,
     tidy,
+    unmerged,
 )
 
 
@@ -94,18 +92,6 @@ def test_tidy_keeps_a_branch_that_a_paused_operation_will_return_to(
     assert "feat" in branches(primary)
 
 
-def test_tidy_keeps_a_worktree_when_a_process_path_differs_only_in_letter_case(
-    primary: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    busy = linked(primary, "busy")
-    session = linked(primary, "session")
-    monkeypatch.setattr(
-        stale_updates, "open_paths", lambda: {str(busy.resolve()).swapcase() + "/x"}
-    )
-    tidy(session)
-    assert busy.is_dir()
-
-
 @pytest.mark.parametrize(
     ("name", "inside"),
     [
@@ -119,89 +105,25 @@ def test_a_path_matches_after_letter_case_and_unicode_form_are_folded(
     name: str, inside: bool
 ) -> None:
     assert tidy_guards.inside(Path("/work/café"), {name}) is inside
-    assert tidy_guards.under(name, "/work/café") is inside
 
 
-def test_the_codex_folder_and_session_match_in_any_letter_case() -> None:
-    assert tidy_guards.under("/HOME/me/.codex/worktrees/a", "/home/me/.codex/worktrees")
-    assert tidy_guards.same_place(Path("/Work/Tree"), Path("/work/tree"))
-
-
-WHO = ["-c", "user.name=T", "-c", "user.email=t@example.invalid"]
-
-
-def leave_submodule_commit_in_log(primary: Path, path: Path, allow: list[str]) -> None:
-    git(path, *allow, "submodule", "update", "--init", "-q")
-    git(path / "vendor", *WHO, "commit", "--allow-empty", "-qm", "left behind")
-    git(path, *allow, "submodule", "update", "-q", "--force")
-
-
-def keep_stash_commit_in_a_worktree_ref(
-    primary: Path, path: Path, allow: list[str]
+def test_tidy_keeps_a_build_folder_when_a_process_path_differs_only_in_letter_case(
+    primary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (path / "tracked.txt").write_text("edited\n")
-    saved = git(path, "stash", "create")
-    git(path, "update-ref", "refs/worktree/keep", saved)
-    git(path, "checkout", "--", "tracked.txt")
-
-
-def leave_a_note_in_the_git_folder(primary: Path, path: Path, allow: list[str]) -> None:
-    (Path(git(path, "rev-parse", "--absolute-git-dir")) / "NOTES.md").write_text("n\n")
-
-
-@pytest.mark.parametrize(
-    "setup",
-    [
-        leave_submodule_commit_in_log,
-        keep_stash_commit_in_a_worktree_ref,
-        leave_a_note_in_the_git_folder,
-    ],
-)
-def test_tidy_keeps_a_worktree_whose_private_git_folder_holds_work(
-    primary: Path, tmp_path: Path, setup: Callable[[Path, Path, list[str]], None]
-) -> None:
-    allow = add_vendor(primary, tmp_path)
-    path = linked(primary, "private")
-    setup(primary, path, allow)
-    age(path)
-    tidy(primary)
-    assert path.is_dir()
-
-
-def test_tidy_removes_a_sparse_worktree_whose_skipped_files_are_absent(
-    primary: Path,
-) -> None:
-    sparse = sparse_worktree(primary)
-    tidy(primary)
-    assert not sparse.exists()
-
-
-def test_tidy_keeps_a_worktree_with_a_present_skip_worktree_file(primary: Path) -> None:
-    present = linked(primary, "present")
-    git(present, "update-index", "--skip-worktree", "tracked.txt")
-    age(present)
-    tidy(primary)
-    assert present.is_dir()
-
-
-def test_tidy_says_why_it_keeps_a_locked_or_gone_worktree(
-    primary: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    locked = linked(primary, "locked")
-    git(primary, "worktree", "lock", str(locked))
-    gone = linked(primary, "gone")
-    shutil.rmtree(gone)
+    busy = linked(primary, "busy")
+    unmerged(busy)
+    target = make_target(busy)
+    monkeypatch.setattr(
+        stale_updates, "open_paths", lambda: {str(busy.resolve()).swapcase() + "/x"}
+    )
     tidy(linked(primary, "session"))
-    said = capsys.readouterr().err
-    assert f"kept worktree {locked}: locked" in said
-    assert f"kept worktree {gone}: its folder is gone" in said
+    assert target.is_dir()
 
 
 def test_tidy_writes_what_it_removes_to_a_file_in_the_common_git_folder(
     primary: Path,
 ) -> None:
-    done = linked(primary, "done")
-    head = git(done, "rev-parse", "HEAD")
+    head = merged_branch(primary, "done")
     log = (
         Path(git(primary, "rev-parse", "--absolute-git-dir"))
         / "hard-eng-tidy-removed.log"
@@ -209,25 +131,7 @@ def test_tidy_writes_what_it_removes_to_a_file_in_the_common_git_folder(
     log.write_text(f"{int(time.time()) - 40 * 86400} branch old {head}\n")
     tidy(linked(primary, "session"))
     rows = [row.partition(" ")[2] for row in log.read_text().splitlines()]
-    assert rows == [f"worktree {done} {head}", f"branch done {head}"]
-    git(primary, "branch", "done", head)
-
-
-def test_tidy_keeps_a_worktree_whose_orig_head_is_the_last_reference_to_a_commit(
-    primary: Path,
-) -> None:
-    path = linked(primary, "reset")
-    git(path, "switch", "-q", "--detach")
-    (path / "own.txt").write_text("own\n")
-    commit(path, "own work")
-    git(path, "reset", "-q", "--hard", "main")
-    main = git(path, "rev-parse", "HEAD")
-    git_path(path, "logs/HEAD").write_text(
-        f"{main} {main} T <t@example.invalid> {OLD} +0000\treset: moving to main\n"
-    )
-    age(path)
-    tidy(primary)
-    assert path.is_dir()
+    assert rows == [f"branch done {head}"]
 
 
 def gc_now(primary: Path) -> None:
@@ -275,89 +179,6 @@ def test_rescue_refs_expire_after_thirty_days_and_no_other_reader_lists_them(
     names = git(primary, "for-each-ref", "--format=%(refname)", "refs/hard-eng").split()
     assert names == [new]
     assert branches(primary) == {"main", "session"}
-
-
-def nested_repository(path: Path) -> None:
-    inner = path / ".venv/src/pkg"
-    inner.mkdir(parents=True)
-    git(inner, "init", "-q")
-    (inner / "m.txt").write_text("m\n")
-    git(inner, "add", ".")
-    git(inner, *WHO, "commit", "-qm", "unpushed")
-
-
-def fresh_file(path: Path) -> None:
-    (path / "node_modules/pkg").mkdir(parents=True)
-    (path / "node_modules/pkg/index.js").write_text("x\n")
-    age(path)
-    (path / "node_modules/pkg/edited.js").write_text("edited a moment ago\n")
-
-
-def dropped_in_submodule_folder(path: Path) -> None:
-    (path / "vendor").mkdir(exist_ok=True)
-    (path / "vendor/dropped.txt").write_text("dropped\n")
-
-
-def old_install(path: Path) -> None:
-    (path / "node_modules/pkg").mkdir(parents=True)
-    (path / "node_modules/pkg/index.js").write_text("x\n")
-    (path / "src/__pycache__").mkdir(parents=True)
-    (path / "src/__pycache__/m.pyc").write_text("c\n")
-    (path / ".venv/bin").mkdir(parents=True)
-    (path / ".venv/bin/python").symlink_to("/usr/bin/true")
-
-
-def ordinary_git_files(path: Path) -> None:
-    git_path(path, "COMMIT_EDITMSG").write_text("msg\n")
-    git_path(path, "FETCH_HEAD").write_text("")
-    git_path(path, "MERGE_RR").write_text("")
-
-
-@pytest.mark.parametrize(
-    ("setup", "kept"),
-    [
-        (nested_repository, True),
-        (fresh_file, True),
-        (dropped_in_submodule_folder, True),
-        (old_install, False),
-        (ordinary_git_files, False),
-    ],
-)
-def test_tidy_tests_what_the_removal_deletes_in_every_untracked_or_ignored_path(
-    primary: Path, tmp_path: Path, setup: Callable[[Path], None], kept: bool
-) -> None:
-    add_vendor(primary, tmp_path)
-    path = linked(primary, "walk")
-    setup(path)
-    age(path)
-    if setup is fresh_file:
-        (path / "node_modules/pkg/edited.js").write_text("edited a moment ago\n")
-    tidy(primary)
-    assert path.is_dir() == kept
-
-
-def write_during_gh_answer(
-    primary: Path, waiting: Path, name: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    git(waiting, "push", "-q", "origin", "waiting")
-    real = stale_updates.tidy_gh
-
-    def slow(cwd: Path, *arguments: str) -> list[object] | None:
-        (waiting / name).write_text("written while gh answered\n")
-        return real(cwd, *arguments)
-
-    fake_gh(primary.parent, monkeypatch, {"open": {}})
-    monkeypatch.setattr(stale_updates, "tidy_gh", slow)
-
-
-@pytest.mark.parametrize("name", ["late.txt", "tracked.txt"])
-def test_tidy_keeps_a_worktree_that_gets_work_while_it_waits_for_github(
-    primary: Path, monkeypatch: pytest.MonkeyPatch, name: str
-) -> None:
-    waiting = linked(primary, "waiting")
-    write_during_gh_answer(primary, waiting, name, monkeypatch)
-    tidy(linked(primary, "session"))
-    assert (waiting / name).read_text() == "written while gh answered\n"
 
 
 @pytest.mark.parametrize("through", ["global-config", "environment"])

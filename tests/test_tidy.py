@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 import shutil
 import signal
 import subprocess
@@ -181,29 +180,29 @@ def process_inside(
         child.wait()
 
 
-@pytest.mark.parametrize("where", ["sibling", "claude"])
-def test_tidy_removes_a_merged_idle_worktree_and_its_branch(
-    primary: Path, where: str, capsys: pytest.CaptureFixture[str]
+def merged_branch(root: Path, name: str) -> str:
+    git(root, "branch", name, "main")
+    age_branch(root, name)
+    return git(root, "rev-parse", name)
+
+
+def test_tidy_removes_a_merged_idle_branch(
+    primary: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    merged = linked(primary, "done", where)
+    tip = merged_branch(primary, "done")
     current = linked(primary, "current")
-    head = git(merged, "rev-parse", "HEAD")
     tidy(current)
-    assert f"removed worktree {merged} at {head}" in capsys.readouterr().err
-    assert not merged.exists()
-    assert not (primary / ".git/worktrees/done").exists()
-    assert "done" not in branches(primary)
+    assert f"removed branch done at {tip}" in capsys.readouterr().err
     assert primary.is_dir() and current.is_dir()
-    assert {"main", "current"} <= branches(primary)
+    assert branches(primary) == {"main", "current"}
 
 
 def test_tidy_keeps_the_primary_checkout(primary: Path) -> None:
     git(primary, "switch", "-qc", "parking")
     age(primary)
-    current = linked(primary, "current")
-    gone = linked(primary, "gone")
-    tidy(current)
-    assert not gone.exists()
+    merged_branch(primary, "gone")
+    tidy(linked(primary, "current"))
+    assert "gone" not in branches(primary)
     assert primary.is_dir()
     assert "parking" in branches(primary)
 
@@ -213,128 +212,6 @@ def test_tidy_keeps_the_current_worktree(primary: Path) -> None:
     tidy(current)
     assert current.is_dir()
     assert "current" in branches(primary)
-
-
-@pytest.mark.parametrize("via_link", [False, True], ids=["direct", "symlink"])
-@pytest.mark.parametrize("how", ["cwd", "open-file"])
-def test_tidy_keeps_a_worktree_with_a_process_inside(
-    primary: Path, tmp_path: Path, how: str, via_link: bool
-) -> None:
-    busy = linked(primary, "busy")
-    free = linked(primary, "free")
-    with process_inside(busy, how, tmp_path, via_link):
-        tidy(primary)
-    assert busy.is_dir()
-    assert not free.exists()
-    assert "busy" in branches(primary)
-
-
-@pytest.mark.parametrize("change", ["tracked", "untracked", "ignored"])
-def test_tidy_keeps_a_worktree_with_changes(primary: Path, change: str) -> None:
-    dirty = linked(primary, "dirty")
-    match change:
-        case "tracked":
-            (dirty / "tracked.txt").write_text("two\n")
-        case "untracked":
-            (dirty / "new.txt").write_text("x\n")
-        case _:
-            (dirty / ".env").write_text("SECRET=1\n")
-    age(dirty)
-    clean = linked(primary, "clean")
-    tidy(primary)
-    assert dirty.is_dir() and not clean.exists()
-
-
-def test_tidy_ignores_only_known_generated_folders(primary: Path) -> None:
-    generated = linked(primary, "generated")
-    for name in (
-        "__pycache__/a.pyc",
-        "node_modules/p/x",
-        ".hard-eng/update.log",
-        ".venv/bin/python",
-    ):
-        (generated / name).parent.mkdir(parents=True, exist_ok=True)
-        (generated / name).write_text("x\n")
-    age(generated)
-    browser = linked(primary, "browser")
-    (browser / ".hard-eng/browser").mkdir(parents=True)
-    (browser / ".hard-eng/browser/shot.png").write_text("x\n")
-    age(browser)
-    built = linked(primary, "built")
-    (built / "build").mkdir()
-    (built / "build/out.bin").write_text("x\n")
-    age(built)
-    tidy(primary)
-    assert not generated.exists()
-    assert browser.is_dir() and built.is_dir()
-
-
-@pytest.mark.parametrize("detached", [False, True], ids=["branch", "detached"])
-def test_tidy_keeps_a_worktree_that_a_stash_names(
-    primary: Path, detached: bool
-) -> None:
-    stashed = linked(primary, "stashed")
-    if detached:
-        git(stashed, "switch", "-q", "--detach")
-        age(stashed)
-    (stashed / "tracked.txt").write_text("two\n")
-    git(stashed, "stash")
-    age(stashed)
-    (primary / "later.txt").write_text("later\n")
-    commit(primary, "later")
-    git(primary, "push", "-q", "origin", "main")
-    gone = linked(primary, "gone")
-    tidy(primary)
-    assert stashed.is_dir() and not gone.exists()
-
-
-@pytest.mark.parametrize("fresh", ["top-level", "head-log", "both"])
-def test_tidy_keeps_a_recently_used_worktree(primary: Path, fresh: str) -> None:
-    recent = linked(primary, "recent")
-    if fresh != "head-log":
-        os.utime(recent / "tracked.txt", None)
-    if fresh != "top-level":
-        log = git_path(recent, "logs/HEAD")
-        log.write_text(
-            re.sub(
-                r"(> )\d+( [+-]\d{4})",
-                rf"\g<1>{int(time.time()) - HOUR}\g<2>",
-                log.read_text(),
-            )
-        )
-    gone = linked(primary, "gone")
-    tidy(primary)
-    assert recent.is_dir() and not gone.exists()
-
-
-def test_tidy_keeps_locked_and_codex_app_worktrees(
-    primary: Path, tmp_path: Path
-) -> None:
-    locked = linked(primary, "locked")
-    git(primary, "worktree", "lock", str(locked))
-    codex = tmp_path / "codex/worktrees/app"
-    git(primary, "worktree", "add", "-q", "-b", "app", str(codex), "main")
-    age(codex)
-    gone = linked(primary, "gone")
-    tidy(primary)
-    assert locked.is_dir() and codex.is_dir() and not gone.exists()
-
-
-@pytest.mark.parametrize("work", ["none", "local-commit", "ignored-file"])
-def test_tidy_removes_a_submodule_worktree_only_when_the_submodule_holds_no_work(
-    primary: Path, tmp_path: Path, work: str
-) -> None:
-    allow = add_vendor(primary, tmp_path)
-    path = linked(primary, "withsub")
-    git(path, *allow, "submodule", "update", "--init", "-q")
-    if work == "local-commit":
-        who = ["-c", "user.name=T", "-c", "user.email=t@example.invalid"]
-        git(path / "vendor", *who, "commit", "--allow-empty", "-qm", "local")
-    if work == "ignored-file":
-        (path / "vendor/data.secret").write_text("keep\n")
-    age(path)
-    tidy(primary)
-    assert path.is_dir() == (work != "none")
 
 
 def test_tidy_keeps_an_unmerged_branch(primary: Path) -> None:
@@ -470,43 +347,26 @@ def test_tidy_keeps_the_item_whose_command_fails_or_hangs_and_goes_on(
     capsys: pytest.CaptureFixture[str],
     hangs: bool,
 ) -> None:
-    bad, good = linked(primary, "aaa-bad"), linked(primary, "zzz-good")
+    merged_branch(primary, "aaa-bad")
+    merged_branch(primary, "zzz-good")
     if hangs:
         quick_git_limits(monkeypatch)
         stand_in_git(
             tmp_path,
             monkeypatch,
-            '[ "$1" = "log" ] && pwd -P | grep -q aaa-bad',
+            '[ "$1" = "log" ] && echo "$@" | grep -q aaa-bad',
             "sleep 30",
         )
     else:
         stand_in_git(
             tmp_path,
             monkeypatch,
-            '[ "$1 $2" = "worktree remove" ] && echo "$@" | grep -q aaa-bad',
+            '[ "$1 $2" = "update-ref -d" ] && echo "$@" | grep -q aaa-bad',
         )
     tidy(primary)
     err = capsys.readouterr().err
-    assert bad.is_dir() and not good.exists()
-    assert "kept worktree" in err and "aaa-bad" in err and "stopped" not in err
-
-
-def test_tidy_keeps_the_item_whose_check_fails_and_removes_the_next(
-    primary: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    bad, good = linked(primary, "aaa-bad"), linked(primary, "zzz-good")
-    stand_in_git(
-        tmp_path,
-        monkeypatch,
-        '[ "$1" = "--no-optional-locks" ] && pwd -P | grep -q aaa-bad',
-    )
-    tidy(primary)
-    err = capsys.readouterr().err
-    assert bad.is_dir() and not good.exists()
-    assert "kept worktree" in err and "aaa-bad" in err and "stopped" not in err
+    assert "aaa-bad" in branches(primary) and "zzz-good" not in branches(primary)
+    assert "kept branch" in err and "aaa-bad" in err and "stopped" not in err
 
 
 def test_tidy_stops_the_repository_when_a_repository_level_command_fails(
@@ -515,7 +375,6 @@ def test_tidy_stops_the_repository_when_a_repository_level_command_fails(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    gone = linked(primary, "gone")
     idle = linked(primary, "idle")
     unmerged(idle)
     target = make_target(idle)
@@ -526,7 +385,6 @@ def test_tidy_stops_the_repository_when_a_repository_level_command_fails(
     stand_in_git(tmp_path, monkeypatch, '[ "$1" = "for-each-ref" ]')
     tidy(primary)
     monkeypatch.setenv("PATH", path)
-    assert not gone.exists()
     assert "extra" in branches(primary)
     assert target.is_dir()
     assert "stopped for this repository" in capsys.readouterr().err
@@ -559,11 +417,11 @@ def test_tidy_uses_its_own_lock_and_skips_after_an_interrupt(
     import fcntl
 
     root = installed(primary)
-    gone = linked(root, "gone")
+    merged_branch(root, "gone")
     with (stale_updates.common_dir(root) / "hard-eng-tidy.lock").open("a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         tidy(root)
-    assert gone.is_dir()
+    assert "gone" in branches(root)
 
     monkeypatch.setattr(update_runner, "update_command", update_as("sleep", "60"))
     previous = signal.getsignal(signal.SIGTERM)
@@ -574,7 +432,7 @@ def test_tidy_uses_its_own_lock_and_skips_after_an_interrupt(
     finally:
         signal.signal(signal.SIGTERM, previous)
         stopper.join(timeout=60)
-    assert gone.is_dir()
+    assert "gone" in branches(root)
     assert not update_runner.update_running(root)
 
     seen: list[bool] = []
@@ -591,7 +449,7 @@ def test_tidy_uses_its_own_lock_and_skips_after_an_interrupt(
     finally:
         signal.signal(signal.SIGTERM, previous)
     assert seen == [False]
-    assert not gone.exists()
+    assert "gone" not in branches(root)
 
 
 def test_tidy_reads_real_worktree_record_shapes(primary: Path, tmp_path: Path) -> None:
@@ -660,9 +518,9 @@ def test_tidy_touches_only_its_own_repository(primary: Path, tmp_path: Path) -> 
         "main",
     )
     age(other / "idle")
-    mine = linked(primary, "mine")
+    merged_branch(primary, "mine")
     tidy(primary)
-    assert not mine.exists()
+    assert "mine" not in branches(primary)
     assert (other / "idle").is_dir()
     assert "idle" in branches(other / "repo")
 
@@ -717,11 +575,11 @@ def test_tidy_reports_one_line_only_when_it_removed_something(primary: Path) -> 
     update_runner.record_result(root, "Updated Hard Eng")
     tidy(root)
     assert result.read_text().count("\n") == 1
-    linked(root, "gone")
+    merged_branch(root, "gone")
     tidy(root)
     lines = result.read_text().splitlines()
     assert lines[1] == (
-        f"Tidy: removed 1 worktrees, 1 branches, 0 build folders ({update_runner.LOG_FILE})."
+        f"Tidy: removed 1 branches, 0 build folders ({update_runner.LOG_FILE})."
     )
     assert len(lines) == 2
     assert update_runner.freshness_note(root) == ""
@@ -734,20 +592,20 @@ def test_tidy_runs_after_a_failed_update_and_stops_on_a_failed_fetch(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     root = installed(primary)
-    first = linked(root, "first")
+    merged_branch(root, "first")
     monkeypatch.setattr(update_runner, "update_command", update_as("false"))
     previous = signal.getsignal(signal.SIGTERM)
     try:
         assert update_runner.run_update(root) == 1
     finally:
         signal.signal(signal.SIGTERM, previous)
-    assert not first.exists()
-    second = linked(root, "second")
+    assert "first" not in branches(root)
+    merged_branch(root, "second")
     git(root, "config", "--unset", f"url.{tmp_path / 'origin.git'}.insteadOf")
     git(root, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
     capsys.readouterr()
     tidy(root)
-    assert second.is_dir()
+    assert "second" in branches(root)
     assert "fetch of the base branch failed" in capsys.readouterr().err
 
 
@@ -760,7 +618,7 @@ def test_session_start_tidies_in_the_background_and_reports_at_the_next_start(
         ignore=shutil.ignore_patterns("__pycache__"),
     )
     root = installed(primary)
-    gone = linked(root, "gone")
+    merged_branch(root, "gone")
     payload = json.dumps({"session_id": "journey"})
 
     def start() -> str:
@@ -782,8 +640,8 @@ def test_session_start_tidies_in_the_background_and_reports_at_the_next_start(
     while "Tidy:" not in update_runner.last_result(root):
         assert time.monotonic() < deadline, "the background run did not finish"
         time.sleep(0.2)
-    assert not gone.exists() and "gone" not in branches(root)
-    assert "Tidy: removed 1 worktrees, 1 branches" in start()
+    assert "gone" not in branches(root)
+    assert "Tidy: removed 1 branches" in start()
     while update_runner.update_running(root) or tidy_running(root):
         assert time.monotonic() < deadline, "the second background run did not finish"
         time.sleep(0.2)

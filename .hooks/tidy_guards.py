@@ -7,9 +7,7 @@ import subprocess
 import sys
 import time
 import unicodedata
-from collections.abc import Callable
 from contextlib import suppress
-from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -18,44 +16,13 @@ def idle(stamp: float) -> bool:
     return time.time() - stamp > 24 * 3600
 
 
-GENERATED_FOLDERS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 CARGO_SIGNATURE = "Signature: 8a477f597d28d172789f06886806bc55"
 REFLOG_SELECTOR = re.compile(r"@\{(\d+)\}$")
-OPERATIONS = (
-    "rebase-merge",
-    "rebase-apply",
-    "BISECT_LOG",
-    "MERGE_HEAD",
-    "CHERRY_PICK_HEAD",
-    "REVERT_HEAD",
-)
 PAUSED_BRANCH_FILES = (
     "rebase-merge/head-name",
     "rebase-apply/head-name",
     "BISECT_START",
 )
-PRIVATE_FILES = {
-    "HEAD",
-    "ORIG_HEAD",
-    "FETCH_HEAD",
-    "COMMIT_EDITMSG",
-    "AUTO_MERGE",
-    "MERGE_RR",
-    "index",
-    "gitdir",
-    "commondir",
-    "config.worktree",
-}
-PRIVATE_FOLDERS = {"logs", "refs", "modules", "info"}
-PRIVATE_PREFIXES = ("hard-eng", "fsmonitor--daemon", "sharedindex.")
-INFO_FILES = {"exclude", "sparse-checkout"}
-MODULE_ENTRIES = (
-    PRIVATE_FILES
-    | PRIVATE_FOLDERS
-    | {"config", "description", "hooks", "objects", "packed-refs", "shallow"}
-)
-OBJECT_ID = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-SUBMODULE_LINE = re.compile(r"(.)[0-9a-f]+ (.+?)(?: \(.*\))?")
 
 
 class TidyStop(Exception):
@@ -178,11 +145,6 @@ def same_place(first: Path, second: Path) -> bool:
     return fold(first) == fold(second)
 
 
-def under(name: str, folder: str | Path) -> bool:
-    place, prefix = fold(name), fold(folder)
-    return place == prefix or place.startswith(prefix + os.sep)
-
-
 def inside(path: Path, names: set[str]) -> bool:
     prefixes = {fold(path), fold(path.resolve())}
     return any(
@@ -190,11 +152,6 @@ def inside(path: Path, names: set[str]) -> bool:
         for folded in map(fold, names)
         for prefix in prefixes
     )
-
-
-def codex_folder() -> Path:
-    home = os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")
-    return (Path(home) / "worktrees").resolve()
 
 
 def quiet_tree(folder: Path) -> bool:
@@ -213,29 +170,6 @@ def quiet_tree(folder: Path) -> bool:
     except OSError:
         return False
     return True
-
-
-def generated(worktree: Path) -> Callable[[str], bool]:
-    """Names of ignored entries that only a tool run leaves behind, and that hold no nested repository and nothing changed in a day."""
-
-    def known(name: str) -> bool:
-        from process_group import INSTALL_FOLDERS
-
-        parts = name.rstrip("/").split("/")
-        if name == "target/":
-            return cargo_target(worktree)
-        if parts[0] == ".hard-eng":
-            browser = worktree / ".hard-eng/browser"
-            if browser.is_dir() and any(browser.iterdir()):
-                return False
-        elif not (
-            name.endswith("/")
-            and (parts[-1] in GENERATED_FOLDERS or parts[-1] in INSTALL_FOLDERS)
-        ):
-            return False
-        return quiet_tree(worktree / name.rstrip("/"))
-
-    return known
 
 
 def cargo_target(worktree: Path) -> bool:
@@ -262,25 +196,6 @@ def quiet_folders(target: Path) -> bool:
         return False
 
 
-def hidden_edits(path: Path) -> bool:
-    """Assume-unchanged and skip-worktree files can hide edits; a skip-worktree file that is absent is sparse, with nothing to lose."""
-    for row in tidy_git(path, "ls-files", "-z", "-v").split("\0"):
-        if (
-            row
-            and row[0] != "H"
-            and not (row[0] == "S" and not os.path.lexists(path / row[2:]))
-        ):
-            return True
-    return False
-
-
-def operation_pending(path: Path) -> bool:
-    folder = Path(
-        tidy_git(path, "rev-parse", "--path-format=absolute", "--git-dir").strip()
-    )
-    return any((folder / name).exists() for name in OPERATIONS)
-
-
 def idle_worktree(path: Path) -> bool:
     """The HEAD log, the top level and every tracked file, submodules too, are a day old; status, fetch and this tidy touch none of them."""
     logged = reflog_time(path, "HEAD")
@@ -297,33 +212,6 @@ def idle_worktree(path: Path) -> bool:
     return logged is not None and idle(max(times, default=0)) and idle(logged)
 
 
-def submodules_hold_nothing(path: Path) -> bool:
-    listing = tidy_git(path, "submodule", "status", "--recursive")
-    for line in listing.splitlines():
-        found = SUBMODULE_LINE.fullmatch(line)
-        if found is None or found[1] in "+U":
-            return False
-        if found[1] == "-":
-            if os.listdir(path / found[2]):
-                return False
-            continue
-        inner = path / found[2]
-        if (
-            tidy_git(
-                inner,
-                "--no-optional-locks",
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignored=matching",
-            )
-            or tidy_git(inner, "stash", "list")
-            or tidy_git(inner, "rev-list", "HEAD", "--branches", "--not", "--remotes")
-        ):
-            return False
-    return True
-
-
 def paused_branches(common: Path) -> set[str]:
     """Branches that a rebase or bisect in any worktree will return to, though HEAD is detached now."""
     folders = [common, *sorted((common / "worktrees").glob("*"))]
@@ -335,80 +223,6 @@ def paused_branches(common: Path) -> set[str]:
                     (folder / name).read_text().strip().removeprefix("refs/heads/")
                 )
     return found
-
-
-@dataclass
-class Private:
-    """What a worktree removal deletes from its own git folder: ref tips, logged refs and submodule git folders."""
-
-    tips: list[str]
-    logged: list[str]
-    modules: list[Path]
-
-
-def relative_files(folder: Path) -> list[str]:
-    return [
-        str((Path(here) / name).relative_to(folder))
-        for here, _, names in os.walk(folder)
-        for name in names
-    ]
-
-
-def module_folders(modules: Path) -> list[Path]:
-    """Git folders below a modules folder, nested ones too; a submodule name may hold slashes."""
-    found: list[Path] = []
-    for here, names, _ in os.walk(modules):
-        if (Path(here) / "HEAD").is_file():
-            found.append(Path(here))
-            names[:] = [name for name in names if name == "modules"]
-    return found
-
-
-def read_private(gitdir: Path) -> Private | None:
-    """None when the folder holds anything that is not known to hold no work."""
-    tips: list[str] = []
-    for entry in os.scandir(gitdir):
-        known = entry.name in PRIVATE_FILES | PRIVATE_FOLDERS
-        if not known and not entry.name.startswith(PRIVATE_PREFIXES):
-            return None
-    if not INFO_FILES >= set(relative_files(gitdir / "info")):
-        return None
-    files = [gitdir / "ORIG_HEAD"] if (gitdir / "ORIG_HEAD").exists() else []
-    files += [gitdir / "refs" / name for name in relative_files(gitdir / "refs")]
-    for file in files:
-        tip = file.read_text().strip()
-        if OBJECT_ID.fullmatch(tip) is None:
-            return None
-        tips.append(tip)
-    logged = [
-        name.removeprefix("logs/")
-        for name in relative_files(gitdir)
-        if name.startswith("logs/")
-    ]
-    return Private(tips, logged, module_folders(gitdir / "modules"))
-
-
-def module_holds_work(folder: Path) -> bool:
-    """A submodule git folder keeps a commit that no remote branch holds, in a ref, a log or the stash."""
-    names = {entry.name for entry in os.scandir(folder)}
-    if not names <= MODULE_ENTRIES or any(
-        not name.endswith(".sample") for name in relative_files(folder / "hooks")
-    ):
-        return True
-    git_dir = f"--git-dir={folder}"
-    commits = set(
-        tidy_git(folder, git_dir, "for-each-ref", "--format=%(objectname)").split()
-    )
-    for name in relative_files(folder / "logs"):
-        commits |= set(
-            tidy_git(folder, git_dir, "log", "-g", "--format=%H", name).split()
-        )
-    return bool(
-        commits
-        and tidy_git(
-            folder, git_dir, "rev-list", "--no-walk", *commits, "--not", "--remotes"
-        ).split()
-    )
 
 
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
