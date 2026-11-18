@@ -170,11 +170,13 @@ def process_inside(
 
 @pytest.mark.parametrize("where", ["sibling", "claude"])
 def test_tidy_removes_a_merged_idle_worktree_and_its_branch(
-    primary: Path, where: str
+    primary: Path, where: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     merged = linked(primary, "done", where)
     current = linked(primary, "current")
+    head = git(merged, "rev-parse", "HEAD")
     tidy(current)
+    assert f"removed worktree {merged} at {head}" in capsys.readouterr().err
     assert not merged.exists()
     assert not (primary / ".git/worktrees/done").exists()
     assert "done" not in branches(primary)
@@ -352,6 +354,8 @@ def test_tidy_deletes_rebase_and_squash_merged_branches(
     git(primary, "cherry-pick", "rebased")
     git(primary, "merge", "--squash", "squashed")
     git(primary, "commit", "-qm", "squash")
+    (primary / "s1.txt").write_text("later edit on the base\n")
+    commit(primary, "later edit")
     git(primary, "push", "-q", "origin", "main")
     git(primary, "switch", "-qc", "parking")
     for name in ("rebased", "squashed", "parking"):
@@ -785,3 +789,97 @@ def test_an_unreadable_process_counts_as_unknown_only_for_another_person(
     monkeypatch.setattr(stale_updates, "foreign_user", other_person)
     found = stale_updates.proc_paths(proc)
     assert found == (None if foreign else {"/work/100"})
+
+
+def test_tidy_keeps_a_branch_whose_only_difference_is_whitespace(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (primary / "ind.py").write_text("if x:\n    y = 1\n")
+    commit(primary, "base file")
+    git(primary, "switch", "-qc", "reindent")
+    (primary / "ind.py").write_text("if x:\n  y = 1\n")
+    commit(primary, "two spaces")
+    git(primary, "switch", "-q", "main")
+    (primary / "ind.py").write_text("if x:\n        y = 1\n")
+    commit(primary, "eight spaces")
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "switch", "-qc", "parking")
+    for name in ("reindent", "parking"):
+        age_branch(primary, name)
+    age(primary)
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    session = linked(primary, "session")
+    tidy(session)
+    assert "reindent" in branches(primary)
+
+
+@pytest.mark.parametrize("kept_by", ["worktree-reset", "detached", "branch-only"])
+def test_tidy_keeps_work_that_only_a_reflog_holds(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kept_by: str
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    holder = linked(primary, "holder")
+    if kept_by == "detached":
+        git(holder, "switch", "-q", "--detach")
+    unmerged(holder)
+    if kept_by == "branch-only":
+        git(primary, "worktree", "remove", "--force", str(holder))
+        git(primary, "branch", "-f", "holder", "main")
+        age_branch(primary, "holder")
+    elif kept_by == "detached":
+        git(holder, "checkout", "-q", "--detach", "main")
+        age(holder)
+    else:
+        git(holder, "reset", "-q", "--hard", "main")
+        age(holder)
+    session = linked(primary, "session")
+    tidy(session)
+    assert holder.is_dir() == (kept_by != "branch-only")
+    assert ("holder" in branches(primary)) == (kept_by != "detached")
+
+
+@pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
+def test_tidy_keeps_a_worktree_with_hidden_edits(primary: Path, flag: str) -> None:
+    hidden = linked(primary, "hidden")
+    git(hidden, "update-index", flag, "tracked.txt")
+    (hidden / "tracked.txt").write_text("edited and hidden\n")
+    age(hidden)
+    gone = linked(primary, "gone")
+    tidy(primary)
+    assert hidden.is_dir() and not gone.exists()
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "rebase-merge",
+        "rebase-apply",
+        "BISECT_LOG",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+    ],
+)
+def test_tidy_keeps_a_worktree_in_the_middle_of_a_git_operation(
+    primary: Path, marker: str
+) -> None:
+    busy = linked(primary, "midway")
+    folder = git_path(busy, marker)
+    if marker.startswith("rebase"):
+        folder.mkdir()
+    else:
+        folder.write_text("x\n")
+    gone = linked(primary, "gone")
+    tidy(primary)
+    assert busy.is_dir() and not gone.exists()
+
+
+def test_tidy_goes_on_after_a_worktree_with_no_commits(
+    primary: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "wt-aaa-empty"
+    git(primary, "worktree", "add", "-q", "--orphan", "-b", "empty", str(empty))
+    gone = linked(primary, "zzz-gone")
+    tidy(primary)
+    assert empty.is_dir() and not gone.exists()
+    assert "stopped" not in capsys.readouterr().err

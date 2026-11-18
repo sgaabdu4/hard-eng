@@ -116,7 +116,7 @@ After setup:
 
 ### Updates
 
-- At session start, a hook reports the last update result. It then starts the next update in the background, so a session never waits When that run ends, it removes merged worktrees and branches that nobody has used for 24 hours, and idle Rust build folders. It keeps anything with changes, a stash, an open pull request or a running process, and it adds one line to the next report when it removed something.
+- At session start, a hook reports the last update result. It then starts the next update in the background, so a session never waits. When that run ends, it removes merged worktrees and branches that nobody has used for 24 hours, and idle Rust build folders. It keeps anything with changes, a stash, an open pull request or a running process, and it adds one line to the next report when it removed something.
 - One update runs per repository at a time. It writes `.hard-eng/update.log`.
 - The update builds in a separate worktree from the remote base branch. It leaves one commit on the local branch `hard-eng/update`. It never touches your current branch.
 - `python3 .hooks/hard-eng.py update-pr` pushes that branch and opens or reuses the "Update Hard Eng" PR.
