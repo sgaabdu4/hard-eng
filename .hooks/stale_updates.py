@@ -530,7 +530,9 @@ class Tidy:
                 ).splitlines()
             } | {key[len("branch.") : key.rindex(".")] for key in keys}
             if any(other.startswith(f"{name}]") for other in others):
-                own = [key for key in keys if key.startswith(f"{section}.")]
+                own = [
+                    key for key in keys if key[len("branch.") : key.rindex(".")] == name
+                ]
                 note(
                     f"branch {name} is gone but its settings stay, because another name starts with `{name}]` and `--remove-section` would remove that one too; run "
                     + "; ".join(
@@ -543,7 +545,10 @@ class Tidy:
             )
             failed = bool(
                 done.returncode and "no such section" not in done.stderr
-            ) or any(key.startswith(f"{section}.") for key in self.config_keys())
+            ) or any(
+                key[len("branch.") : key.rindex(".")] == name
+                for key in self.config_keys()
+            )
         except ITEM_ERRORS:
             failed = True
         if failed:
