@@ -157,6 +157,16 @@ def tidy_gh(cwd: Path, *arguments: str) -> list[object] | None:
     return found if isinstance(found, list) else None
 
 
+def fetch_tip(root: Path, base: str) -> str:
+    """The base tip that origin reported, once its objects are here; no shared FETCH_HEAD."""
+    rows = tidy_git(root, "ls-remote", "origin", f"refs/heads/{base}").split()
+    if len(rows) != 2:
+        raise TidyStop(f"origin has no unique branch {base}")
+    tidy_git(root, "fetch", "--quiet", "--no-tags", "origin", base)
+    tidy_git(root, "cat-file", "-e", f"{rows[0]}^{{commit}}")
+    return rows[0]
+
+
 def reflog_time(cwd: Path, ref: str) -> float | None:
     selector = tidy_git(
         cwd, "log", "-g", "-1", "--date=unix", "--format=%gd", ref
@@ -267,11 +277,11 @@ class Tidy:
     @classmethod
     def open(cls, root: Path, removed: Counter[str]) -> "Tidy":
         from shipping import ShippingError, origin_repository
-        from update_runner import fetch_base, update_base
+        from update_runner import update_base
 
         try:
             base = update_base(root)
-            tip = fetch_base(root, base)
+            tip = fetch_tip(root, base)
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             raise TidyStop(f"fetch of the base branch failed: {error}") from error
         try:
@@ -396,7 +406,7 @@ class Tidy:
                     "status",
                     "--porcelain",
                     "--untracked-files=all",
-                    "--ignored=no",
+                    "--ignored=matching",
                 )
                 or tidy_git(inner, "stash", "list")
                 or tidy_git(
@@ -447,11 +457,15 @@ class Tidy:
     def remove_worktrees(self) -> None:
         from ship_actions import worktrees
 
-        records = worktrees(self.root)
-        main = Path(records[0]["worktree"])
-        for index, record in enumerate(records):
+        listed = worktrees(self.root)
+        for index, first in enumerate(listed):
+            path = first.get("worktree", "")
+            fresh = worktrees(self.root)
+            main = Path(fresh[0]["worktree"])
+            record = next((r for r in fresh if r.get("worktree") == path), None)
+            if record is None:
+                continue
             reason = self.worktree_reason(record, main, index == 0)
-            path = record.get("worktree", "")
             if reason is not None:
                 if not reason.startswith(("primary", "the session")):
                     note(f"kept worktree {path}: {reason}")
@@ -478,16 +492,16 @@ class Tidy:
     def remove_branches(self) -> None:
         from ship_actions import worktrees
 
-        checked_out = {
-            record.get("branch", "").removeprefix("refs/heads/")
-            for record in worktrees(self.root)
-        }
         listing = tidy_git(
             self.root, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads"
         )
         for line in listing.splitlines():
             tip, _, ref = line.partition(" ")
             name = ref.removeprefix("refs/heads/")
+            checked_out = {
+                record.get("branch", "").removeprefix("refs/heads/")
+                for record in worktrees(self.root)
+            }
             reason = self.branch_reason(name, tip, checked_out)
             if reason is not None:
                 if reason not in {"protected", "checked out"}:
