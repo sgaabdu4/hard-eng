@@ -39,7 +39,7 @@ Decisions:
 - [x] A real hung gate stops at its limit and the next run gets the full budget → `tests/test_gate_limits.py::test_a_gate_stopped_at_its_limit_gets_the_full_budget_next_time`
 - [x] A stop at the limit stays a failure when the debt judge calls the gate a pass → `tests/test_gate_limits.py::test_a_stop_at_the_limit_fails_the_check_when_the_debt_judge_calls_the_gate_a_pass`
 - [x] A slow start of a gate that did not time out records no stop → `tests/test_gate_limits.py::test_a_slow_start_is_not_a_stop_at_the_limit`
-- [x] Two processes cannot lose each other's record → `tests/test_gate_limits.py::test_a_check_in_another_process_cannot_lose_a_record`
+- [x] Two records made at once are both kept unless one waits more than 5 seconds for the lock → `tests/test_gate_limits.py::test_a_check_in_another_process_cannot_lose_a_record`
 - [x] A record waits a limited time for the lock and is then skipped → `tests/test_gate_limits.py::test_a_record_waits_a_limited_time_for_the_lock_and_then_is_skipped`
 - [x] A file with one number for each gate still loads → `tests/test_gate_limits.py::test_a_file_with_one_number_for_each_gate_still_loads`
 - [x] A gate with no record gets the budget → `tests/test_gate_limits.py::test_a_gate_with_no_record_gets_the_budget`
