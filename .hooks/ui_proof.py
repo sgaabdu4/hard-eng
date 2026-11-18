@@ -9,11 +9,15 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol, cast
+from urllib.parse import urlparse
 
 from gate_config import JsonValue
 from plans import _is_test as is_test_path
 from ui_rules import COMMENT_LINE, is_theme_path
 
+HTTP_STATUS_LINE = re.compile(r"(?im)^HTTP/\S+\s+(\d{3})\b")
+CONTENT_TYPE_HEADER = re.compile(r"(?im)^content-type:\s*([^\r\n]+)")
+CONTENT_LENGTH_HEADER = re.compile(r"(?im)^content-length:\s*([^\r\n]+)")
 MARKUP = frozenset(
     (".tsx", ".jsx", ".vue", ".svelte", ".astro", ".html", ".css", ".scss", ".less")
 )
@@ -414,6 +418,48 @@ def file_names(files: list[dict[str, JsonValue]]) -> list[str]:
         if item.get("previous_filename") is not None:
             names.add(cast(str, item["previous_filename"]))
     return sorted(names)
+
+
+def check_attachment(root: Path, url: str) -> str:
+    """The content type of a PR attachment on GitHub; refuses a missing, empty or non-image, non-video one."""
+    from shipping import ShippingError, gh
+
+    parsed = urlparse(url)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "github.com"
+        or parsed.query
+        or parsed.fragment
+        or not parsed.path.startswith("/user-attachments/assets/")
+    ):
+        raise ShippingError("UI evidence URL is not an allowed GitHub attachment")
+    # Signed attachment redirects can reject HEAD; keep binary data out of stdout.
+    request = ("api", "--method", "GET", "--include", "--silent")
+    try:
+        response = gh(root, *request, "-H", "Range: bytes=0-0", url)
+    except ShippingError:
+        # GitHub can time out ranged requests while a plain GET succeeds.
+        try:
+            response = gh(root, *request, url)
+        except ShippingError as error:
+            raise ShippingError(
+                f"UI evidence attachment is unavailable: {url} ({error})"
+            ) from error
+    statuses = HTTP_STATUS_LINE.findall(response)
+    if not statuses or not 200 <= int(statuses[-1]) < 300:
+        raise ShippingError(f"UI evidence attachment is unavailable: {url}")
+    content_types = CONTENT_TYPE_HEADER.findall(response)
+    content_type = content_types[-1].lower() if content_types else ""
+    if not content_type.startswith(("image/", "video/")):
+        raise ShippingError("UI evidence attachment is not image or video")
+    lengths = CONTENT_LENGTH_HEADER.findall(response)
+    if lengths:
+        try:
+            if int(lengths[-1]) <= 0:
+                raise ValueError
+        except ValueError as error:
+            raise ShippingError("UI evidence attachment has invalid length") from error
+    return content_type
 
 
 def download(root: Path, url: str) -> bytes:

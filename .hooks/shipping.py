@@ -18,9 +18,6 @@ from gate_config import JsonValue
 from project_files import parse_project_text, read_project_file
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
-HTTP_STATUS_LINE = re.compile(r"(?im)^HTTP/\S+\s+(\d{3})\b")
-CONTENT_TYPE_HEADER = re.compile(r"(?im)^content-type:\s*([^\r\n]+)")
-CONTENT_LENGTH_HEADER = re.compile(r"(?im)^content-length:\s*([^\r\n]+)")
 DELIVERY_TARGET_LINE = re.compile(
     r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*(PR|Merge|Deploy)\s*$"
 )
@@ -628,45 +625,6 @@ def passed_branch_point(root: Path) -> str | None:
     return point
 
 
-def _check_attachment(root: Path, url: str) -> str:
-    parsed = urlparse(url)
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != "github.com"
-        or parsed.query
-        or parsed.fragment
-        or not parsed.path.startswith("/user-attachments/assets/")
-    ):
-        raise ShippingError("UI evidence URL is not an allowed GitHub attachment")
-    # Signed attachment redirects can reject HEAD; keep binary data out of stdout.
-    request = ("api", "--method", "GET", "--include", "--silent")
-    try:
-        response = gh(root, *request, "-H", "Range: bytes=0-0", url)
-    except ShippingError:
-        # GitHub can time out ranged requests while a plain GET succeeds.
-        try:
-            response = gh(root, *request, url)
-        except ShippingError as error:
-            raise ShippingError(
-                f"UI evidence attachment is unavailable: {url} ({error})"
-            ) from error
-    statuses = HTTP_STATUS_LINE.findall(response)
-    if not statuses or not 200 <= int(statuses[-1]) < 300:
-        raise ShippingError(f"UI evidence attachment is unavailable: {url}")
-    content_types = CONTENT_TYPE_HEADER.findall(response)
-    content_type = content_types[-1].lower() if content_types else ""
-    if not content_type.startswith(("image/", "video/")):
-        raise ShippingError("UI evidence attachment is not image or video")
-    lengths = CONTENT_LENGTH_HEADER.findall(response)
-    if lengths:
-        try:
-            if int(lengths[-1]) <= 0:
-                raise ValueError
-        except ValueError as error:
-            raise ShippingError("UI evidence attachment has invalid length") from error
-    return content_type
-
-
 def _ui_evidence(
     root: Path,
     pull: _PullRequest,
@@ -674,10 +632,10 @@ def _ui_evidence(
     policy: ShippingPolicy,
     plan: Path | None,
 ) -> None:
-    from ui_proof import ui_evidence
+    from ui_proof import check_attachment, ui_evidence
 
     try:
-        ui_evidence(root, pull, files, policy["ui_paths"], plan, _check_attachment)
+        ui_evidence(root, pull, files, policy["ui_paths"], plan, check_attachment)
     except ValueError as error:
         raise ShippingError(str(error)) from error
 
@@ -889,16 +847,13 @@ def _ready_state(
     from ship_actions import rebase_problem
     from ship_record import route
 
+    merged_by_commit = route(pull, policy["base"]) is not None
     if problem := (
         body_problem(pull.body)
-        or (
-            None
-            if route(pull, policy["base"]) is not None
-            else commits_problem(pull.commits)
-        )
+        or (None if merged_by_commit else commits_problem(pull.commits))
         or (
             rebase_problem(root, "/".join(identity[:2]), pull.base_ref, pull.head_sha)
-            if pull.rebaseable is False
+            if pull.rebaseable is False and not merged_by_commit
             else None
         )
     ):
@@ -938,7 +893,7 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
 
 
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
-    from ship_record import base_matches, ship_method
+    from ship_record import base_matches, route, ship_method
     from ui_proof import changed_files
 
     if stage not in {"ready", "delivered"}:
@@ -952,7 +907,13 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
     _clean(resolved_root)
-    resolved_plan, target = _delivery_scope(resolved_root, plan, policy["delivery"])
+    try:
+        resolved_plan, target = _delivery_scope(resolved_root, plan, policy["delivery"])
+    except ShippingError:
+        pull = _pull(resolved_root, owner, name, number)
+        if plan is not None or route(pull, policy["base"]) is None:
+            raise
+        resolved_plan, target = None, "Deploy" if policy["delivery"] else "Merge"
     if problem := target_problem(target, policy["delivery"]):
         raise ShippingError(problem)
     pull = _pull(resolved_root, owner, name, number)
