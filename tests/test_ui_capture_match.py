@@ -58,3 +58,17 @@ def test_a_capture_of_an_older_commit_alone_is_still_refused(tmp_path: Path) -> 
     write_set(tmp_path, "a-old", OLD)
     problem = ui_proof.measured_problem(tmp_path, HEAD, [IMAGE])
     assert problem is not None and "not taken at the head" in problem
+
+
+def test_a_set_refreshed_at_one_width_with_a_finding_is_not_hidden_by_a_clean_set(
+    tmp_path: Path,
+) -> None:
+    write_set(tmp_path, "a-part", OLD)
+    refreshed = tmp_path / ".hard-eng/browser/a-part-390.json"
+    record = json.loads(refreshed.read_text())
+    refreshed.write_text(
+        json.dumps({**record, "commit": HEAD, "findings": [{"rule": "tap-size"}]})
+    )
+    write_set(tmp_path, "b-current", HEAD)
+    problem = ui_proof.measured_problem(tmp_path, HEAD, [IMAGE])
+    assert problem is not None and "tap-size" in problem
