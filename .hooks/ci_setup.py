@@ -862,15 +862,43 @@ def add_workflow_checks(config: GateConfig) -> None:
         )
 
 
+def job_repository(root: Path) -> bool:
+    """Whether the check root belongs to the repository that the CI job checked out: the repository of the workspace itself (a package below it included), or a repository inside the workspace whose origin is GITHUB_REPOSITORY (a checkout with `path:`). A repository that a test or the canary creates, and a clone outside the workspace, are other trees."""
+    workspace = os.environ.get("GITHUB_WORKSPACE", "")
+    top = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    if not workspace or not top:
+        return False
+    top_path, base = Path(top).resolve(), Path(workspace).resolve()
+    if top_path == base:
+        return True
+    name = os.environ.get("GITHUB_REPOSITORY", "").lower()
+    origin = (
+        subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        .stdout.strip()
+        .lower()
+    )
+    return bool(
+        name
+        and base in top_path.parents
+        and origin.removesuffix(".git").endswith(("/" + name, ":" + name))
+    )
+
+
 def require_ci_base(base: str | None, root: Path) -> None:
     sha = os.environ.get("GITHUB_SHA", "")
-    workspace = os.environ.get("GITHUB_WORKSPACE", "")
-    if (
-        os.environ.get("GITHUB_ACTIONS") == "true"
-        and sha
-        and workspace
-        and Path(workspace).resolve() == root.resolve()
-    ):
+    if os.environ.get("GITHUB_ACTIONS") == "true" and sha and job_repository(root):
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=root,
