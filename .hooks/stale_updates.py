@@ -16,7 +16,7 @@ from pathlib import Path
 
 OWNER = re.compile(r"hard-eng-update (\d+)")
 TEMPORARY = re.compile(
-    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check|mutation)-[a-z0-9_]{8}"
+    r"hard-eng-(?:update|push|gate|gitleaks|dart-parser|scaffold-check|mutation|tidy)-[a-z0-9_]{8}"
 )
 WORKTREE = re.compile(r"hard-eng-(?:update-.+/candidate|push-.+/project)")
 
@@ -135,12 +135,16 @@ def note(text: str) -> None:
 
 
 def tidy_run(
-    cwd: Path, limit: float, *command: str
+    cwd: Path,
+    limit: float,
+    *command: str,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             command,
             cwd=cwd,
+            env=env,
             capture_output=True,
             text=True,
             timeout=limit,
@@ -315,6 +319,8 @@ class Tidy:
     on_origin: set[str]
     protected: set[str]
     removed: Counter[str]
+    scratch: Path
+    objects: Path
 
     @classmethod
     def open(cls, root: Path, removed: Counter[str]) -> "Tidy":
@@ -342,6 +348,10 @@ class Tidy:
             root, 120, "git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"
         )
         named = default.stdout.strip().removeprefix("origin/")
+        objects = tidy_git(
+            root, "rev-parse", "--path-format=absolute", "--git-path", "objects"
+        ).strip()
+        scratch = Path(tempfile.mkdtemp(prefix="hard-eng-tidy-"))
         return cls(
             root,
             root.resolve(),
@@ -351,12 +361,25 @@ class Tidy:
             on_origin,
             {*PROTECTED_BRANCHES, base, named},
             removed,
+            scratch,
+            Path(objects),
         )
 
     def content_merged(self, head: str) -> bool:
         """Merging the head into the base tip changes nothing, so the base holds every change."""
         done = tidy_run(
-            self.root, 120, "git", "merge-tree", "--write-tree", self.tip, head
+            self.root,
+            120,
+            "git",
+            "merge-tree",
+            "--write-tree",
+            self.tip,
+            head,
+            env={
+                **os.environ,
+                "GIT_OBJECT_DIRECTORY": str(self.scratch),
+                "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(self.objects),
+            },
         )
         if done.returncode == 1:
             return False
@@ -717,12 +740,17 @@ def tidy(root: Path) -> None:
         if not exclusive(handle):
             note("skipped: another tidy is running")
             return
+        opened: Tidy | None = None
         try:
-            Tidy.open(root, removed).run()
-        except (TidyStop, OSError, ValueError, subprocess.SubprocessError) as error:
+            opened = Tidy.open(root, removed)
+            opened.run()
+        except ITEM_ERRORS as error:
             note(
                 f"stopped for this repository, what is not yet removed is kept: {error}"
             )
+        finally:
+            if opened is not None:
+                shutil.rmtree(opened.scratch, ignore_errors=True)
     if removed:
         result = root / RESULT_FILE
         result.parent.mkdir(parents=True, exist_ok=True)

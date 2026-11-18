@@ -1028,3 +1028,31 @@ def test_tidy_keeps_a_branch_with_unrelated_history_and_goes_on(
     assert "separate" in branches(primary)
     assert not gone.exists()
     assert "stopped" not in capsys.readouterr().err
+
+
+def loose_objects(root: Path) -> int:
+    counts = git(root, "count-objects", "-v").splitlines()
+    return int(next(line for line in counts if line.startswith("count:")).split()[1])
+
+
+def test_tidy_writes_no_objects_into_the_repository_and_leaves_no_scratch_folder(
+    primary: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_gh(tmp_path, monkeypatch, {"open": {}})
+    git(primary, "switch", "-qc", "diverged")
+    (primary / "tracked.txt").write_text("changed on the branch\n")
+    commit(primary, "branch edit")
+    git(primary, "switch", "-q", "main")
+    (primary / "tracked.txt").write_text("changed on the base\n")
+    commit(primary, "base edit")
+    git(primary, "push", "-q", "origin", "main")
+    git(primary, "switch", "-qc", "parking")
+    for name in ("diverged", "parking"):
+        age_branch(primary, name)
+    age(primary)
+    session = linked(primary, "session")
+    before = loose_objects(primary)
+    tidy(session)
+    assert "diverged" in branches(primary)
+    assert loose_objects(primary) == before
+    assert not list((tmp_path / "tmp").glob("hard-eng-tidy-*"))
