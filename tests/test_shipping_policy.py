@@ -331,6 +331,38 @@ SHARDED_WORKFLOWS = {
             "- run: python3 .hooks/hard-eng.py check\n",
             '- run: |\n          if [ -f flag ]; then\n            echo "nothing"; exit 0\n          fi\n          python3 .hooks/hard-eng.py check\n',
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          [ "$DOCS_ONLY" = true ] && exit 0\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          [ -n "$X" ] || exit 0\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          exit 0\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          exit\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          return 0\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          f() { exit 0; }\n          f\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          trap "exit 0" EXIT\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          exit "$CODE"\n          python3 .hooks/hard-eng.py check\n',
+        ),
         *SHARDED_WORKFLOWS.values(),
     ],
     ids=[
@@ -364,6 +396,14 @@ SHARDED_WORKFLOWS = {
         "unchecked-shell-then-a-line",
         "a-closed-block-that-exits-zero-before-the-check",
         "a-closed-block-that-prints-then-exits-zero-before-the-check",
+        "a-one-line-and-exit-zero-before-the-check",
+        "a-one-line-or-exit-zero-before-the-check",
+        "a-bare-exit-zero-before-the-check",
+        "a-bare-exit-before-the-check",
+        "a-return-before-the-check",
+        "an-exit-zero-in-a-function-before-the-check",
+        "an-exit-trap-that-exits-zero-before-the-check",
+        "an-exit-with-a-variable-before-the-check",
         *SHARDED_WORKFLOWS,
     ],
 )
@@ -449,6 +489,10 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
             "- run: python3 .hooks/hard-eng.py check\n",
             "- run: |\n          if [ -f flag ]; then\n            echo no\n            exit 1\n          fi\n          python3 .hooks/hard-eng.py check\n",
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          [ -z "$X" ] && exit 1\n          gitleaks detect --exit-code 1 || exit 2\n          python3 .hooks/hard-eng.py check\n',
+        ),
     ],
     ids=[
         "not-cancelled",
@@ -457,6 +501,7 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
         "the-generated-launcher-line",
         "a-comment-that-names-errexit",
         "a-closed-block-that-only-fails-before-the-check",
+        "one-line-lists-that-exit-non-zero-before-the-check",
     ],
 )
 def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
