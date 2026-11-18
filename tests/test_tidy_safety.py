@@ -14,6 +14,7 @@ from test_tidy import (
     branches,
     fake_gh,
     linked,
+    sparse_worktree,
     tidy,
     unmerged,
 )
@@ -354,15 +355,7 @@ def test_tidy_keeps_a_worktree_whose_submodule_file_was_touched_lately(
 def test_a_tracked_path_that_a_sparse_checkout_left_out_does_not_make_a_worktree_busy(
     primary: Path,
 ) -> None:
-    (primary / "lib").mkdir()
-    (primary / "lib/b.txt").write_text("b\n")
-    commit(primary, "a folder")
-    git(primary, "push", "-q", "origin", "main")
-    sparse = linked(primary, "sparse")
-    git(sparse, "update-index", "--skip-worktree", "lib/b.txt")
-    (sparse / "lib/b.txt").unlink()
-    (sparse / "lib").rmdir()
-    age(sparse)
+    sparse = sparse_worktree(primary)
     assert tidy_guards.idle_worktree(sparse)
 
 

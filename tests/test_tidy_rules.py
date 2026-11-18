@@ -9,7 +9,7 @@ import pytest
 import stale_updates
 import tidy_guards
 from conftest import age_branch, commit, git, git_path
-from test_tidy import add_vendor, age, branches, linked, tidy
+from test_tidy import add_vendor, age, branches, linked, sparse_worktree, tidy
 
 
 def diverge(primary: Path, how: str) -> None:
@@ -157,15 +157,7 @@ def test_tidy_keeps_a_worktree_whose_private_git_folder_holds_work(
 def test_tidy_removes_a_sparse_worktree_whose_skipped_files_are_absent(
     primary: Path,
 ) -> None:
-    (primary / "lib").mkdir()
-    (primary / "lib/b.txt").write_text("b\n")
-    commit(primary, "a folder")
-    git(primary, "push", "-q", "origin", "main")
-    sparse = linked(primary, "sparse")
-    git(sparse, "update-index", "--refresh")
-    git(sparse, "sparse-checkout", "set", "--cone")
-    assert not (sparse / "lib").exists()
-    age(sparse)
+    sparse = sparse_worktree(primary)
     tidy(primary)
     assert not sparse.exists()
 
