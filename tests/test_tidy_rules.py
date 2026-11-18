@@ -262,3 +262,61 @@ def test_rescue_refs_expire_after_thirty_days_and_no_other_reader_lists_them(
     names = git(primary, "for-each-ref", "--format=%(refname)", "refs/hard-eng").split()
     assert names == [new]
     assert branches(primary) == {"main", "session"}
+
+
+def nested_repository(path: Path) -> None:
+    inner = path / ".venv/src/pkg"
+    inner.mkdir(parents=True)
+    git(inner, "init", "-q")
+    (inner / "m.txt").write_text("m\n")
+    git(inner, "add", ".")
+    git(inner, *WHO, "commit", "-qm", "unpushed")
+
+
+def fresh_file(path: Path) -> None:
+    (path / "node_modules/pkg").mkdir(parents=True)
+    (path / "node_modules/pkg/index.js").write_text("x\n")
+    age(path)
+    (path / "node_modules/pkg/edited.js").write_text("edited a moment ago\n")
+
+
+def dropped_in_submodule_folder(path: Path) -> None:
+    (path / "vendor").mkdir(exist_ok=True)
+    (path / "vendor/dropped.txt").write_text("dropped\n")
+
+
+def old_install(path: Path) -> None:
+    (path / "node_modules/pkg").mkdir(parents=True)
+    (path / "node_modules/pkg/index.js").write_text("x\n")
+    (path / "src/__pycache__").mkdir(parents=True)
+    (path / "src/__pycache__/m.pyc").write_text("c\n")
+    (path / ".venv/bin").mkdir(parents=True)
+    (path / ".venv/bin/python").symlink_to("/usr/bin/true")
+
+
+def ordinary_git_files(path: Path) -> None:
+    git_path(path, "COMMIT_EDITMSG").write_text("msg\n")
+    git_path(path, "FETCH_HEAD").write_text("")
+
+
+@pytest.mark.parametrize(
+    ("setup", "kept"),
+    [
+        (nested_repository, True),
+        (fresh_file, True),
+        (dropped_in_submodule_folder, True),
+        (old_install, False),
+        (ordinary_git_files, False),
+    ],
+)
+def test_tidy_tests_what_the_removal_deletes_in_every_untracked_or_ignored_path(
+    primary: Path, tmp_path: Path, setup: Callable[[Path], None], kept: bool
+) -> None:
+    add_vendor(primary, tmp_path)
+    path = linked(primary, "walk")
+    setup(path)
+    age(path)
+    if setup is fresh_file:
+        (path / "node_modules/pkg/edited.js").write_text("edited a moment ago\n")
+    tidy(primary)
+    assert path.is_dir() == kept

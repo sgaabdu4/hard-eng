@@ -196,21 +196,43 @@ def codex_folder() -> Path:
     return (Path(home) / "worktrees").resolve()
 
 
+def quiet_tree(folder: Path) -> bool:
+    """No nested repository and no file changed within a day below the folder; the walk stops at the first hit and follows no link."""
+    pending = [folder]
+    try:
+        while pending:
+            with os.scandir(pending.pop()) as entries:
+                for entry in entries:
+                    if entry.name == ".git":
+                        return False
+                    if entry.is_dir(follow_symlinks=False):
+                        pending.append(Path(entry.path))
+                    elif not idle(entry.stat(follow_symlinks=False).st_mtime):
+                        return False
+    except OSError:
+        return False
+    return True
+
+
 def generated(worktree: Path) -> Callable[[str], bool]:
-    """Names of ignored entries that only a tool run leaves behind."""
+    """Names of ignored entries that only a tool run leaves behind, and that hold no nested repository and nothing changed in a day."""
 
     def known(name: str) -> bool:
         from process_group import INSTALL_FOLDERS
 
         parts = name.rstrip("/").split("/")
-        if parts[0] == ".hard-eng":
-            browser = worktree / ".hard-eng/browser"
-            return not (browser.is_dir() and any(browser.iterdir()))
         if name == "target/":
             return cargo_target(worktree)
-        return name.endswith("/") and (
-            parts[-1] in GENERATED_FOLDERS or parts[-1] in INSTALL_FOLDERS
-        )
+        if parts[0] == ".hard-eng":
+            browser = worktree / ".hard-eng/browser"
+            if browser.is_dir() and any(browser.iterdir()):
+                return False
+        elif not (
+            name.endswith("/")
+            and (parts[-1] in GENERATED_FOLDERS or parts[-1] in INSTALL_FOLDERS)
+        ):
+            return False
+        return quiet_tree(worktree / name.rstrip("/"))
 
     return known
 
@@ -281,6 +303,8 @@ def submodules_hold_nothing(path: Path) -> bool:
         if found is None or found[1] in "+U":
             return False
         if found[1] == "-":
+            if os.listdir(path / found[2]):
+                return False
             continue
         inner = path / found[2]
         if (
