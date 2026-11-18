@@ -155,16 +155,20 @@ def inside(path: Path, names: set[str]) -> bool:
 
 
 def holds_repository(folder: Path) -> bool:
-    """A nested repository is below the folder; the walk stops at the first one, follows no link, and counts an unreadable folder as one."""
+    """A nested repository, with a `.git` entry or bare, is below the folder; the walk stops at the first one, follows no link, and counts an unreadable folder as one."""
     pending = [folder]
     try:
         while pending:
             with os.scandir(pending.pop()) as entries:
-                for entry in entries:
-                    if entry.name == ".git":
-                        return True
-                    if entry.is_dir(follow_symlinks=False):
-                        pending.append(Path(entry.path))
+                found = list(entries)
+            names = {entry.name for entry in found}
+            if ".git" in names or {"HEAD", "objects", "refs"} <= names:
+                return True
+            pending += [
+                Path(entry.path)
+                for entry in found
+                if entry.is_dir(follow_symlinks=False)
+            ]
     except OSError:
         return True
     return False
