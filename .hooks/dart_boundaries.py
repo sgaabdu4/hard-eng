@@ -7,7 +7,13 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
 
-from generated_marks import generated_sources
+from generated_marks import (
+    folder_prefix,
+    generated_sources,
+    package_name,
+    proven_copies,
+    repository_top,
+)
 from project_files import GIT_LISTING
 
 if TYPE_CHECKING:
@@ -497,6 +503,7 @@ def validate_dart_typing(
     sources: list[str] | tuple[str, ...],
     package_root: Path | None,
     children: frozenset[str] = frozenset(),
+    copies: frozenset[str] = frozenset(),
 ) -> None:
     from gate_config import JsonObject
 
@@ -526,5 +533,117 @@ def validate_dart_typing(
     require_flutter_skill_lints(options, path, package_root)
     for source in {*sources, "test", "tests"}:
         for nested in (directory / source).rglob("analysis_options.yaml"):
-            if nested.parent != directory:
+            if nested.parent != directory and not any(
+                nested.parent.relative_to(directory).is_relative_to(copy)
+                for copy in copies
+            ):
                 validate_dart_typing(nested.parent, (), package_root or directory)
+
+
+def judged_in_full(
+    root: Path, source: "Group", groups: "list[Group]", timeout: float
+) -> bool:
+    """Whether a group runs every Dart gate that judges a package in full (strict typing, Dart Decimate with the CRAP limit, tests with coverage) and its settings pass them now."""
+    from gate_config import dart_scan_includes_boundaries
+    from tool_setup import managed_command
+
+    checks = source["checks"]
+    scans = [gate for gate in checks if dart_scan_includes_boundaries(gate)]
+    tests = [
+        gate
+        for gate in checks
+        if gate.get("role") == "tests"
+        and gate.get("report", {}).get("type") == "dart-tests"
+        and gate["report"].get("coverage")
+    ]
+    if (
+        source.get("language") != "dart"
+        or not scans
+        or not tests
+        or not any(gate.get("role") == "types" for gate in checks)
+    ):
+        return False
+    directory = root / source["path"]
+    try:
+        validate_dart_typing(
+            directory,
+            source.get("sources", []),
+            None,
+            nested_package_patterns(source, groups),
+        )
+        validate_dart_boundaries(
+            managed_command(scans[0]["command"], directory), directory, timeout
+        )
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def judged_copies(
+    root: Path, group: "Group", groups: "list[Group]", timeout: float
+) -> frozenset[str]:
+    """The folders below the group's folder, relative to it, that are proven byte copies of a package whose own group judges it in full; a copy that fails any step stays judged in place."""
+    directory = root / group["path"]
+    top = repository_top(root)
+    prefix = folder_prefix(directory.resolve().relative_to(top).as_posix())
+    by_folder = {
+        (root / other["path"]).resolve().relative_to(top).as_posix(): other
+        for other in groups
+    }
+    return frozenset(
+        held[len(prefix) :]
+        for held, source in proven_copies(root, directory).items()
+        if source in by_folder
+        and judged_in_full(root, by_folder[source], groups, timeout)
+    )
+
+
+def typing_scope(
+    root: Path, group: "Group", groups: "list[Group]", timeout: float
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The child package patterns and the judged copies that a group's Dart typing check leaves to other groups."""
+    copies = (
+        judged_copies(root, group, groups, timeout)
+        if group.get("language") == "dart"
+        else frozenset()
+    )
+    return nested_package_patterns(group, groups), copies
+
+
+def local_packages(directory: Path, copies: frozenset[str]) -> list[str]:
+    """The pub package names under a folder, leaving out the copies and the folders that pub and builds write."""
+    names = set()
+    for current, folders, files in os.walk(directory):
+        here = Path(current).relative_to(directory)
+        folders[:] = [
+            name
+            for name in folders
+            if name not in {".dart_tool", ".git", "build"}
+            and (here / name).as_posix() not in copies
+        ]
+        if "pubspec.yaml" in files:
+            names.add(
+                package_name(
+                    (Path(current) / "pubspec.yaml").read_text(errors="replace")
+                )
+            )
+    return sorted(name for name in names if name)
+
+
+def leave_out_copies(
+    root: Path,
+    command: list[str],
+    group: "Group",
+    groups: "list[Group]",
+    timeout: float,
+) -> list[str]:
+    """Scope a Dart Decimate scan to the packages that no proven copy holds, so a copy is judged once, at its source."""
+    if command[:3] != ["dart-decimate", "check", "."] or "--workspace" in command:
+        return command
+    directory = root / group["path"]
+    copies = judged_copies(root, group, groups, timeout)
+    names = local_packages(directory, copies) if copies else []
+    return [
+        *command,
+        *(argument for name in names for argument in ("--workspace", name)),
+    ]
