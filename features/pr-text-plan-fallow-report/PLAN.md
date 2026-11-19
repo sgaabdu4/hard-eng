@@ -29,7 +29,7 @@ Authority: Autonomous mode. The maintainer assigned these three faults, named th
 - [x] `ship --stage ready` reads the PR text, including the UI form, before the check results; a UI path PR with no pictures and a failing check was refused for the check before → `tests/test_pr_text.py::test_ready_refuses_a_ui_change_without_pictures_or_a_note`
 - [x] The quick check judges a plan that the branch changed and committed when no branch point is found, in a clean tree → `tests/test_quick_plan_scope.py::test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known`
 - [x] A failed Fallow gate prints each complexity and CRAP finding, in the combined and the audit report, and every other finding with no cut at 20 → `tests/test_report_findings.py::test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings`
-- [x] The CI template uploads the Fallow JSON only on failure → `tests/test_ci_setup.py::test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails`
+- [x] The CI template uploads the Fallow JSON only on failure → `tests/test_shard_workflow.py::test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails`
 
 ## Baseline + execution
 
