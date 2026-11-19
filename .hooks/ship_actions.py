@@ -188,8 +188,11 @@ QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
 PACKAGE_NAME = re.compile(r"""^name:\s*["']?([^\s"']+)""", re.MULTILINE)
 
 
+type LocalizationOutput = tuple[PurePosixPath | None, str] | None
+
+
 def written_by_generator(
-    checkout: Path, name: str, mains: dict[Path, PurePosixPath | None]
+    checkout: Path, name: str, mains: dict[Path, LocalizationOutput]
 ) -> bool:
     """A file that a tool of the project writes again; a link would let that tool write into the main checkout. `mains` holds each package's main gen-l10n file, read once."""
     path = PurePosixPath(name)
@@ -201,27 +204,33 @@ def written_by_generator(
             if package not in mains:
                 mains[package] = main_localization_file(package)
             main = mains[package]
+            if main is None:
+                return False
+            output, file = main
             relative = path.relative_to(folder)
-            return (
-                main is not None
-                and main.parent in (relative.parent, PurePosixPath("."))
-                and (
-                    relative.name == main.name
-                    or relative.name.startswith(f"{main.stem}_")
+            stem, _, extension = file.partition(".")
+            # gen-l10n writes `<stem>_<language>.<extension>` only for each bare language code.
+            return output in (None, relative.parent) and (
+                relative.name == file
+                or re.fullmatch(
+                    rf"{re.escape(stem)}_[a-z]{{2,3}}\.{re.escape(extension)}",
+                    relative.name,
                 )
+                is not None
             )
     return False
 
 
-def main_localization_file(package: Path) -> PurePosixPath | None:
-    """A python3 without PyYAML cannot read l10n.yaml, so the default file name stands for any folder."""
+def main_localization_file(package: Path) -> LocalizationOutput:
+    """The output folder and main file of gen-l10n; a python3 without PyYAML cannot read l10n.yaml, so the default name stands in any folder (None)."""
     from dart_boundaries import localization_file, localization_main
 
     try:
-        return localization_main(package)
+        main = localization_main(package)
     except ImportError:
         default = localization_file({})
-        return default and PurePosixPath(default.name)
+        return None if default is None else (None, default.name)
+    return None if main is None else (main.parent, main.name)
 
 
 def dart_target(uri: str, folder: str, package: tuple[str, str] | None) -> str | None:
@@ -278,7 +287,7 @@ def link_local_files(root: Path, checkout: Path) -> None:
         for name, _ in wanted
         if name.endswith(".dart") and not Path(name).name.startswith(".env")
     }
-    mains: dict[Path, PurePosixPath | None] = {}
+    mains: dict[Path, LocalizationOutput] = {}
     missing = {
         name
         for name in dart

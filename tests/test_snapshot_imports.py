@@ -1,3 +1,4 @@
+import posixpath
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -333,6 +334,46 @@ def test_without_pyyaml_a_file_with_the_default_localization_name_counts_as_gene
     checkout = snapshot_of(root, revision)
     assert (checkout / "lib/firebase_options.dart").is_symlink()
     assert not (checkout / folder / "app_localizations.dart").is_symlink()
+
+
+@pytest.mark.parametrize("pyyaml", [True, False])
+def test_a_hand_made_file_beside_the_localization_output_is_linked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pyyaml: bool
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    generated = ["strings.dart", "strings_en.dart"] if pyyaml else []
+    generated += ["lib/l10n/app_localizations_en.dart"] * (not pyyaml)
+    hand_made = [
+        "lib/customer/strings.dart",
+        "lib/customer/app_localizations_controller.dart",
+        "lib/l10n/app_localizations_helper.dart",
+    ]
+    (root / ".gitignore").write_text(
+        "".join(f"{name}\n" for name in [*generated, *hand_made])
+    )
+    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "l10n.yaml").write_text(
+        "output-dir: .\noutput-localization-file: strings.dart\n"
+        if pyyaml
+        else "arb-dir: lib/l10n\n"
+    )
+    (root / "lib/customer").mkdir(parents=True)
+    (root / "lib/l10n").mkdir()
+    (root / "lib/main.dart").write_text(
+        "".join(
+            f"import '{posixpath.relpath(name, 'lib')}';\n"
+            for name in [*generated, *hand_made]
+        )
+    )
+    revision = commit(root, "start")
+    for name in [*generated, *hand_made]:
+        (root / name).write_text("// file\n")
+    if not pyyaml:
+        monkeypatch.setitem(sys.modules, "yaml", None)
+    checkout = snapshot_of(root, revision)
+    assert [name for name in hand_made if (checkout / name).is_symlink()] == hand_made
+    assert not [name for name in generated if (checkout / name).is_symlink()]
 
 
 def test_l10n_yaml_is_read_once_for_all_the_candidates_of_a_package(
