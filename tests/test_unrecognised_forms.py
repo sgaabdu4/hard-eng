@@ -3,6 +3,7 @@
 import json
 import subprocess
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from gate_config import Gate, Group, validate_gate
@@ -251,6 +252,31 @@ def test_the_run_judges_a_parent_against_every_group_not_only_the_changed_ones(
     validate_resolved(root, every[:1], 900, every)
     with pytest.raises(ValueError, match=r"packages/child/src/b\.ts"):
         validate_resolved(root, every[:1], 900)
+
+
+def test_the_run_judges_the_root_gate_against_every_configured_group(
+    runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run of the root group alone still knows the child group, so the root ignore of the child root is accepted; a child with no Fallow gate is still refused."""
+    need_fallow()
+    files = {
+        ".fallowrc.json": json.dumps({"ignorePatterns": ["packages/child/**"]}),
+        "src/a.ts": "export const a = 1;\n",
+        "packages/child/.fallowrc.json": "{}",
+        "packages/child/src/b.ts": "export const b = 1;\n",
+    }
+    monkeypatch.setattr(runner, "ROOT", project(tmp_path, files))
+    root_group = fallow_groups()[0]
+    child: Group = {
+        "path": "packages/child",
+        "language": "javascript",
+        "checks": [gate(DEAD, "dead-code-duplicates")],
+    }
+    monkeypatch.setattr(runner, "CONFIGURED", [root_group, child])
+    runner.prepared_command(root_group, root_group["checks"][0], 900, [root_group])
+    child["checks"] = [gate(LINT)]
+    with pytest.raises(ValueError, match=r"packages/child/src/b\.ts"):
+        runner.prepared_command(root_group, root_group["checks"][0], 900, [root_group])
 
 
 @pytest.mark.parametrize(
