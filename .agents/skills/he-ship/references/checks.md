@@ -55,9 +55,9 @@ After: ![After](https://github.com/user-attachments/assets/actual-after-id)
 ```
 
 When the installed `gh pr create` or `gh pr edit` supports `--attach`, upload
-images or videos directly; a browser upload is not a prerequisite. For video,
-keep its local Markdown reference as the only content in its paragraph in the
-body file:
+images or videos directly; a browser upload is not a prerequisite. Put each
+label on its own line, then the local Markdown reference as the only content in
+its paragraph in the body file. Use `.png` or `.mp4` paths alike:
 
 ```markdown
 Before:
@@ -78,10 +78,11 @@ gh pr edit https://github.com/owner/repo/pull/123 --body-file pr-body.md \
   --attach evidence/before.mp4 --attach evidence/after.mp4
 ```
 
-GitHub CLI rewrites each video reference to a standalone GitHub asset URL, so
-the published body has the same labels followed by raw URLs. The verifier
-accepts those URLs only under `Before:` or `After:`; image Markdown and mixed
-image/video pairs remain supported.
+GitHub CLI rewrites each local reference to a GitHub asset URL under the same
+label: a raw URL for a video, `![name](url)` for an image. The verifier accepts
+either only under `Before:` or `After:`, and mixed image/video pairs work. An
+`--attach` file that the body does not reference is appended as an unlabelled
+image at the end of the body; it does not count.
 
 When appearance is unchanged, omit the duplicate attachments and record one comparison note instead:
 
