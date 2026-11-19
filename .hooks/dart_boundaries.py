@@ -539,12 +539,28 @@ def validate_dart_typing(
                 validate_dart_typing(nested.parent, (), package_root or directory)
 
 
+JUDGED: dict[tuple[Path, str, tuple[str, ...]], bool] = {}
+
+
 def judged_in_full(
     root: Path, source: "Group", groups: "list[Group]", timeout: float
 ) -> bool:
-    """Whether a group runs every Dart gate that judges a package in full (strict typing, Dart Decimate with the CRAP limit, tests with coverage) and its settings pass them now."""
+    """Once for each source in a run: whether a group runs every Dart gate that judges a package in full (strict typing, Dart Decimate with the CRAP limit, tests with coverage) and its settings pass them now."""
+    key = (
+        root / source["path"],
+        json.dumps(source, sort_keys=True),
+        tuple(group["path"] for group in groups),
+    )
+    if key not in JUDGED:
+        JUDGED[key] = judged_once(root, source, groups, timeout)
+    return JUDGED[key]
+
+
+def judged_once(
+    root: Path, source: "Group", groups: "list[Group]", timeout: float
+) -> bool:
     from gate_config import dart_scan_includes_boundaries
-    from tool_setup import managed_command
+    from tool_setup import managed_command, quick_mode
 
     checks = source["checks"]
     scans = [gate for gate in checks if dart_scan_includes_boundaries(gate)]
@@ -570,9 +586,10 @@ def judged_in_full(
             None,
             nested_package_patterns(source, groups),
         )
-        validate_dart_boundaries(
-            managed_command(scans[0]["command"], directory), directory, timeout
-        )
+        if not quick_mode():
+            validate_dart_boundaries(
+                managed_command(scans[0]["command"], directory), directory, timeout
+            )
     except (ValueError, TypeError):
         return False
     return True
