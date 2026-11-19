@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import dart_boundaries
 import pytest
 import ship_actions
 from conftest import commit, init
@@ -310,24 +311,50 @@ def test_an_ignored_env_dart_file_is_linked_like_any_env_file(
     assert (checkout / "lib/.env.local.dart").is_symlink()
 
 
-def test_without_pyyaml_the_default_localization_names_still_count_as_generated(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("folder", ["lib/l10n", "lib/generated"])
+def test_without_pyyaml_a_file_with_the_default_localization_name_counts_as_generated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, folder: str
 ) -> None:
     root = tmp_path / "project"
     init(root)
     (root / ".gitignore").write_text(
-        "lib/firebase_options.dart\nlib/l10n/app_localizations*.dart\n"
+        f"lib/firebase_options.dart\n{folder}/app_localizations*.dart\n"
     )
     (root / "pubspec.yaml").write_text("name: app\n")
-    (root / "l10n.yaml").write_text("arb-dir: lib/l10n\n")
-    (root / "lib/l10n").mkdir(parents=True)
+    (root / "l10n.yaml").write_text(f"arb-dir: lib/l10n\noutput-dir: {folder}\n")
+    (root / folder).mkdir(parents=True)
     (root / "lib/main.dart").write_text(
-        "import 'firebase_options.dart';\nimport 'l10n/app_localizations.dart';\n"
+        f"import 'firebase_options.dart';\nimport '{folder.removeprefix('lib/')}/app_localizations.dart';\n"
     )
     revision = commit(root, "start")
     (root / "lib/firebase_options.dart").write_text("const a = 1;\n")
-    (root / "lib/l10n/app_localizations.dart").write_text("// generated\n")
+    (root / folder / "app_localizations.dart").write_text("// generated\n")
     monkeypatch.setitem(sys.modules, "yaml", None)
     checkout = snapshot_of(root, revision)
     assert (checkout / "lib/firebase_options.dart").is_symlink()
-    assert not (checkout / "lib/l10n/app_localizations.dart").is_symlink()
+    assert not (checkout / folder / "app_localizations.dart").is_symlink()
+
+
+def test_l10n_yaml_is_read_once_for_all_the_candidates_of_a_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    names = [f"lib/l10n/app_localizations_{code}.dart" for code in ("en", "ar", "fr")]
+    (root / ".gitignore").write_text("".join(f"{name}\n" for name in names))
+    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "l10n.yaml").write_text("arb-dir: lib/l10n\n")
+    (root / "lib/l10n").mkdir(parents=True)
+    (root / "lib/main.dart").write_text("void main() {}\n")
+    revision = commit(root, "start")
+    for name in names:
+        (root / name).write_text("// generated\n")
+    reads = []
+    original = dart_boundaries.localization_main
+    monkeypatch.setattr(
+        dart_boundaries,
+        "localization_main",
+        lambda package: reads.append(package) or original(package),
+    )
+    snapshot_of(root, revision)
+    assert len(reads) == 1

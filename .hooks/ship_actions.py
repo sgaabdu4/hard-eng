@@ -12,6 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
+from functools import cache
 from pathlib import Path, PurePosixPath
 from xml.parsers.expat import ExpatError
 
@@ -199,17 +200,24 @@ def written_by_generator(checkout: Path, name: str) -> bool:
     return False
 
 
-def localizes(package: Path, name: PurePosixPath) -> bool:
-    """Whether gen-l10n writes this file of a package; a python3 without PyYAML cannot read l10n.yaml, so the default names count."""
+@cache
+def localization_of(package: Path) -> PurePosixPath | None:
+    """The main gen-l10n file of a package; a python3 without PyYAML cannot read l10n.yaml, so the default file name stands for any folder."""
     from dart_boundaries import localization_file, localization_main
 
     try:
-        main = localization_main(package)
+        return localization_main(package)
     except ImportError:
-        main = localization_file({})
-    return main is not None and (
-        name == main
-        or (name.parent == main.parent and name.name.startswith(f"{main.stem}_"))
+        return PurePosixPath(localization_file({}).name)
+
+
+def localizes(package: Path, name: PurePosixPath) -> bool:
+    main = localization_of(package)
+    if main is None:
+        return False
+    in_folder = main.parent in (name.parent, PurePosixPath("."))
+    return in_folder and (
+        name.name == main.name or name.name.startswith(f"{main.stem}_")
     )
 
 
