@@ -329,3 +329,22 @@ def test_a_dot_slash_scan_is_the_combined_gate() -> None:
             "report": {"type": "dart-decimate", "stdout": True},
         }
     )
+
+
+def test_a_package_script_does_not_hide_a_refused_option(tmp_path: Path) -> None:
+    script = " ".join([*SCAN["command"], "--file", "lib/main.dart"])
+    root = repo(
+        tmp_path, GOOD, {"package.json": json.dumps({"scripts": {"dd": script}})}
+    )
+    with pytest.raises(ValueError, match=r"option --file"):
+        validate_resolved(root, groups(["bun", "run", "dd"]), 900)
+
+
+@pytest.mark.parametrize("subcommand", ["json", "dead-code", "audit", "human"])
+def test_a_scan_subcommand_other_than_check_is_refused_on_a_scan_gate(
+    tmp_path: Path, subcommand: str
+) -> None:
+    root = repo(tmp_path, GOOD)
+    command = ["dart-decimate", subcommand, ".", "--strict"]
+    with pytest.raises(ValueError, match=rf"subcommand {subcommand}"):
+        validate_resolved(root, groups(command), 900)

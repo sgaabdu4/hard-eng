@@ -565,6 +565,7 @@ def judged_once(
     root: Path, source: "Group", groups: "list[Group]", timeout: float
 ) -> bool:
     from gate_config import dart_scan_includes_boundaries
+    from resolved_settings import validate_resolved
     from tool_setup import managed_command, quick_mode
 
     checks = source["checks"]
@@ -595,6 +596,7 @@ def judged_once(
             validate_dart_boundaries(
                 managed_command(scans[0]["command"], directory), directory, timeout
             )
+            validate_resolved(root, [source], timeout, groups, scans[0])
     except (ValueError, TypeError):
         return False
     return True

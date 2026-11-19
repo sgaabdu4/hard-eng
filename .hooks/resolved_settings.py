@@ -18,6 +18,7 @@ from fallow_report import (
 )
 from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
+from project_setup import package_script_invocation
 from ruff_settings import option_words
 from ruff_table import ruff_hits
 from scope_check import (
@@ -322,9 +323,15 @@ def decimate_tasks(
     timeout: float,
 ) -> list[Task]:
     root, every, group, gate = scope
-    command = native_scanner_command(gate["command"]) or gate["command"]
-    if command[:2] != ["dart-decimate", "check"]:
+    command = scan_command(root / group["path"], gate)
+    if command[:1] != ["dart-decimate"]:
         return []
+    if command[:2] != ["dart-decimate", "check"]:
+        return (
+            [partial(named_hits, gate, [subcommand_hit(command)])]
+            if gate.get("role") in {"dead-code-duplicates", "boundaries"}
+            else []
+        )
     tasks: list[Task] = []
     if hits := option_hits(command, gate.get("role", "")):
         tasks.append(partial(named_hits, gate, hits))
@@ -342,6 +349,19 @@ def decimate_tasks(
         )
         tasks.append(partial(decimate_gate_hits, run, defaults.decimate()))
     return tasks
+
+
+def scan_command(directory: Path, gate: Gate) -> list[str]:
+    """The command the runner starts for a gate: a package script and a launcher such as `bun x` resolved."""
+    try:
+        arguments, _ = package_script_invocation(gate["command"], directory)
+    except (ValueError, TypeError):
+        arguments = gate["command"]
+    return native_scanner_command(arguments) or gate["command"]
+
+
+def subcommand_hit(command: list[str]) -> str:
+    return f"Dart Decimate subcommand {command[1:2] and command[1]} is a scan that is not judged: run `dart-decimate check` on a scan gate"
 
 
 def named_hits(gate: Gate, hits: list[str]) -> list[str]:
@@ -405,6 +425,6 @@ def judge_before_run(
         judged = direct(gate["command"], root / group["path"])
     except ValueError:
         return
-    scanner = native_scanner_command(gate["command"]) or gate["command"]
-    if (judged and judged[0] == "fallow") or scanner[:2] == ["dart-decimate", "check"]:
+    scanner = scan_command(root / group["path"], gate)
+    if (judged and judged[0] == "fallow") or scanner[:1] == ["dart-decimate"]:
         validate_resolved(root, [group], timeout, groups, gate)
