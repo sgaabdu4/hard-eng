@@ -284,6 +284,30 @@ def scanned_folder(command: list[str]) -> str:
     return posixpath.normpath(plain)
 
 
+INSTALLED_FLAGS = frozenset({"--strict", "--boundary-violations"})
+INSTALLED_VALUES = {"--threshold": "0", "--format": "json"}
+
+
+def option_hits(command: list[str]) -> list[str]:
+    """The options of a `dart-decimate check` command beyond the installed forms (`check . --threshold 0 --strict --format json` and `check . --boundary-violations --strict`): the tool reads each before its settings file, and each narrows the files it scans, picks what it reports or raises a limit."""
+    hits = []
+    words = command[2:]
+    index = 0
+    while index < len(words):
+        name, equals, value = words[index].partition("=")
+        step = 2 if name in VALUE_OPTIONS and not equals else 1
+        if name.startswith("-") and name not in {"--root", "--config"}:
+            given = value if equals else "".join(words[index + 1 : index + 2])
+            if name in INSTALLED_FLAGS and not equals:
+                pass
+            elif INSTALLED_VALUES.get(name) != given:
+                hits.append(
+                    f"Dart Decimate option {name} changes what the scan covers or a limit: run only `check . --threshold 0 --format json --strict` or `check . --boundary-violations --strict`, and set the rest in the settings file, which Hard Eng judges"
+                )
+        index += step
+    return hits
+
+
 def decimate_hits(
     directory: Path,
     config: str | None,

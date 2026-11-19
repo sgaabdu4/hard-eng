@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from conftest import git
-from decimate_resolved import judge
+from decimate_resolved import judge, option_hits
 from gate_config import Gate, Group
 from resolved_settings import validate_resolved
 from test_proven_copy_judged_once import SCAN, need_decimate
@@ -200,4 +200,101 @@ def test_a_scan_of_the_whole_gate_folder_is_judged_in_every_spelling(
 ) -> None:
     root = repo(tmp_path, {**GOOD, "health": {"maxCyclomatic": 99}})
     with pytest.raises(ValueError, match=r"health\.max_cyclomatic is 99"):
+        validate_resolved(root, groups(command), 900)
+
+
+REFUSED_OPTIONS = [
+    ["--file", "lib/main.dart"],
+    ["--entry", "lib/main.dart"],
+    ["--dart-platform", "web"],
+    ["--production"],
+    ["--no-production"],
+    ["--workspace", "app"],
+    ["--changed-workspaces", "main"],
+    ["--changed-since", "main"],
+    ["--compare", "main"],
+    ["--baseline", "b.json"],
+    ["--save-baseline", "b.json"],
+    ["--regression-baseline", "b.json"],
+    ["--save-regression-baseline", "b.json"],
+    ["--fail-on-regression"],
+    ["--tolerance", "5"],
+    ["--coverage", "l.info"],
+    ["--runtime-coverage", "c.json"],
+    ["--max-cyclomatic", "99"],
+    ["--max-cognitive", "99"],
+    ["--max-unit-size", "99"],
+    ["--max-crap", "99"],
+    ["--min-score", "1"],
+    ["--mode", "weak"],
+    ["--min-tokens", "500"],
+    ["--min-lines", "50"],
+    ["--min-occurrences", "9"],
+    ["--top", "0"],
+    ["--threshold", "5"],
+    ["--format", "human"],
+    ["--skip-local"],
+    ["--cross-language"],
+    ["--ignore-imports"],
+    ["--no-ignore-imports"],
+    ["--include-entry-exports"],
+    ["--unused-files"],
+    ["--unused-exports"],
+    ["--unused-types"],
+    ["--unused-deps"],
+    ["--unlisted-deps"],
+    ["--private-src-imports"],
+    ["--duplicate-exports"],
+    ["--unused-enum-members"],
+    ["--unused-class-members"],
+    ["--unresolved-imports"],
+    ["--stale-suppressions"],
+    ["--unused-dependency-overrides"],
+    ["--misconfigured-dependency-overrides"],
+    ["--package-cycles"],
+    ["--circular-deps"],
+    ["--re-export-cycles"],
+    ["--boundary", "a:b"],
+    ["--boundary-call", "a:b"],
+    ["--policy-pack", "p.json"],
+    ["--min-invocations-hot", "1"],
+    ["--min-observation-volume", "1"],
+    ["--low-traffic-threshold", "0.5"],
+    ["--max-cognitive=99"],
+    ["--file=lib/main.dart"],
+]
+INSTALLED_FORMS = [
+    ["--threshold", "0", "--strict", "--format", "json"],
+    ["--format", "json", "--threshold", "0", "--strict"],
+    ["--boundary-violations", "--strict"],
+    ["--strict", "--format=json", "--threshold=0"],
+    ["--strict", "--config", ".dart-decimaterc.json"],
+    ["--root", ".", "--strict"],
+]
+
+
+@pytest.mark.parametrize("extra", REFUSED_OPTIONS, ids=" ".join)
+def test_an_option_that_changes_the_scope_or_a_limit_is_refused(
+    extra: list[str],
+) -> None:
+    """HE-NO-SWITCH-OFF: the tool reads these options before the settings file, so only the installed forms may run."""
+    hits = option_hits(["dart-decimate", "check", ".", "--strict", *extra])
+    assert len(hits) == 1
+    assert extra[0].split("=")[0] in hits[0]
+
+
+@pytest.mark.parametrize("extra", INSTALLED_FORMS, ids=" ".join)
+def test_the_installed_forms_of_the_scan_pass_the_option_check(
+    extra: list[str],
+) -> None:
+    assert option_hits(["dart-decimate", "check", ".", *extra]) == []
+    assert option_hits(["dart-decimate", "check", "./", *extra]) == []
+
+
+def test_a_refused_option_fails_the_settings_judgment_of_the_gate(
+    tmp_path: Path,
+) -> None:
+    root = repo(tmp_path, GOOD)
+    command = [*SCAN["command"], "--max-cognitive", "99"]
+    with pytest.raises(ValueError, match=r"option --max-cognitive"):
         validate_resolved(root, groups(command), 900)
