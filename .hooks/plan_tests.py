@@ -3,7 +3,7 @@
 import re
 from pathlib import Path, PurePosixPath
 
-from plans import _is_test
+from plans import _is_test, acceptance_tests, plan_sections, plan_status
 from source_scan import code_without_comments
 
 HASH_COMMENT_SUFFIXES = {".py", ".rb", ".sh", ".bash", ".zsh", ".pl", ".ex", ".exs"}
@@ -73,3 +73,30 @@ def missing_tests(root: Path, references: list[tuple[str, str]]) -> list[str]:
         ):
             missing.append(f"{path}::{name}")
     return missing
+
+
+def unchanged_plan_test_problem(
+    root: Path, paths: list[Path], judged: list[Path], changed: set[str]
+) -> None:
+    """A change to a test file also judges every other Complete plan that names a test in it."""
+    tests = [name for name in changed if names_tests(PurePosixPath(name))]
+    for path in paths:
+        if path in judged:
+            continue
+        content = path.read_text()
+        if not tests or not any(name in content for name in tests):
+            continue
+        if plan_status(content) != "Complete":
+            continue
+        try:
+            sections = plan_sections(content)
+            found, _ = acceptance_tests(sections)
+        except ValueError:
+            continue
+        named = [reference for reference in found if reference[0] in changed]
+        if missing := missing_tests(root, named):
+            raise ValueError(
+                f"{path.relative_to(root)}: acceptance names tests that do not exist: "
+                + ", ".join(missing)
+                + ". Update that plan to the replacement test"
+            )

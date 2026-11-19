@@ -774,6 +774,7 @@ def validate_plans(
         plan_not_needed,
         update_only,
     )
+    from plan_tests import unchanged_plan_test_problem
 
     explicit_stage = stage is not None
     typed = base is None
@@ -793,6 +794,9 @@ def validate_plans(
         print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
         return stage
     changed, paths, applicable = judged_plans(root, base, changed)
+    unchanged_plan_test_problem(
+        root, paths, [p for p in paths if str(p.relative_to(root)) in changed], changed
+    )
     asks_size = bool(changed) and not any(
         str(path.relative_to(root)) in changed for path in paths
     )
