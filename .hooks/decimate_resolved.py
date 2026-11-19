@@ -77,6 +77,9 @@ LIMITS = {
     "dupes.threshold": 0,
 }
 Drop = Callable[[list[str]], list[str]]
+VALUE_OPTIONS = frozenset(
+    {"--format", "--config", "--threshold", "--root", "--workspace", "--coverage"}
+)
 
 
 def printed_config(
@@ -204,7 +207,14 @@ def pattern_hits(directory: Path, children: frozenset[str]) -> Drop:
             return []
         names = tracked(directory, (".dart",))
         regexes = [glob_regex(pattern) for pattern in patterns]
-        kept = {name for name in names if not any(r.fullmatch(name) for r in regexes)}
+        bases = {directory.as_posix(), directory.resolve().as_posix()}
+
+        def dropped(name: str) -> bool:
+            """The tool matches a pattern against the relative path and the absolute one."""
+            full = [name, *(f"{base}/{name}" for base in bases)]
+            return any(r.fullmatch(path) for r in regexes for path in full)
+
+        kept = {name for name in names if not dropped(name)}
         left = left_out(directory, (".dart",), kept, children, DART_SKIPPED)
         return [f"drops {name}" for name in left[:1]] if left else []
 
@@ -218,6 +228,18 @@ def untracked_configs(directory: Path) -> list[str]:
         for name in SETTINGS_FILES
         if (directory / name).is_file() and not committed(directory, directory / name)
     ]
+
+
+def scanned_folder(command: list[str]) -> str:
+    """The folder that a `dart-decimate check` command scans: its `--root` value, else its first plain word, else `.`."""
+    for index, word in enumerate(command[2:], start=2):
+        if word.startswith("--root="):
+            return word.removeprefix("--root=")
+        if word == "--root":
+            return command[index + 1] if index + 1 < len(command) else "."
+        if not word.startswith("-") and command[index - 1] not in VALUE_OPTIONS:
+            return word
+    return "."
 
 
 def decimate_hits(

@@ -373,10 +373,22 @@ BRANCHY = """int branchy(int a) {
 """
 
 
+@pytest.mark.parametrize(
+    ("function_name", "other_name", "other_folder", "inner"),
+    [
+        pytest.param("'f'", "other # helper", "other", "", id="quoted and commented"),
+        pytest.param("f", "example", "example", "example", id="same name in the copy"),
+    ],
+)
 def test_the_real_tool_still_reports_the_code_of_the_function_and_its_other_packages(
-    tmp_path: Path, runner: ModuleType
+    tmp_path: Path,
+    runner: ModuleType,
+    function_name: str,
+    other_name: str,
+    other_folder: str,
+    inner: str,
 ) -> None:
-    """A package name read from its text, such as `'f'` or `other # helper`, is no selector: the scan is scoped by package folder."""
+    """A package name read from its text is no selector, and a copied package that shares a name with a kept one must not fail the scan: the scan is scoped by package folder."""
     need_decimate()
     source = {
         **SOURCE_FILES,
@@ -388,15 +400,18 @@ def test_the_real_tool_still_reports_the_code_of_the_function_and_its_other_pack
             }
         ),
     }
+    if inner:
+        source[f"{inner}/pubspec.yaml"] = f"name: {inner}\nversion: 1.0.0\n"
     files = {f"packages/lib_a/{name}": text for name, text in source.items()}
     files |= {f"functions/f/shared_copy/{name}": text for name, text in source.items()}
+    sdk = "environment:\n  sdk: ^3.0.0\n"
     files |= {
-        "functions/f/pubspec.yaml": "name: 'f'\nversion: 1.0.0\nenvironment:\n  sdk: ^3.0.0\n",
+        "functions/f/pubspec.yaml": f"name: {function_name}\nversion: 1.0.0\n{sdk}",
         "functions/f/analysis_options.yaml": OPTIONS,
         "functions/f/lib/main.dart": "void main() {}\n",
         "functions/f/lib/dead.dart": BRANCHY,
-        "functions/f/other/pubspec.yaml": "name: other # helper\nversion: 1.0.0\nenvironment:\n  sdk: ^3.0.0\n",
-        "functions/f/other/lib/src/unused.dart": "int o() => 1;\n",
+        f"functions/f/{other_folder}/pubspec.yaml": f"name: {other_name}\nversion: 1.0.0\n{sdk}",
+        f"functions/f/{other_folder}/lib/src/unused.dart": "int o() => 1;\n",
         "functions/f/.dart-decimaterc.json": json.dumps(
             {
                 "boundaries": [{"from": "lib/main.dart", "disallow": "shared_copy"}],
@@ -418,7 +433,7 @@ def test_the_real_tool_still_reports_the_code_of_the_function_and_its_other_pack
     )
     report = json.loads((root / "functions/f/coverage/decimate.json").read_text())
     paths = {finding["path"] for finding in report["findings"]}
-    assert {"lib/dead.dart", "other/lib/src/unused.dart"} <= paths
+    assert {"lib/dead.dart", f"{other_folder}/lib/src/unused.dart"} <= paths
     assert not any(path.startswith("shared_copy/") for path in paths)
 
 

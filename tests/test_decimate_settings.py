@@ -65,6 +65,10 @@ SWITCHED_OFF = [
     ({"dupes": {"threshold": 5}}, r"dupes\.threshold is 5"),
     ({"dupes": {"skipLocal": True}}, r"dupes\.skip_local is True"),
     (
+        {"ignorePatterns": ["**/repo/lib/src/*.dart"]},
+        r"ignore_patterns: drops lib/src/inner\.dart",
+    ),
+    (
         {"ignorePatterns": ["lib/[m]ain.dart"]},
         r"ignore_patterns lists 'lib/\[m\]ain\.dart'",
     ),
@@ -164,3 +168,27 @@ def test_a_setting_that_no_table_classes_is_refused_unless_it_is_the_default() -
         )
         == []
     )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["dart-decimate", "check", "other"],
+        ["dart-decimate", "check", "--root", "other"],
+        ["dart-decimate", "check", "--root=other", "--strict"],
+    ],
+)
+def test_a_scan_of_another_folder_is_refused(
+    tmp_path: Path, command: list[str]
+) -> None:
+    """The tool reads the settings of the folder it scans, so a scan of another folder judges and reads the wrong ones."""
+    root = repo(tmp_path, GOOD, {"other/pubspec.yaml": FILES["pubspec.yaml"]})
+    gate: Gate = {**SCAN, "command": command}
+    group: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [gate],
+    }
+    with pytest.raises(ValueError, match=r"scans `other`, not the gate folder"):
+        validate_resolved(root, [group], 900)

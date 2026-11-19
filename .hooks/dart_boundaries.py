@@ -642,6 +642,10 @@ def package_roots(directory: Path, selectors: list[str], timeout: float) -> list
     return sorted(item["root"] or "." for item in json.loads(output)["workspaces"])
 
 
+def held_by(name: str, copies: frozenset[str]) -> bool:
+    return any(PurePosixPath(name).is_relative_to(copy) for copy in copies)
+
+
 def leave_out_copies(
     root: Path,
     command: list[str],
@@ -649,7 +653,7 @@ def leave_out_copies(
     groups: "list[Group]",
     timeout: float,
 ) -> list[str]:
-    """Scope a Dart Decimate scan to the package folders that no proven copy holds, so a copy is judged once, at its source. A selector that does not pick exactly those folders fails the gate: Dart Decimate drops what no selector names, in silence."""
+    """Scope a Dart Decimate scan to the package folders that no proven copy holds, so a copy is judged once, at its source. The tool matches a selector against package names too, so it may also pick a package of a copy, which only judges more; a selector that drops a kept folder or picks a package outside the copies fails the gate, because the tool drops what no selector names, in silence."""
     if command[:3] != ["dart-decimate", "check", "."] or "--workspace" in command:
         return command
     directory = root / group["path"]
@@ -659,13 +663,15 @@ def leave_out_copies(
     kept = [
         name
         for name in package_roots(directory, [], timeout)
-        if not any(PurePosixPath(name).is_relative_to(copy) for copy in copies)
+        if not held_by(name, copies)
     ]
     if not kept:
         return command
-    if package_roots(directory, kept, timeout) != sorted(kept):
+    picked = package_roots(directory, kept, timeout)
+    inside = [name for name in picked if name not in kept and held_by(name, copies)]
+    if sorted(set(picked) - set(inside)) != sorted(kept):
         raise ValueError(
-            f"{group['path']}: Dart Decimate does not select exactly the package folders {kept}, so the scan would drop code that no proven copy holds"
+            f"{group['path']}: Dart Decimate does not select exactly the package folders {kept} and the packages of a proven copy, so the scan would drop code that no copy holds or scan more"
         )
     return [
         *command,
