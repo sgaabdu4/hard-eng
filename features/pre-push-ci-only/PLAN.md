@@ -25,7 +25,7 @@ Authority: Autonomous — the maintainer asked for the setting. A hotfix may car
 ## Acceptance + steps
 
 - [x] A policy without the key runs the same push commands as before → `tests/test_push_check.py::test_a_policy_without_the_key_runs_the_same_commands_as_before`: one `check` call with the narrow options, and no `ls-remote` or `fetch`.
-- [x] A base that says `"ci"` runs only the commit secret scan when mutation is off → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_runs_only_the_commit_secret_scan_when_mutation_is_off`: one `check --commit-secrets --base <base>` call and the left-to-CI line.
+- [x] A base that says `"ci"` runs only the commit secret scan when mutation is off → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_runs_one_cheap_check_and_no_full_gate_when_mutation_is_off`: one `check --commit-secrets --base <base>` call and the left-to-CI line.
 - [x] With mutation on, the scan, a quick check and the mutation report run, and no full check → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_still_runs_the_secret_scan_and_the_mutation_report`.
 - [x] Under CI, a gate that edits a tracked file fails `check` only when the base policy says `"ci"` → `tests/test_push_check.py::test_under_ci_a_gate_that_edits_a_tracked_file_fails_only_when_the_base_leaves_checks_to_ci`: it failed (exit 0 instead of 1) before the guard and passes after; the key off and a clean run pass.
 - [x] A `workflow_call`-only workflow counts only when a `pull_request` workflow calls it → `tests/test_shipping_policy.py::test_a_workflow_with_only_workflow_call_counts_when_a_pull_request_workflow_calls_it`: called passes; never called and called by a push-only workflow are refused.
