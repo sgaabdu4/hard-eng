@@ -69,6 +69,10 @@ SWITCHED_OFF = [
         r"ignore_patterns: drops lib/src/inner\.dart",
     ),
     (
+        {"ignorePatterns": ["**/repo?lib/src/*.dart"]},
+        r"ignore_patterns lists '\*\*/repo\?lib/src/\*\.dart'",
+    ),
+    (
         {"ignorePatterns": ["lib/[m]ain.dart"]},
         r"ignore_patterns lists 'lib/\[m\]ain\.dart'",
     ),
@@ -176,6 +180,8 @@ def test_a_setting_that_no_table_classes_is_refused_unless_it_is_the_default() -
         ["dart-decimate", "check", "other"],
         ["dart-decimate", "check", "--root", "other"],
         ["dart-decimate", "check", "--root=other", "--strict"],
+        ["dart-decimate", "check", ".", "--root", "other"],
+        ["dart-decimate", "check", "--max-cyclomatic", "10", "other"],
     ],
 )
 def test_a_scan_of_another_folder_is_refused(
@@ -191,4 +197,27 @@ def test_a_scan_of_another_folder_is_refused(
         "checks": [gate],
     }
     with pytest.raises(ValueError, match=r"scans `other`, not the gate folder"):
+        validate_resolved(root, [group], 900)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["dart-decimate", "check", "./"],
+        ["dart-decimate", "check", "--max-cyclomatic", "10"],
+        ["dart-decimate", "check", ".", "--root", "."],
+    ],
+)
+def test_a_scan_of_the_whole_gate_folder_is_judged_in_every_spelling(
+    tmp_path: Path, command: list[str]
+) -> None:
+    root = repo(tmp_path, {**GOOD, "health": {"maxCyclomatic": 99}})
+    gate: Gate = {**SCAN, "command": command}
+    group: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [gate],
+    }
+    with pytest.raises(ValueError, match=r"health\.max_cyclomatic is 99"):
         validate_resolved(root, [group], 900)
