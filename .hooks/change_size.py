@@ -291,7 +291,10 @@ def released_plans(root: Path, base: str | None) -> set[str]:
         # A caller's base names what is released; without one, origin does.
         tips = remote
     point = default_branch_point(root)
-    if point is None or _revision(root, base or "HEAD") in tips:
+    if point is None:
+        # No branch point to compare with: each plan is the branch's own, as in held_by_base.
+        return {str(path.relative_to(root)) for path in plan_files(root)}
+    if _revision(root, base or "HEAD") in tips:
         return set()
     return {
         name for name in changed_files(root, point) or () if is_plan_path(Path(name))
@@ -374,7 +377,7 @@ def reformatted_plans(root: Path, base: str | None, changed: set[str]) -> set[st
         and (root / name).is_file()
         and fails_todays_rules(root / name)
     ]
-    if not failing:
+    if not failing or default_branch_point(root) is None:
         return set()
     references = {
         reference
