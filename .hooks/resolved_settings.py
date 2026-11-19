@@ -8,7 +8,7 @@ from pathlib import Path
 
 from command_words import direct, launch
 from dart_boundaries import nested_package_patterns
-from decimate_resolved import decimate_hits, scanned_folder
+from decimate_resolved import decimate_hits, option_hits, scanned_folder
 from decimate_resolved import default_config as decimate_defaults
 from fallow_report import named_config, native_fallow_command, option
 from fallow_resolved import default_config, fallow_hits
@@ -318,17 +318,29 @@ def decimate_tasks(
 ) -> list[Task]:
     root, every, group, gate = scope
     command = gate["command"]
-    if gate.get("role") != "dead-code-duplicates" or command[:2] != [
-        "dart-decimate",
-        "check",
-    ]:
+    if command[:2] != ["dart-decimate", "check"]:
         return []
+    tasks: list[Task] = []
+    if hits := option_hits(command):
+        tasks.append(partial(named_hits, gate, hits))
     folder = scanned_folder(command)
     if folder != ".":
-        return [partial(other_folder_hits, gate, folder)]
-    children = nested_package_patterns(group, every, gate.get("role", ""))
-    run = (root / group["path"], option(command, "--config"), children, gate, timeout)
-    return [partial(decimate_gate_hits, run, defaults.decimate())]
+        tasks.append(partial(other_folder_hits, gate, folder))
+    elif gate.get("role") == "dead-code-duplicates":
+        children = nested_package_patterns(group, every, gate.get("role", ""))
+        run = (
+            root / group["path"],
+            option(command, "--config"),
+            children,
+            gate,
+            timeout,
+        )
+        tasks.append(partial(decimate_gate_hits, run, defaults.decimate()))
+    return tasks
+
+
+def named_hits(gate: Gate, hits: list[str]) -> list[str]:
+    return [f"gate {gate['name']}: {hit}" for hit in hits]
 
 
 def other_folder_hits(gate: Gate, folder: str) -> list[str]:
