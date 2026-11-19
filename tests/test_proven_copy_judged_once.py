@@ -301,7 +301,11 @@ def scan_run(
         return SimpleNamespace(returncode=1 if found else 0)
 
     monkeypatch.setattr(runner, "run_projects", decimate)
-    monkeypatch.setattr("resolved_settings.judge_before_run", lambda *_arguments: None)
+
+    def unjudged(*_arguments: object) -> None:
+        return None
+
+    monkeypatch.setattr("resolved_settings.judge_before_run", unjudged)
     group = groups[0]
     failed = runner.run_limited_gate(
         group, group["checks"][1], 60, nullcontext(), groups
