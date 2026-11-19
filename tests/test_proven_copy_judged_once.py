@@ -1,0 +1,318 @@
+"""A folder that Hard Eng proves to be a byte copy of a package that another gate group judges in full is judged once, at its source."""
+
+import copy
+import json
+import subprocess
+from contextlib import nullcontext
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+
+import pytest
+import yaml
+from conftest import commit
+from dart_boundaries import DART_TYPING
+from gate_config import Gate, Group
+from test_reports import REPORTS
+from test_strict_refusals import project
+
+OPTIONS = yaml.safe_dump(DART_TYPING)
+SOURCE_FILES = {
+    "pubspec.yaml": "name: lib_a\nversion: 1.0.0\n",
+    "analysis_options.yaml": OPTIONS,
+    "lib/a.dart": "int a() => 1;\n",
+    "lib/src/b.dart": "int b() => 2;\n",
+}
+MARK = "functions/*/shared_copy/** linguist-generated\n"
+NESTED = "A nested Dart settings file must include the package settings"
+TYPES: Gate = {"name": "types", "role": "types", "command": ["dart", "analyze", "."]}
+TESTS: Gate = {
+    "name": "tests",
+    "role": "tests",
+    "command": ["dart", "test"],
+    "report": {
+        "type": "dart-tests",
+        "tests": "coverage/tests.json",
+        "coverage": "coverage/lcov.info",
+    },
+}
+SCAN: Gate = {
+    "name": "dead-code",
+    "role": "dead-code-duplicates",
+    "command": [
+        "dart-decimate",
+        "check",
+        ".",
+        "--threshold",
+        "0",
+        "--format",
+        "json",
+        "--strict",
+    ],
+    "report": {
+        "type": "dart-decimate",
+        "path": "coverage/decimate.json",
+        "stdout": True,
+    },
+}
+FINDING = {
+    "rule_id": "dart-decimate/high-crap-score",
+    "message": "a has CRAP score 56 with 0% line coverage",
+    "line": 1,
+}
+
+
+def source_group(*gates: Gate) -> Group:
+    return {
+        "path": "packages/lib_a",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [copy.deepcopy(gate) for gate in gates],
+    }
+
+
+def function_group() -> Group:
+    return {
+        "path": "functions/f",
+        "language": "dart",
+        "sources": ["lib", "shared_copy"],
+        "checks": [copy.deepcopy(TYPES), copy.deepcopy(SCAN)],
+    }
+
+
+def full_source() -> Group:
+    return source_group(TYPES, TESTS, SCAN)
+
+
+def decimate_settings(monkeypatch: pytest.MonkeyPatch, max_crap: int = 30) -> None:
+    real = subprocess.check_output
+
+    def settings(command: list[str], *args: object, **kwargs: object) -> str:
+        if "dart-decimate" not in " ".join(command):
+            return real(command, *args, **kwargs)  # type: ignore[no-any-return]
+        own = Path(str(kwargs["cwd"])).name == "f"
+        rules = [
+            {"from": "lib/main.dart", "disallow": "shared_copy"}
+            if own
+            else {"from": "lib/a.dart", "disallow": "lib/src"}
+        ]
+        health = {"max_crap": max_crap}
+        return json.dumps({"config": {"boundaries": rules, "health": health}})
+
+    monkeypatch.setattr(subprocess, "check_output", settings)
+
+
+def build(
+    tmp_path: Path,
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    mark: str = MARK,
+    changed: dict[str, str] | None = None,
+    source_options: str = OPTIONS,
+    shared_name: str = "lib_a",
+) -> Path:
+    source = {
+        **SOURCE_FILES,
+        "pubspec.yaml": f"name: {shared_name}\nversion: 1.0.0\n",
+        "analysis_options.yaml": source_options,
+    }
+    files = {f"packages/lib_a/{name}": text for name, text in source.items()}
+    files |= {
+        f"functions/f/shared_copy/{name}": text
+        for name, text in {**source, **(changed or {})}.items()
+    }
+    files |= {
+        "functions/f/pubspec.yaml": "name: f\nversion: 1.0.0\n",
+        "functions/f/analysis_options.yaml": OPTIONS,
+        "functions/f/lib/main.dart": "void main() {}\n",
+        ".gitattributes": mark,
+    }
+    root = project(tmp_path, files)
+    runner.__dict__["ROOT"] = root
+    decimate_settings(monkeypatch)
+    return root
+
+
+def refused(runner: ModuleType, group: Group, groups: list[Group]) -> str | None:
+    try:
+        runner.prepare_command(group, group["checks"][0], 60, groups)
+    except ValueError as error:
+        return str(error)
+    return None
+
+
+def test_a_proven_copy_with_a_source_group_skips_the_nested_settings_rule(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build(tmp_path, runner, monkeypatch)
+    group = function_group()
+    assert refused(runner, group, [group, full_source()]) is None
+
+
+@pytest.mark.parametrize(
+    "gates",
+    [
+        pytest.param((TESTS, SCAN), id="no types gate"),
+        pytest.param((TYPES, SCAN), id="no tests with coverage"),
+        pytest.param((TYPES, TESTS), id="no Dart Decimate gate"),
+        pytest.param(
+            (
+                TYPES,
+                TESTS,
+                {
+                    **SCAN,
+                    "command": [*SCAN["command"][:-1], "--no-boundary-violations"],
+                },
+            ),
+            id="a Dart Decimate gate that is not the strict form",
+        ),
+        pytest.param(
+            (
+                TYPES,
+                {**TESTS, "report": {"type": "dart-tests", "tests": "coverage/t.json"}},
+                SCAN,
+            ),
+            id="tests without a coverage report",
+        ),
+    ],
+)
+def test_a_copy_is_judged_in_place_unless_every_condition_holds(
+    tmp_path: Path,
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    gates: tuple[Gate, ...],
+) -> None:
+    build(tmp_path, runner, monkeypatch)
+    group = function_group()
+    assert NESTED in (refused(runner, group, [group, source_group(*gates)]) or "")
+    assert NESTED in (refused(runner, group, [group]) or "")
+
+
+def test_a_copy_with_one_changed_file_or_no_mark_is_judged_in_place(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    group = function_group()
+    groups = [group, full_source()]
+    build(tmp_path, runner, monkeypatch, changed={"lib/a.dart": "int a() => 9;\n"})
+    assert NESTED in (refused(runner, group, groups) or "")
+    build(tmp_path / "other", runner, monkeypatch, mark="")
+    assert NESTED in (refused(runner, group, groups) or "")
+
+
+def test_an_unmarked_nested_settings_file_without_the_include_is_still_refused(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = build(tmp_path, runner, monkeypatch)
+    (root / "functions/f/lib/tool").mkdir()
+    (root / "functions/f/lib/tool/analysis_options.yaml").write_text(OPTIONS)
+    commit(root, "a nested file that is no copy")
+    group = function_group()
+    message = refused(runner, group, [group, full_source()]) or ""
+    assert NESTED in message
+    assert "functions/f/lib/tool/analysis_options.yaml" in message
+
+
+@pytest.mark.parametrize(
+    ("source_options", "max_crap"),
+    [
+        pytest.param("analyzer: {}\n", 30, id="strict typing settings fail"),
+        pytest.param(OPTIONS, 31, id="the CRAP limit is above 30"),
+    ],
+)
+def test_a_source_that_fails_its_own_settings_does_not_excuse_its_copy(
+    tmp_path: Path,
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    source_options: str,
+    max_crap: int,
+) -> None:
+    build(tmp_path, runner, monkeypatch, source_options=source_options)
+    decimate_settings(monkeypatch, max_crap)
+    group = function_group()
+    assert NESTED in (refused(runner, group, [group, full_source()]) or "")
+
+
+def test_a_run_with_only_the_function_group_still_finds_the_source(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build(tmp_path, runner, monkeypatch)
+    group = function_group()
+    runner.CONFIGURED[:] = [group, full_source()]
+    try:
+        assert refused(runner, group, [group]) is None
+    finally:
+        runner.CONFIGURED.clear()
+
+
+def scan_run(
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    groups: list[Group],
+    outside: bool = False,
+) -> tuple[bool, list[str], str]:
+    """The tool is faked as it behaves: `--workspace` leaves the other packages out of its report."""
+    commands: list[list[str]] = []
+
+    def decimate(
+        _group: Group, _gate: Gate, command: list[str], *rest: object
+    ) -> SimpleNamespace:
+        commands.append(command)
+        report = json.loads(REPORTS["dart-decimate"])
+        found = [{**FINDING, "path": "lib/main.dart"}] if outside else []
+        if "--workspace" not in command:
+            found.append({**FINDING, "path": "shared_copy/lib/a.dart"})
+        report["findings"] = found
+        report["verdict"] = "fail" if found else "pass"
+        rest[2].write(json.dumps(report))  # type: ignore[attr-defined]
+        return SimpleNamespace(returncode=1 if found else 0)
+
+    monkeypatch.setattr(runner, "run_projects", decimate)
+    group = groups[0]
+    failed = runner.run_limited_gate(
+        group, group["checks"][1], 60, nullcontext(), groups
+    )
+    scoped = [
+        command[index + 1]
+        for command in commands
+        for index, word in enumerate(command)
+        if word == "--workspace"
+    ]
+    return failed, scoped, " ".join(commands[0])
+
+
+def test_the_decimate_gate_leaves_out_a_proven_copy(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = build(tmp_path, runner, monkeypatch)
+    (root / "functions/f/other").mkdir()
+    (root / "functions/f/other/pubspec.yaml").write_text("name: other\n")
+    commit(root, "another package in the function")
+    group = function_group()
+    failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
+    assert (failed, scoped) == (False, ["f", "other"])
+
+
+def test_findings_outside_a_copy_still_fail_the_gate(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build(tmp_path, runner, monkeypatch)
+    group = function_group()
+    failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()], True)
+    assert (failed, scoped) == (True, ["f"])
+
+
+def test_a_copy_that_is_not_proven_keeps_the_whole_scan(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build(tmp_path, runner, monkeypatch, changed={"lib/a.dart": "int a() => 9;\n"})
+    group = function_group()
+    failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
+    assert (failed, scoped) == (True, [])
+
+
+def test_a_copy_without_a_source_group_keeps_the_whole_scan(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build(tmp_path, runner, monkeypatch)
+    group = function_group()
+    failed, scoped, _ = scan_run(runner, monkeypatch, [group])
+    assert (failed, scoped) == (True, [])

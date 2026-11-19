@@ -9,6 +9,7 @@ from project_files import GIT_LISTING
 
 GENERATED_KEYS = {"linguist-generated", "linguist-vendored"}
 PROOFS: dict[tuple[Path, str], str | None] = {}
+SOURCES: dict[tuple[Path, str], str] = {}
 INDEXES: dict[Path, dict[str, str]] = {}
 PUBSPECS: dict[Path, dict[str, bytes]] = {}
 MARKED_PACKAGES: dict[Path, dict[str, bool]] = {}
@@ -110,6 +111,7 @@ def package_name(text: str) -> str | None:
 
 def reset() -> None:
     PROOFS.clear()
+    SOURCES.clear()
     INDEXES.clear()
     PUBSPECS.clear()
     MARKED_PACKAGES.clear()
@@ -313,6 +315,7 @@ def derived_copy(top: Path, folder: str) -> str | None:
                 first = first or f"{path} differs from {source}/{relative}"
                 break
         else:
+            SOURCES[top, folder] = source
             return None
     return first
 
@@ -321,6 +324,17 @@ def proven_copy(top: Path, folder: str) -> str | None:
     if (top, folder) not in PROOFS:
         PROOFS[top, folder] = derived_copy(top, folder)
     return PROOFS[top, folder]
+
+
+def proven_copies(root: Path, folder: Path) -> dict[str, str]:
+    """The folders below this folder that a mark claims and the proof accepts, each with the package folder it copies; every path is relative to the repository top."""
+    top = repository_top(root)
+    prefix = folder_prefix(folder.resolve().relative_to(top).as_posix())
+    return {
+        held: SOURCES[top, held]
+        for held in claims(top)[0]
+        if held.startswith(prefix) and proven_copy(top, held) is None
+    }
 
 
 def folder_of(pattern: str, name: str) -> str | None:

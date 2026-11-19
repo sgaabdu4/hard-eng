@@ -26,7 +26,11 @@ from ci_jobs import (
     language_filter,
     language_groups,
 )
-from dart_boundaries import validate_dart_boundaries, validate_dart_typing
+from dart_boundaries import (
+    leave_out_copies,
+    validate_dart_boundaries,
+    validate_dart_typing,
+)
 from debt import OUTPUTS, remember, without_fixes
 from dependency_graph import SOURCE_SUFFIXES, biome_children
 from gate_config import (
@@ -77,11 +81,12 @@ def validate_typing(
     language: str | None,
     sources: list[str] | tuple[str, ...] = (),
     children: frozenset[str] = frozenset(),
+    copies: frozenset[str] = frozenset(),
 ) -> None:
     if language == "python":
         validate_pyrefly(directory, ROOT)
     elif language == "dart":
-        validate_dart_typing(directory, sources, None, children)
+        validate_dart_typing(directory, sources, None, children, copies)
 
 
 def reject_test_filters(
@@ -195,10 +200,10 @@ def prepare_command(
     if gate.get("role") == "types":
         directory = ROOT / group["path"]
         language = group.get("language")
-        from dart_boundaries import nested_package_patterns
+        from dart_boundaries import typing_scope
 
-        children = nested_package_patterns(group, every_group(groups))
-        validate_typing(directory, language, group.get("sources", []), children)
+        children, copies = typing_scope(ROOT, group, every_group(groups), timeout)
+        validate_typing(directory, language, group.get("sources", []), children, copies)
         if language == "python":
             from project_setup import python_interpreter
 
@@ -490,7 +495,13 @@ def run_limited_gate(
             report_path, coverage_path, directory, expected_sources = prepare_reports(
                 group, report, kind, tests, scanner, command
             )
-        command = leave_out_children(ROOT, command, group, gate)
+        command = leave_out_copies(
+            ROOT,
+            leave_out_children(ROOT, command, group, gate),
+            group,
+            every_group(groups),
+            timeout,
+        )
         command, coverage_path = related_command(
             command, coverage_path, gate, groups or [group], directory, related_base
         )
