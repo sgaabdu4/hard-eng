@@ -66,6 +66,8 @@ Review declined: a comment line between `name:` and a quoted value on the next l
 Review declined: a block-commented import at the start of a line can link an unneeded file :: a narrow case; the real limit is stated in Repository context, including the case where the linked file imports a package that the commit removed.
 Review declined: the made folder can follow a link that the pushed commit put in place of the generated folder, and write outside the worktree :: far-fetched; an existing parent folder that is a link was followed by the link step before this change in the same way.
 Review declined: a made folder can block the clone of a submodule that the pushed commit adds at that path :: far-fetched; it needs a commit that turns the folder into a submodule while the main checkout still holds the ignored file and tracked code imports it.
+Review declined: a quoted key `"output-localization-file":` in `l10n.yaml` falls back to the default name :: far-fetched; no project quotes a key in that file, and the installed project that ignores gen-l10n files writes it plain.
+Review declined: the gen-l10n name filter also drops an individually ignored hand-made file with the same stem outside the output folder :: far-fetched; it needs a hand-made ignored file named like the localization output in another folder, and the failure is the old one, a missing import.
 Review declined: when the task branch ignores the whole generated folder and the main checkout ignores only the file, cleanup keeps the worktree :: the refusal is safe and names the path; the two checkouts must hold different ignore rules for the same path.
 
 ## ux_reference
