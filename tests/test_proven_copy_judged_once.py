@@ -4,6 +4,8 @@ import copy
 import json
 import shutil
 import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -520,6 +522,33 @@ def test_the_settings_of_a_source_are_judged_once_for_all_its_copies(
     groups = [group, full_source()]
     for _ in range(3):
         assert dart_boundaries.judged_copies(runner.ROOT, group, groups, 60)
+    assert calls == [runner.ROOT / "packages/lib_a"]
+
+
+def test_gates_in_parallel_judge_a_shared_source_once(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dart_boundaries
+
+    build(tmp_path, runner, monkeypatch)
+    calls: list[Path] = []
+    real = dart_boundaries.validate_dart_boundaries
+
+    def slow(command: list[str], directory: Path, timeout: float) -> None:
+        calls.append(directory)
+        time.sleep(0.5)
+        real(command, directory, timeout)
+
+    monkeypatch.setattr(dart_boundaries, "validate_dart_boundaries", slow)
+    group = function_group()
+    groups = [group, full_source()]
+
+    def judge(_: int) -> frozenset[str]:
+        return dart_boundaries.judged_copies(runner.ROOT, group, groups, 60)
+
+    with ThreadPoolExecutor(2) as pool:
+        found = list(pool.map(judge, range(2)))
+    assert all(found)
     assert calls == [runner.ROOT / "packages/lib_a"]
 
 

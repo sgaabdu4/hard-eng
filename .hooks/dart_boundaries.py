@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import threading
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict, cast
 from urllib.parse import unquote, urljoin, urlparse
@@ -545,6 +546,8 @@ def validate_dart_typing(
 
 
 JUDGED: dict[tuple[Path, str, tuple[str, ...]], bool] = {}
+JUDGE_LOCKS: dict[tuple[Path, str, tuple[str, ...]], threading.Lock] = {}
+JUDGING = threading.Lock()
 
 
 def judged_in_full(
@@ -556,8 +559,11 @@ def judged_in_full(
         json.dumps(source, sort_keys=True),
         tuple(group["path"] for group in groups),
     )
-    if key not in JUDGED:
-        JUDGED[key] = judged_once(root, source, groups, timeout)
+    with JUDGING:
+        lock = JUDGE_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        if key not in JUDGED:
+            JUDGED[key] = judged_once(root, source, groups, timeout)
     return JUDGED[key]
 
 
