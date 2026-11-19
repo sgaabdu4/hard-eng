@@ -2,6 +2,7 @@
 
 import copy
 import json
+import shutil
 import subprocess
 from contextlib import nullcontext
 from pathlib import Path
@@ -84,6 +85,25 @@ def full_source() -> Group:
     return source_group(TYPES, TESTS, SCAN)
 
 
+def packages_of(cwd: Path, command: list[str]) -> str:
+    """The tool's package listing: each folder with a pubspec, narrowed by the `--workspace` roots."""
+    chosen = [command[i + 1] for i, word in enumerate(command) if word == "--workspace"]
+    roots = sorted(
+        pubspec.parent.relative_to(cwd).as_posix()
+        for pubspec in cwd.rglob("pubspec.yaml")
+        if ".dart_tool" not in pubspec.parts
+    )
+    return json.dumps(
+        {
+            "workspaces": [
+                {"root": "" if root == "." else root}
+                for root in roots
+                if not chosen or root in chosen or (root == "." and "." in chosen)
+            ]
+        }
+    )
+
+
 def decimate_settings(monkeypatch: pytest.MonkeyPatch, max_crap: int = 30) -> None:
     real = subprocess.check_output
 
@@ -96,6 +116,8 @@ def decimate_settings(monkeypatch: pytest.MonkeyPatch, max_crap: int = 30) -> No
     ) -> str:
         if "dart-decimate" not in " ".join(command):
             return str(real(command, cwd=cwd, text=text))
+        if "workspaces" in command:
+            return packages_of(cwd, command)
         own = cwd.name == "f"
         rules = [
             {"from": "lib/main.dart", "disallow": "shared_copy"}
@@ -301,7 +323,7 @@ def test_the_decimate_gate_leaves_out_a_proven_copy(
     commit(root, "another package in the function")
     group = function_group()
     failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
-    assert (failed, scoped) == (False, ["f", "other"])
+    assert (failed, scoped) == (False, [".", "other"])
 
 
 def test_findings_outside_a_copy_still_fail_the_gate(
@@ -310,7 +332,7 @@ def test_findings_outside_a_copy_still_fail_the_gate(
     build(tmp_path, runner, monkeypatch)
     group = function_group()
     failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()], True)
-    assert (failed, scoped) == (True, ["f"])
+    assert (failed, scoped) == (True, ["."])
 
 
 def test_a_copy_that_is_not_proven_keeps_the_whole_scan(
@@ -329,3 +351,67 @@ def test_a_copy_without_a_source_group_keeps_the_whole_scan(
     group = function_group()
     failed, scoped, _ = scan_run(runner, monkeypatch, [group])
     assert (failed, scoped) == (True, [])
+
+
+def need_decimate() -> None:
+    if shutil.which("dart-decimate") is None:
+        from tool_setup import PACKAGES, provision_batch
+
+        provision_batch([PACKAGES["dart-decimate"] + "@latest"], 900)
+
+
+BRANCHY = """int branchy(int a) {
+  if (a > 1) { return 1; } else if (a > 2) { return 2; } else if (a > 3) { return 3; }
+  else if (a > 4) { return 4; } else if (a > 5) { return 5; } else if (a > 6) { return 6; }
+  return 0;
+}
+"""
+
+
+def test_the_real_tool_still_reports_the_code_of_the_function_and_its_other_packages(
+    tmp_path: Path, runner: ModuleType
+) -> None:
+    """A package name read from its text, such as `'f'` or `other # helper`, is no selector: the scan is scoped by package folder."""
+    need_decimate()
+    source = {
+        **SOURCE_FILES,
+        "lib/a.dart": BRANCHY,
+        ".dart-decimaterc.json": json.dumps(
+            {
+                "boundaries": [{"from": "lib/a.dart", "disallow": "lib/src"}],
+                "health": {"max_crap": 30},
+            }
+        ),
+    }
+    files = {f"packages/lib_a/{name}": text for name, text in source.items()}
+    files |= {f"functions/f/shared_copy/{name}": text for name, text in source.items()}
+    files |= {
+        "functions/f/pubspec.yaml": "name: 'f'\nversion: 1.0.0\nenvironment:\n  sdk: ^3.0.0\n",
+        "functions/f/analysis_options.yaml": OPTIONS,
+        "functions/f/lib/main.dart": "void main() {}\n",
+        "functions/f/lib/dead.dart": BRANCHY,
+        "functions/f/other/pubspec.yaml": "name: other # helper\nversion: 1.0.0\nenvironment:\n  sdk: ^3.0.0\n",
+        "functions/f/other/lib/src/unused.dart": "int o() => 1;\n",
+        "functions/f/.dart-decimaterc.json": json.dumps(
+            {
+                "boundaries": [{"from": "lib/main.dart", "disallow": "shared_copy"}],
+                "health": {"max_crap": 30},
+            }
+        ),
+        ".gitattributes": MARK,
+    }
+    root = project(tmp_path, files)
+    runner.__dict__["ROOT"] = root
+    (root / "functions/f/coverage").mkdir()
+    (root / "functions/f/coverage/lcov.info").write_text(
+        "SF:lib/main.dart\nDA:1,1\nend_of_record\n"
+    )
+    group = function_group()
+    groups = [group, full_source()]
+    assert runner.run_limited_gate(
+        group, group["checks"][1], 600, nullcontext(), groups
+    )
+    report = json.loads((root / "functions/f/coverage/decimate.json").read_text())
+    paths = {finding["path"] for finding in report["findings"]}
+    assert {"lib/dead.dart", "other/lib/src/unused.dart"} <= paths
+    assert not any(path.startswith("shared_copy/") for path in paths)

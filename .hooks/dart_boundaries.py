@@ -10,7 +10,6 @@ from urllib.parse import unquote, urljoin, urlparse
 from generated_marks import (
     folder_prefix,
     generated_sources,
-    package_name,
     proven_copies,
     repository_top,
 )
@@ -610,24 +609,20 @@ def typing_scope(
     return nested_package_patterns(group, groups), copies
 
 
-def local_packages(directory: Path, copies: frozenset[str]) -> list[str]:
-    """The pub package names under a folder, leaving out the copies and the folders that pub and builds write."""
-    names = set()
-    for current, folders, files in os.walk(directory):
-        here = Path(current).relative_to(directory)
-        folders[:] = [
-            name
-            for name in folders
-            if name not in {".dart_tool", ".git", "build"}
-            and (here / name).as_posix() not in copies
-        ]
-        if "pubspec.yaml" in files:
-            names.add(
-                package_name(
-                    (Path(current) / "pubspec.yaml").read_text(errors="replace")
-                )
-            )
-    return sorted(name for name in names if name)
+def package_roots(directory: Path, selectors: list[str], timeout: float) -> list[str]:
+    """The folders of the local pub packages that Dart Decimate finds in a folder, narrowed by the selectors; `.` stands for the folder itself."""
+    from tool_setup import managed_command
+
+    command = ["dart-decimate", "workspaces", ".", "--format", "json"]
+    for selector in selectors:
+        command += ["--workspace", selector]
+    output = subprocess.check_output(
+        managed_command(command, directory),
+        cwd=directory,
+        text=True,
+        timeout=timeout,
+    )
+    return sorted(item["root"] or "." for item in json.loads(output)["workspaces"])
 
 
 def leave_out_copies(
@@ -637,13 +632,23 @@ def leave_out_copies(
     groups: "list[Group]",
     timeout: float,
 ) -> list[str]:
-    """Scope a Dart Decimate scan to the packages that no proven copy holds, so a copy is judged once, at its source."""
+    """Scope a Dart Decimate scan to the package folders that no proven copy holds, so a copy is judged once, at its source. A selector that does not pick exactly those folders fails the gate: Dart Decimate drops what no selector names, in silence."""
     if command[:3] != ["dart-decimate", "check", "."] or "--workspace" in command:
         return command
     directory = root / group["path"]
     copies = judged_copies(root, group, groups, timeout)
-    names = local_packages(directory, copies) if copies else []
+    if not copies:
+        return command
+    kept = [
+        name for name in package_roots(directory, [], timeout) if name not in copies
+    ]
+    if not kept:
+        return command
+    if package_roots(directory, kept, timeout) != sorted(kept):
+        raise ValueError(
+            f"{group['path']}: Dart Decimate does not select exactly the package folders {kept}, so the scan would drop code that no proven copy holds"
+        )
     return [
         *command,
-        *(argument for name in names for argument in ("--workspace", name)),
+        *(argument for name in kept for argument in ("--workspace", name)),
     ]
