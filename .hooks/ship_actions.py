@@ -174,8 +174,8 @@ def local_files(root: Path) -> Iterator[tuple[str, bool]]:
     for name in filter(None, ignored.split("\0")):
         source = root / name
         if name in LOCAL_FILES or (
-            source.is_file()
-            and (Path(name).name.startswith(".env") or name.endswith(".dart"))
+            (Path(name).name.startswith(".env") or name.endswith(".dart"))
+            and source.is_file()
         ):
             yield name, False
         elif source.resolve() == hooks.resolve():
