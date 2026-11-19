@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from conftest import git
 from decimate_resolved import judge, option_hits
-from gate_config import Gate, Group
+from gate_config import Gate, Group, dart_scan_includes_boundaries
 from resolved_settings import validate_resolved
 from test_proven_copy_judged_once import SCAN, need_decimate
 from test_strict_refusals import project
@@ -278,7 +278,9 @@ def test_an_option_that_changes_the_scope_or_a_limit_is_refused(
     extra: list[str],
 ) -> None:
     """HE-NO-SWITCH-OFF: the tool reads these options before the settings file, so only the installed forms may run."""
-    hits = option_hits(["dart-decimate", "check", ".", "--strict", *extra])
+    hits = option_hits(
+        ["dart-decimate", "check", ".", "--strict", *extra], "dead-code-duplicates"
+    )
     assert len(hits) == 1
     assert extra[0].split("=")[0] in hits[0]
 
@@ -287,8 +289,9 @@ def test_an_option_that_changes_the_scope_or_a_limit_is_refused(
 def test_the_installed_forms_of_the_scan_pass_the_option_check(
     extra: list[str],
 ) -> None:
-    assert option_hits(["dart-decimate", "check", ".", *extra]) == []
-    assert option_hits(["dart-decimate", "check", "./", *extra]) == []
+    role = "boundaries" if "--boundary-violations" in extra else "dead-code-duplicates"
+    assert option_hits(["dart-decimate", "check", ".", *extra], role) == []
+    assert option_hits(["dart-decimate", "check", "./", *extra], role) == []
 
 
 def test_a_refused_option_fails_the_settings_judgment_of_the_gate(
@@ -298,3 +301,31 @@ def test_a_refused_option_fails_the_settings_judgment_of_the_gate(
     command = [*SCAN["command"], "--max-cognitive", "99"]
     with pytest.raises(ValueError, match=r"option --max-cognitive"):
         validate_resolved(root, groups(command), 900)
+
+
+def test_the_boundary_flag_is_refused_on_a_full_scan_gate() -> None:
+    """HE-NO-SWITCH-OFF: with a separate boundaries gate, the flag on the full scan drops every other finding."""
+    command = [*SCAN["command"], "--boundary-violations"]
+    assert len(option_hits(command, "dead-code-duplicates")) == 1
+
+
+@pytest.mark.parametrize("launcher", [["bun", "x"], ["bunx"]])
+def test_a_launcher_does_not_hide_a_refused_option(
+    tmp_path: Path, launcher: list[str]
+) -> None:
+    root = repo(tmp_path, GOOD)
+    command = [*launcher, "dart-decimate@0.0.76", *SCAN["command"][1:]]
+    command[command.index("--strict")] = "--file=classify.dart"
+    with pytest.raises(ValueError, match=r"option --file"):
+        validate_resolved(root, groups(command), 900)
+
+
+def test_a_dot_slash_scan_is_the_combined_gate() -> None:
+    command = ["dart-decimate", "check", "./", *SCAN["command"][3:]]
+    assert dart_scan_includes_boundaries(
+        {
+            **SCAN,
+            "command": command,
+            "report": {"type": "dart-decimate", "stdout": True},
+        }
+    )

@@ -339,7 +339,8 @@ def dart_scan_includes_boundaries(gate: Gate) -> bool:
     report = gate.get("report", {})
     return (
         gate.get("role") == "dead-code-duplicates"
-        and command[:3] == ["dart-decimate", "check", "."]
+        and command[:2] == ["dart-decimate", "check"]
+        and command[2:3] in (["."], ["./"])
         and options == {"--threshold": "0", "--format": "json", "--strict": ""}
         and report.get("type") == "dart-decimate"
         and report.get("stdout") is True

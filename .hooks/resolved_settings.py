@@ -10,7 +10,12 @@ from command_words import direct, launch
 from dart_boundaries import nested_package_patterns
 from decimate_resolved import decimate_hits, option_hits, scanned_folder
 from decimate_resolved import default_config as decimate_defaults
-from fallow_report import named_config, native_fallow_command, option
+from fallow_report import (
+    named_config,
+    native_fallow_command,
+    native_scanner_command,
+    option,
+)
 from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
 from ruff_settings import option_words
@@ -317,11 +322,11 @@ def decimate_tasks(
     timeout: float,
 ) -> list[Task]:
     root, every, group, gate = scope
-    command = gate["command"]
+    command = native_scanner_command(gate["command"]) or gate["command"]
     if command[:2] != ["dart-decimate", "check"]:
         return []
     tasks: list[Task] = []
-    if hits := option_hits(command):
+    if hits := option_hits(command, gate.get("role", "")):
         tasks.append(partial(named_hits, gate, hits))
     folder = scanned_folder(command)
     if folder != ".":
@@ -400,8 +405,6 @@ def judge_before_run(
         judged = direct(gate["command"], root / group["path"])
     except ValueError:
         return
-    if (judged and judged[0] == "fallow") or gate["command"][:2] == [
-        "dart-decimate",
-        "check",
-    ]:
+    scanner = native_scanner_command(gate["command"]) or gate["command"]
+    if (judged and judged[0] == "fallow") or scanner[:2] == ["dart-decimate", "check"]:
         validate_resolved(root, [group], timeout, groups, gate)
