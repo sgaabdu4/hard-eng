@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -175,6 +176,10 @@ def refuse_scan(monkeypatch: pytest.MonkeyPatch) -> None:
             ["lib/l10n/app_localizations.dart", "lib/l10n/app_localizations_en.dart"],
         ),
         (
+            '"output-localization-file": strings.dart\n',
+            ["lib/l10n/strings.dart", "lib/l10n/strings_en.dart"],
+        ),
+        (
             "output-localization-file: strings.dart\n",
             ["lib/l10n/strings.dart", "lib/l10n/strings_en.dart"],
         ),
@@ -228,38 +233,57 @@ def test_the_scan_does_not_run_when_the_commit_already_holds_every_candidate(
     assert not (checkout / "lib/firebase_options.dart").is_symlink()
 
 
-@pytest.mark.parametrize(
-    ("importer", "directive", "expected"),
-    [
-        ("lib/a.dart", "import 'b.dart';", "lib/b.dart"),
-        ("lib/a.dart", 'export "src/b.dart";', "lib/src/b.dart"),
-        ("lib/a.dart", "part 'b.g.dart';", "lib/b.g.dart"),
-        ("lib/s/a.dart", "import '../b.dart';", "lib/b.dart"),
-        ("lib/a.dart", "import 'package:app/b.dart';", "lib/b.dart"),
-        ("lib/a.dart", "import 'package:other/b.dart';", None),
-        ("lib/a.dart", "import 'dart:io';", None),
-        ("lib/a.dart", "import '../../outside.dart';", None),
-        ("lib/a.dart", "// import 'b.dart';", None),
-        (
-            "lib/a.dart",
-            "import 'stub.dart'\n    if (dart.library.io) 'b.dart';",
-            "lib/b.dart lib/stub.dart",
-        ),
-        ("test/a.dart", "import 'package:app/b.dart';", "lib/b.dart"),
+QUOTINGS = ["app", '"app"', "'app'"]
+PLAIN = ("", "app")
+IMPORTS = [
+    ("lib/a.dart", "import 'b.dart';", "lib/b.dart", *PLAIN),
+    ("lib/a.dart", 'export "src/b.dart";', "lib/src/b.dart", *PLAIN),
+    ("lib/a.dart", "part 'b.g.dart';", "lib/b.g.dart", *PLAIN),
+    ("lib/s/a.dart", "import '../b.dart';", "lib/b.dart", *PLAIN),
+    ("lib/a.dart", "import 'dart:io';", None, *PLAIN),
+    ("lib/a.dart", "import '../../outside.dart';", None, *PLAIN),
+    ("lib/a.dart", "// import 'b.dart';", None, *PLAIN),
+    (
+        "lib/a.dart",
+        "import 'stub.dart'\n    if (dart.library.io) 'b.dart';",
+        "lib/b.dart lib/stub.dart",
+        *PLAIN,
+    ),
+    *[
+        (importer, directive, expected, "", name)
+        for name in QUOTINGS
+        for importer, directive, expected in [
+            ("lib/a.dart", "import 'package:app/b.dart';", "lib/b.dart"),
+            ("lib/a.dart", "import 'package:other/b.dart';", None),
+            ("test/a.dart", "import 'package:app/b.dart';", "lib/b.dart"),
+        ]
     ],
+    ("app/lib/a.dart", "import 'package:app/b.dart';", "app/lib/b.dart", "app", "app"),
+    ("app/test/a.dart", "import 'package:app/b.dart';", "app/lib/b.dart", "app", "app"),
+]
+
+
+@pytest.mark.parametrize(
+    ("importer", "directive", "expected", "package", "name"), IMPORTS
 )
-@pytest.mark.parametrize("name", ["app", '"app"', "'app'"])
 def test_an_import_resolves_the_way_dart_resolves_it(
-    tmp_path: Path, importer: str, directive: str, expected: str | None, name: str
+    tmp_path: Path,
+    importer: str,
+    directive: str,
+    expected: str | None,
+    package: str,
+    name: str,
 ) -> None:
     root = tmp_path / "project"
     init(root)
-    (root / "pubspec.yaml").write_text(f"name: {name}\n")
+    (root / package).mkdir(exist_ok=True)
+    (root / package / "pubspec.yaml").write_text(f"name: {name}\n")
     (root / importer).parent.mkdir(parents=True, exist_ok=True)
     (root / importer).write_text(directive + "\n")
     commit(root, "start")
     ignored = {
         "lib/b.dart",
+        "app/lib/b.dart",
         "lib/stub.dart",
         "lib/src/b.dart",
         "lib/b.g.dart",
@@ -267,3 +291,43 @@ def test_an_import_resolves_the_way_dart_resolves_it(
     }
     found = ship_actions.imported_files(root, ignored)
     assert found == set((expected or "").split())
+
+
+def test_an_ignored_env_dart_file_is_linked_like_any_env_file(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / ".gitignore").write_text(".env.dart\nlib/.env.local.dart\n")
+    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "lib").mkdir()
+    (root / "lib/main.dart").write_text("import '../.env.dart';\n")
+    revision = commit(root, "start")
+    (root / ".env.dart").write_text("const a = 1;\n")
+    (root / "lib/.env.local.dart").write_text("const b = 2;\n")
+    checkout = snapshot_of(root, revision)
+    assert (checkout / ".env.dart").is_symlink()
+    assert (checkout / "lib/.env.local.dart").is_symlink()
+
+
+def test_without_pyyaml_the_default_localization_names_still_count_as_generated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    (root / ".gitignore").write_text(
+        "lib/firebase_options.dart\nlib/l10n/app_localizations*.dart\n"
+    )
+    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "l10n.yaml").write_text("arb-dir: lib/l10n\n")
+    (root / "lib/l10n").mkdir(parents=True)
+    (root / "lib/main.dart").write_text(
+        "import 'firebase_options.dart';\nimport 'l10n/app_localizations.dart';\n"
+    )
+    revision = commit(root, "start")
+    (root / "lib/firebase_options.dart").write_text("const a = 1;\n")
+    (root / "lib/l10n/app_localizations.dart").write_text("// generated\n")
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    checkout = snapshot_of(root, revision)
+    assert (checkout / "lib/firebase_options.dart").is_symlink()
+    assert not (checkout / "lib/l10n/app_localizations.dart").is_symlink()

@@ -186,23 +186,31 @@ def local_files(root: Path) -> Iterator[tuple[str, bool]]:
 DIRECTIVE = re.compile(r"^[ \t]*(?:import|export|part)\s+([^;]*);", re.MULTILINE)
 QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
 PACKAGE_NAME = re.compile(r"""^name:\s*["']?([^\s"']+)""", re.MULTILINE)
-LOCALIZATION = re.compile(
-    r"""^output-localization-file:\s*["']?([^\s"'#]+)""", re.MULTILINE
-)
 
 
 def written_by_generator(checkout: Path, name: str) -> bool:
     """A file that a tool of the project writes again; a link would let that tool write into the main checkout."""
-    base = posixpath.basename(name)
-    if base.count(".") > 1:
+    path = PurePosixPath(name)
+    if path.name.count(".") > 1:
         return True
-    for folder in PurePosixPath(name).parents:
-        spec = checkout / folder / "l10n.yaml"
-        if spec.is_file():
-            match = LOCALIZATION.search(spec.read_text())
-            stem = PurePosixPath(match.group(1) if match else "app_localizations").stem
-            return base == f"{stem}.dart" or base.startswith(f"{stem}_")
+    for folder in path.parents:
+        if (checkout / folder / "l10n.yaml").is_file():
+            return localizes(checkout / folder, path.relative_to(folder))
     return False
+
+
+def localizes(package: Path, name: PurePosixPath) -> bool:
+    """Whether gen-l10n writes this file of a package; a python3 without PyYAML cannot read l10n.yaml, so the default names count."""
+    from dart_boundaries import localization_file, localization_main
+
+    try:
+        main = localization_main(package)
+    except ImportError:
+        main = localization_file({})
+    return main is not None and (
+        name == main
+        or (name.parent == main.parent and name.name.startswith(f"{main.stem}_"))
+    )
 
 
 def dart_target(uri: str, folder: str, package: tuple[str, str] | None) -> str | None:
@@ -254,7 +262,11 @@ def imported_files(checkout: Path, candidates: set[str]) -> set[str]:
 def link_local_files(root: Path, checkout: Path) -> None:
     """Builds read ignored local .env* files and ignored Dart files that tracked code imports; link them and local settings without reading them."""
     wanted = list(local_files(root))
-    dart = {name for name, _ in wanted if name.endswith(".dart")}
+    dart = {
+        name
+        for name, _ in wanted
+        if name.endswith(".dart") and not Path(name).name.startswith(".env")
+    }
     missing = {
         name
         for name in dart
