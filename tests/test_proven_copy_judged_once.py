@@ -128,7 +128,14 @@ def decimate_settings(monkeypatch: pytest.MonkeyPatch, max_crap: int = 30) -> No
         health = {"max_crap": max_crap}
         return json.dumps({"config": {"boundaries": rules, "health": health}})
 
+    def printed(
+        directory: Path, _config: str | None, _timeout: float
+    ) -> dict[str, object]:
+        fresh = directory.name.startswith("hard-eng-decimate-")
+        return {"health": {"max_crap": 30 if fresh else max_crap}}
+
     monkeypatch.setattr(subprocess, "check_output", settings)
+    monkeypatch.setattr(decimate_resolved, "printed_config", printed)
 
 
 def build(
