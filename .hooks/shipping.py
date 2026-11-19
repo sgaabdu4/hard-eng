@@ -847,13 +847,14 @@ def _ready_state(
     if threads is None or any(node.get("isResolved") is not True for node in threads):
         raise ShippingError("a review conversation is unresolved or uncounted")
     from change_size import commits_problem
-    from pr_text import body_problem
+    from pr_text import body_problem, ready_problem
     from ship_actions import rebase_problem
     from ship_record import route
 
     found = route(root, pull, policy["base"])
     if problem := (
-        body_problem(pull.body)
+        ready_problem(pull, root, identity[2])
+        or body_problem(pull.body)
         or (None if found in ("release", "join") else commits_problem(pull.commits))
         or (
             rebase_problem(root, "/".join(identity[:2]), pull.base_ref, pull.head_sha)

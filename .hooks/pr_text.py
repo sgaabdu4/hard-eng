@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from gate_config import JsonObject, JsonValue
+
+if TYPE_CHECKING:
+    from shipping import _PullRequest
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_BLOCK = re.compile(r"^[ \t]*(?:```|~~~)[ \t]*mermaid\b", re.MULTILINE)
@@ -94,37 +101,100 @@ def body_problem(body: str) -> str | None:
     )
 
 
-def event_problem(event_path: str, root: Path = Path()) -> str | None:
-    """Name what the text of the PR in a GitHub event file lacks; None when it passes."""
+def _at(value: JsonValue, *keys: str) -> JsonValue:
+    for key in keys:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
+
+
+def pull_problem(pull: JsonObject, root: Path, number: int) -> str | None:
+    """Name what the text of a pull request lacks, as GitHub gives it; None when it passes. CI, `pr-text` and `ship` all call this."""
     from shipping import ShippingError, load_policy
     from update_runner import UPDATE_BRANCH
 
-    pull = json.loads(Path(event_path).read_text())["pull_request"]
-    head_repo = (pull["head"].get("repo") or {}).get("full_name")
-    base_repo = (pull["base"].get("repo") or {}).get("full_name")
-    if pull["head"]["ref"] == UPDATE_BRANCH and head_repo and head_repo == base_repo:
+    head_repo = _at(pull, "head", "repo", "full_name")
+    if (
+        _at(pull, "head", "ref") == UPDATE_BRANCH
+        and head_repo
+        and head_repo == _at(pull, "base", "repo", "full_name")
+    ):
         return None
-    if (pull.get("user") or {}).get("login") in DEPENDENCY_BOTS:
+    if str(_at(pull, "user", "login") or "") in DEPENDENCY_BOTS:
         return None
     try:
         policy = load_policy(root, required=False)
     except ShippingError:
         policy = None
-    if policy is not None and pull["base"]["ref"] != policy["base"]:
+    if policy is not None and _at(pull, "base", "ref") != policy["base"]:
         return None
-    body = pull["body"] or ""
+    body = str(pull.get("body") or "")
     problem = body_problem(body)
     if not problem and policy is not None and policy["ui_paths"]:
         problem = ui_problem(
             root,
-            pull["base"]["repo"]["full_name"],
-            (pull["number"], pull["head"].get("sha", "")),
+            str(_at(pull, "base", "repo", "full_name") or ""),
+            (number, str(_at(pull, "head", "sha") or "")),
             body,
             policy["ui_paths"],
         )
     if problem:
         return f"{problem}. Edit the PR text; this check runs again on each edit."
     return None
+
+
+def ready_problem(pull: "_PullRequest", root: Path, number: int) -> str | None:
+    """The CI text check on a pull request that `ship` has already read."""
+    return pull_problem(
+        {
+            "head": {
+                "ref": pull.head_ref,
+                "sha": pull.head_sha,
+                "repo": {"full_name": pull.head_repository},
+            },
+            "base": {
+                "ref": pull.base_ref,
+                "repo": {"full_name": pull.base_repository},
+            },
+            "body": pull.body,
+        },
+        root,
+        number,
+    )
+
+
+def event_problem(event_path: str, root: Path = Path()) -> str | None:
+    """Name what the text of the PR in a GitHub event file lacks; None when it passes."""
+    pull = json.loads(Path(event_path).read_text())["pull_request"]
+    return pull_problem(pull, root, pull["number"])
+
+
+def fetch_pull(root: Path, repository: str, number: int) -> JsonObject:
+    from shipping import ShippingError, gh
+
+    pull = json.loads(gh(root, "api", f"repos/{repository}/pulls/{number}"))
+    if not isinstance(pull, dict):
+        raise ShippingError("the pull request answer is not an object")
+    return pull
+
+
+def pr_text_command(root: Path, pr: str) -> int:
+    """Run the CI text check on a pull request, given by URL or number; 1 with the reason on a fault."""
+    from shipping import _pr_url, git, origin_repository
+
+    if pr.isdecimal():
+        repository = origin_repository(git(root, "remote", "get-url", "origin").strip())
+        number = int(pr)
+    else:
+        owner, name, number = _pr_url(pr)
+        repository = f"{owner}/{name}"
+    problem = pull_problem(fetch_pull(root, repository, number), root, number)
+    if problem:
+        print(f"Hard Eng: {problem}", file=sys.stderr)
+        return 1
+    print(f"PASS pr-text: {repository}#{number}")
+    return 0
 
 
 def ui_problem(

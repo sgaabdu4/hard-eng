@@ -776,6 +776,10 @@ def deliver(args: "Namespace") -> int:
         from text_walls import walls_command
 
         return walls_command(ROOT, args.paths, args.stdin)
+    if args.command == "pr-text":
+        from pr_text import pr_text_command
+
+        return pr_text_command(ROOT, args.pr)
     if args.command == "gap-issue":
         from gap_issue import file_gap
 
@@ -934,6 +938,9 @@ def main() -> int:
         help="The running agent, only when it cannot be detected",
     )
     commands.add_parser(
+        "pr-text", help="Run the CI PR text check on a pull request"
+    ).add_argument("--pr", required=True, help="PR URL or number")
+    commands.add_parser(
         "gap-issue", help="File a Hard Eng issue for a check it lacks"
     ).add_argument("text", help="the missing check, described generically")
     shipping = commands.add_parser(
@@ -971,6 +978,7 @@ def main() -> int:
         "gap-issue",
         "ci-usage",
         "hot-paths",
+        "pr-text",
         "text-walls",
     }:
         return deliver(args)
