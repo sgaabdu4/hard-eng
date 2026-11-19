@@ -56,7 +56,9 @@ def groups() -> list[Group]:
     return [{"path": ".", "language": "dart", "sources": ["lib"], "checks": [SCAN]}]
 
 
-GOOD = {"boundaries": [{"from": "lib/main.dart", "disallow": "lib/src"}]}
+GOOD: dict[str, object] = {
+    "boundaries": [{"from": "lib/main.dart", "disallow": "lib/src"}]
+}
 
 
 def refused(
@@ -106,7 +108,7 @@ def test_a_dart_decimate_config_that_narrows_the_scan_is_refused(
 
 
 def test_a_dart_decimate_config_that_keeps_every_check_passes(tmp_path: Path) -> None:
-    config = {
+    config: dict[str, object] = {
         **GOOD,
         "ignorePatterns": [".agents/**"],
         "health": {"maxCrap": 30, "maxCyclomatic": 10},
