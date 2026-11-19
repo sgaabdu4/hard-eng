@@ -208,7 +208,8 @@ def localization_of(package: Path) -> PurePosixPath | None:
     try:
         return localization_main(package)
     except ImportError:
-        return PurePosixPath(localization_file({}).name)
+        default = localization_file({})
+        return default and PurePosixPath(default.name)
 
 
 def localizes(package: Path, name: PurePosixPath) -> bool:

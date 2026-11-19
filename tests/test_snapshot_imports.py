@@ -1,5 +1,5 @@
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import dart_boundaries
 import pytest
@@ -349,12 +349,13 @@ def test_l10n_yaml_is_read_once_for_all_the_candidates_of_a_package(
     revision = commit(root, "start")
     for name in names:
         (root / name).write_text("// generated\n")
-    reads = []
+    reads: list[Path] = []
     original = dart_boundaries.localization_main
-    monkeypatch.setattr(
-        dart_boundaries,
-        "localization_main",
-        lambda package: reads.append(package) or original(package),
-    )
+
+    def counted(package: Path) -> PurePosixPath | None:
+        reads.append(package)
+        return original(package)
+
+    monkeypatch.setattr(dart_boundaries, "localization_main", counted)
     snapshot_of(root, revision)
     assert len(reads) == 1
