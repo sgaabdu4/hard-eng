@@ -11,6 +11,7 @@ from project_files import GIT_LISTING
 GENERATED_KEYS = {"linguist-generated", "linguist-vendored"}
 PROOFS: dict[tuple[Path, str], str | None] = {}
 SOURCES: dict[tuple[Path, str], str] = {}
+ON_DISK: dict[tuple[Path, str], bool] = {}
 INDEXES: dict[Path, dict[str, str]] = {}
 PUBSPECS: dict[Path, dict[str, bytes]] = {}
 MARKED_PACKAGES: dict[Path, dict[str, bool]] = {}
@@ -319,6 +320,31 @@ def derived_copy(top: Path, folder: str) -> str | None:
             SOURCES[top, folder] = source
             return None
     return first
+
+
+def same_on_disk(top: Path, held: str, source: str) -> bool:
+    """The index proof holds on disk too: each file that git reports as changed under the copy or its source has the same bytes at both places, by the proof's own rules."""
+    if (top, held) not in ON_DISK:
+        status = [*GIT_LISTING, "status", "-z", "--porcelain", "-uall", "--no-renames"]
+        changed = subprocess.check_output(
+            [*status, "--", held, source], cwd=top, text=True
+        ).split("\0")
+        ON_DISK[top, held] = all(
+            same_file(top, held, source, entry[3:]) for entry in changed if entry
+        )
+    return ON_DISK[top, held]
+
+
+def same_file(top: Path, held: str, source: str, path: str) -> bool:
+    relative = PurePosixPath(path).relative_to(
+        held if PurePosixPath(path).is_relative_to(held) else source
+    )
+    copied, original = top / held / relative, top / source / relative
+    if relative.as_posix() == "pubspec.lock" or not copied.is_file():
+        return True
+    return original.is_file() and runtime_text(
+        relative.as_posix(), copied.read_bytes()
+    ) == runtime_text(relative.as_posix(), original.read_bytes())
 
 
 def proven_copy(top: Path, folder: str) -> str | None:
