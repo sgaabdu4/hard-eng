@@ -235,6 +235,25 @@ def test_a_copy_with_one_changed_file_or_no_mark_is_judged_in_place(
     assert NESTED in (refused(runner, group, groups) or "")
 
 
+@pytest.mark.parametrize(
+    "edit",
+    [
+        "functions/f/shared_copy/lib/a.dart",
+        "packages/lib_a/lib/a.dart",
+        "functions/f/shared_copy/lib/new.dart",
+    ],
+)
+def test_a_copy_with_an_edit_not_yet_committed_is_judged_in_place(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch, edit: str
+) -> None:
+    root = build(tmp_path, runner, monkeypatch)
+    (root / edit).write_text("int a() => 9;\n")
+    group = function_group()
+    assert NESTED in (refused(runner, group, [group, full_source()]) or "")
+    _, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
+    assert scoped == []
+
+
 def test_an_unmarked_nested_settings_file_without_the_include_is_still_refused(
     tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
