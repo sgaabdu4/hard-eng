@@ -8,7 +8,7 @@ from pathlib import Path
 
 from command_words import direct, launch
 from dart_boundaries import nested_package_patterns
-from decimate_resolved import decimate_hits
+from decimate_resolved import decimate_hits, scanned_folder
 from decimate_resolved import default_config as decimate_defaults
 from fallow_report import named_config, native_fallow_command, option
 from fallow_resolved import default_config, fallow_hits
@@ -323,9 +323,18 @@ def decimate_tasks(
         "check",
     ]:
         return []
+    folder = scanned_folder(command)
+    if folder != ".":
+        return [partial(other_folder_hits, gate, folder)]
     children = nested_package_patterns(group, every, gate.get("role", ""))
     run = (root / group["path"], option(command, "--config"), children, gate, timeout)
     return [partial(decimate_gate_hits, run, defaults.decimate())]
+
+
+def other_folder_hits(gate: Gate, folder: str) -> list[str]:
+    return [
+        f"gate {gate['name']}: Dart Decimate scans `{folder}`, not the gate folder, and reads the settings of that folder: scan `.` and give the folder its own gate group"
+    ]
 
 
 def decimate_gate_hits(
