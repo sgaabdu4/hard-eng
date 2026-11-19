@@ -169,20 +169,26 @@ def localization_file(options: object) -> PurePosixPath | None:
     return PurePosixPath(str(folder), PurePosixPath(str(name)).name)
 
 
-def localization_exclusions(directory: Path) -> frozenset[str]:
-    """Flutter 3.50's gen-l10n lists deprecated delegates in its main file (flutter/flutter#191072)."""
+def localization_main(directory: Path) -> PurePosixPath | None:
+    """The main file that gen-l10n writes in a package folder, from its l10n.yaml."""
     path = directory / "l10n.yaml"
     if not path.is_file():
-        return frozenset()
+        return None
     import yaml
 
     try:
         main = localization_file(yaml.safe_load(path.read_text()) or {})
     except yaml.YAMLError:
-        return frozenset()
+        return None
     if main is None or main.is_absolute() or ".." in main.parts:
-        return frozenset()
-    return frozenset({main.as_posix()})
+        return None
+    return main
+
+
+def localization_exclusions(directory: Path) -> frozenset[str]:
+    """Flutter 3.50's gen-l10n lists deprecated delegates in its main file (flutter/flutter#191072)."""
+    main = localization_main(directory)
+    return frozenset({main.as_posix()}) if main else frozenset()
 
 
 def add_exclusions(options: "JsonObject", patterns: frozenset[str]) -> None:
