@@ -17,8 +17,8 @@ Deliverables: None
 - Rule, only imported files: In scope — An ignored file that nobody imports is not linked
 - Rule, only imports of tracked files: In scope — An ignored file that only an untracked file imports is not linked
 - Rule, status checks treat the link as Hard Eng's own: In scope — The link stays placed by Hard Eng
-- Rule, no scan and no added time unless an ignored Dart file could be linked: In scope — No scan runs when no ignored Dart file is a candidate (none exists, a tool of the project writes it, or the commit already holds it); with a candidate the scan adds the time that Verification measures
-- Rule, a file that a tool of the project writes is not linked: In scope — A generator output is not linked, because a generator in the snapshot writes through a link into the main checkout
+- Rule, no scan and no added time unless an ignored Dart file could be linked (none exists, a tool of the project writes it, or the commit already holds it): In scope — Link speed is recorded in Verification: no scan without a candidate, and the measured added time with one
+- Rule, a generator in the snapshot writes through a link into the main checkout, so its output is not linked: In scope — A file that a tool of the project writes (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, the gen-l10n files named by `l10n.yaml`) is not linked and starts no scan
 - Rule, Dart imports resolve as Dart resolves them: In scope — An import resolves the way Dart resolves it
 
 ## Repository context
