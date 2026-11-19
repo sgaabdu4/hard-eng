@@ -26,8 +26,9 @@ def repo(
     return project(tmp_path, files)
 
 
-def groups() -> list[Group]:
-    return [{"path": ".", "language": "dart", "sources": ["lib"], "checks": [SCAN]}]
+def groups(command: list[str] | None = None) -> list[Group]:
+    gate: Gate = {**SCAN, "command": command or SCAN["command"]}
+    return [{"path": ".", "language": "dart", "sources": ["lib"], "checks": [gate]}]
 
 
 GOOD: dict[str, object] = {
@@ -140,15 +141,8 @@ def test_a_toml_settings_file_that_git_does_not_track_is_refused(
 
 def test_the_root_option_form_of_the_scan_is_judged_too(tmp_path: Path) -> None:
     root = repo(tmp_path, {**GOOD, "health": {"maxCyclomatic": 99}})
-    other: Gate = {**SCAN, "command": ["dart-decimate", "check", "--root", "."]}
-    group: Group = {
-        "path": ".",
-        "language": "dart",
-        "sources": ["lib"],
-        "checks": [other],
-    }
     with pytest.raises(ValueError, match=r"health\.max_cyclomatic is 99"):
-        validate_resolved(root, [group], 900)
+        validate_resolved(root, groups(["dart-decimate", "check", "--root", "."]), 900)
 
 
 def test_a_settings_file_that_git_does_not_track_is_refused(tmp_path: Path) -> None:
@@ -189,15 +183,8 @@ def test_a_scan_of_another_folder_is_refused(
 ) -> None:
     """The tool reads the settings of the folder it scans, so a scan of another folder judges and reads the wrong ones."""
     root = repo(tmp_path, GOOD, {"other/pubspec.yaml": FILES["pubspec.yaml"]})
-    gate: Gate = {**SCAN, "command": command}
-    group: Group = {
-        "path": ".",
-        "language": "dart",
-        "sources": ["lib"],
-        "checks": [gate],
-    }
     with pytest.raises(ValueError, match=r"scans `other`, not the gate folder"):
-        validate_resolved(root, [group], 900)
+        validate_resolved(root, groups(command), 900)
 
 
 @pytest.mark.parametrize(
@@ -212,12 +199,5 @@ def test_a_scan_of_the_whole_gate_folder_is_judged_in_every_spelling(
     tmp_path: Path, command: list[str]
 ) -> None:
     root = repo(tmp_path, {**GOOD, "health": {"maxCyclomatic": 99}})
-    gate: Gate = {**SCAN, "command": command}
-    group: Group = {
-        "path": ".",
-        "language": "dart",
-        "sources": ["lib"],
-        "checks": [gate],
-    }
     with pytest.raises(ValueError, match=r"health\.max_cyclomatic is 99"):
-        validate_resolved(root, [group], 900)
+        validate_resolved(root, groups(command), 900)
