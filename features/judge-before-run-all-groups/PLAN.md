@@ -17,6 +17,8 @@ Same cause: the earlier fix 00cf25ef passed every configured group to the types 
 Single source: `every_group` in `.hooks/gate_runner.py` is the one place that picks the configured groups; the types gate call uses it too.
 Consistency note: `fallow_table.py` (the judge of the printed config) lists `health.ignore` as "patterns", like `ignorePatterns`, so a pattern that names a child group root is allowed there. `fallow_settings.py` (the whole-project check of the settings files, called from `whole_project.py`) refuses any `health.ignore`. Both run in the full check and the file check is stricter, so the child-root allowance for `health.ignore` never takes effect. The two are consistent in outcome but overlap; no reason for the allowance was found in the code. No code change: removing the table entry would change the printed-config judge, which the maintainer did not ask for.
 
+Second repair: the hosted `hard-eng-tests` shard 5 failed `tests/test_ci_usage.py::test_a_fresh_or_unreadable_queued_job_keeps_the_plain_pending_text[job0]`. Its "queued 1 minute ago" job was built at collection, and the shard reached the test over 5 minutes later, so the job looked stale. The case now builds its job when the test runs. No relation to the judge.
+
 ## Decisions + authorization
 
 Blockers: None.
@@ -44,10 +46,10 @@ N/A — hooks only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: the new test failed on develop df030688 with the refusal above and passes with the change; 57 tests of `tests/test_unrecognised_forms.py`, `tests/test_change_filtered_judges.py` and `tests/test_gate_limits.py` pass. Ruff format, lint, complexity and annotations, Pyrefly, Vulture and the duplicates scan report no finding. The Complete check ran once with `--base origin/develop` on this head.
+Evidence: the new test failed on develop df030688 with the refusal above and passes with the change; 57 tests of `tests/test_unrecognised_forms.py`, `tests/test_change_filtered_judges.py` and `tests/test_gate_limits.py` pass. Ruff format, lint, complexity and annotations, Pyrefly, Vulture and the duplicates scan report no finding. The Complete check ran once with `--base origin/develop` on commit 11077448 and passed; the later commit changes one test, and `tests/test_ci_usage.py` passes (51 tests).
 Review: the first independent review at 3c18ce93 found one defect, the Biome change; it was removed (see Repository context). The reviews at 000bbe98 and 6ee30520 were clean.
 E2E: N/A — no user journey changes.
 Real service: N/A — the change calls no outside service.
-Retro: (1) Escaped bug: the earlier fix covered the types gate only, and no test covered the Fallow judge with a base → the tests gate should have caught it; the new test now covers it. The same-cause search found no other narrowing that refuses a valid setting.
+Retro: (1) Escaped bug: the earlier fix covered the types gate only, and no test covered the Fallow judge with a base → the tests gate should have caught it; the new test now covers it. The same-cause search found no other narrowing that refuses a valid setting. (2) A hosted shard failed a test that built its "fresh job" time at collection → no gate can catch it on a fast run: the time depends on how long the shard waits, so the case now builds the job inside the test.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
