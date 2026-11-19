@@ -10,6 +10,7 @@ from types import ModuleType
 from typing import cast
 
 import look
+import pr_text
 import pytest
 import shipping
 import ui_proof
@@ -198,6 +199,7 @@ def ship_setup(
         files or [VISIBLE_FILE],
     )
     _patch_gh(monkeypatch, fake)
+    monkeypatch.setattr(pr_text, "ui_problem", lambda *_arguments: None)
     return fixture, fake
 
 
