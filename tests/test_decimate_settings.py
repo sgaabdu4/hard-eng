@@ -1,47 +1,21 @@
 """The full check judges what Dart Decimate prints as its resolved config, so no spelling of a setting can narrow a scan, raise a limit or switch a rule off."""
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 from conftest import git
 from decimate_resolved import judge
-from gate_config import Gate, Group
+from gate_config import Group
 from resolved_settings import validate_resolved
+from test_proven_copy_judged_once import SCAN, need_decimate
 from test_strict_refusals import project
 
-SCAN: Gate = {
-    "name": "dead-code",
-    "role": "dead-code-duplicates",
-    "command": [
-        "dart-decimate",
-        "check",
-        ".",
-        "--threshold",
-        "0",
-        "--format",
-        "json",
-        "--strict",
-    ],
-    "report": {
-        "type": "dart-decimate",
-        "path": "coverage/decimate.json",
-        "stdout": True,
-    },
-}
 FILES = {
     "pubspec.yaml": "name: app\nversion: 1.0.0\nenvironment:\n  sdk: ^3.0.0\n",
     "lib/main.dart": "void main() {}\n",
     "lib/src/inner.dart": "int inner() => 1;\n",
 }
-
-
-def need_decimate() -> None:
-    if shutil.which("dart-decimate") is None:
-        from tool_setup import PACKAGES, provision_batch
-
-        provision_batch([PACKAGES["dart-decimate"] + "@latest"], 900)
 
 
 def repo(
