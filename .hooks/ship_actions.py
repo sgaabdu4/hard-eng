@@ -185,7 +185,7 @@ def local_files(root: Path) -> Iterator[tuple[str, bool]]:
 
 DIRECTIVE = re.compile(r"^[ \t]*(?:import|export|part)\s+([^;]*);", re.MULTILINE)
 QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
-PACKAGE_NAME = re.compile(r"^name:\s*(\S+)", re.MULTILINE)
+PACKAGE_NAME = re.compile(r"""^name:\s*["']?([^\s"']+)""", re.MULTILINE)
 
 
 def dart_target(uri: str, folder: str, package: tuple[str, str] | None) -> str | None:
