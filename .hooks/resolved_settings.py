@@ -324,14 +324,11 @@ def decimate_tasks(
 ) -> list[Task]:
     root, every, group, gate = scope
     command = scan_command(root / group["path"], gate)
+    scan = group.get("language") == "dart" and gate.get("role") in SCAN_ROLES
     if command[:1] != ["dart-decimate"]:
-        return []
+        return [partial(named_hits, gate, [unreadable_hit(command)])] if scan else []
     if command[:2] != ["dart-decimate", "check"]:
-        return (
-            [partial(named_hits, gate, [subcommand_hit(command)])]
-            if gate.get("role") in {"dead-code-duplicates", "boundaries"}
-            else []
-        )
+        return [partial(named_hits, gate, [subcommand_hit(command)])] if scan else []
     tasks: list[Task] = []
     if hits := option_hits(command, gate.get("role", "")):
         tasks.append(partial(named_hits, gate, hits))
@@ -358,6 +355,13 @@ def scan_command(directory: Path, gate: Gate) -> list[str]:
     except (ValueError, TypeError, OSError):
         arguments = gate["command"]
     return native_scanner_command(arguments) or gate["command"]
+
+
+SCAN_ROLES = {"dead-code-duplicates", "boundaries"}
+
+
+def unreadable_hit(command: list[str]) -> str:
+    return f"the Dart scan runs `{' '.join(command)}`, not one `dart-decimate` command that Hard Eng can judge: run `dart-decimate check .` directly or through `bun x`"
 
 
 def subcommand_hit(command: list[str]) -> str:

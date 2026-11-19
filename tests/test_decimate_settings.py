@@ -348,3 +348,14 @@ def test_a_scan_subcommand_other_than_check_is_refused_on_a_scan_gate(
     command = ["dart-decimate", subcommand, ".", "--strict"]
     with pytest.raises(ValueError, match=rf"subcommand {subcommand}"):
         validate_resolved(root, groups(command), 900)
+
+
+def test_a_scan_gate_that_resolves_to_another_program_is_refused(
+    tmp_path: Path,
+) -> None:
+    script = " ".join(["env", "CI=1", *SCAN["command"], "--file", "lib/main.dart"])
+    root = repo(
+        tmp_path, GOOD, {"package.json": json.dumps({"scripts": {"dd": script}})}
+    )
+    with pytest.raises(ValueError, match=r"not one `dart-decimate` command"):
+        validate_resolved(root, groups(["bun", "run", "dd"]), 900)
