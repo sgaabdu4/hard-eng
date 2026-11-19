@@ -361,7 +361,10 @@ def test_a_scan_gate_that_resolves_to_another_program_is_refused(
         validate_resolved(root, groups(["bun", "run", "dd"]), 900)
 
 
-def test_a_scan_script_rewritten_before_the_run_is_judged_again(tmp_path: Path) -> None:
+@pytest.mark.parametrize("tail", ["", " && ruff check ."])
+def test_a_scan_script_rewritten_before_the_run_is_judged_again(
+    tmp_path: Path, tail: str
+) -> None:
     root = repo(
         tmp_path,
         GOOD,
@@ -371,6 +374,6 @@ def test_a_scan_script_rewritten_before_the_run_is_judged_again(tmp_path: Path) 
     gate = group["checks"][0]
     judge_before_run(root, group, gate, [group], 900)
     script = " ".join(["env", "CI=1", *SCAN["command"], "--file", "lib/main.dart"])
-    (root / "package.json").write_text(json.dumps({"scripts": {"dd": script}}))
-    with pytest.raises(ValueError, match=r"not one `dart-decimate` command"):
+    (root / "package.json").write_text(json.dumps({"scripts": {"dd": script + tail}}))
+    with pytest.raises(ValueError, match=r"HE-NO-SWITCH-OFF"):
         judge_before_run(root, group, gate, [group], 900)
