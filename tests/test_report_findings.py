@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 import reports
-from gate_config import Gate
+from gate_config import Gate, JsonObject, JsonValue
 from process_group import parallel_hint
+from test_gate_tools import clean_typescript_report as clean_fallow_report
 from test_reports import REPORTS
 
 PARALLEL = ["uv", "run", "pytest", "-n", "auto"]
@@ -139,6 +140,56 @@ def test_a_failed_fallow_gate_prints_its_findings(
     assert "package.json:9 unused_dependencies is-odd" in output
 
 
+SLOW: JsonObject = {
+    "path": "src/a.ts",
+    "name": "route",
+    "line": 3,
+    "exceeded": "crap",
+    "cyclomatic": 21,
+    "cognitive": 16,
+    "crap": 40.0,
+}
+SLOW_LINE = "scan: src/a.ts:3 complexity route (exceeded crap; cyclomatic 21, cognitive 16, crap 40.0)"
+
+
+@pytest.mark.parametrize("form", ["combined", "audit"])
+def test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], form: str
+) -> None:
+    missing: list[object] = []
+    nothing: dict[str, object] = {}
+    report: dict[str, object]
+    if form == "combined":
+        report = {
+            "kind": "combined",
+            "check": {"unused_files": missing},
+            "dupes": nothing,
+            "health": {"findings": [SLOW]},
+        }
+    else:
+        report = {
+            "kind": "audit",
+            "dead_code": {"unused_files": missing},
+            "duplication": nothing,
+            "complexity": {"findings": [SLOW]},
+        }
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(report))
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [SLOW_LINE]
+
+
+def test_a_fallow_gate_that_exits_zero_with_a_finding_prints_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    findings: list[JsonValue] = [SLOW]
+    report = clean_fallow_report({"findings": findings})
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="complexity"):
+        reports.scanner_result(0, "fallow", NO_GATE, path, [], tmp_path, 1.0)
+    assert SLOW_LINE in capsys.readouterr().out
+
+
 def test_a_failed_fallow_gate_prints_findings_that_have_no_path_of_their_own(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -257,7 +308,7 @@ def test_a_secret_found_in_history_names_its_commit(
     ]
 
 
-def test_the_findings_of_all_kinds_stop_at_twenty(
+def test_the_findings_of_all_kinds_are_all_printed(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     exports = [{"path": f"s{n}.ts", "export_name": "x"} for n in range(30)]
@@ -269,8 +320,9 @@ def test_the_findings_of_all_kinds_stop_at_twenty(
         )
     )
     lines = failed("fallow", path, tmp_path, capsys).splitlines()
-    assert len(lines) == 21
-    assert lines[-1] == f"scan: 40 more findings in {path}"
+    assert len(lines) == 60
+    assert lines[29] == "scan: s29.ts unused_exports x"
+    assert not any("more findings" in line for line in lines)
 
 
 @pytest.mark.parametrize("scanner", ["gitleaks", "react-doctor", "fallow"])

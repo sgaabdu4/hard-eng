@@ -663,6 +663,19 @@ def own_place(item: JsonObject) -> tuple[str, str] | None:
     return None
 
 
+def complexity_line(item: JsonObject) -> str:
+    """One function over a complexity or CRAP limit, with the numbers that Fallow measured."""
+    numbers = ", ".join(
+        f"{key} {item[key]}"
+        for key in ("cyclomatic", "cognitive", "crap")
+        if key in item
+    )
+    return (
+        f"{located(item.get('path'), item.get('line'))} complexity {item.get('name', '')} "
+        f"(exceeded {item.get('exceeded', 'a limit')}; {numbers})"
+    )
+
+
 def finding_lines(path: Path, directory: Path | None = None) -> list[str]:
     try:
         report = json.loads(path.read_text())
@@ -688,6 +701,9 @@ def finding_lines(path: Path, directory: Path | None = None) -> list[str]:
                 for copy in group["instances"]
             ]
             found.append("copied code " + " ".join(copies))
+        health = report.get("complexity" if audit else "health")
+        items = health.get("findings") if isinstance(health, dict) else None
+        found += [complexity_line(i) for i in items or [] if isinstance(i, dict)]
         return found
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return []

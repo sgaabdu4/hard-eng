@@ -1,6 +1,6 @@
 # PR text before CI, the quick check on a committed plan, and every Fallow finding on failure
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,12 +24,12 @@ Authority: Autonomous mode. The maintainer assigned these three faults, named th
 
 ## Acceptance + steps
 
-- [ ] The `pr-text` command fails on a body that lacks the Undo line, the Mermaid diagrams or the Not checked line, and on a UI path PR with no pictures or note → `tests/test_pr_text.py::test_the_pr_text_command_refuses_a_body_that_lacks_a_part`
-- [ ] The `pr-text` command passes a good body and a UI path PR with the unchanged note → `tests/test_pr_text.py::test_the_pr_text_command_passes_a_good_body`
-- [ ] `ship --stage ready` refuses a UI path PR with no pictures, which `body_problem` alone let pass → `tests/test_pr_text.py::test_ready_refuses_a_ui_change_without_pictures_or_a_note`
-- [ ] The quick check judges a plan that the branch changed and committed when no branch point is found, in a clean tree → `tests/test_quick_plan_scope.py::test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known`
-- [ ] A failed Fallow gate prints each complexity and CRAP finding and every other finding past 20 → `tests/test_report_findings.py::test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings`
-- [ ] The CI template uploads the Fallow JSON only on failure → `tests/test_ci_setup.py::test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails`
+- [x] The `pr-text` command fails on a body that lacks the Undo line, the Mermaid diagrams or the Not checked line, and on a UI path PR with no pictures or note → `tests/test_pr_text.py::test_the_pr_text_command_refuses_a_body_that_lacks_a_part`
+- [x] The `pr-text` command passes a good body and a UI path PR with the unchanged note → `tests/test_pr_text.py::test_the_pr_text_command_passes_a_good_body`
+- [x] `ship --stage ready` reads the PR text, including the UI form, before the check results; a UI path PR with no pictures and a failing check was refused for the check before → `tests/test_pr_text.py::test_ready_refuses_a_ui_change_without_pictures_or_a_note`
+- [x] The quick check judges a plan that the branch changed and committed when no branch point is found, in a clean tree → `tests/test_quick_plan_scope.py::test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known`
+- [x] A failed Fallow gate prints each complexity and CRAP finding, in the combined and the audit report, and every other finding with no cut at 20 → `tests/test_report_findings.py::test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings`
+- [x] The CI template uploads the Fallow JSON only on failure → `tests/test_ci_setup.py::test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails`
 
 ## Baseline + execution
 
@@ -47,11 +47,11 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: The ship-ready test failed on the old code (refused for the failing check) and passes now. The F22 tests failed before the fix (DID NOT RAISE, both base forms) and pass. F22 probe: in a single branch clone, `check --quick` and `--quick --base HEAD` passed and `--plan-stage Complete` refused; after the fix all three refuse. With the base branch present, quick refused before and after. A local base branch moved onto HEAD with `--base HEAD` passes by design (nothing is changed since the base). Quick check timing, 5 interleaved runs each, compiled modules, before 2.71 to 3.08 s, after 1.95 to 3.14 s: no slowdown. Focused suites: ship and PR text 345 passed, plans 719 passed, reports 541 passed, CI setup 161 passed. Static gates on the changed files: ruff format, check, complexity, annotations, pyrefly, vulture passed; semgrep 0 findings.
 E2E: N/A — the change is a command and check rules proved by the tests above; no user journey crosses a screen.
-Real service: Required — GitHub: the `pr-text` command reads this PR once through `gh api repos/<repo>/pulls/<n>` after the PR opens; the tests fake GitHub.
-Retro: Required on Complete plans; written at task end.
+Real service: Passed — GitHub: `pr-text --pr` ran against a real merged PR of this repository by number and by URL and printed PASS for both.
+Retro: Escaped bug: ship ready ran only part of the CI text rules and the quick check judged no plan when no branch point existed. The tests gate lacked a row for each; the new rows are in `tests/test_pr_text.py::test_the_pr_text_command_refuses_a_body_that_lacks_a_part` and `tests/test_quick_plan_scope.py::test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known`. Prevention: one function for the text rules and the branch-point rule that treats a missing point as no proof.
 
 Delivery target: PR
 Delivery: Pending — required remote proof.

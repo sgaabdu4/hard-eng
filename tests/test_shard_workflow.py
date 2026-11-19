@@ -261,7 +261,7 @@ def test_a_run_that_selects_no_package_leaves_a_marker_in_each_shard_for_the_gat
 ) -> None:
     jobs = yaml.safe_load(generated(tmp_path, SOURCE, suite_config(2)))["jobs"]
     upload = next(
-        s for s in jobs["tests"]["steps"] if "upload-artifact" in s.get("uses", "")
+        s for s in jobs["tests"]["steps"] if s.get("name") == "Keep the shard reports"
     )
     download = next(
         s for s in jobs["hard-eng"]["steps"] if "download-artifact" in s.get("uses", "")
