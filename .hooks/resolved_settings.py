@@ -355,7 +355,7 @@ def scan_command(directory: Path, gate: Gate) -> list[str]:
     """The command the runner starts for a gate: a package script and a launcher such as `bun x` resolved."""
     try:
         arguments, _ = package_script_invocation(gate["command"], directory)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OSError):
         arguments = gate["command"]
     return native_scanner_command(arguments) or gate["command"]
 
