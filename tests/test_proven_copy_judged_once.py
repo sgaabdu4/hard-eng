@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import TextIO
 
+import decimate_resolved
 import pytest
 import yaml
 from conftest import commit
@@ -256,6 +257,22 @@ def test_a_source_that_fails_its_own_settings_does_not_excuse_its_copy(
 ) -> None:
     build(tmp_path, runner, monkeypatch, source_options=source_options)
     decimate_settings(monkeypatch, max_crap)
+    group = function_group()
+    assert NESTED in (refused(runner, group, [group, full_source()]) or "")
+
+
+def test_a_source_with_a_raised_limit_in_its_settings_does_not_excuse_its_copy(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-NO-SWITCH-OFF: the settings judge of the source group runs before its copy is left out."""
+    build(tmp_path, runner, monkeypatch)
+
+    def printed(
+        directory: Path, _config: str | None, _timeout: float
+    ) -> dict[str, object]:
+        return {"health": {"max_cognitive": 99 if directory.name == "lib_a" else 15}}
+
+    monkeypatch.setattr(decimate_resolved, "printed_config", printed)
     group = function_group()
     assert NESTED in (refused(runner, group, [group, full_source()]) or "")
 
