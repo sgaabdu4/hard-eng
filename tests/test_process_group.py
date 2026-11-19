@@ -211,3 +211,22 @@ process_group.run_in_group([sys.executable, "-c", "import time; time.sleep(60)"]
         assert gone(pid_file)
     finally:
         subprocess.run(["kill", "-9", pid_file.read_text()], check=False)
+
+
+def test_a_stop_signal_while_a_launch_fails_still_stops_the_run() -> None:
+    script = f"""
+import os, signal, subprocess, sys
+sys.path.insert(0, {str(SOURCE / ".hooks")!r})
+import process_group
+process_group.exit_when_stopped()
+def missing(*args, **kwargs):
+    os.kill(os.getpid(), signal.SIGTERM)
+    raise FileNotFoundError(args[0][0])
+subprocess.Popen = missing
+try:
+    process_group.run_in_group(["no-such-tool"], timeout=None)
+except FileNotFoundError:
+    sys.exit(0)
+"""
+    runner = subprocess.run([sys.executable, "-c", script], check=False)
+    assert runner.returncode == 128 + signal.SIGTERM
