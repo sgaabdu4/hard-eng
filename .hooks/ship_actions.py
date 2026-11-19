@@ -244,6 +244,8 @@ def link_local_files(root: Path, checkout: Path) -> None:
             continue
         source = root / name
         target = checkout / name
+        if name in dart:
+            target.parent.mkdir(parents=True, exist_ok=True)
         if not target.parent.is_dir() or target.exists() or target.is_symlink():
             continue
         if copied:

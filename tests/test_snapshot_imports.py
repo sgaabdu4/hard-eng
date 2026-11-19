@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import ship_actions
 from conftest import commit, init
-from shipping import git
+from shipping import Shipment, git
 
 
 def project(root: Path, imported: bool = True, importer_tracked: bool = True) -> str:
@@ -91,6 +91,73 @@ def test_the_link_stays_placed_by_hard_eng_after_the_import_is_removed(
     assert "!! lib/firebase_options.dart" in ship_actions.placed_by_hard_eng(
         root, checkout
     )
+
+
+def kept_by_cleanup(root: Path, checkout: Path, revision: str) -> None:
+    ship_actions.unchanged_checkout(
+        Shipment(
+            root=checkout,
+            plan=checkout / "PLAN.md",
+            pr_url="https://github.com/fixture/project/pull/1",
+            repository="fixture/project",
+            remote="origin",
+            remote_url=str(root),
+            branch="main",
+            head_sha=revision,
+            base="main",
+            merged_sha=revision,
+            delivery_target="Merge",
+        )
+    )
+
+
+def generated_project(root: Path, tracked_beside: bool) -> str:
+    init(root)
+    (root / ".gitignore").write_text("lib/gen/key.dart\n")
+    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "lib/gen").mkdir(parents=True)
+    (root / "lib/main.dart").write_text("import 'gen/key.dart';\n")
+    if tracked_beside:
+        (root / "lib/gen/beside.dart").write_text("const beside = 1;\n")
+    revision = commit(root, "start")
+    (root / "lib/gen/key.dart").write_text("const key = 'secret';\n")
+    return revision
+
+
+def test_an_ignored_file_alone_in_its_folder_is_linked_with_the_folder_made(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    revision = generated_project(root, tracked_beside=False)
+    checkout = snapshot_of(root, revision)
+    assert not (root / "lib/gen/beside.dart").exists()
+    link = checkout / "lib/gen/key.dart"
+    assert link.is_symlink()
+    assert link.resolve() == (root / "lib/gen/key.dart").resolve()
+    status = git(
+        checkout, "status", "--porcelain", "--untracked-files=all", "--ignored=matching"
+    )
+    assert set(status.splitlines()) == ship_actions.placed_by_hard_eng(root, checkout)
+    kept_by_cleanup(root, checkout, revision)
+
+
+def test_an_ignored_file_is_linked_when_the_commit_removed_its_folder(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    generated_project(root, tracked_beside=True)
+    pushed = tmp_path / "pushed"
+    git(root, "worktree", "add", "-b", "pushed", str(pushed))
+    git(pushed, "rm", "-q", "lib/gen/beside.dart")
+    revision = commit(pushed, "remove the tracked file of the folder")
+    checkout = snapshot_of(root, revision)
+    assert not (checkout / "lib/gen/beside.dart").exists()
+    assert (checkout / "lib/gen/key.dart").is_symlink()
+    status = git(
+        checkout, "status", "--porcelain", "--untracked-files=all", "--ignored=matching"
+    )
+    assert set(status.splitlines()) == ship_actions.placed_by_hard_eng(root, checkout)
+    kept_by_cleanup(root, checkout, revision)
 
 
 @pytest.mark.parametrize(
