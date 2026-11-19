@@ -613,10 +613,13 @@ def judged_copies(
         (root / other["path"]).resolve().relative_to(top).as_posix(): other
         for other in groups
     }
+    # The proof reads git's index, but the gates read the files on disk.
+    status = [*GIT_LISTING, "status", "-z", "--porcelain", "-uall", "--"]
     return frozenset(
         held[len(prefix) :]
         for held, source in proven_copies(root, directory).items()
         if source in by_folder
+        and not subprocess.check_output([*status, held, source], cwd=top, text=True)
         and judged_in_full(root, by_folder[source], groups, timeout)
     )
 
