@@ -256,6 +256,22 @@ def test_a_copy_with_an_edit_not_yet_committed_is_judged_in_place(
     assert scoped == []
 
 
+@pytest.mark.parametrize("staged", [False, True])
+def test_a_copy_synced_to_an_edit_not_yet_committed_stays_left_to_its_source(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch, staged: bool
+) -> None:
+    root = build(tmp_path, runner, monkeypatch)
+    for folder in ("packages/lib_a", "functions/f/shared_copy"):
+        (root / folder / "lib/a.dart").write_text("int a() => 9;\n")
+        (root / folder / "lib/c.dart").write_text("int c() => 3;\n")
+    if staged:
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    group = function_group()
+    assert refused(runner, group, [group, full_source()]) is None
+    _, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
+    assert scoped == ["."]
+
+
 def test_an_unmarked_nested_settings_file_without_the_include_is_still_refused(
     tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -563,7 +579,11 @@ def test_a_quick_check_does_not_start_the_tool_to_judge_a_source(
     def started(*_arguments: object) -> None:
         raise AssertionError("the quick check started Dart Decimate")
 
+    def asked(*_arguments: object) -> None:
+        raise AssertionError("the quick check asked git for the state on disk")
+
     monkeypatch.setattr(dart_boundaries, "validate_dart_boundaries", started)
+    monkeypatch.setattr(dart_boundaries, "same_on_disk", asked)
     monkeypatch.setattr("sys.argv", ["hard-eng.py", "check", "--quick"])
     group = function_group()
     assert dart_boundaries.judged_copies(

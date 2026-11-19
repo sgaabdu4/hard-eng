@@ -13,6 +13,7 @@ from generated_marks import (
     generated_sources,
     proven_copies,
     repository_top,
+    same_on_disk,
 )
 from project_files import GIT_LISTING
 
@@ -612,6 +613,8 @@ def judged_copies(
     root: Path, group: "Group", groups: "list[Group]", timeout: float
 ) -> frozenset[str]:
     """The folders below the group's folder, relative to it, that are proven byte copies of a package whose own group judges it in full; a copy that fails any step stays judged in place."""
+    from tool_setup import quick_mode
+
     directory = root / group["path"]
     top = repository_top(root)
     prefix = folder_prefix(directory.resolve().relative_to(top).as_posix())
@@ -619,13 +622,11 @@ def judged_copies(
         (root / other["path"]).resolve().relative_to(top).as_posix(): other
         for other in groups
     }
-    # The proof reads git's index, but the gates read the files on disk.
-    status = [*GIT_LISTING, "status", "-z", "--porcelain", "-uall", "--"]
     return frozenset(
         held[len(prefix) :]
         for held, source in proven_copies(root, directory).items()
         if source in by_folder
-        and not subprocess.check_output([*status, held, source], cwd=top, text=True)
+        and (quick_mode() or same_on_disk(top, held, source))
         and judged_in_full(root, by_folder[source], groups, timeout)
     )
 
