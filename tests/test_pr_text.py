@@ -10,7 +10,7 @@ import pytest
 import shipping
 import yaml
 from conftest import SOURCE
-from pr_text import body_problem, event_problem
+from pr_text import body_problem, event_problem, pr_text_command
 from test_shipping import (
     _DIAGRAM,
     _UI_BODY,
@@ -516,3 +516,76 @@ def test_pr_text_job_reads_the_pr_files_with_the_workflow_token_and_nothing_more
         "PR": "${{ github.event.pull_request.number }}",
         "REPO": "${{ github.repository }}",
     }
+
+
+_COMMAND_PROBLEMS = [
+    ("Undo", _VALID.replace("Undo: revert the commits.\n", "")),
+    ("Mermaid", _VALID.replace("mermaid", "text")),
+    ("Not checked", _GOOD),
+]
+
+
+def _command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
+    files: list[dict[str, object]] | None = None,
+    pr: str = "1",
+) -> tuple[int, str]:
+    root = _project(tmp_path, ui_paths=["src/**"])
+    (tmp_path / "pull").mkdir()
+    fake = FakeGitHub(_pull(_fixture(tmp_path / "pull"), body=body), [], files)
+    _patch_gh(monkeypatch, fake)
+    return pr_text_command(root, pr), fake.calls[0][-1]
+
+
+@pytest.mark.parametrize(("part", "body"), _COMMAND_PROBLEMS)
+def test_the_pr_text_command_refuses_a_body_that_lacks_a_part(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    part: str,
+    body: str,
+) -> None:
+    code, asked = _command(tmp_path, monkeypatch, body)
+    assert code == 1
+    assert part in capsys.readouterr().err
+    assert asked == "repos/acme/widget/pulls/1"
+
+
+def test_the_pr_text_command_refuses_a_ui_change_with_no_pictures_or_note(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, _ = _command(tmp_path, monkeypatch, _VALID, [{"filename": "src/App.tsx"}])
+    assert code == 1
+    assert "UI changes require distinct Before and After" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "pr", ["1", "https://github.com/acme/widget/pull/1"], ids=["number", "url"]
+)
+def test_the_pr_text_command_passes_a_good_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    pr: str,
+) -> None:
+    logic = {"filename": "src/App.ts", "patch": "-const a = 1\n+const a = 2"}
+    code, asked = _command(tmp_path, monkeypatch, _UNCHANGED + _VALID, [logic], pr)
+    assert code == 0
+    assert asked == "repos/acme/widget/pulls/1"
+    assert "PASS pr-text" in capsys.readouterr().out
+
+
+def test_ready_refuses_a_ui_change_without_pictures_or_a_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, ui_paths=["src/**"])
+    fake = FakeGitHub(
+        _pull(fixture, body=_VALID, mergeable_state="unstable"),
+        [_check(fixture.head, conclusion="failure")],
+        [{"filename": "src/App.tsx"}],
+    )
+    _ready_outcome(fixture, fake, monkeypatch, "UI changes require distinct")

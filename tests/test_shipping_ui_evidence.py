@@ -34,8 +34,10 @@ def _no_problem(*_arguments: object) -> None:
 
 def isolate_attachments(monkeypatch: pytest.MonkeyPatch) -> None:
     """The attachment rules are tested apart from the measured and look checks, which have their own tests."""
+    import look
     import ui_proof
 
+    monkeypatch.setattr(look, "block_problem", _no_problem)
     monkeypatch.setattr(ui_proof, "download", _image)
     monkeypatch.setattr(ui_proof, "evidence_problem", _no_problem)
 
