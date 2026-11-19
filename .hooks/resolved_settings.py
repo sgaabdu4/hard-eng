@@ -318,10 +318,9 @@ def decimate_tasks(
 ) -> list[Task]:
     root, every, group, gate = scope
     command = gate["command"]
-    if gate.get("role") != "dead-code-duplicates" or command[:3] != [
+    if gate.get("role") != "dead-code-duplicates" or command[:2] != [
         "dart-decimate",
         "check",
-        ".",
     ]:
         return []
     children = nested_package_patterns(group, every, gate.get("role", ""))

@@ -657,7 +657,9 @@ def leave_out_copies(
     if not copies:
         return command
     kept = [
-        name for name in package_roots(directory, [], timeout) if name not in copies
+        name
+        for name in package_roots(directory, [], timeout)
+        if not any(PurePosixPath(name).is_relative_to(copy) for copy in copies)
     ]
     if not kept:
         return command
