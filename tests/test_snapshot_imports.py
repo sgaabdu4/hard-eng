@@ -160,6 +160,74 @@ def test_an_ignored_file_is_linked_when_the_commit_removed_its_folder(
     kept_by_cleanup(root, checkout, revision)
 
 
+def refuse_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    def scan(checkout: Path, candidates: set[str]) -> set[str]:
+        raise AssertionError(f"scanned for {sorted(candidates)}")
+
+    monkeypatch.setattr(ship_actions, "imported_files", scan)
+
+
+@pytest.mark.parametrize(
+    ("l10n", "outputs"),
+    [
+        (
+            "arb-dir: lib/l10n\n",
+            ["lib/l10n/app_localizations.dart", "lib/l10n/app_localizations_en.dart"],
+        ),
+        (
+            "output-localization-file: strings.dart\n",
+            ["lib/l10n/strings.dart", "lib/l10n/strings_en.dart"],
+        ),
+    ],
+)
+def test_files_that_a_generator_of_the_project_writes_are_not_linked_and_not_scanned_for(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    l10n: str,
+    outputs: list[str],
+) -> None:
+    root = tmp_path / "project"
+    init(root)
+    generated = [
+        "lib/model.g.dart",
+        "lib/model.freezed.dart",
+        "test/a.mocks.dart",
+        *outputs,
+    ]
+    (root / ".gitignore").write_text("".join(f"{name}\n" for name in generated))
+    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "l10n.yaml").write_text(l10n)
+    (root / "lib/l10n").mkdir(parents=True)
+    (root / "test").mkdir()
+    (root / "lib/model.dart").write_text(
+        "part 'model.g.dart';\npart 'model.freezed.dart';\n"
+        + "".join(f"import 'l10n/{Path(name).name}';\n" for name in outputs)
+    )
+    (root / "test/a_test.dart").write_text("import 'a.mocks.dart';\n")
+    revision = commit(root, "start")
+    for name in generated:
+        (root / name).write_text("// generated\n")
+    refuse_scan(monkeypatch)
+    checkout = snapshot_of(root, revision)
+    assert not [name for name in generated if (checkout / name).is_symlink()]
+
+
+def test_the_scan_does_not_run_when_the_commit_already_holds_every_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    project(root)
+    pushed = tmp_path / "pushed"
+    git(root, "worktree", "add", "-b", "pushed", str(pushed))
+    (pushed / "lib/firebase_options.dart").write_text("const key = 'tracked';\n")
+    (pushed / "lib/other.dart").write_text("const other = 'tracked';\n")
+    git(pushed, "add", "-f", "lib/firebase_options.dart", "lib/other.dart")
+    revision = commit(pushed, "track both files")
+    refuse_scan(monkeypatch)
+    checkout = snapshot_of(root, revision)
+    assert not (checkout / "lib/firebase_options.dart").is_symlink()
+
+
 @pytest.mark.parametrize(
     ("importer", "directive", "expected"),
     [
