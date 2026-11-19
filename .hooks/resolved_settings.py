@@ -1,4 +1,4 @@
-"""Judge the settings that Ruff and Fallow print for each gate, so no spelling of a setting can hide a narrowed rule set."""
+"""Judge the settings that Ruff, Fallow and Dart Decimate print for each gate, so no spelling of a setting can hide a narrowed rule set."""
 
 import subprocess
 from collections.abc import Callable
@@ -8,6 +8,8 @@ from pathlib import Path
 
 from command_words import direct, launch
 from dart_boundaries import nested_package_patterns
+from decimate_resolved import decimate_hits
+from decimate_resolved import default_config as decimate_defaults
 from fallow_report import named_config, native_fallow_command, option
 from fallow_resolved import default_config, fallow_hits
 from gate_config import Gate, Group
@@ -76,6 +78,7 @@ class Defaults:
         self.pool, self.root, self.timeout = pool, root, timeout
         self.ruff_runs: dict[tuple[tuple[str, ...], bool], Future[str]] = {}
         self.fallow_run: Future[dict[str, object]] | None = None
+        self.decimate_run: Future[dict[str, object]] | None = None
 
     def ruff(self, prefix: tuple[str, ...], role: object = None) -> Future[str]:
         """Ruff's own settings: its defaults, or for an annotations gate the template rule set."""
@@ -90,6 +93,11 @@ class Defaults:
                 self.timeout,
             )
         return self.ruff_runs[key]
+
+    def decimate(self) -> Future[dict[str, object]]:
+        if self.decimate_run is None:
+            self.decimate_run = self.pool.submit(decimate_defaults, self.timeout)
+        return self.decimate_run
 
     def fallow(self) -> Future[dict[str, object]]:
         if self.fallow_run is None:
@@ -303,6 +311,33 @@ def fallow_gate_hits(
     ]
 
 
+def decimate_tasks(
+    scope: Scope,
+    defaults: Defaults,
+    timeout: float,
+) -> list[Task]:
+    root, every, group, gate = scope
+    command = gate["command"]
+    if gate.get("role") != "dead-code-duplicates" or command[:3] != [
+        "dart-decimate",
+        "check",
+        ".",
+    ]:
+        return []
+    children = nested_package_patterns(group, every, gate.get("role", ""))
+    run = (root / group["path"], option(command, "--config"), children, gate, timeout)
+    return [partial(decimate_gate_hits, run, defaults.decimate())]
+
+
+def decimate_gate_hits(
+    run: tuple[Path, str | None, frozenset[str], Gate, float],
+    defaults: Future[dict[str, object]],
+) -> list[str]:
+    directory, config, children, gate, timeout = run
+    hits = decimate_hits(directory, config, children, defaults.result(), timeout)
+    return [f"gate {gate['name']} ({directory.name}): {hit}" for hit in hits]
+
+
 def run_task(task: Task) -> list[str]:
     return task()
 
@@ -326,12 +361,13 @@ def validate_resolved(
             for task in (
                 *ruff_tasks((root, every, group, gate), defaults, timeout),
                 *fallow_tasks((root, every, group, gate), defaults, timeout),
+                *decimate_tasks((root, every, group, gate), defaults, timeout),
             )
         ]
         refused = [hit for found in pool.map(run_task, tasks) for hit in found]
     if refused:
         raise ValueError(
-            "HE-NO-SWITCH-OFF: The settings that Ruff and Fallow print switch a check off or drop files:\n"
+            "HE-NO-SWITCH-OFF: The settings that Ruff, Fallow and Dart Decimate print switch a check off, raise a limit or drop files:\n"
             + "\n".join(f"  {line}" for line in dict.fromkeys(refused))
         )
 
@@ -344,5 +380,8 @@ def judge_before_run(
         judged = direct(gate["command"], root / group["path"])
     except ValueError:
         return
-    if judged and judged[0] == "fallow":
+    if (judged and judged[0] == "fallow") or gate["command"][:2] == [
+        "dart-decimate",
+        "check",
+    ]:
         validate_resolved(root, [group], timeout, groups, gate)
