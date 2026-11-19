@@ -113,12 +113,13 @@ def test_the_link_stays_placed_by_hard_eng_after_the_import_is_removed(
         ("test/a.dart", "import 'package:app/b.dart';", "lib/b.dart"),
     ],
 )
+@pytest.mark.parametrize("name", ["app", '"app"', "'app'"])
 def test_an_import_resolves_the_way_dart_resolves_it(
-    tmp_path: Path, importer: str, directive: str, expected: str | None
+    tmp_path: Path, importer: str, directive: str, expected: str | None, name: str
 ) -> None:
     root = tmp_path / "project"
     init(root)
-    (root / "pubspec.yaml").write_text("name: app\n")
+    (root / "pubspec.yaml").write_text(f"name: {name}\n")
     (root / importer).parent.mkdir(parents=True, exist_ok=True)
     (root / importer).write_text(directive + "\n")
     commit(root, "start")
