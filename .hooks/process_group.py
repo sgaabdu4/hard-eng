@@ -74,8 +74,8 @@ def run_in_group(
                 RUNNING.add(process.pid)
             finally:
                 MAIN_STARTING.clear()
-            if DEFERRED_STOP.is_set():
-                raise SystemExit(128 + STOP_SIGNAL[0])
+                if DEFERRED_STOP.is_set():
+                    raise SystemExit(128 + STOP_SIGNAL[0])
         out, err = process.communicate(timeout=timeout)
     except BaseException:
         if process is not None:
