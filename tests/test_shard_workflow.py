@@ -301,3 +301,20 @@ def test_an_edit_under_github_selects_the_package_checks(repository: Path) -> No
     (repository / OLD_PATH).write_text("name: edited\n")
     chosen = affected_groups(repository, groups, "HEAD")
     assert "tests" in [gate["name"] for group in chosen for gate in group["checks"]]
+
+
+def test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails() -> None:
+    import shards
+
+    pinned = shards.UPLOAD.partition(" #")[0].removeprefix("actions/upload-artifact@")
+    own = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    for jobs in (
+        yaml.safe_load(WORKFLOW_TEMPLATE.read_text())["jobs"],
+        {"hard-eng": own["jobs"]["checks"]},
+    ):
+        last = jobs["hard-eng"]["steps"][-1]
+        assert last["uses"] == f"actions/upload-artifact@{pinned}"
+        assert len(pinned) == 40
+        assert last["if"] == "failure()"
+        assert last["with"]["path"] == "**/coverage/fallow.json"
+        assert last["with"]["if-no-files-found"] == "ignore"
