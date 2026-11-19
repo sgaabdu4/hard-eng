@@ -409,10 +409,15 @@ def has_dart_file(directory: Path, prefix: str) -> bool:
     )
 
 
+def scans_here(command: list[str]) -> bool:
+    """A `dart-decimate check` of the folder the command runs in; `./` names it as `.` does."""
+    return command[:2] == ["dart-decimate", "check"] and command[2:3] in (["."], ["./"])
+
+
 def validate_dart_boundaries(
     command: list[str], directory: Path, timeout: float
 ) -> None:
-    if command[:3] != ["dart-decimate", "check", "."]:
+    if not scans_here(command):
         return
     from tool_setup import managed_command
 
@@ -654,7 +659,7 @@ def leave_out_copies(
     timeout: float,
 ) -> list[str]:
     """Scope a Dart Decimate scan to the package folders that no proven copy holds, so a copy is judged once, at its source. The tool matches a selector against package names too, so it may also pick a package of a copy, which only judges more; a selector that drops a kept folder or picks a package outside the copies fails the gate, because the tool drops what no selector names, in silence."""
-    if command[:3] != ["dart-decimate", "check", "."] or "--workspace" in command:
+    if not scans_here(command) or "--workspace" in command:
         return command
     directory = root / group["path"]
     copies = judged_copies(root, group, groups, timeout)

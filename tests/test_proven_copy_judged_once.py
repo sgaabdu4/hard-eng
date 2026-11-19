@@ -516,3 +516,29 @@ def test_a_package_inside_a_proven_copy_is_left_out_with_it(
     group = function_group()
     failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
     assert (failed, scoped) == (False, ["."])
+
+
+def test_a_scan_of_dot_slash_leaves_out_a_proven_copy(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build(tmp_path, runner, monkeypatch)
+    group = function_group()
+    group["checks"][1]["command"][2] = "./"
+    failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
+    assert (failed, scoped) == (False, ["."])
+
+
+def test_an_attributes_file_without_a_double_star_is_not_parsed_for_copies(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A folder mark ends in `/**`, so a file without `**` needs no parse, and no import of the parser, on a cold hook."""
+    import generated_marks
+    from dart_boundaries import typing_scope
+
+    def parsed(*_arguments: object) -> list[str]:
+        raise AssertionError("the attributes file was parsed")
+
+    build(tmp_path, runner, monkeypatch, mark="*.g.dart linguist-generated\n")
+    monkeypatch.setattr(generated_marks, "marks", parsed)
+    group = function_group()
+    assert typing_scope(runner.ROOT, group, [group], 60)[1] == frozenset()
