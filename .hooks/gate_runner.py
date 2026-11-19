@@ -156,6 +156,11 @@ def production_files(
     return files
 
 
+def every_group(groups: list[Group] | None) -> list[Group]:
+    """A run with a base holds only the changed groups, yet a parent needs its child groups to know what they cover."""
+    return CONFIGURED or groups or []
+
+
 def prepare_command(
     group: Group, gate: Gate, timeout: float, groups: list[Group] | None = None
 ) -> list[str]:
@@ -192,7 +197,7 @@ def prepare_command(
         language = group.get("language")
         from dart_boundaries import nested_package_patterns
 
-        children = nested_package_patterns(group, CONFIGURED or groups or [])
+        children = nested_package_patterns(group, every_group(groups))
         validate_typing(directory, language, group.get("sources", []), children)
         if language == "python":
             from project_setup import python_interpreter
@@ -440,7 +445,7 @@ def prepared_command(
     if command:
         from resolved_settings import judge_before_run
 
-        judge_before_run(ROOT, group, gate, groups, timeout)
+        judge_before_run(ROOT, group, gate, every_group(groups), timeout)
     return command
 
 
