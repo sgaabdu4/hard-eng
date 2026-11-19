@@ -11,7 +11,7 @@ import agent_hooks
 import process_group
 import pytest
 import update_runner
-from conftest import below, gone, running, spawner
+from conftest import SOURCE, below, gone, running, spawner
 from process_group import Process, process_table, stop_idle_codex_brokers
 
 
@@ -186,3 +186,28 @@ def test_an_interrupt_right_after_start_still_stops_the_group(
     with pytest.raises(KeyboardInterrupt):
         process_group.run_in_group(spawner(pid_file), timeout=60)
     assert gone(pid_file)
+
+
+def test_a_stop_signal_while_the_command_starts_still_stops_its_group(
+    tmp_path: Path,
+) -> None:
+    pid_file = tmp_path / "child.pid"
+    script = f"""
+import os, pathlib, signal, subprocess, sys
+sys.path.insert(0, {str(SOURCE / ".hooks")!r})
+import process_group
+process_group.exit_when_stopped()
+class Stopped(subprocess.Popen):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        pathlib.Path({str(pid_file)!r}).write_text(str(self.pid))
+        os.kill(os.getpid(), signal.SIGTERM)
+subprocess.Popen = Stopped
+process_group.run_in_group([sys.executable, "-c", "import time; time.sleep(60)"], timeout=None)
+"""
+    runner = subprocess.run([sys.executable, "-c", script], check=False)
+    try:
+        assert runner.returncode == 128 + signal.SIGTERM
+        assert gone(pid_file)
+    finally:
+        subprocess.run(["kill", "-9", pid_file.read_text()], check=False)
