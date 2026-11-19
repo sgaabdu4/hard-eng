@@ -3,6 +3,7 @@
 import re
 import subprocess
 import sys
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
 from project_files import GIT_LISTING
@@ -326,9 +327,26 @@ def proven_copy(top: Path, folder: str) -> str | None:
     return PROOFS[top, folder]
 
 
+def may_hold_copies(top: Path, folder: Path) -> bool:
+    """Whether a folder mark of the root attributes file could name a folder below this one; it reads the marks alone, so a project with none pays nothing."""
+    parts = folder.resolve().relative_to(top).parts
+    for pattern in marks(top / ".gitattributes", GENERATED_KEYS):
+        if mark_kind(pattern) != "folder":
+            continue
+        named = pattern.strip("/").removesuffix("/**").split("/")
+        if "**" in named or (
+            len(named) > len(parts)
+            and all(fnmatchcase(part, name) for part, name in zip(parts, named))
+        ):
+            return True
+    return False
+
+
 def proven_copies(root: Path, folder: Path) -> dict[str, str]:
     """The folders below this folder that a mark claims and the proof accepts, each with the package folder it copies; every path is relative to the repository top."""
     top = repository_top(root)
+    if not may_hold_copies(top, folder):
+        return {}
     prefix = folder_prefix(folder.resolve().relative_to(top).as_posix())
     return {
         held: SOURCES[top, held]

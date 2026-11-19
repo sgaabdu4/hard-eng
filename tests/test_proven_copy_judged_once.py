@@ -415,3 +415,65 @@ def test_the_real_tool_still_reports_the_code_of_the_function_and_its_other_pack
     paths = {finding["path"] for finding in report["findings"]}
     assert {"lib/dead.dart", "other/lib/src/unused.dart"} <= paths
     assert not any(path.startswith("shared_copy/") for path in paths)
+
+
+def test_a_project_with_no_mark_under_the_group_never_asks_git_about_copies(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every Dart types gate runs this, the quick checks of the hooks too: with no folder mark below the group it must read nothing."""
+    import generated_marks
+    from dart_boundaries import typing_scope
+
+    def asked(*_arguments: object) -> object:
+        raise AssertionError("the proof of a copy was asked for")
+
+    group = function_group()
+    for mark in (
+        "",
+        "other/*/elsewhere/** linguist-generated\n",
+        "*.g.dart linguist-generated\n",
+    ):
+        build(tmp_path / str(len(mark)), runner, monkeypatch, mark=mark)
+        monkeypatch.setattr(generated_marks, "claims", asked)
+        monkeypatch.setattr(generated_marks, "proven_copy", asked)
+        assert typing_scope(runner.ROOT, group, [group], 60)[1] == frozenset()
+
+
+def test_the_settings_of_a_source_are_judged_once_for_all_its_copies(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dart_boundaries
+
+    build(tmp_path, runner, monkeypatch)
+    calls: list[Path] = []
+    real = dart_boundaries.validate_dart_boundaries
+
+    def counted(command: list[str], directory: Path, timeout: float) -> None:
+        calls.append(directory)
+        real(command, directory, timeout)
+
+    monkeypatch.setattr(dart_boundaries, "validate_dart_boundaries", counted)
+    group = function_group()
+    groups = [group, full_source()]
+    for _ in range(3):
+        assert dart_boundaries.judged_copies(runner.ROOT, group, groups, 60)
+    assert calls == [runner.ROOT / "packages/lib_a"]
+
+
+def test_a_quick_check_does_not_start_the_tool_to_judge_a_source(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hooks add no time: the quick check skips the copy on the gates of the source group, and the full check starts the tool."""
+    import dart_boundaries
+
+    build(tmp_path, runner, monkeypatch)
+
+    def started(*_arguments: object) -> None:
+        raise AssertionError("the quick check started Dart Decimate")
+
+    monkeypatch.setattr(dart_boundaries, "validate_dart_boundaries", started)
+    monkeypatch.setattr("sys.argv", ["hard-eng.py", "check", "--quick"])
+    group = function_group()
+    assert dart_boundaries.judged_copies(
+        runner.ROOT, group, [group, full_source()], 60
+    ) == frozenset({"shared_copy"})
