@@ -328,7 +328,13 @@ def proven_copy(top: Path, folder: str) -> str | None:
 
 
 def may_hold_copies(top: Path, folder: Path) -> bool:
-    """Whether a folder mark of the root attributes file could name a folder below this one; it reads the marks alone, so a project with none pays only the stat that every mark read pays, which the process shares."""
+    """Whether a folder mark of the root attributes file could name a folder below this one; it reads the marks alone, so a project whose attributes file holds no `**` pays one small read and no parse."""
+    try:
+        text = (top / ".gitattributes").read_text(errors="replace")
+    except OSError:
+        return False
+    if "**" not in text:
+        return False
     folder_marks = [
         pattern
         for pattern in marks(top / ".gitattributes", GENERATED_KEYS)
