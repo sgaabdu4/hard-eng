@@ -7,7 +7,7 @@ import pytest
 from conftest import git
 from decimate_resolved import judge, option_hits
 from gate_config import Gate, Group, dart_scan_includes_boundaries
-from resolved_settings import validate_resolved
+from resolved_settings import judge_before_run, validate_resolved
 from test_proven_copy_judged_once import SCAN, need_decimate
 from test_strict_refusals import project
 
@@ -359,3 +359,18 @@ def test_a_scan_gate_that_resolves_to_another_program_is_refused(
     )
     with pytest.raises(ValueError, match=r"not one `dart-decimate` command"):
         validate_resolved(root, groups(["bun", "run", "dd"]), 900)
+
+
+def test_a_scan_script_rewritten_before_the_run_is_judged_again(tmp_path: Path) -> None:
+    root = repo(
+        tmp_path,
+        GOOD,
+        {"package.json": json.dumps({"scripts": {"dd": " ".join(SCAN["command"])}})},
+    )
+    group = groups(["bun", "run", "dd"])[0]
+    gate = group["checks"][0]
+    judge_before_run(root, group, gate, [group], 900)
+    script = " ".join(["env", "CI=1", *SCAN["command"], "--file", "lib/main.dart"])
+    (root / "package.json").write_text(json.dumps({"scripts": {"dd": script}}))
+    with pytest.raises(ValueError, match=r"not one `dart-decimate` command"):
+        judge_before_run(root, group, gate, [group], 900)

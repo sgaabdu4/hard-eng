@@ -430,5 +430,6 @@ def judge_before_run(
     except ValueError:
         return
     scanner = scan_command(root / group["path"], gate)
-    if (judged and judged[0] == "fallow") or scanner[:1] == ["dart-decimate"]:
+    scan = group.get("language") == "dart" and gate.get("role") in SCAN_ROLES
+    if (judged and judged[0] == "fallow") or scan or scanner[:1] == ["dart-decimate"]:
         validate_resolved(root, [group], timeout, groups, gate)
