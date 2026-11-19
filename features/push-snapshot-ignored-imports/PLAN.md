@@ -17,7 +17,8 @@ Deliverables: None
 - Rule, only imported files: In scope — An ignored file that nobody imports is not linked
 - Rule, only imports of tracked files: In scope — An ignored file that only an untracked file imports is not linked
 - Rule, status checks treat the link as Hard Eng's own: In scope — The link stays placed by Hard Eng
-- Rule, no added time in a project with no ignored Dart file, and the added time elsewhere is measured: In scope — Link speed is recorded in Verification
+- Rule, no scan and no added time unless an ignored Dart file could be linked: In scope — No scan runs when no ignored Dart file is a candidate (none exists, a tool of the project writes it, or the commit already holds it); with a candidate the scan adds the time that Verification measures
+- Rule, a file that a tool of the project writes is not linked: In scope — A generator output is not linked, because a generator in the snapshot writes through a link into the main checkout
 - Rule, Dart imports resolve as Dart resolves them: In scope — An import resolves the way Dart resolves it
 
 ## Repository context
@@ -33,7 +34,7 @@ Handoff: Approval
 Authority: Autonomous. The maintainer gave this task and the design limits in the request; no release or merge is part of this builder's task.
 Decisions:
 
-1. The import scan runs only in `link_local_files`, and only when the ignored listing holds an ignored `.dart` file. A project with none adds no process and reads no file.
+1. The import scan runs only in `link_local_files`, and only when an ignored `.dart` file is a candidate: absent from the checkout and not written by a tool of the project. A project with none adds no process and reads no file. A new linked worktree runs it once, from the `post-checkout` hook, which exits at once unless the previous head is all zeros; a branch switch does not run it.
 2. `placed_by_hard_eng` does no scan. A link stays Hard Eng's own after the task removes the import, because it compares the link with the main checkout's file.
 3. The scan reads only tracked Dart files of the snapshot. It never reads the ignored file.
 
@@ -47,7 +48,9 @@ Decisions:
 - [x] An import resolves the way Dart resolves it → `tests/test_snapshot_imports.py::test_an_import_resolves_the_way_dart_resolves_it`
 - [x] An imported ignored file that is alone in its folder is linked and the folder is made: the status lines equal the placed set and cleanup keeps nothing → `tests/test_snapshot_imports.py::test_an_ignored_file_alone_in_its_folder_is_linked_with_the_folder_made`
 - [x] An imported ignored file whose folder the pushed commit removed is linked the same way → `tests/test_snapshot_imports.py::test_an_ignored_file_is_linked_when_the_commit_removed_its_folder`
-- [x] Link speed is recorded in Verification: no added time without an ignored Dart file, and the measured added time with one → N/A — a timing record of two runs each side, not a test
+- [x] A file that a tool of the project writes (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, the gen-l10n files named by `l10n.yaml`) is not linked and starts no scan → `tests/test_snapshot_imports.py::test_files_that_a_generator_of_the_project_writes_are_not_linked_and_not_scanned_for`
+- [x] No scan runs when the commit already holds every candidate → `tests/test_snapshot_imports.py::test_the_scan_does_not_run_when_the_commit_already_holds_every_candidate`
+- [x] Link speed is recorded in Verification: no scan without a candidate, and the measured added time with one → N/A — a timing record of two runs each side, not a test
 
 ## Baseline + execution
 

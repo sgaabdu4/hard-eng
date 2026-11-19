@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from xml.parsers.expat import ExpatError
 
 from challenge import shipping_note
@@ -186,6 +186,23 @@ def local_files(root: Path) -> Iterator[tuple[str, bool]]:
 DIRECTIVE = re.compile(r"^[ \t]*(?:import|export|part)\s+([^;]*);", re.MULTILINE)
 QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
 PACKAGE_NAME = re.compile(r"""^name:\s*["']?([^\s"']+)""", re.MULTILINE)
+LOCALIZATION = re.compile(
+    r"""^output-localization-file:\s*["']?([^\s"'#]+)""", re.MULTILINE
+)
+
+
+def written_by_generator(checkout: Path, name: str) -> bool:
+    """A file that a tool of the project writes again; a link would let that tool write into the main checkout."""
+    base = posixpath.basename(name)
+    if base.count(".") > 1:
+        return True
+    for folder in PurePosixPath(name).parents:
+        spec = checkout / folder / "l10n.yaml"
+        if spec.is_file():
+            match = LOCALIZATION.search(spec.read_text())
+            stem = PurePosixPath(match.group(1) if match else "app_localizations").stem
+            return base == f"{stem}.dart" or base.startswith(f"{stem}_")
+    return False
 
 
 def dart_target(uri: str, folder: str, package: tuple[str, str] | None) -> str | None:
@@ -238,7 +255,14 @@ def link_local_files(root: Path, checkout: Path) -> None:
     """Builds read ignored local .env* files and ignored Dart files that tracked code imports; link them and local settings without reading them."""
     wanted = list(local_files(root))
     dart = {name for name, _ in wanted if name.endswith(".dart")}
-    imported = imported_files(checkout, dart) if dart else set()
+    missing = {
+        name
+        for name in dart
+        if not (checkout / name).exists()
+        and not (checkout / name).is_symlink()
+        and not written_by_generator(checkout, name)
+    }
+    imported = imported_files(checkout, missing) if missing else set()
     for name, copied in wanted:
         if name in dart and name not in imported:
             continue
