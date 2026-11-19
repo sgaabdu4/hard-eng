@@ -572,7 +572,10 @@ def test_the_pr_text_command_passes_a_good_body(
     capsys: pytest.CaptureFixture[str],
     pr: str,
 ) -> None:
-    logic = {"filename": "src/App.ts", "patch": "-const a = 1\n+const a = 2"}
+    logic: dict[str, object] = {
+        "filename": "src/App.ts",
+        "patch": "-const a = 1\n+const a = 2",
+    }
     code, asked = _command(tmp_path, monkeypatch, _UNCHANGED + _VALID, [logic], pr)
     assert code == 0
     assert asked == "repos/acme/widget/pulls/1"

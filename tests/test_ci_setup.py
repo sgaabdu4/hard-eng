@@ -465,7 +465,7 @@ def generated_tools(
     configure_ci(root, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]
     job = yaml.safe_load(workflow)["jobs"]["hard-eng"]
-    checks = job["steps"][-1]
+    checks = next(s for s in job["steps"] if s.get("name") == "Run required checks")
     fallback = checks["env"]["SDK_TOOLS"].split(" || '", 1)[1].split("'", 1)[0]
     output = subprocess.check_output(
         ["bash", "-c", 'bun() { printf "%s\\n" "$*"; }\n' + checks["run"]],
@@ -983,3 +983,20 @@ def test_generated_tool_cache_is_removed_from_existing_workflows(
     changes.clear()
     configure_ci(tmp_path, SOURCE, {"packages": [], "shared": []}, changes)
     assert changes == {}
+
+
+def test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails() -> None:
+    import shards
+
+    pinned = shards.UPLOAD.partition(" #")[0].removeprefix("actions/upload-artifact@")
+    own = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    for jobs in (
+        yaml.safe_load(WORKFLOW_TEMPLATE.read_text())["jobs"],
+        {"hard-eng": own["jobs"]["checks"]},
+    ):
+        last = jobs["hard-eng"]["steps"][-1]
+        assert last["uses"] == f"actions/upload-artifact@{pinned}"
+        assert len(pinned) == 40
+        assert last["if"] == "failure()"
+        assert last["with"]["path"] == "**/coverage/fallow.json"
+        assert last["with"]["if-no-files-found"] == "ignore"

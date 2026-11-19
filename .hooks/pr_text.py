@@ -144,7 +144,7 @@ def pull_problem(pull: JsonObject, root: Path, number: int) -> str | None:
     return None
 
 
-def ready_problem(pull: "_PullRequest", root: Path, number: int) -> str | None:
+def ready_problem(pull: _PullRequest, root: Path, number: int) -> str | None:
     """The CI text check on a pull request that `ship` has already read."""
     return pull_problem(
         {
