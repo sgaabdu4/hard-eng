@@ -2,6 +2,7 @@
 
 import os
 import plistlib
+import posixpath
 import re
 import shutil
 import signal
@@ -172,18 +173,75 @@ def local_files(root: Path) -> Iterator[tuple[str, bool]]:
     )
     for name in filter(None, ignored.split("\0")):
         source = root / name
-        if (
-            Path(name).name.startswith(".env") and source.is_file()
-        ) or name in LOCAL_FILES:
+        if name in LOCAL_FILES or (
+            source.is_file()
+            and (Path(name).name.startswith(".env") or name.endswith(".dart"))
+        ):
             yield name, False
         elif source.resolve() == hooks.resolve():
             # Git ignores files inside a linked folder, not the link; Husky's folder holds only shims.
             yield name, True
 
 
+DIRECTIVE = re.compile(r"^[ \t]*(?:import|export|part)\s+([^;]*);", re.MULTILINE)
+QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
+PACKAGE_NAME = re.compile(r"^name:\s*(\S+)", re.MULTILINE)
+
+
+def dart_target(uri: str, folder: str, package: tuple[str, str] | None) -> str | None:
+    """The project path that a Dart import names, or None for a library of another package."""
+    if uri.startswith("package:"):
+        name, _, rest = uri.removeprefix("package:").partition("/")
+        if package is None or name != package[1]:
+            return None
+        return posixpath.normpath(posixpath.join(package[0], "lib", rest))
+    if ":" in uri:
+        return None
+    return posixpath.normpath(posixpath.join(folder, uri))
+
+
+def imported_files(checkout: Path, candidates: set[str]) -> set[str]:
+    """The candidates that a Dart file of this commit imports, exports or takes as a part by path."""
+    packages: dict[str, tuple[str, str] | None] = {}
+
+    def package_of(folder: str) -> tuple[str, str] | None:
+        if folder not in packages:
+            pubspec = checkout / folder / "pubspec.yaml"
+            match = (
+                PACKAGE_NAME.search(pubspec.read_text()) if pubspec.is_file() else None
+            )
+            if match:
+                packages[folder] = (folder, match.group(1))
+            else:
+                packages[folder] = (
+                    None
+                    if folder == "."
+                    else package_of(posixpath.dirname(folder) or ".")
+                )
+        return packages[folder]
+
+    found: set[str] = set()
+    for name in filter(
+        None, git(checkout, "ls-files", "-z", "--", "*.dart").split("\0")
+    ):
+        text = (checkout / name).read_text(errors="replace")
+        folder = posixpath.dirname(name) or "."
+        for directive in DIRECTIVE.findall(text):
+            for uri in QUOTED.findall(directive):
+                target = dart_target(uri, folder, package_of(folder))
+                if target in candidates:
+                    found.add(target)
+    return found
+
+
 def link_local_files(root: Path, checkout: Path) -> None:
-    """Builds read ignored local .env* files; link them and local settings without reading them."""
-    for name, copied in local_files(root):
+    """Builds read ignored local .env* files and ignored Dart files that tracked code imports; link them and local settings without reading them."""
+    wanted = list(local_files(root))
+    dart = {name for name, _ in wanted if name.endswith(".dart")}
+    imported = imported_files(checkout, dart) if dart else set()
+    for name, copied in wanted:
+        if name in dart and name not in imported:
+            continue
         source = root / name
         target = checkout / name
         if not target.parent.is_dir() or target.exists() or target.is_symlink():
