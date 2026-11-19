@@ -6,6 +6,7 @@ import subprocess
 from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import TextIO
 
 import pytest
 import yaml
@@ -86,10 +87,16 @@ def full_source() -> Group:
 def decimate_settings(monkeypatch: pytest.MonkeyPatch, max_crap: int = 30) -> None:
     real = subprocess.check_output
 
-    def settings(command: list[str], *args: object, **kwargs: object) -> str:
+    def settings(
+        command: list[str],
+        cwd: Path,
+        text: bool,
+        timeout: float | None = None,
+        stderr: int | None = None,
+    ) -> str:
         if "dart-decimate" not in " ".join(command):
-            return real(command, *args, **kwargs)  # type: ignore[no-any-return]
-        own = Path(str(kwargs["cwd"])).name == "f"
+            return str(real(command, cwd=cwd, text=text))
+        own = cwd.name == "f"
         rules = [
             {"from": "lib/main.dart", "disallow": "shared_copy"}
             if own
@@ -253,7 +260,13 @@ def scan_run(
     commands: list[list[str]] = []
 
     def decimate(
-        _group: Group, _gate: Gate, command: list[str], *rest: object
+        _group: Group,
+        _gate: Gate,
+        command: list[str],
+        _directory: Path,
+        _timeout: float,
+        stdout: TextIO,
+        _stderr: TextIO,
     ) -> SimpleNamespace:
         commands.append(command)
         report = json.loads(REPORTS["dart-decimate"])
@@ -262,7 +275,7 @@ def scan_run(
             found.append({**FINDING, "path": "shared_copy/lib/a.dart"})
         report["findings"] = found
         report["verdict"] = "fail" if found else "pass"
-        rest[2].write(json.dumps(report))  # type: ignore[attr-defined]
+        stdout.write(json.dumps(report))
         return SimpleNamespace(returncode=1 if found else 0)
 
     monkeypatch.setattr(runner, "run_projects", decimate)
