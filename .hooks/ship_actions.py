@@ -12,7 +12,6 @@ import tempfile
 import time
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
-from functools import cache
 from pathlib import Path, PurePosixPath
 from xml.parsers.expat import ExpatError
 
@@ -189,20 +188,33 @@ QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
 PACKAGE_NAME = re.compile(r"""^name:\s*["']?([^\s"']+)""", re.MULTILINE)
 
 
-def written_by_generator(checkout: Path, name: str) -> bool:
-    """A file that a tool of the project writes again; a link would let that tool write into the main checkout."""
+def written_by_generator(
+    checkout: Path, name: str, mains: dict[Path, PurePosixPath | None]
+) -> bool:
+    """A file that a tool of the project writes again; a link would let that tool write into the main checkout. `mains` holds each package's main gen-l10n file, read once."""
     path = PurePosixPath(name)
     if path.name.count(".") > 1:
         return True
     for folder in path.parents:
-        if (checkout / folder / "l10n.yaml").is_file():
-            return localizes(checkout / folder, path.relative_to(folder))
+        package = checkout / folder
+        if (package / "l10n.yaml").is_file():
+            if package not in mains:
+                mains[package] = main_localization_file(package)
+            main = mains[package]
+            relative = path.relative_to(folder)
+            return (
+                main is not None
+                and main.parent in (relative.parent, PurePosixPath("."))
+                and (
+                    relative.name == main.name
+                    or relative.name.startswith(f"{main.stem}_")
+                )
+            )
     return False
 
 
-@cache
-def localization_of(package: Path) -> PurePosixPath | None:
-    """The main gen-l10n file of a package; a python3 without PyYAML cannot read l10n.yaml, so the default file name stands for any folder."""
+def main_localization_file(package: Path) -> PurePosixPath | None:
+    """A python3 without PyYAML cannot read l10n.yaml, so the default file name stands for any folder."""
     from dart_boundaries import localization_file, localization_main
 
     try:
@@ -210,16 +222,6 @@ def localization_of(package: Path) -> PurePosixPath | None:
     except ImportError:
         default = localization_file({})
         return default and PurePosixPath(default.name)
-
-
-def localizes(package: Path, name: PurePosixPath) -> bool:
-    main = localization_of(package)
-    if main is None:
-        return False
-    in_folder = main.parent in (name.parent, PurePosixPath("."))
-    return in_folder and (
-        name.name == main.name or name.name.startswith(f"{main.stem}_")
-    )
 
 
 def dart_target(uri: str, folder: str, package: tuple[str, str] | None) -> str | None:
@@ -276,12 +278,13 @@ def link_local_files(root: Path, checkout: Path) -> None:
         for name, _ in wanted
         if name.endswith(".dart") and not Path(name).name.startswith(".env")
     }
+    mains: dict[Path, PurePosixPath | None] = {}
     missing = {
         name
         for name in dart
         if not (checkout / name).exists()
         and not (checkout / name).is_symlink()
-        and not written_by_generator(checkout, name)
+        and not written_by_generator(checkout, name, mains)
     }
     imported = imported_files(checkout, missing) if missing else set()
     for name, copied in wanted:
