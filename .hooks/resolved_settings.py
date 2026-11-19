@@ -428,7 +428,7 @@ def judge_before_run(
     try:
         judged = direct(gate["command"], root / group["path"])
     except ValueError:
-        return
+        judged = None
     scanner = scan_command(root / group["path"], gate)
     scan = group.get("language") == "dart" and gate.get("role") in SCAN_ROLES
     if (judged and judged[0] == "fallow") or scan or scanner[:1] == ["dart-decimate"]:
