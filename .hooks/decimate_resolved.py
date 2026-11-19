@@ -79,7 +79,42 @@ LIMITS = {
 }
 Drop = Callable[[list[str]], list[str]]
 VALUE_OPTIONS = frozenset(
-    ["--root", "--format", "--config", "--entry", "--dart-platform", "--workspace", "--changed-workspaces", "--changed-since", "--compare", "--regression-baseline", "--save-regression-baseline", "--tolerance", "--baseline", "--save-baseline", "--boundary", "--boundary-call", "--policy-pack", "--max-cyclomatic", "--max-cognitive", "--max-unit-size", "--coverage", "--max-crap", "--runtime-coverage", "--min-invocations-hot", "--min-observation-volume", "--low-traffic-threshold", "--min-score", "--mode", "--min-tokens", "--min-lines", "--min-occurrences", "--top", "--threshold", "--file"]
+    [
+        "--root",
+        "--format",
+        "--config",
+        "--entry",
+        "--dart-platform",
+        "--workspace",
+        "--changed-workspaces",
+        "--changed-since",
+        "--compare",
+        "--regression-baseline",
+        "--save-regression-baseline",
+        "--tolerance",
+        "--baseline",
+        "--save-baseline",
+        "--boundary",
+        "--boundary-call",
+        "--policy-pack",
+        "--max-cyclomatic",
+        "--max-cognitive",
+        "--max-unit-size",
+        "--coverage",
+        "--max-crap",
+        "--runtime-coverage",
+        "--min-invocations-hot",
+        "--min-observation-volume",
+        "--low-traffic-threshold",
+        "--min-score",
+        "--mode",
+        "--min-tokens",
+        "--min-lines",
+        "--min-occurrences",
+        "--top",
+        "--threshold",
+        "--file",
+    ]
 )
 
 
