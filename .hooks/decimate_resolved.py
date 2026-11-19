@@ -1,6 +1,7 @@
 """Judge the config that Dart Decimate prints for a gate: no rule off, no limit raised, no hand-written file dropped."""
 
 import json
+import posixpath
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -78,7 +79,7 @@ LIMITS = {
 }
 Drop = Callable[[list[str]], list[str]]
 VALUE_OPTIONS = frozenset(
-    {"--format", "--config", "--threshold", "--root", "--workspace", "--coverage"}
+    ["--root", "--format", "--config", "--entry", "--dart-platform", "--workspace", "--changed-workspaces", "--changed-since", "--compare", "--regression-baseline", "--save-regression-baseline", "--tolerance", "--baseline", "--save-baseline", "--boundary", "--boundary-call", "--policy-pack", "--max-cyclomatic", "--max-cognitive", "--max-unit-size", "--coverage", "--max-crap", "--runtime-coverage", "--min-invocations-hot", "--min-observation-volume", "--low-traffic-threshold", "--min-score", "--mode", "--min-tokens", "--min-lines", "--min-occurrences", "--top", "--threshold", "--file"]
 )
 
 
@@ -178,7 +179,7 @@ def key_hits(
             *(
                 f"{name} lists {text!r}, a form this check cannot read; use only * and ** and a path below the folder"
                 for text in strings(value)
-                if any(mark in text for mark in "[]{}!") or text.startswith("/")
+                if any(mark in text for mark in "[]{}!?") or text.startswith("/")
             ),
             *(f"{name}: {hit}" for hit in drop(strings(value))),
         ]
@@ -231,15 +232,21 @@ def untracked_configs(directory: Path) -> list[str]:
 
 
 def scanned_folder(command: list[str]) -> str:
-    """The folder that a `dart-decimate check` command scans: its `--root` value, else its first plain word, else `.`."""
-    for index, word in enumerate(command[2:], start=2):
-        if word.startswith("--root="):
-            return word.removeprefix("--root=")
-        if word == "--root":
-            return command[index + 1] if index + 1 < len(command) else "."
-        if not word.startswith("-") and command[index - 1] not in VALUE_OPTIONS:
-            return word
-    return "."
+    """The folder that a `dart-decimate check` command scans: its `--root` value, which the tool puts first, else its plain word, else `.`."""
+    plain = "."
+    skip = False
+    for word in command[2:]:
+        if skip:
+            skip = False
+        elif word.startswith("--root="):
+            return posixpath.normpath(word.removeprefix("--root="))
+        elif word == "--root":
+            return posixpath.normpath(command[command.index(word, 2) + 1])
+        elif word in VALUE_OPTIONS:
+            skip = True
+        elif not word.startswith("-") and plain == ".":
+            plain = word
+    return posixpath.normpath(plain)
 
 
 def decimate_hits(
