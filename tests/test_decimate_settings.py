@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from conftest import git
 from decimate_resolved import judge
-from gate_config import Group
+from gate_config import Gate, Group
 from resolved_settings import validate_resolved
 from test_proven_copy_judged_once import SCAN, need_decimate
 from test_strict_refusals import project
@@ -64,6 +64,12 @@ SWITCHED_OFF = [
     ({"dupes": {"minLines": 50}}, r"dupes\.min_lines is 50"),
     ({"dupes": {"threshold": 5}}, r"dupes\.threshold is 5"),
     ({"dupes": {"skipLocal": True}}, r"dupes\.skip_local is True"),
+    (
+        {"ignorePatterns": ["lib/[m]ain.dart"]},
+        r"ignore_patterns lists 'lib/\[m\]ain\.dart'",
+    ),
+    ({"health": {"top": 0}}, r"health\.top is 0"),
+    ({"dupes": {"top": 0}}, r"dupes\.top is 0"),
     ({"ignoreDependencies": ["foo"]}, r"ignore_dependencies is \['foo'\]"),
     (
         {"rules": {"dart-decimate/dead-file": "off"}},
@@ -108,14 +114,33 @@ def test_generated_output_may_be_ignored_when_the_attributes_name_it(
         validate_resolved(root, groups(), 900)
 
 
-def test_a_coverage_file_that_git_tracks_is_refused(tmp_path: Path) -> None:
-    config = {**GOOD, "health": {"maxCrap": 30, "coveragePath": "lcov.info"}}
-    refused(
-        config,
-        r"health\.coverage_path is lcov\.info",
-        tmp_path,
-        **{"lcov.info": "SF:lib/main.dart\nDA:1,1\nend_of_record\n"},
-    )
+def test_a_coverage_path_is_refused_whatever_file_it_names(tmp_path: Path) -> None:
+    """A stale or partial LCOV file would replace the coverage that the tests write."""
+    config = {**GOOD, "health": {"maxCrap": 30, "coveragePath": "cov/lcov.info"}}
+    refused(config, r"health\.coverage_path is 'cov/lcov\.info'", tmp_path)
+
+
+@pytest.mark.parametrize("name", ["dart-decimate.toml", ".dart-decimate.toml"])
+def test_a_toml_settings_file_that_git_does_not_track_is_refused(
+    tmp_path: Path, name: str
+) -> None:
+    root = repo(tmp_path, {})
+    (root / name).write_text("")
+    with pytest.raises(ValueError, match=rf"{name} is not tracked by Git"):
+        validate_resolved(root, groups(), 900)
+
+
+def test_the_root_option_form_of_the_scan_is_judged_too(tmp_path: Path) -> None:
+    root = repo(tmp_path, {**GOOD, "health": {"maxCyclomatic": 99}})
+    other: Gate = {**SCAN, "command": ["dart-decimate", "check", "--root", "."]}
+    group: Group = {
+        "path": ".",
+        "language": "dart",
+        "sources": ["lib"],
+        "checks": [other],
+    }
+    with pytest.raises(ValueError, match=r"health\.max_cyclomatic is 99"):
+        validate_resolved(root, [group], 900)
 
 
 def test_a_settings_file_that_git_does_not_track_is_refused(tmp_path: Path) -> None:
@@ -129,16 +154,13 @@ def test_a_settings_file_that_git_does_not_track_is_refused(tmp_path: Path) -> N
 
 def test_a_setting_that_no_table_classes_is_refused_unless_it_is_the_default() -> None:
     defaults: dict[str, object] = {"future": None, "rules": {}}
-    hit = judge(
-        {"future": 3, "rules": {}}, defaults, lambda _patterns: [], lambda _path: False
-    )
+    hit = judge({"future": 3, "rules": {}}, defaults, lambda _patterns: [])
     assert any("future is 3, not its default None" in line for line in hit)
     assert (
         judge(
             {"future": None, "rules": {}},
             defaults,
             lambda _patterns: [],
-            lambda _path: False,
         )
         == []
     )

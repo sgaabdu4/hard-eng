@@ -482,3 +482,22 @@ def test_a_quick_check_does_not_start_the_tool_to_judge_a_source(
     assert dart_boundaries.judged_copies(
         runner.ROOT, group, [group, full_source()], 60
     ) == frozenset({"shared_copy"})
+
+
+def test_a_package_inside_a_proven_copy_is_left_out_with_it(
+    tmp_path: Path, runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A copy of a package that holds an example package keeps it out of the function's scan."""
+    root = build(
+        tmp_path,
+        runner,
+        monkeypatch,
+        changed=None,
+    )
+    for folder in ("packages/lib_a", "functions/f/shared_copy"):
+        (root / folder / "example").mkdir()
+        (root / folder / "example/pubspec.yaml").write_text("name: example\n")
+    commit(root, "an example package in the source and its copy")
+    group = function_group()
+    failed, scoped, _ = scan_run(runner, monkeypatch, [group, full_source()])
+    assert (failed, scoped) == (False, ["."])

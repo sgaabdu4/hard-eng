@@ -6,13 +6,13 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+from dart_boundaries import SETTINGS_FILES
 from fallow_report import HEALTH_LIMITS
 from fallow_resolved import committed
 from fallow_table import GLOB_CHARACTERS, number, strings
 from scope_check import glob_regex, left_out, tracked
 from tool_setup import managed_command
 
-SETTINGS_FILES = (".dart-decimaterc", ".dart-decimaterc.json", ".dart-decimaterc.jsonc")
 DART_SKIPPED = frozenset({".dart_tool", "build"})
 DECIMATE_KEYS = {
     "path": "free",
@@ -35,9 +35,9 @@ DECIMATE_KEYS = {
     "health.max_cognitive": "limit",
     "health.max_unit_size": "limit",
     "health.max_crap": "limit",
-    "health.top": "free",
+    "health.top": "equal",
     "health.complexity_breakdown": "free",
-    "health.coverage_path": "coverage",
+    "health.coverage_path": "equal",
     "health.coverage_gaps": "free",
     "health.runtime_coverage": "equal",
     "health.min_invocations_hot": "free",
@@ -55,7 +55,7 @@ DECIMATE_KEYS = {
     "dupes.min_lines": "limit",
     "dupes.min_occurrences": "limit",
     "dupes.threshold": "limit",
-    "dupes.top": "free",
+    "dupes.top": "equal",
     "dupes.skip_local": "equal",
     "dupes.ignore_imports": "equal",
     "dupes.ignore_mapper_pairs": "equal",
@@ -151,7 +151,6 @@ def key_hits(
     value: object,
     default: object,
     drop: Drop,
-    tracked_file: Callable[[str], bool],
 ) -> list[str]:
     kind = DECIMATE_KEYS.get(name)
     if kind is None or kind == "equal":
@@ -172,10 +171,13 @@ def key_hits(
             if any(mark in text for mark in GLOB_CHARACTERS)
         ]
     if kind == "patterns":
-        return [f"{name}: {hit}" for hit in drop(strings(value))]
-    if kind == "coverage" and value and tracked_file(str(value)):
         return [
-            f"{name} is {value}, a file that Git tracks: the scan may read only coverage that the tests write"
+            *(
+                f"{name} lists {text!r}, a form this check cannot read; use only * and ** and a path below the folder"
+                for text in strings(value)
+                if any(mark in text for mark in "[]{}!") or text.startswith("/")
+            ),
+            *(f"{name}: {hit}" for hit in drop(strings(value))),
         ]
     return []
 
@@ -184,14 +186,13 @@ def judge(
     config: dict[str, object],
     defaults: dict[str, object],
     drop: Drop,
-    tracked_file: Callable[[str], bool],
 ) -> list[str]:
     """What the printed Dart Decimate config does wrong, key by key, compared with the tool's own defaults."""
     base = flatten(defaults)
     return [
         hit
         for name, value in flatten(config).items()
-        for hit in key_hits(name, value, base.get(name), drop, tracked_file)
+        for hit in key_hits(name, value, base.get(name), drop)
     ]
 
 
@@ -233,7 +234,6 @@ def decimate_hits(
             printed,
             defaults,
             drop,
-            lambda name: committed(directory, directory / name),
         ),
         *untracked_configs(directory),
     ]
