@@ -2,6 +2,8 @@
 
 import copy
 import json
+import os
+import signal
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
@@ -218,13 +220,37 @@ def test_a_pull_request_that_is_not_a_join_is_refused_with_no_call(
     assert fake.calls == []
 
 
-def test_a_join_with_no_passed_record_for_its_head_is_refused_with_no_call(
+def test_a_join_that_fails_ship_verification_makes_no_github_call(
     monkeypatch: pytest.MonkeyPatch, shipment: Shipment
 ) -> None:
     fake = use(monkeypatch, FakeGitHub(saved_protection()))
-    with pytest.raises(ShippingError, match="ship ready"):
-        join_merge.merge_join(replace(shipment, head_sha="f" * 40))
+    monkeypatch.setattr(
+        ship_actions, "verify", Mock(side_effect=ShippingError("required check failed"))
+    )
+    monkeypatch.setattr(ship_actions, "require_current", Mock())
+    with pytest.raises(ShippingError, match="required check failed"):
+        ship_actions.run(shipment.root, None, shipment.pr_url, "merge", None, "rebase")
     assert fake.calls == []
+
+
+def test_a_stop_signal_during_the_merge_still_puts_the_protection_back(
+    monkeypatch: pytest.MonkeyPatch, shipment: Shipment, pause: Mock
+) -> None:
+    fake = use(monkeypatch, FakeGitHub(saved_protection()))
+    real = fake.__call__
+
+    def stopped(root: Path, *args: str) -> str:
+        if args[:2] == ("pr", "merge"):
+            os.kill(os.getpid(), signal.SIGTERM)
+        return real(root, *args)
+
+    monkeypatch.setattr(join_merge, "gh", stopped)
+    before = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(SystemExit):
+        join_merge.merge_join(shipment)
+    assert fake.bodies == [put_body(False), put_body(True)]
+    assert fake.protection == saved_protection()
+    assert signal.getsignal(signal.SIGTERM) == before
 
 
 def test_a_base_without_the_rule_is_merged_with_no_protection_write(
