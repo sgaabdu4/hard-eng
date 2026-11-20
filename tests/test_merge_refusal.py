@@ -287,6 +287,17 @@ def test_a_merge_with_no_record_or_another_method_is_refused_even_with_the_flag(
     assert denied(hook(bash(repo, command)))
 
 
+@pytest.mark.parametrize("flag", ["--merge", "-m"])
+def test_a_typed_merge_of_a_join_is_refused_and_names_the_ship_merge_command(
+    repo: Path, flag: str
+) -> None:
+    record_ship(repo, 12, HEAD, "join")
+    output = hook(bash(repo, f"gh pr merge 12 {flag} --match-head-commit {HEAD}"))
+    assert denied(output)
+    assert "ship --stage merge --pr <PR URL> --plan <plan>" in output
+    assert "lifts" in output
+
+
 @pytest.mark.parametrize("flag", ["--rebase", "-r"])
 @pytest.mark.parametrize("number", ["12", "https://github.com/o/r/pull/12"])
 def test_a_typed_rebase_merge_with_a_passed_record_is_refused_and_names_the_ship_merge_command(

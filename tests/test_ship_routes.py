@@ -76,8 +76,8 @@ def _recorded_method(fixture: Fixture) -> str:
 
 
 @pytest.mark.parametrize(
-    ("head_ref", "base_ref", "behind"),
-    [("develop", "main", 0), ("chore/join-main-hotfix", "develop", 4)],
+    ("head_ref", "base_ref", "behind", "method"),
+    [("develop", "main", 0, "merge"), ("chore/join-main-hotfix", "develop", 4, "join")],
     ids=["release", "join"],
 )
 def test_a_release_or_join_passes_ship_with_a_merge_commit_beyond_the_commit_limit(
@@ -86,13 +86,14 @@ def test_a_release_or_join_passes_ship_with_a_merge_commit_beyond_the_commit_lim
     head_ref: str,
     base_ref: str,
     behind: int,
+    method: str,
 ) -> None:
     fixture = develop_policy(tmp_path, head_ref)
     _origin_refs(fixture, "head")
     pull = _route_pull(fixture, head_ref, base_ref, 156)
     shipment = _ship(monkeypatch, fixture, pull, behind)
-    assert shipment.method == "merge"
-    assert _recorded_method(fixture) == "merge"
+    assert shipment.method == method
+    assert _recorded_method(fixture) == method
 
 
 def test_a_task_branch_into_the_base_that_lacks_the_default_tip_is_not_a_join(
