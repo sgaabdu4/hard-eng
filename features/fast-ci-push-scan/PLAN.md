@@ -29,7 +29,7 @@ Authority: Autonomous. The maintainer approved this fault report on 2026-11-20 a
 - [x] Local mode keeps its setup → `tests/test_push_check.py::test_a_push_that_runs_the_full_check_still_sets_up_the_copy`
 - [x] The scan still refuses a pushed commit with a secret that a later commit removed (guard; already held before the change) → `tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci`
 - [x] A changed or added working-tree `.gitleaks.toml` or `.gitleaksignore` does not hide a pushed secret (guard; already held before the change) → `tests/test_push_check.py::test_a_changed_working_tree_gitleaks_config_does_not_hide_a_pushed_secret`
-- [x] CI mode keeps the full setup when a package of the pushed gates file sits in a submodule → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_for_a_package_in_a_submodule`
+- [x] CI mode keeps the full setup when a package of the pushed gates file sits in a submodule or leaves its folder with `..` → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_for_a_package_in_a_submodule`
 - [x] A pre-push hook that SIGTERM or SIGHUP stops prints one line naming the signal and saying the stop is not a fault in the project → `tests/test_pre_push_stop.py::test_a_pre_push_stopped_by_a_signal_says_the_check_did_not_finish`
 - [x] A check that exits with 128 plus the signal gets the same line; a check that fails on its own gets none → `tests/test_pre_push_stop.py::test_a_check_that_the_signal_reached_first_gets_the_same_line`, `tests/test_pre_push_stop.py::test_a_check_that_fails_on_its_own_gets_no_stop_line`, `tests/test_pre_push_stop.py::test_a_check_that_a_signal_ended_before_its_handlers_start_gets_the_same_line`, `tests/test_pre_push_stop.py::test_an_interrupted_mutation_report_does_not_ask_for_another_push`
 - [x] The update PR names both cases when its push fails: a printed failing check is a project fault, and no printed failing check (for example a stopped check) is not → `tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step`
@@ -58,6 +58,8 @@ Retro: (1) The ci-mode push built a full copy for a scan that reads only tracked
 Who sent the stop in the reported run: not checked. The log shows only the exit code 143 after the tool setup; a time limit in the caller is possible, because the reported times straddle 120 s. Hard Eng's own limits end a command with SIGKILL after a timeout, not SIGTERM.
 
 Review declined: the plan quotes a standing push and merge instruction, which could steer a read-only reviewer :: the Authority line is required text from the maintainer, and the reviewer is read-only by its own assignment.
+
+Review declined: a package path that reaches a submodule through a tracked symlink still gets an empty submodule in CI mode :: a gates file naming a package through a symlink into a skill submodule is far-fetched, and the full setup still runs for every path with `..` or inside a submodule.
 
 Delivery target: Merge
 

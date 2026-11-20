@@ -140,8 +140,9 @@ def stop_number(code: int) -> int | None:
 def stopped_line(number: int) -> str:
     return (
         f"Hard Eng: the pre-push check was stopped by {signal.Signals(number).name} "
-        "before it finished. The stop is not a fault in the project. Fix any failure "
-        "printed above, then run the push again."
+        "before it finished. The stop is not a fault in the project, and neither is "
+        "the FAIL line of a gate that it ended. Fix a failure printed before the "
+        "stop, then run the push again."
     )
 
 
@@ -581,7 +582,8 @@ def package_in_submodule(root: Path, revision: str) -> bool:
         if entry.startswith("160000 ")
     ]
     return any(
-        Path(os.path.normpath(package["path"])).is_relative_to(module)
+        ".." in Path(package["path"]).parts
+        or Path(os.path.normpath(package["path"])).is_relative_to(module)
         for package in config.get("packages", [])
         for module in modules
     )
