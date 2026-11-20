@@ -1,6 +1,6 @@
 # Cut the setup around the CI-mode push scan and name a stopped push check
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,14 +24,14 @@ Authority: Autonomous. The maintainer approved this fault report on 2026-11-20 a
 
 ## Acceptance + steps
 
-- [x] In CI mode with no mutation run, the copy of the pushed commit gets no submodule clone, no local file links and no post-checkout hook → tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_no_copy_for_the_secret_scan
-- [x] In CI mode with a mutation budget, the copy gets the full setup, because the quick check and mutation read installed dependencies → tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_when_mutation_will_run
-- [x] Local mode keeps its setup → tests/test_push_check.py::test_a_push_that_runs_the_full_check_still_sets_up_the_copy
-- [x] The scan still refuses a pushed commit with a secret that a later commit removed (guard; already held before the change) → tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci
-- [x] A changed or added working-tree `.gitleaks.toml` or `.gitleaksignore` does not hide a pushed secret (guard; already held before the change) → tests/test_push_check.py::test_a_changed_working_tree_gitleaks_config_does_not_hide_a_pushed_secret
-- [x] A pre-push hook that SIGTERM or SIGHUP stops prints one line naming the signal and saying no check failed → tests/test_pre_push_stop.py::test_a_pre_push_stopped_by_a_signal_says_the_check_did_not_finish
-- [x] A check that exits with 128 plus the signal gets the same line; a check that fails on its own gets none → tests/test_pre_push_stop.py::test_a_check_that_the_signal_reached_first_gets_the_same_line, tests/test_pre_push_stop.py::test_a_check_that_fails_on_its_own_gets_no_stop_line
-- [x] The update PR names both cases when its push fails: a printed failing check is a project fault, a stopped check or no printed failing check is not → tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step
+- [x] In CI mode with no mutation run, the copy of the pushed commit gets no submodule clone, no local file links and no post-checkout hook → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_no_copy_for_the_secret_scan`
+- [x] In CI mode with a mutation budget, the copy gets the full setup, because the quick check and mutation read installed dependencies → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_when_mutation_will_run`
+- [x] Local mode keeps its setup → `tests/test_push_check.py::test_a_push_that_runs_the_full_check_still_sets_up_the_copy`
+- [x] The scan still refuses a pushed commit with a secret that a later commit removed (guard; already held before the change) → `tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci`
+- [x] A changed or added working-tree `.gitleaks.toml` or `.gitleaksignore` does not hide a pushed secret (guard; already held before the change) → `tests/test_push_check.py::test_a_changed_working_tree_gitleaks_config_does_not_hide_a_pushed_secret`
+- [x] A pre-push hook that SIGTERM or SIGHUP stops prints one line naming the signal and saying no check failed → `tests/test_pre_push_stop.py::test_a_pre_push_stopped_by_a_signal_says_the_check_did_not_finish`
+- [x] A check that exits with 128 plus the signal gets the same line; a check that fails on its own gets none → `tests/test_pre_push_stop.py::test_a_check_that_the_signal_reached_first_gets_the_same_line`, `tests/test_pre_push_stop.py::test_a_check_that_fails_on_its_own_gets_no_stop_line`
+- [x] The update PR names both cases when its push fails: a printed failing check is a project fault, a stopped check or no printed failing check is not → `tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step`
 
 ## Baseline + execution
 
@@ -53,7 +53,7 @@ Result: Passed
 Evidence: Same large project and method as the baseline, develop hooks with and without this change, two runs each, total seconds of the ci-mode pre-push: old 12.65 and 11.24, new 7.37 and 7.14. In the old runs `git worktree add` with its hook took 5.1 and 5.9 s and the second prepare 0.4 s; the new runs start no hook and no prepare, so the total falls by about 4 to 5 s. The remote base lookup, the child check and the worktree remove are unchanged. Tests: tests/test_push_check.py, tests/test_pre_push_stop.py, tests/test_update_pr_refusal.py and tests/test_ship_actions.py pass (128 tests). The three failures of tests/test_snapshot_imports.py on this machine also fail on the unchanged develop.
 E2E: N/A — no user journey changes; the hook tests run the real hook with a real signal.
 Real service: N/A — no outside service
-Retro: Pending
+Retro: (1) The ci-mode push built a full copy for a scan that reads only tracked files → fixed at the cause in `pre_push`, with a test for each of the three modes. (2) The first scratch timings missed the cost because the copy was warm and held no submodules → the plan lists the runs with and without submodules and names what was not checked. (3) A push stopped by a signal looked like a project fault → the hook now names the signal, and the update PR names both cases.
 Who sent the stop in the reported run: not checked. The log shows only the exit code 143 after the tool setup; a time limit in the caller is possible, because the reported times straddle 120 s. Hard Eng's own limits end a command with SIGKILL after a timeout, not SIGTERM.
 
 Delivery target: Merge
