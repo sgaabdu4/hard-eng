@@ -70,6 +70,29 @@ def add_walls_command(add_parser: Callable[..., ArgumentParser]) -> None:
     walls.add_argument("--stdin", action="store_true")
 
 
+def add_scope_options(checks: ArgumentParser) -> None:
+    checks.add_argument(
+        "--without-dependents",
+        action="store_true",
+        help="Check changed packages only; CI checks their dependents",
+    )
+    checks.add_argument(
+        "--related-tests",
+        action="store_true",
+        help="Run only JavaScript tests related to the change; CI runs them all",
+    )
+    checks.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run only format, lint, types and the file secret scan; the Stop hook uses it",
+    )
+    checks.add_argument(
+        "--commit-secrets",
+        action="store_true",
+        help="Run only the secret scan of the commits since --base, the plan checks and the changed-line text rules; pre-push uses it when CI runs the full check",
+    )
+
+
 NO_LANGUAGES = LanguageFilter()
 
 

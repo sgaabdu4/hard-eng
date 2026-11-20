@@ -199,7 +199,7 @@ def ship_setup(
         files or [VISIBLE_FILE],
     )
     _patch_gh(monkeypatch, fake)
-    monkeypatch.setattr(pr_text, "ui_problem", lambda *_arguments: None)
+    monkeypatch.setattr(pr_text, "ui_problem", no_problem)
     return fixture, fake
 
 
