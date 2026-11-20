@@ -115,8 +115,8 @@ def stop_groups() -> None:
 
 
 def stopped_note(code: int) -> str:
-    """The text for a gate that ended because the check was stopped."""
-    if code == 0 or not STOPPED.is_set():
+    """The text for a gate that the stop killed; a gate that exited by itself keeps its own result."""
+    if code >= 0 or not STOPPED.is_set():
         return ""
     cause = f" by {signal.Signals(STOP_SIGNAL[0]).name}" if STOP_SIGNAL else ""
     return f"\nThe check was stopped{cause}, so this gate was ended before it finished."
