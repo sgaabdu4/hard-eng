@@ -16,7 +16,20 @@ from reports import validate_semgrep
 
 SOURCE = Path(__file__).resolve().parents[1]
 FIXTURES = SOURCE / "tests/fixtures/performance"
+REVIEWER_INPUTS = SOURCE / "tests/fixtures/reviewer-inputs"
 ANNOTATION = re.compile(r"ruleid: (\S+)")
+PERFORMANCE_CHUNKS = 6
+REVIEWER_CHUNKS = 12
+REVIEWER_PARSE_GAPS = [
+    ("f3_q4_py_generic.py", 52, "PartialParsing"),
+    ("f3_q4fmt_py_generic.py", 70, "PartialParsing"),
+    ("r22_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
+    ("r22_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
+    ("r22_twin_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
+    ("r22_twin_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
+    ("r23_opus_p22_py_py.py", 19, "PartialParsing"),
+    ("r23_twin_opus_p22_py_py.py", 23, "PartialParsing"),
+]
 
 
 def strict_gate() -> Gate:
@@ -49,25 +62,57 @@ def coordinates(results: list[dict[str, object]]) -> list[tuple[str, str, int]]:
     ]
 
 
-def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
-    """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
+def fixture_chunk(files: list[Path], chunks: int, index: int) -> list[Path]:
+    return sorted(files)[index::chunks]
+
+
+def performance_fixtures() -> list[Path]:
+    return [path for path in FIXTURES.iterdir() if path.is_file()]
+
+
+def reviewer_fixtures() -> list[Path]:
+    return list(REVIEWER_INPUTS.glob("*.txt"))
+
+
+def blank_annotations(fixture: Path) -> tuple[list[tuple[str, str, int]], str]:
+    name = fixture.name.removesuffix(".txt")
+    lines = fixture.read_text().splitlines()
     expected = []
-    for fixture in sorted(FIXTURES.iterdir()):
-        name = fixture.name.removesuffix(".txt")
-        lines = fixture.read_text().splitlines()
-        for number, line in enumerate(lines, 1):
-            if match := ANNOTATION.search(line):
-                expected.append((name, match[1], number + 1))
-                lines[number - 1] = ""
-        (tmp_path / "src").mkdir(exist_ok=True)
-        (tmp_path / "src" / name).write_text("\n".join(lines) + "\n")
+    for number, line in enumerate(lines, 1):
+        if match := ANNOTATION.search(line):
+            expected.append((name, match[1], number + 1))
+            lines[number - 1] = ""
+    return expected, "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize("index", range(PERFORMANCE_CHUNKS))
+def test_each_rule_finds_exactly_the_annotated_lines(
+    tmp_path: Path, index: int
+) -> None:
+    """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
+    expected: list[tuple[str, str, int]] = []
+    (tmp_path / "src").mkdir()
+    for fixture in fixture_chunk(performance_fixtures(), PERFORMANCE_CHUNKS, index):
+        annotated, source = blank_annotations(fixture)
+        expected += annotated
+        (tmp_path / "src" / fixture.name.removesuffix(".txt")).write_text(source)
     with patch("hot_paths.require_parsed") as parsed:
         results = findings(tmp_path, ["src"], 900)
     parsed.assert_called_once_with([], tmp_path)
-    actual = coordinates(results)
-    assert sorted(actual) == sorted(expected)
+    assert sorted(coordinates(results)) == sorted(expected)
+
+
+def test_the_annotated_chunks_cover_every_fixture_and_every_rule() -> None:
+    """HE-HOT-PATH: the chunked scans together read each fixture once and annotate each rule."""
+    files = performance_fixtures()
+    chunks = [
+        fixture_chunk(files, PERFORMANCE_CHUNKS, index)
+        for index in range(PERFORMANCE_CHUNKS)
+    ]
+    assert sorted(path for chunk in chunks for path in chunk) == sorted(files)
+    annotated = {rule for path in files for _, rule, _ in blank_annotations(path)[0]}
     rules = yaml.safe_load(RULES.read_text())["rules"]
-    assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
+    assert annotated == {rule["id"] for rule in rules}
 
 
 @pytest.mark.parametrize(
@@ -121,10 +166,14 @@ def test_a_loop_in_a_flutter_test_folder_gets_no_finding(tmp_path: Path) -> None
     ]
 
 
-def test_exact_reported_inputs_keep_all_expected_findings(tmp_path: Path) -> None:
-    fixtures = SOURCE / "tests/fixtures/reviewer-inputs"
-    expected = json.loads((fixtures / "expected.json").read_text())
-    for fixture in fixtures.glob("*.txt"):
+@pytest.mark.parametrize("index", range(REVIEWER_CHUNKS))
+def test_exact_reported_inputs_keep_all_expected_findings(
+    tmp_path: Path, index: int
+) -> None:
+    expected = json.loads((REVIEWER_INPUTS / "expected.json").read_text())
+    names = set()
+    for fixture in fixture_chunk(reviewer_fixtures(), REVIEWER_CHUNKS, index):
+        names.add(fixture.name.removesuffix(".txt"))
         (tmp_path / fixture.name.removesuffix(".txt")).write_bytes(fixture.read_bytes())
     with patch("hot_paths.require_parsed") as parsed:
         results = findings(tmp_path, ["."], 900)
@@ -135,23 +184,27 @@ def test_exact_reported_inputs_keep_all_expected_findings(tmp_path: Path) -> Non
         (Path(span["file"]).name, span["start"]["line"], error["type"][0])
         for error in errors
         for span in error["spans"]
-    ) == [
-        ("f3_q4_py_generic.py", 52, "PartialParsing"),
-        ("f3_q4fmt_py_generic.py", 70, "PartialParsing"),
-        ("r22_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
-        ("r22_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
-        ("r22_twin_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
-        ("r22_twin_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
-        ("r23_opus_p22_py_py.py", 19, "PartialParsing"),
-        ("r23_twin_opus_p22_py_py.py", 23, "PartialParsing"),
-    ]
+    ) == [row for row in REVIEWER_PARSE_GAPS if row[0] in names]
     actual = coordinates(results)
     assert sorted(actual) == sorted(
         (name, rule, line)
         for name, rules in expected.items()
+        if name in names
         for rule, lines in rules.items()
         for line in lines
     )
+
+
+def test_the_reported_input_chunks_cover_every_input_and_every_expectation() -> None:
+    files = reviewer_fixtures()
+    chunks = [
+        fixture_chunk(files, REVIEWER_CHUNKS, index) for index in range(REVIEWER_CHUNKS)
+    ]
+    assert sorted(path for chunk in chunks for path in chunk) == sorted(files)
+    names = {path.name.removesuffix(".txt") for path in files}
+    expected = json.loads((REVIEWER_INPUTS / "expected.json").read_text())
+    assert set(expected) <= names
+    assert {row[0] for row in REVIEWER_PARSE_GAPS} <= names
 
 
 def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
