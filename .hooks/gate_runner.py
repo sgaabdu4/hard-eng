@@ -21,6 +21,7 @@ from ci_jobs import (
     NO_LANGUAGES,
     LanguageFilter,
     add_language_filters,
+    add_scope_options,
     add_shard_option,
     add_walls_command,
     language_filter,
@@ -58,7 +59,7 @@ from untrusted_input import (
 )
 
 if TYPE_CHECKING:
-    from argparse import ArgumentParser, Namespace
+    from argparse import Namespace
 
 ROOT = Path(__file__).resolve().parents[1]
 FAILED_GATES: list[str] = []
@@ -835,29 +836,6 @@ def check_command(args: "Namespace") -> int:
         quick=args.quick,
         languages=language_filter(args),
         shard=args.shard,
-    )
-
-
-def add_scope_options(checks: "ArgumentParser") -> None:
-    checks.add_argument(
-        "--without-dependents",
-        action="store_true",
-        help="Check changed packages only; CI checks their dependents",
-    )
-    checks.add_argument(
-        "--related-tests",
-        action="store_true",
-        help="Run only JavaScript tests related to the change; CI runs them all",
-    )
-    checks.add_argument(
-        "--quick",
-        action="store_true",
-        help="Run only format, lint, types and the file secret scan; the Stop hook uses it",
-    )
-    checks.add_argument(
-        "--commit-secrets",
-        action="store_true",
-        help="Run only the secret scan of the commits since --base, the plan checks and the changed-line text rules; pre-push uses it when CI runs the full check",
     )
 
 
