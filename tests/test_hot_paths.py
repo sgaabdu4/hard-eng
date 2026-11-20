@@ -6,10 +6,12 @@ import re
 import subprocess
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 from unittest.mock import patch
 
 import pytest
 import yaml
+from conftest import pytest_collection_modifyitems
 from gate_config import TEST_FOLDERS, Gate, Group
 from hot_paths import RULES, findings, require_parsed, scan_all, unowned_paths
 from reports import validate_semgrep
@@ -115,6 +117,24 @@ def test_the_annotated_chunks_cover_every_fixture_and_every_rule() -> None:
     annotated = {rule for path in files for _, rule, _ in blank_annotations(path)[0]}
     rules = yaml.safe_load(RULES.read_text())["rules"]
     assert annotated == {rule["id"] for rule in rules}
+
+
+class Case:
+    def __init__(self, scan: bool) -> None:
+        self.scan = scan
+
+    def get_closest_marker(self, name: str) -> str | None:
+        return name if self.scan else None
+
+
+def test_scan_cases_start_apart_and_the_other_tests_keep_their_order() -> None:
+    """HE-HOT-PATH: xdist gives a worker neighbouring tests, so the long scans must not be neighbours."""
+    plain = [Case(False) for _ in range(640)]
+    scans = [Case(True) for _ in range(3)]
+    items = [*plain, *scans]
+    pytest_collection_modifyitems(cast("list[pytest.Item]", items))
+    assert [items.index(scan) for scan in scans] == [0, 10, 20]
+    assert [case for case in items if case not in scans] == plain
 
 
 @pytest.mark.parametrize(
