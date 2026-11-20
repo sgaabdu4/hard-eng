@@ -7,6 +7,7 @@ import threading
 import time
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import Mock
 
 import process_group
 import pytest
@@ -110,22 +111,29 @@ def test_a_check_that_fails_on_its_own_gets_no_stop_line(tmp_path: Path) -> None
     assert "stopped by" not in output
 
 
-def test_a_gate_that_a_stop_ended_before_its_scanner_log_was_judged_carries_the_stop_note(
+@pytest.mark.parametrize("stopped", [True, False])
+def test_only_a_gate_that_a_stop_ended_loses_its_scanner_log_judgement(
     runner: ModuleType,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    stopped: bool,
 ) -> None:
-    def stopped_then_invalid(*_arguments: object) -> None:
+    def stop(*_arguments: object) -> None:
         process_group.STOP_SIGNAL[:] = [signal.SIGTERM]
         process_group.STOPPED.set()
+
+    def invalid(*_arguments: object) -> None:
         raise ValueError("Trivy configuration diagnostics are missing")
 
-    monkeypatch.setattr(reports, "validate_scanner_log", stopped_then_invalid)
-    check = {"name": "scan", "command": [sys.executable, "-c", "pass"]}
+    monkeypatch.setattr(reports, "validate_scanner_log", invalid)
+    monkeypatch.setattr(reports, "emit_dart_test_failure", stop if stopped else Mock())
+    check = {"name": "scan", "command": [sys.executable, "-c", "raise SystemExit(1)"]}
     group = {"path": ".", "checks": [check]}
     try:
         assert runner.run_gate(group, check, 30, threading.Lock()) is True
     finally:
         process_group.STOPPED.clear()
         process_group.STOP_SIGNAL.clear()
-    assert "so this gate was ended before it finished" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert ("so this gate was ended before it finished" in output) is stopped
+    assert ("diagnostics are missing" in output) is not stopped
