@@ -36,6 +36,7 @@ Authority: Autonomous. The maintainer approved on 2026-11-20: keep develop's lin
 - [x] `ship ready` records the method `join` for a join → `tests/test_ship_routes.py::test_a_release_or_join_passes_ship_with_a_merge_commit_beyond_the_commit_limit`
 - [x] Only a join keeps its own error when GitHub cannot rebase the pull request; other methods keep the rebase advice → `tests/test_join_merge.py::test_only_a_join_keeps_its_own_error_when_the_pull_request_cannot_be_rebased`
 - [x] A stop signal during the merge still puts the protection back → `tests/test_join_merge.py::test_a_stop_signal_during_the_merge_still_puts_the_protection_back`
+- [x] A stop signal during the put back waits until the protection is back, then ends the process → `tests/test_join_merge.py::test_a_stop_signal_during_the_put_back_waits_until_the_protection_is_back`
 - [x] A typed `gh pr merge` for a join is refused and names the ship command → `tests/test_merge_refusal.py::test_a_typed_merge_of_a_join_is_refused_and_names_the_ship_merge_command`
 - [x] `shipping.pre_push_checks` is `"ci"` in this repository and `check --quick` accepts it → N/A — a setting; the `check --quick` run under Verification reads it
 - [x] `AGENTS.override.md` says that `ship --stage merge` does the join merge → N/A — a sentence; read in the diff
