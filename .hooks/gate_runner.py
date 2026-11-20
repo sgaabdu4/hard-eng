@@ -480,6 +480,7 @@ def run_limited_gate(
                 f"COVERED {gate['name']}{reason}; elapsed {time.monotonic() - started:.3f}s"
             )
             return False
+        from process_group import stopped_note
         from reports import (
             SCANNERS,
             emit_dart_test_failure,
@@ -538,13 +539,14 @@ def run_limited_gate(
                         remembered_output(group, gate, command, result, log)
                     )
                     emit_dart_test_failure(result, tests, kind, report_path)
-            validate_scanner_log(scanner, log)
+            if not stopped_note(result.returncode):
+                validate_scanner_log(scanner, log)
         shard_reports(group, gate)
         unfixed = False
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             unfixed = scanner_result(result.returncode, scanner, *report_args)
-        from process_group import parallel_hint, stopped_note
+        from process_group import parallel_hint
         from reports import check_coverage, completed_tests
 
         if (
@@ -577,12 +579,9 @@ def run_limited_gate(
     ) as error:
         unrun = gate_times.run_not_finished(error, group, gate, related_base)
         text = str(error) if unrun else remember(group, gate, str(error))
-        from process_group import stopped_note
-
         print(
             f"FAIL {gate['name']}: {text}; "
             f"elapsed {time.monotonic() - started:.3f}s @ {group['path']}"
-            + stopped_note(1)
         )
         return True
 
