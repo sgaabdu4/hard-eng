@@ -18,6 +18,7 @@ from xml.parsers.expat import ExpatError
 from challenge import shipping_note
 from gate_config import Group
 from process_group import (
+    STOP_SIGNAL,
     exit_when_stopped,
     passed_minutes,
     passed_note,
@@ -123,6 +124,14 @@ def remote_base(root: Path, branch: str | None) -> str | None:
     return revision
 
 
+def stopped_line(number: int) -> str:
+    return (
+        f"Hard Eng: the pre-push check was stopped by {signal.Signals(number).name} "
+        "before it finished. No check failed, so this is not a fault in the project: "
+        "run the push again."
+    )
+
+
 def run_hard_eng(
     checkout: Path, arguments: list[str], environment: dict[str, str]
 ) -> int:
@@ -134,7 +143,10 @@ def run_hard_eng(
         start_new_session=True,
     )
     try:
-        return command.wait()
+        code = command.wait()
+        if code in {128 + signal.SIGTERM, 128 + signal.SIGHUP}:
+            print(stopped_line(code - 128), flush=True)
+        return code
     finally:
         if command.poll() is None:
             os.killpg(command.pid, signal.SIGTERM)
@@ -548,6 +560,15 @@ def push_checks(
 
 def pre_push(root: Path) -> int:
     exit_when_stopped()
+    try:
+        return check_pushes(root)
+    except SystemExit as stop:
+        if STOP_SIGNAL and stop.code == 128 + STOP_SIGNAL[0]:
+            print(stopped_line(STOP_SIGNAL[0]), flush=True)
+        raise
+
+
+def check_pushes(root: Path) -> int:
     started, mutating = time.monotonic(), 0.0
     for line in sys.stdin:
         fields = line.split()

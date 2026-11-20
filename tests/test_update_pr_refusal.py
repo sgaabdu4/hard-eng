@@ -270,9 +270,11 @@ def test_a_refused_push_of_the_update_branch_names_the_next_step(
     printed = capsys.readouterr().out
     assert (
         f"The push of {update_runner.UPDATE_BRANCH} failed; the lines above give the "
-        "reason. When the pre-push check refused it, the new release found a fault in "
-        f"this project: fix it on the branch {update_runner.UPDATE_BRANCH} in its own "
-        "worktree, as its own commit, then run "
+        "reason. If a failing check is printed above, the new release found a fault "
+        f"in this project: fix it on the branch {update_runner.UPDATE_BRANCH} in its "
+        "own worktree, as its own commit, then run "
+        f"`{update_runner.UPDATE_COMMAND}` again. If the check was stopped before it "
+        "finished, or no failing check is printed, the project is not at fault: run "
         f"`{update_runner.UPDATE_COMMAND}` again."
     ) in printed
     assert "returned non-zero exit status" not in printed
