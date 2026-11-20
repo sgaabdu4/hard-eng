@@ -25,7 +25,7 @@ Review declined: `ship ready` loses the dependency bot exemption :: `ship ready`
 Review declined: Existing Swift and JavaScript four job workflows miss the upload :: those layouts have their own jobs and the migration only edits the one job and split layouts that it can prove it generated; a project with that layout gets the step when its workflow is next generated. Stated limit.
 Review declined: Reports with a custom filename are lost :: the upload takes any `fallow.json` in any folder, which is the name that setup writes; a custom file name is the project's own choice. Stated limit.
 Review declined: A workflow with a step after the check or a trailing outputs block gets no upload :: the migration edits only the workflow text that Hard Eng generates and leaves a customised one as it is, as the shard split does with its own note; adding a step inside any custom layout risks breaking a working workflow. Stated limit.
-Authority: Autonomous mode. The maintainer assigned these three faults, named the branch and the checks; the PR is not merged here.
+Authority: Autonomous mode. The maintainer assigned these three faults, named the branch and the checks. Merge: maintainer, standing chat instruction for this repository's task PRs, "keep going and merge when green" (rebase only, user 2026-10-07); this plan's PR merges into `develop` by rebase after CI passes, never into `main`.
 
 ## Acceptance + steps
 
@@ -59,5 +59,5 @@ E2E: N/A — the change is a command and check rules proved by the tests above; 
 Real service: Passed — GitHub: `pr-text --pr` ran against a real merged PR of this repository by number and by URL and printed PASS for both.
 Retro: Escaped bug: ship ready ran only part of the CI text rules and the quick check judged no plan when no branch point existed. The tests gate lacked a row for each; the new rows are in `tests/test_pr_text.py::test_the_pr_text_command_refuses_a_body_that_lacks_a_part` and `tests/test_quick_plan_scope.py::test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known`. Prevention: one function for the text rules and the branch-point rule that treats a missing point as no proof.
 
-Delivery target: PR
+Delivery target: Merge
 Delivery: Pending — required remote proof.
