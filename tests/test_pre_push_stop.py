@@ -147,6 +147,7 @@ def gate_output_after(
         ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", True, True),
         ("raise SystemExit(1)", True, False),
         ("raise SystemExit(1)", False, False),
+        ("pass", False, False),
     ],
 )
 def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
