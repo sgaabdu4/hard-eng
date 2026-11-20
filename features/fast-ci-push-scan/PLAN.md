@@ -64,7 +64,7 @@ Review declined: a package path that reaches a submodule through a tracked symli
 
 Review declined: the retry text names `update-pr` without `--no-merge` :: the text named the same command before this change, and the retry only merges when checks pass, which the plain command is meant to do.
 Review declined: a signal that arrives after the scanner exited with a finding, while the runner reads its report, labels that gate as stopped :: the window is a few milliseconds, and the next push prints the finding plainly.
-Review declined: a scanner that failed before the signal, while its worker waits for the output lock on a blocked stdout, is judged as stopped :: it needs stdout blocked for over a second and a signal in that window; the stop line names the signal, and the next push shows the real result.
+Review declined: a scanner that failed just before the signal, with the signal landing between its exit and the check of its log, is judged as stopped :: the window is a few milliseconds of one gate; the stop line names the signal, the retry runs the gate again, and a real configuration fault then prints plainly with no stop note.
 
 Delivery target: Merge
 
