@@ -52,6 +52,21 @@ def test_a_runtime_copy_without_dev_dependencies_and_with_a_lock_is_exempt(
     assert generated_sources(root, sorted(copy)) == set(copy)
 
 
+def test_a_copy_that_adds_a_section_after_dev_dependencies_is_refused(
+    tmp_path: Path,
+) -> None:
+    source = {
+        **SOURCE,
+        "packages/lib_a/pubspec.yaml": "name: lib_a\ndev_dependencies:\n  test: ^1.0.0\n",
+    }
+    copy = {
+        **COPY,
+        "functions/f/vendor/lib_a/pubspec.yaml": "name: lib_a\ndev_dependencies:\n  mocktail: ^1.0.0\ndependencies:\n  http: ^1.0.0\n",
+    }
+    root = project(tmp_path, {**source, **copy, ".gitattributes": MARK})
+    assert exempt(root) == set()
+
+
 def test_a_copy_with_one_changed_line_is_refused_and_names_the_file(
     tmp_path: Path,
 ) -> None:

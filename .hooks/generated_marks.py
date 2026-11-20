@@ -272,9 +272,16 @@ def inside(path: str, folders: list[str]) -> bool:
 
 def runtime_text(relative: str, data: bytes) -> bytes:
     """The bytes of a file as a deployed copy keeps them: a `pubspec.yaml` without its `dev_dependencies`, which tests need and a function does not ship."""
-    if relative == "pubspec.yaml":
-        return data.split(b"\ndev_dependencies:", 1)[0].rstrip(b"\r\n") + b"\n"
-    return data
+    if relative != "pubspec.yaml":
+        return data
+    kept: list[bytes] = []
+    skip = False
+    for line in data.splitlines(keepends=True):
+        if line.strip() and not line[:1].isspace() and not line.startswith(b"#"):
+            skip = line.startswith(b"dev_dependencies:")
+        if not skip:
+            kept.append(line)
+    return b"".join(kept).rstrip(b"\r\n") + b"\n"
 
 
 def derived_copy(top: Path, folder: str) -> str | None:
