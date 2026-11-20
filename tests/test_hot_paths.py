@@ -148,6 +148,7 @@ def test_each_worker_starts_with_its_share_of_the_scan_cases(
     scans = [Case(True) for _ in range(count)]
     items = [*plain, *scans]
     pytest_collection_modifyitems(cast("list[pytest.Item]", items))
+    assert sorted(map(id, items)) == sorted(map(id, [*plain, *scans]))
     batches = first_batches(tests, workers)
     held = [
         [scans.index(items[place]) for place in batch if items[place] in scans]
