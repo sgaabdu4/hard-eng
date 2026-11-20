@@ -63,6 +63,7 @@ Review declined: a package path that reaches a submodule through a tracked symli
 
 Review declined: the retry text names `update-pr` without `--no-merge` :: the text named the same command before this change, and the retry only merges when checks pass, which the plain command is meant to do.
 Review declined: a signal that arrives after the scanner exited with a finding, while the runner reads its report, labels that gate as stopped :: the window is a few milliseconds, and the next push prints the finding plainly.
+Review declined: a stop that lands before a scanner prints its startup text leaves a FAIL line without the stop note :: this is the gate runner's own message path in the full local check, outside the CI-mode push this plan changes; the stop line still names the signal, and the next run shows the real result.
 
 Delivery target: Merge
 
