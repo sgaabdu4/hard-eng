@@ -539,7 +539,7 @@ def run_limited_gate(
                         remembered_output(group, gate, command, result, log)
                     )
                     emit_dart_test_failure(result, tests, kind, report_path)
-            if not stopped_note(result.returncode):
+            if result.returncode >= 0 or not stopped_note(result.returncode):
                 validate_scanner_log(scanner, log)
         shard_reports(group, gate)
         unfixed = False
