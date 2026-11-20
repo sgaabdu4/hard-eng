@@ -32,6 +32,7 @@ Authority: Autonomous. The maintainer approved this fault report on 2026-11-20 a
 - [x] CI mode keeps the full setup when a package of the pushed gates file sits in a submodule or leaves its folder with `..` → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_for_a_package_in_a_submodule`
 - [x] A pre-push hook that SIGTERM or SIGHUP stops prints one line naming the signal and saying the stop is not a fault in the project → `tests/test_pre_push_stop.py::test_a_pre_push_stopped_by_a_signal_says_the_check_did_not_finish`
 - [x] A check that exits with 128 plus the signal gets the same line; a check that fails on its own gets none → `tests/test_pre_push_stop.py::test_a_check_that_the_signal_reached_first_gets_the_same_line`, `tests/test_pre_push_stop.py::test_a_check_that_fails_on_its_own_gets_no_stop_line`, `tests/test_pre_push_stop.py::test_a_check_that_a_signal_ended_before_its_handlers_start_gets_the_same_line`, `tests/test_pre_push_stop.py::test_an_interrupted_mutation_report_does_not_ask_for_another_push`
+- [x] A gate that a stop ended while its scanner log was judged carries the stop note, not a bare FAIL → `tests/test_pre_push_stop.py::test_a_gate_that_a_stop_ended_before_its_scanner_log_was_judged_carries_the_stop_note`
 - [x] The update PR names both cases when its push fails: a printed failing check is a project fault, and no printed failing check (for example a stopped check) is not → `tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step`
 
 ## Baseline + execution
@@ -63,7 +64,6 @@ Review declined: a package path that reaches a submodule through a tracked symli
 
 Review declined: the retry text names `update-pr` without `--no-merge` :: the text named the same command before this change, and the retry only merges when checks pass, which the plain command is meant to do.
 Review declined: a signal that arrives after the scanner exited with a finding, while the runner reads its report, labels that gate as stopped :: the window is a few milliseconds, and the next push prints the finding plainly.
-Review declined: a stop that lands before a scanner prints its startup text leaves a FAIL line without the stop note :: this is the gate runner's own message path in the full local check, outside the CI-mode push this plan changes; the stop line still names the signal, and the next run shows the real result.
 
 Delivery target: Merge
 

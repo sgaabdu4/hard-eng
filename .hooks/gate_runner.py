@@ -577,9 +577,12 @@ def run_limited_gate(
     ) as error:
         unrun = gate_times.run_not_finished(error, group, gate, related_base)
         text = str(error) if unrun else remember(group, gate, str(error))
+        from process_group import stopped_note
+
         print(
             f"FAIL {gate['name']}: {text}; "
             f"elapsed {time.monotonic() - started:.3f}s @ {group['path']}"
+            + stopped_note(1)
         )
         return True
 
