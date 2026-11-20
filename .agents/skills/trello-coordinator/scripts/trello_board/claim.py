@@ -16,6 +16,7 @@ MEMORY_SUFFIXES = (".md", ".log", ".json")
 MACHINE_FILE = "machine"
 RECORD_FILE = "claim-record"
 HOLDER_FILE = "holder"
+OPEN_CLAIM_TRIES = 3
 SECONDS = 60
 NO_PROMPT = {"GIT_TERMINAL_PROMPT": "0"}
 IDENTITY = {
@@ -204,12 +205,14 @@ def hold(place: Place, secrets: Secrets) -> Obj | None:
     record = load_record(place.state)
     if remote and record and record.sha == remote:
         return None
-    if not remote:
+    tries = OPEN_CLAIM_TRIES
+    while not remote and tries:
         if take(place, secrets, ""):
             return None
-        remote = remote_sha(place)
-        if not remote:
-            raise TrelloError("The coordinator claim could not be taken")
+        # A push that lost the ref lock fails before the winner's ref shows.
+        remote, tries = remote_sha(place), tries - 1
+    if not remote:
+        raise TrelloError("The coordinator claim could not be taken")
     holder = holder_of(place, remote)
     since = text(holder.get("since"))
     if text(holder.get("machine")) == machine_id(place.state):
