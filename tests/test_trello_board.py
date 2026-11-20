@@ -124,6 +124,8 @@ def test_a_push_lost_before_any_holder_shows_tries_again(
     monkeypatch.setattr(claim, "push", push)
     assert claim.hold(place, mods.api.Secrets(KEY, TOKEN)) is None
     assert lost
+    record = claim.load_record(project.state)
+    assert record is not None and record.sha == claim.remote_sha(place) != lost[0]
 
 
 @pytest.mark.parametrize(
