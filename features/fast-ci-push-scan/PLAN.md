@@ -64,6 +64,7 @@ Review declined: the plan quotes a standing push and merge instruction, which co
 Review declined: a package path that reaches a submodule through a tracked symlink still gets an empty submodule in CI mode :: a gates file naming a package through a symlink into a skill submodule is far-fetched, and the full setup still runs for every path with `..` or inside a submodule.
 
 Review declined: the retry text names `update-pr` without `--no-merge` :: the text named the same command before this change, and the retry only merges when checks pass, which the plain command is meant to do.
+Review declined: a scanner killed by the system just before an unrelated stop is treated as ended by the stop :: it needs two separate events, a kill of the scanner and a stop of the push, in the same few seconds; the scanner did not finish either way, the stop line tells the user to run the push again, and the retry then shows the real result.
 
 Delivery target: Merge
 
