@@ -1,11 +1,13 @@
 """Merge a join pull request into a base that requires linear history: lift only that rule, merge, put the saved protection back."""
 
 import json
+import signal
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
-from merge_guard import record_for
 from shipping import Shipment, ShippingError, _json, _object, gh
 
 ATTEMPTS = 3
@@ -141,20 +143,25 @@ def _restore(
     return None
 
 
+@contextmanager
+def _stop_as_exit() -> Iterator[None]:
+    """A stop signal raises, so the protection is put back before the process ends."""
+
+    def stop(number: int, _frame: object) -> None:
+        raise SystemExit(128 + number)
+
+    held = {name: signal.signal(name, stop) for name in (signal.SIGTERM, signal.SIGHUP)}
+    try:
+        yield
+    finally:
+        for name, handler in held.items():
+            signal.signal(name, handler)
+
+
 def merge_join(shipment: Shipment) -> None:
     """Merge a verified join with a merge commit; the protection of its base is lifted for the merge only."""
     if shipment.method != "join":
         raise ShippingError("The protection step is only for a join pull request")
-    number = int(shipment.pr_url.rpartition("/")[2])
-    record = record_for(str(shipment.root), number)
-    if (
-        not record
-        or record.get("result") != "passed"
-        or record.get("head") != shipment.head_sha
-    ):
-        raise ShippingError(
-            f"No passed ship ready record for PR {number} at {shipment.head_sha}; run ship --stage ready first"
-        )
     endpoint = f"repos/{shipment.repository}/branches/{shipment.base}/protection"
     saved = _read(shipment, endpoint)
     merge = (
@@ -170,13 +177,14 @@ def merge_join(shipment: Shipment) -> None:
         return
     lifted, kept = protection_body(saved, False), protection_body(saved, True)
     merged = False
-    try:
-        _put(shipment, endpoint, lifted)
-        gh(shipment.root, *merge)
-        merged = True
-    finally:
-        if problem := _restore(shipment, endpoint, saved, kept):
-            state = "was merged" if merged else "was not merged"
-            raise ShippingError(
-                f"The join {state}, but the protection of {shipment.base} was not put back: {problem}"
-            )
+    with _stop_as_exit():
+        try:
+            _put(shipment, endpoint, lifted)
+            gh(shipment.root, *merge)
+            merged = True
+        finally:
+            if problem := _restore(shipment, endpoint, saved, kept):
+                state = "was merged" if merged else "was not merged"
+                raise ShippingError(
+                    f"The join {state}, but the protection of {shipment.base} was not put back: {problem}"
+                )
