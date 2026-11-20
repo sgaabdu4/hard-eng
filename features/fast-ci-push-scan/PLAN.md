@@ -65,6 +65,7 @@ Review declined: a package path that reaches a submodule through a tracked symli
 
 Review declined: the retry text names `update-pr` without `--no-merge` :: the text named the same command before this change, and the retry only merges when checks pass, which the plain command is meant to do.
 Review declined: a scanner killed by the system before an unrelated stop, with its output held back until after the stop, is treated as ended by the stop :: it needs two separate events, a kill of the scanner and a stop of the push; the scanner did not finish either way, the stop line tells the user to run the push again, and the retry shows the real result.
+Review declined: the exit-zero test does not prove which scanner name reaches the log judgement :: the helper passes the name through unchanged and the choice of scanner is older code that the report tests already cover; this change only decides whether a killed gate is judged.
 
 Delivery target: Merge
 
