@@ -30,6 +30,7 @@ KNOWN = {
     *FLAGS,
 }
 UNPROTECTED = "Branch not protected"
+STOPS = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
 
 
 def _plain(value: object) -> object:
@@ -150,7 +151,7 @@ def _stop_as_exit() -> Generator[None]:
     def stop(number: int, _frame: object) -> None:
         raise SystemExit(128 + number)
 
-    held = {name: signal.signal(name, stop) for name in (signal.SIGTERM, signal.SIGHUP)}
+    held = {name: signal.signal(name, stop) for name in STOPS}
     try:
         yield
     finally:
@@ -159,20 +160,18 @@ def _stop_as_exit() -> Generator[None]:
 
 
 @contextmanager
-def _hold_stops() -> Generator[None]:
-    """A stop signal waits until the block ends, then ends the process."""
+def _hold_stops() -> Generator[list[int]]:
+    """A stop signal waits until the block ends; the caller ends the process after it has reported."""
     stopped = list[int]()
     held = {
         name: signal.signal(name, lambda number, _frame: stopped.append(number))
-        for name in (signal.SIGTERM, signal.SIGHUP)
+        for name in STOPS
     }
     try:
-        yield
+        yield stopped
     finally:
         for name, handler in held.items():
             signal.signal(name, handler)
-    if stopped:
-        raise SystemExit(128 + stopped[0])
 
 
 def merge_join(shipment: Shipment) -> None:
@@ -200,10 +199,12 @@ def merge_join(shipment: Shipment) -> None:
             gh(shipment.root, *merge)
             merged = True
         finally:
-            with _hold_stops():
+            with _hold_stops() as stopped:
                 problem = _restore(shipment, endpoint, saved, kept)
             if problem:
                 state = "was merged" if merged else "was not merged"
                 raise ShippingError(
                     f"The join {state}, but the protection of {shipment.base} was not put back: {problem}"
                 )
+            if stopped:
+                raise SystemExit(128 + stopped[0])
