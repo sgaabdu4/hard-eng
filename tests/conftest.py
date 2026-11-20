@@ -615,14 +615,17 @@ def primary(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     return build_primary(repository, tmp_path, monkeypatch)
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Start each long scan case in the first batch of a different xdist worker, because xdist hands a worker a run of neighbouring tests."""
+    """Start each long scan case in the first batch of a different xdist worker, because xdist hands a worker a run of neighbouring tests, or one test each in a small run."""
     scans = [item for item in items if item.get_closest_marker("scan")]
     rest = [item for item in items if not item.get_closest_marker("scan")]
     workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1"))
     batch = max(len(items) // workers // 4, 2)
 
     def place(number: int) -> int:
+        if len(items) < 2 * workers:
+            return number
         return number % workers * batch + number // workers
 
     for number in sorted(range(len(scans)), key=place):

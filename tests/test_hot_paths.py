@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import cast
@@ -127,31 +128,71 @@ class Case:
         return name if self.scan else None
 
 
-@pytest.mark.parametrize(("workers", "tests"), [(4, 330), (14, 2000)])
+def first_batches(count: int, workers: int) -> list[range]:
+    if count < 2 * workers:
+        return [range(worker, count, workers) for worker in range(workers)]
+    batch = max(count // workers // 4, 2)
+    return [range(worker * batch, (worker + 1) * batch) for worker in range(workers)]
+
+
+@pytest.mark.parametrize(
+    ("workers", "tests", "count"), [(4, 330, 12), (14, 2000, 12), (4, 5, 4)]
+)
 def test_each_worker_starts_with_its_share_of_the_scan_cases(
-    monkeypatch: pytest.MonkeyPatch, workers: int, tests: int
+    monkeypatch: pytest.MonkeyPatch, workers: int, tests: int, count: int
 ) -> None:
-    """HE-HOT-PATH: xdist's first batch gives each worker a run of neighbouring tests, so neighbouring scans go to different workers."""
+    """HE-HOT-PATH: xdist gives each worker a run of neighbouring tests, or one test each in a small run, so neighbouring scans go to different workers."""
     monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", str(workers))
-    plain = [Case(False) for _ in range(tests - 12)]
-    scans = [Case(True) for _ in range(12)]
+    plain = [Case(False) for _ in range(tests - count)]
+    scans = [Case(True) for _ in range(count)]
     items = [*plain, *scans]
     pytest_collection_modifyitems(cast("list[pytest.Item]", items))
-    batch = max(tests // workers // 4, 2)
     held = [
-        [
-            scans.index(case)
-            for case in items[worker * batch : (worker + 1) * batch]
-            if case in scans
-        ]
-        for worker in range(workers)
+        [scans.index(items[place]) for place in batch if items[place] in scans]
+        for batch in first_batches(tests, workers)
     ]
-    assert sorted(number for numbers in held for number in numbers) == list(range(12))
+    assert sorted(number for numbers in held for number in numbers) == list(
+        range(count)
+    )
     assert max(map(len, held)) - min(map(len, held)) <= 1
     assert all(
         len([number for number in numbers if number < 4]) <= 1 for numbers in held
     )
     assert [case for case in items if case not in scans] == plain
+
+
+def test_a_filtered_run_spreads_the_scans_that_remain() -> None:
+    """HE-HOT-PATH: the scan order is set after `-k` drops tests, so a focused run keeps its scans on different workers."""
+    listed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-k",
+            "annotated",
+            "tests/test_hot_paths.py",
+        ],
+        cwd=SOURCE,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTEST_XDIST_WORKER_COUNT": "4"},
+    ).stdout.splitlines()
+    names = [line for line in listed if "::" in line]
+    held = [
+        [
+            names[place]
+            for place in batch
+            if "exactly_the_annotated_lines" in names[place]
+        ]
+        for batch in first_batches(len(names), 4)
+    ]
+    assert len(names) == 5
+    assert [len(scans) for scans in held] == [1, 1, 1, 1]
 
 
 @pytest.mark.parametrize(
