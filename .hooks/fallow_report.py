@@ -667,7 +667,13 @@ def complexity_line(item: JsonObject) -> str:
     """One function over a complexity or CRAP limit, with the numbers that Fallow measured."""
     numbers = ", ".join(
         f"{key} {item[key]}"
-        for key in ("cyclomatic", "cognitive", "crap")
+        for key in (
+            "cyclomatic",
+            "cognitive",
+            "crap",
+            "coverage_pct",
+            "coverage_source",
+        )
         if key in item
     )
     return (
