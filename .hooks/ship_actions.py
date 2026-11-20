@@ -466,9 +466,9 @@ def spared(root: Path, revision: str, base: str | None) -> bool:
 def runner_text(checkout: Path) -> str:
     """The script text of a pushed revision; an older revision has no runner module."""
     hooks = checkout / ".hooks"
-    module = hooks / "gate_runner.py"
-    return (hooks / "hard-eng.py").read_text() + (
-        module.read_text() if module.is_file() else ""
+    modules = (hooks / name for name in ("gate_runner.py", "ci_jobs.py"))
+    return (hooks / "hard-eng.py").read_text() + "".join(
+        module.read_text() for module in modules if module.is_file()
     )
 
 
