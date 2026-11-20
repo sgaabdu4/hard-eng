@@ -361,13 +361,17 @@ def post_checkout(checkout: Path) -> int:
 
 
 @contextmanager
-def snapshot(root: Path, revision: str, environment: dict[str, str]) -> Generator[Path]:
+def snapshot(
+    root: Path, revision: str, environment: dict[str, str], prepare: bool = True
+) -> Generator[Path]:
+    """A copy of a revision; without `prepare` it holds only tracked files, and no hook runs."""
     with tempfile.TemporaryDirectory(
         prefix="hard-eng-push-", dir=temporary_root()
     ) as temporary:
         checkout = Path(temporary) / "project"
+        hooks = [] if prepare else ["-c", "core.hooksPath=/dev/null"]
         subprocess.run(
-            ["git", "worktree", "add", "--detach", str(checkout), revision],
+            ["git", *hooks, "worktree", "add", "--detach", str(checkout), revision],
             cwd=root,
             env=environment,
             check=True,
@@ -376,7 +380,8 @@ def snapshot(root: Path, revision: str, environment: dict[str, str]) -> Generato
             environment[TOOL_OWNER] = os.pathsep.join(
                 [str(checkout.resolve()), str(root.resolve())]
             )
-            prepare_checkout(root, checkout, environment)
+            if prepare:
+                prepare_checkout(root, checkout, environment)
             yield checkout
         finally:
             subprocess.run(
@@ -564,7 +569,8 @@ def pre_push(root: Path) -> int:
         warn_ssh(root)
         environment = snapshot_environment(root)
         ci = base_leaves_checks_to_ci(root, policy)
-        with snapshot(root, revision, environment) as checkout:
+        scan_only = ci and (base is None or not policy["pre_push_mutation_seconds"])
+        with snapshot(root, revision, environment, not scan_only) as checkout:
             if returncode := push_checks(
                 checkout, environment, base, policy, ci, passed
             ):
