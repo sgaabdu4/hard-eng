@@ -63,6 +63,7 @@ Review declined: the plan quotes a standing push and merge instruction, which co
 Review declined: a package path that reaches a submodule through a tracked symlink still gets an empty submodule in CI mode :: a gates file naming a package through a symlink into a skill submodule is far-fetched, and the full setup still runs for every path with `..` or inside a submodule.
 
 Review declined: the retry text names `update-pr` without `--no-merge` :: the text named the same command before this change, and the retry only merges when checks pass, which the plain command is meant to do.
+Review declined: a gate that exited with a failure just before the signal still gets the runner's stop note on its final status line :: that note comes from `stopped_note`, which the runner printed for any failed gate after a stop before this change; the window is the milliseconds between the gate's exit and its status line, the failure text itself is printed, and the retry shows it again without the note.
 
 Delivery target: Merge
 
