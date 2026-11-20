@@ -6,7 +6,7 @@
     "ui_paths": [],
     "ci_seconds": 600,
     "pre_push_seconds": 1800,
-  "pre_push_checks": "ci",
+    "pre_push_checks": "ci",
     "delivery": []
   },
   "packages": [{
