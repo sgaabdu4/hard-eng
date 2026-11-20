@@ -265,11 +265,10 @@ def test_each_shipping_check_runs_on_a_push_to_each_branch_that_ship_delivers_to
         if not isinstance(events, dict):
             events = dict.fromkeys([events] if isinstance(events, str) else events)
         push = events.get("push") or {}
+        branches = push.get("branches", ["develop", "main"]) if "push" in events else []
         workflow = yaml.safe_load(path.read_text())
         for job in workflow["jobs"].values():
-            pushed.setdefault(job.get("name", ""), set()).update(
-                push.get("branches", [])
-            )
+            pushed.setdefault(job.get("name", ""), set()).update(branches)
     assert {
         name: sorted(pushed.get(name, set()) & {"develop", "main"})
         for name in checks["shipping"]["checks"]
