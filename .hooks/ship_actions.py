@@ -1,5 +1,6 @@
 """Guard the mutations following verified PR delivery."""
 
+import json
 import os
 import plistlib
 import posixpath
@@ -124,6 +125,18 @@ def remote_base(root: Path, branch: str | None) -> str | None:
     return revision
 
 
+def stop_number(code: int) -> int | None:
+    """The signal that ended a check, from its exit code or its wait status."""
+    return next(
+        (
+            int(number)
+            for number in (signal.SIGTERM, signal.SIGHUP)
+            if code in {128 + number, -number}
+        ),
+        None,
+    )
+
+
 def stopped_line(number: int) -> str:
     return (
         f"Hard Eng: the pre-push check was stopped by {signal.Signals(number).name} "
@@ -143,10 +156,7 @@ def run_hard_eng(
         start_new_session=True,
     )
     try:
-        code = command.wait()
-        if code in {128 + signal.SIGTERM, 128 + signal.SIGHUP}:
-            print(stopped_line(code - 128), flush=True)
-        return code
+        return command.wait()
     finally:
         if command.poll() is None:
             os.killpg(command.pid, signal.SIGTERM)
@@ -558,6 +568,25 @@ def push_checks(
     return int(report_gate_edits(checkout, environment))
 
 
+def package_in_submodule(root: Path, revision: str) -> bool:
+    """A package of the pushed gates file that sits in a submodule needs its files in the copy."""
+    try:
+        config = json.loads(git(root, "show", f"{revision}:hard-eng.gates.json"))
+        listing = git(root, "ls-tree", "-r", "-z", revision)
+    except (ShippingError, ValueError):
+        return True
+    modules = [
+        Path(entry.partition("\t")[2])
+        for entry in listing.split("\0")
+        if entry.startswith("160000 ")
+    ]
+    return any(
+        Path(package["path"]).is_relative_to(module)
+        for package in config.get("packages", [])
+        for module in modules
+    )
+
+
 def pre_push(root: Path) -> int:
     exit_when_stopped()
     try:
@@ -590,11 +619,17 @@ def check_pushes(root: Path) -> int:
         warn_ssh(root)
         environment = snapshot_environment(root)
         ci = base_leaves_checks_to_ci(root, policy)
-        scan_only = ci and (base is None or not policy["pre_push_mutation_seconds"])
+        scan_only = (
+            ci
+            and (base is None or not policy["pre_push_mutation_seconds"])
+            and not package_in_submodule(root, revision)
+        )
         with snapshot(root, revision, environment, not scan_only) as checkout:
             if returncode := push_checks(
                 checkout, environment, base, policy, ci, passed
             ):
+                if (number := stop_number(returncode)) is not None:
+                    print(stopped_line(number), flush=True)
                 return returncode
             if base is not None and (limit := policy["pre_push_mutation_seconds"]):
                 began = time.monotonic()

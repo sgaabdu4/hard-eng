@@ -806,6 +806,23 @@ def test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_when_mutation_will_run
     assert marker.exists()
 
 
+def test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_for_a_package_in_a_submodule(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pushed = leaves_checks_to_ci(runner, tmp_path, shipping_policy, monkeypatch)
+    pushed.task()
+    marker, prepare = watch_checkout_setup(pushed, monkeypatch)
+    pushed.write_config(packages=[{"path": "component/inner", "checks": []}])
+    revision = pushed.task("a package in the component")
+    recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    prepare.assert_called_once()
+    assert marker.exists()
+
+
 def test_a_push_that_runs_the_full_check_still_sets_up_the_copy(
     pushed: Pushed, monkeypatch: pytest.MonkeyPatch
 ) -> None:
