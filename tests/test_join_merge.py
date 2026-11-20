@@ -374,3 +374,39 @@ def test_a_stop_signal_during_the_put_back_waits_until_the_protection_is_back(
         join_merge.merge_join(shipment)
     assert fake.bodies == [put_body(False), put_body(True), put_body(True)]
     assert fake.protection == saved_protection()
+
+
+def test_an_interrupt_during_the_put_back_waits_until_the_protection_is_back(
+    monkeypatch: pytest.MonkeyPatch, shipment: Shipment, pause: Mock
+) -> None:
+    fake = use(monkeypatch, FakeGitHub(saved_protection()))
+    fake.put_failures = 1
+    real = fake.__call__
+
+    def interrupted(root: Path, *args: str) -> str:
+        if "--method" in args and fake.put_failures and len(fake.bodies) == 1:
+            os.kill(os.getpid(), signal.SIGINT)
+        return real(root, *args)
+
+    monkeypatch.setattr(join_merge, "gh", interrupted)
+    with pytest.raises(SystemExit):
+        join_merge.merge_join(shipment)
+    assert fake.protection == saved_protection()
+
+
+def test_a_stop_signal_does_not_hide_a_put_back_that_failed(
+    monkeypatch: pytest.MonkeyPatch, shipment: Shipment, pause: Mock
+) -> None:
+    fake = use(monkeypatch, FakeGitHub(saved_protection()))
+    fake.put_failures = 99
+    real = fake.__call__
+
+    def stopped(root: Path, *args: str) -> str:
+        if "--method" in args and len(fake.bodies) == 1:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return real(root, *args)
+
+    monkeypatch.setattr(join_merge, "gh", stopped)
+    with pytest.raises(ShippingError, match="was merged") as raised:
+        join_merge.merge_join(shipment)
+    assert json.dumps(put_body(True)) in str(raised.value)
