@@ -254,6 +254,36 @@ def test_a_release_pr_waits_while_develops_push_run_is_running(
     assert waits == [30]
 
 
+def pushed_branches(events: dict[str, object]) -> list[str]:
+    """Which of develop and main a push trigger runs on; a tag-only push runs on neither."""
+    if "push" not in events:
+        return []
+    empty: dict[str, list[str]] = {}
+    push = events["push"] or empty
+    assert isinstance(push, dict)
+    if "branches" in push:
+        return list(push["branches"])
+    if {"tags", "tags-ignore"} & set(push):
+        return []
+    return [b for b in ("develop", "main") if b not in push.get("branches-ignore", [])]
+
+
+@pytest.mark.parametrize(
+    ("push", "branches"),
+    [
+        (None, ["develop", "main"]),
+        ({"branches-ignore": ["main"]}, ["develop"]),
+        ({"tags": ["v*"]}, []),
+        ({"branches": ["develop"]}, ["develop"]),
+    ],
+)
+def test_the_push_reader_counts_only_the_branches_a_push_runs_on(
+    push: dict[str, list[str]] | None, branches: list[str]
+) -> None:
+    assert pushed_branches({"push": push}) == branches
+    assert pushed_branches({"pull_request": None}) == []
+
+
 def test_each_shipping_check_runs_on_a_push_to_each_branch_that_ship_delivers_to() -> (
     None
 ):
@@ -264,8 +294,7 @@ def test_each_shipping_check_runs_on_a_push_to_each_branch_that_ship_delivers_to
         events = yaml.safe_load(path.read_text())[True]
         if not isinstance(events, dict):
             events = dict.fromkeys([events] if isinstance(events, str) else events)
-        push = events.get("push") or {}
-        branches = push.get("branches", ["develop", "main"]) if "push" in events else []
+        branches = pushed_branches(events)
         workflow = yaml.safe_load(path.read_text())
         for job in workflow["jobs"].values():
             pushed.setdefault(job.get("name", ""), set()).update(branches)

@@ -464,14 +464,16 @@ def install_last_release(
     log: IO[str],
     checkout: Path = SOURCE,
 ) -> None:
-    """Install the release users have: the candidate's merge base with main, or for a candidate already on main, the main tip that its release replaced."""
+    """Install the release users have: the main tip a main push replaced, else the candidate's merge base with main."""
     old = work.with_name(f"{work.name}.release")
-    released = output(["git", "merge-base", revision, "origin/main"], checkout)
+    released = os.environ.get("CANARY_RELEASED") or output(
+        ["git", "merge-base", revision, "origin/main"], checkout
+    )
     if released == output(["git", "rev-parse", revision], checkout):
-        span = ["--first-parent", "--ancestry-path", f"{revision}..origin/main"]
-        later = output(["git", "rev-list", "--reverse", *span], checkout).split()
-        release = later[0] if later else revision
-        released = output(["git", "rev-parse", f"{release}^1"], checkout)
+        raise Failed(
+            "the candidate is already on main, so it has no older release to update "
+            "from; run the canary on a newer develop commit"
+        )
     must(
         work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)]
     )
