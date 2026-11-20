@@ -316,5 +316,23 @@ def test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails() -> None:
         assert last["uses"] == f"actions/upload-artifact@{pinned}"
         assert len(pinned) == 40
         assert last["if"] == "failure()"
-        assert last["with"]["path"] == "**/coverage/fallow.json"
+        assert last["with"]["path"] == "**/fallow.json"
         assert last["with"]["if-no-files-found"] == "ignore"
+
+
+def test_a_workflow_from_before_the_fallow_report_step_gains_it(
+    tmp_path: Path,
+) -> None:
+    import shards
+
+    template = WORKFLOW_TEMPLATE.read_text()
+    step = template[template.index("      - name: Keep the Fallow report") :]
+    old = template.replace(step, "")
+    config = suite_config(None)
+    path = tmp_path / "project" / OLD_PATH
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    assert generated(tmp_path, SOURCE, config) == template
+    config = suite_config(2)
+    path.write_text(shards.split_job(old, "1, 2") or "")
+    assert generated(tmp_path, SOURCE, config) == shards.split_job(template, "1, 2")
