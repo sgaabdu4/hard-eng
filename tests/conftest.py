@@ -619,7 +619,12 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Start each long scan case in the first batch of a different xdist worker, because xdist hands a worker a run of neighbouring tests."""
     scans = [item for item in items if item.get_closest_marker("scan")]
     rest = [item for item in items if not item.get_closest_marker("scan")]
-    stride = max(1, len(items) // 64)
-    for number, scan in enumerate(scans):
-        rest.insert(number * stride, scan)
+    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1"))
+    batch = max(len(items) // workers // 4, 2)
+
+    def place(number: int) -> int:
+        return number % workers * batch + number // workers
+
+    for number in sorted(range(len(scans)), key=place):
+        rest.insert(place(number), scans[number])
     items[:] = rest
