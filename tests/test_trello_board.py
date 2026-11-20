@@ -105,6 +105,27 @@ def test_one_machine_wins_an_open_claim(project: Project, mods: Mods) -> None:
         assert isinstance(lost, dict) and lost["heldElsewhere"] is True
 
 
+def test_a_push_lost_before_any_holder_shows_tries_again(
+    project: Project, mods: Mods, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two pushes can race for the ref lock: the loser fails while the winner's ref is not written yet."""
+    claim = load_claim()
+    drop_claim(project)
+    place = importlib.import_module("trello_board.secrets").locate(project.main)
+    real = claim.push
+    lost: list[str] = []
+
+    def push(place: object, sha: str, expected: str) -> bool:
+        if not lost:
+            lost.append(sha)
+            return False
+        return real(place, sha, expected)
+
+    monkeypatch.setattr(claim, "push", push)
+    assert claim.hold(place, mods.api.Secrets(KEY, TOKEN)) is None
+    assert lost
+
+
 @pytest.mark.parametrize(
     "text,listed",
     [
