@@ -252,3 +252,56 @@ def test_a_release_pr_waits_while_develops_push_run_is_running(
     monkeypatch.setattr(release_canary.time, "sleep", waits.append)
     assert release_canary.release_pr_gate("b" * 40, "a" * 40) == 0
     assert waits == [30]
+
+
+def test_each_shipping_check_runs_on_a_push_to_each_branch_that_ship_delivers_to() -> (
+    None
+):
+    """ship delivered reads each shipping check on the merge commit of develop and of main."""
+    checks = json.loads((release_canary.SOURCE / "hard-eng.gates.json").read_text())
+    pushed: dict[str, set[str]] = {}
+    for path in (release_canary.SOURCE / ".github/workflows").glob("*.yml"):
+        workflow = yaml.safe_load(path.read_text())
+        push = workflow[True].get("push") or {}
+        for job in workflow["jobs"].values():
+            pushed.setdefault(job.get("name", ""), set()).update(
+                push.get("branches", [])
+            )
+    assert {
+        name: sorted(pushed.get(name, set()) & {"develop", "main"})
+        for name in checks["shipping"]["checks"]
+    } == {name: ["develop", "main"] for name in checks["shipping"]["checks"]}
+
+
+@pytest.mark.parametrize(
+    ("ref", "base"),
+    [("refs/heads/main", "b" * 40), ("refs/heads/develop", "origin/main")],
+)
+def test_a_push_lists_the_files_since_the_tip_it_replaced_on_main(
+    tmp_path: Path, ref: str, base: str
+) -> None:
+    """A push to main diffs from the main tip before it, because origin/main is the pushed commit itself."""
+    workflow = yaml.safe_load(
+        (release_canary.SOURCE / ".github/workflows/canary.yml").read_text()
+    )
+    step = workflow["jobs"]["targets"]["steps"][1]
+    calls = tmp_path / "calls"
+    for tool, answer in (("git", "setup.py"), ("python3", "targets=[]")):
+        (tmp_path / tool).write_text(
+            f'#!/bin/sh\necho "{tool} $*" >> {calls}\necho {answer}\n'
+        )
+        (tmp_path / tool).chmod(0o755)
+    subprocess.run(
+        ["bash", "-e", "-c", step["run"]],
+        env={
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "GITHUB_OUTPUT": str(tmp_path / "output"),
+            "GITHUB_SHA": PUSHED,
+            "EVENT": "push",
+            "BASE": "origin/main",
+            "BEFORE": "b" * 40,
+            "REF": ref,
+        },
+        check=True,
+    )
+    assert f"git diff --name-only {base}...HEAD" in calls.read_text().splitlines()
