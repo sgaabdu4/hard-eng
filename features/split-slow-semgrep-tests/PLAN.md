@@ -13,7 +13,7 @@ Deliverables: None
 
 ## Repository context
 
-Owners: `tests/test_hot_paths.py` (the two tests), `.hooks/hot_paths.py::findings` (one scan; unchanged), `hard-eng.gates.json` (the `tests` gate, `-n auto`, 6 shards that split by test file).
+Owners: `tests/test_hot_paths.py` (the two tests), `tests/conftest.py` (the collection order hook), `pyproject.toml` (the `scan` marker), `.hooks/hot_paths.py::findings` (one scan; unchanged), `hard-eng.gates.json` (the `tests` gate, `-n auto`, 6 shards that split by test file).
 Same cause: one test that makes one long call cannot share workers, so it ends last. Searched the slowest-30 list of the full run. The workflow judge test of `tests/test_agent_checks.py` runs the full check fifteen times, but it took 14 s alone on a quiet machine; its split into 16 cases took 100 CPU seconds instead of 14, so it stays whole. The browser test and the Dart coverage tests each run one dependent chain, so they stay whole too.
 Single source: the chunk counts, the Semgrep job cap and the expected parse gaps live once, at the top of `tests/test_hot_paths.py`. Searched `tests/` for other copies of the parse gap list: none.
 
@@ -28,8 +28,9 @@ Decisions:
 2. Each chunk keeps the old exact assertions on its own files: the found rule, file and line list equals the annotated or expected list, and the parse gap list equals the expected gaps whose file is in the chunk.
 3. One cheap test per fixture folder replaces what a whole scan proved by union: the chunks read each fixture once, each rule id has an annotation, each expected file exists, and each parse gap file exists. With the exact match per chunk, the old claim that every rule fires still holds.
 4. Each scan in the two tests passes `--jobs 2`. By default Semgrep starts a worker for each core in each of the 16 test workers. With the cap the same scans used a third of the CPU (user seconds 103 to 169 against 324 to 441) and ended sooner in 6 of 6 pairs. The cap sits in the test calls, because one production scan that runs alone gains from every core.
-5. Chunk counts: 6 and 12, 3 and 6, and 4 and 8 were each timed twice, with and without the cap. Wall times were within noise of each other, so the count with the lowest spread was taken (4 and 8).
+5. Chunk counts: 6 and 12, 3 and 6, and 4 and 8 were each timed twice, with and without the cap. Their wall times overlapped within the noise of the machine, so no count is shown to win. The middle pair, 4 and 8, is taken.
 6. The workflow judge test was split into 16 cases and measured: 100 CPU seconds against 14 for the old test on a quiet machine. It is restored to its old form and is not part of this change.
+7. xdist hands each worker a run of neighbouring tests, so the 12 cases first sat on one worker (the full runs gw8 and gw14 held all 12). A hook in `tests/conftest.py` moves the cases marked `scan` apart, so each starts in the first batch of a different worker. The next full run put the 12 cases on 12 workers. A second option, `--dist worksteal`, left 10 of 12 on one worker and is not used. Changing the gate command was avoided.
 
 ## Acceptance + steps
 
@@ -55,10 +56,10 @@ N/A — no screen changes; the change is test code.
 ## Verification
 
 Result: Passed
-Evidence: focused old and new forms of the two tests at 16 workers: new 58 s and 24 s, old 132 s and 51 s. Full suite as the gate runs it, with coverage: new 612 s and 1037 s, old 997 s and 814 s; the other load on the machine moved the totals by hundreds of seconds, so the totals do not separate the forms. The longest hot path case in the full runs: 52 s and 124 s new, against 371 s and 198 s old (and 539 s and 214 s in an earlier pair). The cheap gates (format, lint, complexity, annotations, pyrefly, vulture) passed.
+Evidence: focused old and new forms of the two tests at 16 workers: new 58 s and 24 s, old 132 s and 51 s. Full suite as the gate runs it, with coverage: new 612 s and 1037 s, old 997 s and 814 s; the other load on the machine moved the totals by hundreds of seconds, so the totals do not separate the forms. Before the hook, all 12 cases ran on one worker in each full run; after it, on 12 workers (full run 554 s at load 21, 7,221 tests passed). The longest hot path case in the full runs: 52 s and 124 s new, against 371 s and 198 s old (and 539 s and 214 s in an earlier pair). The cheap gates (format, lint, complexity, annotations, pyrefly, vulture) passed.
 E2E: N/A — no user journey changes.
 Real service: N/A — no outside service is called.
-Retro: (1) The fault escaped to the base branch: no check tied the hot path tests to the gate time limit → None — the gate limit already failed the push, and this change shortens the tests. (2) The first split looked right but the measure showed no gain on the whole suite; the extra Semgrep starts raised the CPU use on a saturated machine → None — the cap in Decision 4 fixed it, found by the advisor review of the timings. (3) The agent check test split cost seven times the CPU, so it was restored → None. (4) The Ready run found a type fault in the new code (an untyped empty list) → None — fixed before the commit.
+Retro: (1) The fault escaped to the base branch: no check tied the hot path tests to the gate time limit → None — the gate limit already failed the push, and this change shortens the tests. (2) The first split looked right but the measure showed no gain on the whole suite; the extra Semgrep starts raised the CPU use on a saturated machine → None — the cap in Decision 4 fixed it, found by the advisor review of the timings. (3) The agent check test split cost seven times the CPU, so it was restored → None. (4) The independent review found that xdist had put all 12 cases on one worker in my own full runs, which I had not read → None — the hook in Decision 7 fixed it and a full run showed 12 workers. (5) The Ready run found a type fault in the new code (an untyped empty list) → None — fixed before the commit.
 
 Delivery target: PR
 Delivery: Pending — required remote proof.

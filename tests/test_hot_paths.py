@@ -68,7 +68,7 @@ def fixture_chunk(files: list[Path], chunks: int, index: int) -> list[Path]:
 
 
 def performance_fixtures() -> list[Path]:
-    return [path for path in FIXTURES.iterdir() if path.is_file()]
+    return list(FIXTURES.iterdir())
 
 
 def reviewer_fixtures() -> list[Path]:
@@ -86,6 +86,7 @@ def blank_annotations(fixture: Path) -> tuple[list[tuple[str, str, int]], str]:
     return expected, "\n".join(lines) + "\n"
 
 
+@pytest.mark.scan
 @pytest.mark.parametrize("index", range(PERFORMANCE_CHUNKS))
 def test_each_rule_finds_exactly_the_annotated_lines(
     tmp_path: Path, index: int
@@ -167,6 +168,7 @@ def test_a_loop_in_a_flutter_test_folder_gets_no_finding(tmp_path: Path) -> None
     ]
 
 
+@pytest.mark.scan
 @pytest.mark.parametrize("index", range(REVIEWER_CHUNKS))
 def test_exact_reported_inputs_keep_all_expected_findings(
     tmp_path: Path, index: int
