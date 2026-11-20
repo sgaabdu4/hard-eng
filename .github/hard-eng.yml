@@ -76,3 +76,11 @@ jobs:
           read -r -a tools <<< "$SDK_TOOLS ${EXTRA_SDK_TOOLS:-}"
           bun x --package="$MISE_PACKAGE" mise --no-config install "${tools[@]}" &&
           MISE_FETCH_REMOTE_VERSIONS_CACHE=1h bun x --package="$MISE_PACKAGE" mise --no-config exec "${tools[@]}" -- uv run --no-project --with pyyaml python .hooks/hard-eng.py check --base "$BASE_SHA"
+      - name: Keep the Fallow report of a failed check
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hard-eng-fallow-report
+          path: "**/fallow.json"
+          retention-days: 3
+          if-no-files-found: ignore

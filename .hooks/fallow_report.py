@@ -487,13 +487,33 @@ def own_place(item: JsonObject) -> tuple[str, str] | None:
     return None
 
 
+def complexity_line(item: JsonObject) -> str:
+    """One function over a complexity or CRAP limit, with the numbers that Fallow measured."""
+    numbers = ", ".join(
+        f"{key} {item[key]}"
+        for key in (
+            "cyclomatic",
+            "cognitive",
+            "crap",
+            "coverage_pct",
+            "coverage_source",
+            "coverage_tier",
+        )
+        if key in item
+    )
+    return (
+        f"{located(item.get('path'), item.get('line'))} complexity {item.get('name', '')} "
+        f"(exceeded {item.get('exceeded', 'a limit')}; {numbers})"
+    )
+
+
 def finding_lines(path: Path, directory: Path | None = None) -> list[str]:
     try:
         report = json.loads(path.read_text())
         set_aside_generated_clones(report, directory)
         audit = report.get("kind") == "audit"
         found: list[str] = []
-        for kind, items in report["dead_code" if audit else "check"].items():
+        for kind, items in report.get("dead_code" if audit else "check", {}).items():
             if not isinstance(items, list) or kind == "workspace_diagnostics":
                 continue
             for item in items:
@@ -512,6 +532,10 @@ def finding_lines(path: Path, directory: Path | None = None) -> list[str]:
                 for copy in group["instances"]
             ]
             found.append("copied code " + " ".join(copies))
+        health = report if report.get("kind") == "health" else None
+        health = health or report.get("complexity" if audit else "health")
+        items = health.get("findings") if isinstance(health, dict) else None
+        found += [complexity_line(i) for i in items or [] if isinstance(i, dict)]
         return found
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return []

@@ -261,7 +261,7 @@ def test_a_run_that_selects_no_package_leaves_a_marker_in_each_shard_for_the_gat
 ) -> None:
     jobs = yaml.safe_load(generated(tmp_path, SOURCE, suite_config(2)))["jobs"]
     upload = next(
-        s for s in jobs["tests"]["steps"] if "upload-artifact" in s.get("uses", "")
+        s for s in jobs["tests"]["steps"] if s.get("name") == "Keep the shard reports"
     )
     download = next(
         s for s in jobs["hard-eng"]["steps"] if "download-artifact" in s.get("uses", "")
@@ -301,3 +301,47 @@ def test_an_edit_under_github_selects_the_package_checks(repository: Path) -> No
     (repository / OLD_PATH).write_text("name: edited\n")
     chosen = affected_groups(repository, groups, "HEAD")
     assert "tests" in [gate["name"] for group in chosen for gate in group["checks"]]
+
+
+def test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails() -> None:
+    import shards
+
+    pinned = shards.UPLOAD.partition(" #")[0].removeprefix("actions/upload-artifact@")
+    own = yaml.safe_load((SOURCE / ".github/workflows/hard-eng.yml").read_text())
+    for jobs in (
+        yaml.safe_load(WORKFLOW_TEMPLATE.read_text())["jobs"],
+        {"hard-eng": own["jobs"]["checks"]},
+    ):
+        last = jobs["hard-eng"]["steps"][-1]
+        assert last["uses"] == f"actions/upload-artifact@{pinned}"
+        assert len(pinned) == 40
+        assert last["if"] == "failure()"
+        assert last["with"]["path"] == "**/fallow.json"
+        assert last["with"]["if-no-files-found"] == "ignore"
+
+
+def test_a_workflow_from_before_the_fallow_report_step_gains_it(
+    tmp_path: Path,
+) -> None:
+    import shards
+
+    template = WORKFLOW_TEMPLATE.read_text()
+    step = template[template.index("      - name: Keep the Fallow report") :]
+    old = template.replace(step, "")
+    config = suite_config(None)
+    path = tmp_path / "project" / OLD_PATH
+    path.parent.mkdir(parents=True)
+    path.write_text(old)
+    assert generated(tmp_path, SOURCE, config) == template
+    config = suite_config(2)
+    path.write_text(shards.split_job(old, "1, 2") or "")
+    assert generated(tmp_path, SOURCE, config) == shards.split_job(template, "1, 2")
+
+
+def test_a_workflow_that_does_not_end_with_the_check_step_is_left_alone() -> None:
+    import shards
+
+    template = WORKFLOW_TEMPLATE.read_text()
+    step = template[template.index("      - name: Keep the Fallow report") :]
+    old = template.replace(step, "") + "    outputs:\n      done: yes\n"
+    assert shards.add_fallow_report(template, old) == old
