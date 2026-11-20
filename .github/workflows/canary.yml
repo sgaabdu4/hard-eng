@@ -16,7 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: canary-${{ github.ref }}
+  # Each main commit needs its own canary for ship delivered, so a later run must not cancel it.
+  group: canary-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}-{1}', github.event_name, github.sha) || '' }}
   cancel-in-progress: true
 
 jobs:

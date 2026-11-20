@@ -464,9 +464,11 @@ def install_last_release(
     log: IO[str],
     checkout: Path = SOURCE,
 ) -> None:
-    """Install the release users have: the candidate's merge base with main."""
+    """Install the release users have: the candidate's merge base with main, or the main tip a candidate on main replaced."""
     old = work.with_name(f"{work.name}.release")
     released = output(["git", "merge-base", revision, "origin/main"], checkout)
+    if released == output(["git", "rev-parse", revision], checkout):
+        released = output(["git", "rev-parse", f"{revision}^1"], checkout)
     must(
         work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)]
     )
