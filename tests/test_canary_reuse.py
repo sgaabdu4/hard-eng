@@ -1,6 +1,5 @@
 """`release_canary.py`: a push or a release PR follows the passed new-project jobs of a merged PR."""
 
-import fnmatch
 import json
 import os
 import subprocess
@@ -256,42 +255,30 @@ def test_a_release_pr_waits_while_develops_push_run_is_running(
 
 
 def pushed_branches(events: dict[str, object]) -> list[str]:
-    """Which of develop and main a push trigger runs on; a tag-only push runs on neither."""
-    if "push" not in events:
+    """develop and main as a push trigger names them; only a plain branch list with no pattern counts, so no filter can hide a branch."""
+    push = events.get("push")
+    if not isinstance(push, dict) or set(push) != {"branches"}:
         return []
-    empty: dict[str, list[str]] = {}
-    push = events["push"] or empty
-    assert isinstance(push, dict)
-    if "branches" in push:
-        return [b for b in ("develop", "main") if matches(b, push["branches"])]
-    if {"tags", "tags-ignore"} & set(push):
+    names = push["branches"]
+    if any(set(name) & set("*?+[]!") for name in names):
         return []
-    ignored = push.get("branches-ignore", [])
-    return [b for b in ("develop", "main") if not matches(b, ignored)]
-
-
-def matches(branch: str, patterns: list[str]) -> bool:
-    """GitHub's branch filter: the last matching pattern wins, and a `!` pattern excludes."""
-    kept = False
-    for pattern in patterns:
-        if fnmatch.fnmatchcase(branch, pattern.removeprefix("!")):
-            kept = not pattern.startswith("!")
-    return kept
+    return [b for b in ("develop", "main") if b in names]
 
 
 @pytest.mark.parametrize(
     ("push", "branches"),
     [
-        (None, ["develop", "main"]),
-        ({"branches-ignore": ["main"]}, ["develop"]),
-        ({"tags": ["v*"]}, []),
+        ({"branches": ["main", "develop"]}, ["develop", "main"]),
         ({"branches": ["develop"]}, ["develop"]),
-        ({"branches-ignore": ["m*"]}, ["develop"]),
-        ({"branches": ["**", "!main"]}, ["develop"]),
-        ({"branches": ["**"]}, ["develop", "main"]),
+        (None, []),
+        ({"branches-ignore": ["main+"]}, []),
+        ({"tags": ["v*"]}, []),
+        ({"branches": ["develop", "main"], "paths": ["src/**"]}, []),
+        ({"branches": ["**", "!main"]}, []),
+        ({"branches": ["develop", "main", "!main"]}, []),
     ],
 )
-def test_the_push_reader_counts_only_the_branches_a_push_runs_on(
+def test_the_push_reader_counts_only_branches_named_in_a_plain_list(
     push: dict[str, list[str]] | None, branches: list[str]
 ) -> None:
     assert pushed_branches({"push": push}) == branches
