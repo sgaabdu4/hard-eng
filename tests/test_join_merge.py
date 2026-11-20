@@ -355,3 +355,22 @@ def test_only_a_join_keeps_its_own_error_when_the_pull_request_cannot_be_rebased
         ship_actions.merge(
             shipment.root, None, replace(shipment, method=method), method
         )
+
+
+def test_a_stop_signal_during_the_put_back_waits_until_the_protection_is_back(
+    monkeypatch: pytest.MonkeyPatch, shipment: Shipment, pause: Mock
+) -> None:
+    fake = use(monkeypatch, FakeGitHub(saved_protection()))
+    fake.put_failures = 1
+    real = fake.__call__
+
+    def stopped(root: Path, *args: str) -> str:
+        if "--method" in args and fake.put_failures and len(fake.bodies) == 1:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return real(root, *args)
+
+    monkeypatch.setattr(join_merge, "gh", stopped)
+    with pytest.raises(SystemExit):
+        join_merge.merge_join(shipment)
+    assert fake.bodies == [put_body(False), put_body(True), put_body(True)]
+    assert fake.protection == saved_protection()

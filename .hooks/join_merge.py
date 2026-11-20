@@ -158,6 +158,23 @@ def _stop_as_exit() -> Generator[None]:
             signal.signal(name, handler)
 
 
+@contextmanager
+def _hold_stops() -> Generator[None]:
+    """A stop signal waits until the block ends, then ends the process."""
+    stopped = list[int]()
+    held = {
+        name: signal.signal(name, lambda number, _frame: stopped.append(number))
+        for name in (signal.SIGTERM, signal.SIGHUP)
+    }
+    try:
+        yield
+    finally:
+        for name, handler in held.items():
+            signal.signal(name, handler)
+    if stopped:
+        raise SystemExit(128 + stopped[0])
+
+
 def merge_join(shipment: Shipment) -> None:
     """Merge a verified join with a merge commit; the protection of its base is lifted for the merge only."""
     if shipment.method != "join":
@@ -183,7 +200,9 @@ def merge_join(shipment: Shipment) -> None:
             gh(shipment.root, *merge)
             merged = True
         finally:
-            if problem := _restore(shipment, endpoint, saved, kept):
+            with _hold_stops():
+                problem = _restore(shipment, endpoint, saved, kept)
+            if problem:
                 state = "was merged" if merged else "was not merged"
                 raise ShippingError(
                     f"The join {state}, but the protection of {shipment.base} was not put back: {problem}"
