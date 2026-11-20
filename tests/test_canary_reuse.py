@@ -260,6 +260,8 @@ def pushed_branches(events: dict[str, object]) -> list[str]:
     if not isinstance(push, dict) or set(push) != {"branches"}:
         return []
     names = push["branches"]
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        return []
     if any(set(name) & set("*?+[]!") for name in names):
         return []
     return [b for b in ("develop", "main") if b in names]
@@ -276,10 +278,11 @@ def pushed_branches(events: dict[str, object]) -> list[str]:
         ({"branches": ["develop", "main"], "paths": ["src/**"]}, []),
         ({"branches": ["**", "!main"]}, []),
         ({"branches": ["develop", "main", "!main"]}, []),
+        ({"branches": "develop-main"}, []),
     ],
 )
 def test_the_push_reader_counts_only_branches_named_in_a_plain_list(
-    push: dict[str, list[str]] | None, branches: list[str]
+    push: dict[str, list[str] | str] | None, branches: list[str]
 ) -> None:
     assert pushed_branches({"push": push}) == branches
     assert pushed_branches({"pull_request": None}) == []
