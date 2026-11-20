@@ -1,6 +1,6 @@
 # Fallow report hotfix
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -48,11 +48,11 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: The seven tests failed on the unchanged `main` source (10 cases) and pass after the change; with the reports suite 307 passed. Static gates on the touched files passed: ruff format, ruff check, pyrefly and vulture. Each changed Python file is under 1000 lines.
 E2E: N/A — the change is check output and a workflow step proved by the tests above; no user journey crosses a screen.
 Real service: N/A — the change calls no outside service
-Retro: Pending
+Retro: Escaped bug: a failed Fallow gate printed a waived line and cut its findings, and CI kept no report, so an installed project could not see a real complexity finding. The tests gate had no row for a printed complexity finding or for the upload step; the new rows are `tests/test_report_findings.py::test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings` and `tests/test_shard_workflow.py::test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails`. Prevention: one printer for every scanner with no cut, and the CI template as the one owner of the upload step.
 
 Delivery target: Merge
 Delivery: Pending — required remote proof.
