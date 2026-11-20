@@ -24,6 +24,7 @@ Review declined: A draft body cannot be checked before the PR opens :: the maint
 Review declined: `ship ready` loses the dependency bot exemption :: `ship ready` refused such a PR before this change too, through `body_problem`, which stays in the same expression; nothing new is refused.
 Review declined: Existing Swift and JavaScript four job workflows miss the upload :: those layouts have their own jobs and the migration only edits the one job and split layouts that it can prove it generated; a project with that layout gets the step when its workflow is next generated. Stated limit.
 Review declined: Reports with a custom filename are lost :: the upload takes any `fallow.json` in any folder, which is the name that setup writes; a custom file name is the project's own choice. Stated limit.
+Review declined: A workflow with a step after the check or a trailing outputs block gets no upload :: the migration edits only the workflow text that Hard Eng generates and leaves a customised one as it is, as the shard split does with its own note; adding a step inside any custom layout risks breaking a working workflow. Stated limit.
 Authority: Autonomous mode. The maintainer assigned these three faults, named the branch and the checks; the PR is not merged here.
 
 ## Acceptance + steps
