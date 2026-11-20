@@ -51,25 +51,22 @@ def test_the_last_release_is_the_candidates_merge_base_with_main_not_mains_merge
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Users go from main's merge commit to the next one, so the old install is its ancestor."""
-    monkeypatch.delenv("CANARY_RELEASED", raising=False)
     shas = released_history(tmp_path)
     assert installed(tmp_path, monkeypatch, shas["candidate"]) == shas["released"]
 
 
-def test_a_main_push_installs_the_main_tip_that_the_push_replaced(
+def test_a_main_commit_installs_the_main_tip_that_it_replaced(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A main push checks main's new merge commit; the workflow passes the tip it replaced, so a rerun gets the same release."""
+    """A push, manual run or rerun on main checks a main commit; its first parent is the release users had."""
     shas = released_history(tmp_path)
-    monkeypatch.setenv("CANARY_RELEASED", shas["base"])
     assert installed(tmp_path, monkeypatch, shas["merged"]) == shas["base"]
 
 
-def test_a_candidate_already_on_main_with_no_pinned_release_fails_with_the_reason(
+def test_a_develop_commit_already_released_fails_with_the_reason(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A develop job rerun after its release has no older release to update from, so it stops instead of guessing one."""
-    monkeypatch.delenv("CANARY_RELEASED", raising=False)
     shas = released_history(tmp_path)
-    with pytest.raises(release_canary.Failed, match="already on main"):
+    with pytest.raises(release_canary.Failed, match="reached main inside a release"):
         installed(tmp_path, monkeypatch, shas["released"])

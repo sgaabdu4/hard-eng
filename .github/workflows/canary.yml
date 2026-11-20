@@ -95,8 +95,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           TARGET: ${{ matrix.target }}
-          # A main push updates from the main tip it replaced; a rerun reads the same event.
-          CANARY_RELEASED: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before || '' }}
         run: |
           git config --global user.name "Hard Eng canary"
           git config --global user.email "canary@users.noreply.github.com"

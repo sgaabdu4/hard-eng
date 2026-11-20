@@ -1,5 +1,6 @@
 """`release_canary.py`: a push or a release PR follows the passed new-project jobs of a merged PR."""
 
+import fnmatch
 import json
 import os
 import subprocess
@@ -262,10 +263,20 @@ def pushed_branches(events: dict[str, object]) -> list[str]:
     push = events["push"] or empty
     assert isinstance(push, dict)
     if "branches" in push:
-        return list(push["branches"])
+        return [b for b in ("develop", "main") if matches(b, push["branches"])]
     if {"tags", "tags-ignore"} & set(push):
         return []
-    return [b for b in ("develop", "main") if b not in push.get("branches-ignore", [])]
+    ignored = push.get("branches-ignore", [])
+    return [b for b in ("develop", "main") if not matches(b, ignored)]
+
+
+def matches(branch: str, patterns: list[str]) -> bool:
+    """GitHub's branch filter: the last matching pattern wins, and a `!` pattern excludes."""
+    kept = False
+    for pattern in patterns:
+        if fnmatch.fnmatchcase(branch, pattern.removeprefix("!")):
+            kept = not pattern.startswith("!")
+    return kept
 
 
 @pytest.mark.parametrize(
@@ -275,6 +286,9 @@ def pushed_branches(events: dict[str, object]) -> list[str]:
         ({"branches-ignore": ["main"]}, ["develop"]),
         ({"tags": ["v*"]}, []),
         ({"branches": ["develop"]}, ["develop"]),
+        ({"branches-ignore": ["m*"]}, ["develop"]),
+        ({"branches": ["**", "!main"]}, ["develop"]),
+        ({"branches": ["**"]}, ["develop", "main"]),
     ],
 )
 def test_the_push_reader_counts_only_the_branches_a_push_runs_on(
