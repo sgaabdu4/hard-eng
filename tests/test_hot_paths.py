@@ -18,8 +18,9 @@ SOURCE = Path(__file__).resolve().parents[1]
 FIXTURES = SOURCE / "tests/fixtures/performance"
 REVIEWER_INPUTS = SOURCE / "tests/fixtures/reviewer-inputs"
 ANNOTATION = re.compile(r"ruleid: (\S+)")
-PERFORMANCE_CHUNKS = 6
-REVIEWER_CHUNKS = 12
+PERFORMANCE_CHUNKS = 4
+REVIEWER_CHUNKS = 8
+SCAN_JOBS = ["--jobs", "2"]
 REVIEWER_PARSE_GAPS = [
     ("f3_q4_py_generic.py", 52, "PartialParsing"),
     ("f3_q4fmt_py_generic.py", 70, "PartialParsing"),
@@ -97,7 +98,7 @@ def test_each_rule_finds_exactly_the_annotated_lines(
         expected += annotated
         (tmp_path / "src" / fixture.name.removesuffix(".txt")).write_text(source)
     with patch("hot_paths.require_parsed") as parsed:
-        results = findings(tmp_path, ["src"], 900)
+        results = findings(tmp_path, [*SCAN_JOBS, "src"], 900)
     parsed.assert_called_once_with([], tmp_path)
     assert sorted(coordinates(results)) == sorted(expected)
 
@@ -176,7 +177,7 @@ def test_exact_reported_inputs_keep_all_expected_findings(
         names.add(fixture.name.removesuffix(".txt"))
         (tmp_path / fixture.name.removesuffix(".txt")).write_bytes(fixture.read_bytes())
     with patch("hot_paths.require_parsed") as parsed:
-        results = findings(tmp_path, ["."], 900)
+        results = findings(tmp_path, [*SCAN_JOBS, "."], 900)
     parsed.assert_called_once()
     errors = parsed.call_args.args[0]
     require_parsed(errors, tmp_path)
