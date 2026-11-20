@@ -111,12 +111,21 @@ def test_a_check_that_fails_on_its_own_gets_no_stop_line(tmp_path: Path) -> None
     assert "stopped by" not in output
 
 
-@pytest.mark.parametrize("stopped", [True, False])
-def test_only_a_gate_that_a_stop_ended_loses_its_scanner_log_judgement(
+@pytest.mark.parametrize(
+    ("code", "stopped", "ended"),
+    [
+        ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", True, True),
+        ("raise SystemExit(1)", True, False),
+        ("raise SystemExit(1)", False, False),
+    ],
+)
+def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
     runner: ModuleType,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    code: str,
     stopped: bool,
+    ended: bool,
 ) -> None:
     def stop(*_arguments: object) -> None:
         process_group.STOP_SIGNAL[:] = [signal.SIGTERM]
@@ -127,7 +136,7 @@ def test_only_a_gate_that_a_stop_ended_loses_its_scanner_log_judgement(
 
     monkeypatch.setattr(reports, "validate_scanner_log", invalid)
     monkeypatch.setattr(reports, "emit_dart_test_failure", stop if stopped else Mock())
-    check = {"name": "scan", "command": [sys.executable, "-c", "raise SystemExit(1)"]}
+    check = {"name": "scan", "command": [sys.executable, "-c", code]}
     group = {"path": ".", "checks": [check]}
     try:
         assert runner.run_gate(group, check, 30, threading.Lock()) is True
@@ -135,5 +144,5 @@ def test_only_a_gate_that_a_stop_ended_loses_its_scanner_log_judgement(
         process_group.STOPPED.clear()
         process_group.STOP_SIGNAL.clear()
     output = capsys.readouterr().out
-    assert ("so this gate was ended before it finished" in output) is stopped
-    assert ("diagnostics are missing" in output) is not stopped
+    assert ("so this gate was ended before it finished" in output) is ended
+    assert ("diagnostics are missing" in output) is not ended
