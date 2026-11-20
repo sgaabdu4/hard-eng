@@ -673,6 +673,7 @@ def complexity_line(item: JsonObject) -> str:
             "crap",
             "coverage_pct",
             "coverage_source",
+            "coverage_tier",
         )
         if key in item
     )

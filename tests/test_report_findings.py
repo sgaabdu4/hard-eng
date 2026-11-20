@@ -152,6 +152,11 @@ SLOW: JsonObject = {
     "coverage_source": "istanbul",
 }
 SLOW_LINE = "scan: src/a.ts:3 complexity route (exceeded crap; cyclomatic 21, cognitive 16, crap 40.0, coverage_pct 12.5, coverage_source istanbul)"
+ESTIMATED: JsonObject = {
+    **{k: v for k, v in SLOW.items() if k not in ("coverage_pct", "coverage_source")},
+    "coverage_tier": "low",
+}
+ESTIMATED_LINE = "scan: src/a.ts:3 complexity route (exceeded crap; cyclomatic 21, cognitive 16, crap 40.0, coverage_tier low)"
 
 
 @pytest.mark.parametrize("form", ["combined", "audit"])
@@ -166,18 +171,21 @@ def test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings(
             "kind": "combined",
             "check": {"unused_files": missing},
             "dupes": nothing,
-            "health": {"findings": [SLOW]},
+            "health": {"findings": [SLOW, ESTIMATED]},
         }
     else:
         report = {
             "kind": "audit",
             "dead_code": {"unused_files": missing},
             "duplication": nothing,
-            "complexity": {"findings": [SLOW]},
+            "complexity": {"findings": [SLOW, ESTIMATED]},
         }
     path = tmp_path / "fallow.json"
     path.write_text(json.dumps(report))
-    assert failed("fallow", path, tmp_path, capsys).splitlines() == [SLOW_LINE]
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [
+        SLOW_LINE,
+        ESTIMATED_LINE,
+    ]
 
 
 def test_a_fallow_gate_that_exits_zero_with_a_finding_prints_it(
