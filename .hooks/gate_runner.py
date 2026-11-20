@@ -455,6 +455,15 @@ def prepared_command(
     return command
 
 
+def judge_scanner_log(scanner: str | None, log: IO[str], code: int) -> None:
+    """A gate that the stop killed left no complete log to judge."""
+    from process_group import stopped_note
+    from reports import validate_scanner_log
+
+    if not stopped_note(code):
+        validate_scanner_log(scanner, log)
+
+
 def run_limited_gate(
     group: Group,
     gate: Gate,
@@ -480,13 +489,11 @@ def run_limited_gate(
                 f"COVERED {gate['name']}{reason}; elapsed {time.monotonic() - started:.3f}s"
             )
             return False
-        from process_group import stopped_note
         from reports import (
             SCANNERS,
             emit_dart_test_failure,
             related_command,
             scanner_result,
-            validate_scanner_log,
         )
 
         report = gate.get("report", {})
@@ -539,14 +546,13 @@ def run_limited_gate(
                         remembered_output(group, gate, command, result, log)
                     )
                     emit_dart_test_failure(result, tests, kind, report_path)
-            if not stopped_note(result.returncode):
-                validate_scanner_log(scanner, log)
+            judge_scanner_log(scanner, log, result.returncode)
         shard_reports(group, gate)
         unfixed = False
         if scanner and report_path is not None:
             report_args = (gate, report_path, command, directory, timeout)
             unfixed = scanner_result(result.returncode, scanner, *report_args)
-        from process_group import parallel_hint
+        from process_group import parallel_hint, stopped_note
         from reports import check_coverage, completed_tests
 
         if (

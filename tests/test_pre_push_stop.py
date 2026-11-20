@@ -7,7 +7,6 @@ import threading
 import time
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import Mock
 
 import process_group
 import pytest
@@ -111,31 +110,25 @@ def test_a_check_that_fails_on_its_own_gets_no_stop_line(tmp_path: Path) -> None
     assert "stopped by" not in output
 
 
-@pytest.mark.parametrize(
-    ("code", "stopped", "ended"),
-    [
-        ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", True, True),
-        ("raise SystemExit(1)", True, False),
-        ("raise SystemExit(1)", False, False),
-    ],
-)
-def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
+def gate_output_after(
     runner: ModuleType,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     code: str,
-    stopped: bool,
-    ended: bool,
-) -> None:
+    invalid: bool,
+) -> str:
+    """Run one gate whose check exits by `code`, with a stop that lands after its output was written."""
+
     def stop(*_arguments: object) -> None:
         process_group.STOP_SIGNAL[:] = [signal.SIGTERM]
         process_group.STOPPED.set()
 
-    def invalid(*_arguments: object) -> None:
+    def refuse(*_arguments: object) -> None:
         raise ValueError("Trivy configuration diagnostics are missing")
 
-    monkeypatch.setattr(reports, "validate_scanner_log", invalid)
-    monkeypatch.setattr(reports, "emit_dart_test_failure", stop if stopped else Mock())
+    if invalid:
+        monkeypatch.setattr(reports, "validate_scanner_log", refuse)
+    monkeypatch.setattr(reports, "emit_dart_test_failure", stop)
     check = {"name": "scan", "command": [sys.executable, "-c", code]}
     group = {"path": ".", "checks": [check]}
     try:
@@ -143,7 +136,24 @@ def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
     finally:
         process_group.STOPPED.clear()
         process_group.STOP_SIGNAL.clear()
-    output = capsys.readouterr().out
+    return capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("code", "ended"),
+    [
+        ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", True),
+        ("raise SystemExit(1)", False),
+    ],
+)
+def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
+    runner: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    code: str,
+    ended: bool,
+) -> None:
+    output = gate_output_after(runner, capsys, monkeypatch, code, True)
     assert ("so this gate was ended before it finished" in output) is ended
     assert ("diagnostics are missing" in output) is not ended
 
@@ -153,18 +163,8 @@ def test_a_gate_that_failed_by_itself_gets_no_stop_note_even_after_a_stop(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def stop(*_arguments: object) -> None:
-        process_group.STOP_SIGNAL[:] = [signal.SIGTERM]
-        process_group.STOPPED.set()
-
-    monkeypatch.setattr(reports, "emit_dart_test_failure", stop)
-    check = {"name": "scan", "command": [sys.executable, "-c", "raise SystemExit(1)"]}
-    group = {"path": ".", "checks": [check]}
-    try:
-        assert runner.run_gate(group, check, 30, threading.Lock()) is True
-    finally:
-        process_group.STOPPED.clear()
-        process_group.STOP_SIGNAL.clear()
-    output = capsys.readouterr().out
+    output = gate_output_after(
+        runner, capsys, monkeypatch, "raise SystemExit(1)", False
+    )
     assert "FAIL scan (exit 1;" in output
     assert "was stopped" not in output
