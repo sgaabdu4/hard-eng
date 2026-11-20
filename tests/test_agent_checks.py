@@ -197,10 +197,10 @@ def test_review_is_blocked_without_a_trustworthy_judge(tmp_path: Path) -> None:
     assert "changed calc.py" in judge_review(Run(root, base, CORRECT, [], []))
 
 
-SHELL_EDIT = Action("command", "sed -i '' 's/0/0.0/' calc.py", True)
-
-
-def unfinished_workflows(edit: Action) -> list[list[Action]]:
+def test_workflow_is_judged_from_recorded_actions(tmp_path: Path) -> None:
+    root, base = case_fixture(tmp_path, "continue-approved")
+    edit = Action("edit", str(root / "calc.py"), True)
+    missing = "ran no passing Complete check after its last edit"
     ready = BASELINE._replace(
         output="Hard Eng: planning checks passed — ready for build"
     )
@@ -216,15 +216,16 @@ def unfinished_workflows(edit: Action) -> list[list[Action]]:
         True,
         "Hard Eng: verification failed",
     )
+    shell_edit = Action("command", "sed -i '' 's/0/0.0/' calc.py", True)
     chained = BASELINE._replace(
-        detail="python3 .hooks/hard-eng.py check && " + SHELL_EDIT.detail
+        detail="python3 .hooks/hard-eng.py check && " + shell_edit.detail
     )
-    return [
+    for actions in (
         [BASELINE, edit],
         [edit, ready],
         [edit, echoed],
         [edit, masked],
-        [edit, BASELINE, SHELL_EDIT],
+        [edit, BASELINE, shell_edit],
         [edit, chained],
         [
             BASELINE,
@@ -240,16 +241,16 @@ def unfinished_workflows(edit: Action) -> list[list[Action]]:
                 PASSED,
             ),
         ],
-    ]
-
-
-def finished_workflows(edit: Action) -> list[list[Action]]:
+    ):
+        assert missing in " ".join(judge_continue(Run(root, base, "", [], actions))), (
+            actions
+        )
     limited = BASELINE._replace(
         detail="/bin/bash -lc \"perl -e 'alarm shift; exec @ARGV' 900 python3 .hooks/hard-eng.py check\""
     )
-    return [
+    for actions in (
         [edit, BASELINE],
-        [SHELL_EDIT, BASELINE, Action("command", "git status 2>&1", True)],
+        [shell_edit, BASELINE, Action("command", "git status 2>&1", True)],
         [edit, limited],
         [edit, limited._replace(detail=limited.detail.replace("V'", "V or exit 127'"))],
         [
@@ -270,55 +271,10 @@ def finished_workflows(edit: Action) -> list[list[Action]]:
             edit,
             limited._replace(detail=limited.detail[:-1] + ' > "$TMPDIR/he.log" 2>&1"'),
         ],
-    ]
-
-
-UNFINISHED = [
-    "baseline-only",
-    "ready-output",
-    "echoed-command",
-    "masked-failure",
-    "shell-edit-after-check",
-    "chained-edit",
-    "read-log",
-    "printed-command",
-]
-FINISHED = [
-    "edit-then-check",
-    "shell-edit-then-check",
-    "limited-run",
-    "limited-run-checks-exit",
-    "limited-run-with-env",
-    "check-with-offline-env",
-    "limited-run-to-log",
-]
-MISSING_CHECK = "ran no passing Complete check after its last edit"
-
-
-@pytest.mark.parametrize("index", range(len(UNFINISHED)), ids=UNFINISHED)
-def test_a_workflow_without_a_passing_check_after_its_last_edit_is_judged(
-    tmp_path: Path, index: int
-) -> None:
-    root, base = case_fixture(tmp_path, "continue-approved")
-    actions = unfinished_workflows(Action("edit", str(root / "calc.py"), True))[index]
-    assert MISSING_CHECK in " ".join(
-        judge_continue(Run(root, base, "", [], actions))
-    ), actions
-
-
-@pytest.mark.parametrize("index", range(len(FINISHED)), ids=FINISHED)
-def test_a_workflow_with_a_passing_check_after_its_last_edit_is_not_judged(
-    tmp_path: Path, index: int
-) -> None:
-    root, base = case_fixture(tmp_path, "continue-approved")
-    actions = finished_workflows(Action("edit", str(root / "calc.py"), True))[index]
-    assert MISSING_CHECK not in " ".join(
-        judge_continue(Run(root, base, "", [], actions))
-    )
-
-
-def test_a_failed_baseline_is_judged_from_recorded_output(tmp_path: Path) -> None:
-    root, base = case_fixture(tmp_path, "failed-baseline")
+    ):
+        assert missing not in " ".join(judge_continue(Run(root, base, "", [], actions)))
+    (tmp_path / "baseline").mkdir()
+    root, base = case_fixture(tmp_path / "baseline", "failed-baseline")
     never = "no recorded command output shows the failing baseline"
     echoed = Action(
         "command", "echo 'python3 -m unittest'", True, "python3 -m unittest"
