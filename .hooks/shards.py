@@ -607,11 +607,14 @@ def add_fallow_report(template: str, content: str) -> str:
         return content
     step = template[start:]
     names = JOB_NAME.findall(content.partition("\njobs:\n")[2])
-    if names == ["hard-eng"]:
+    last = content.rstrip("\n").rpartition("\n")[2]
+    if names == ["hard-eng"] and last.endswith('check --base "$BASE_SHA"'):
         return content.rstrip("\n") + "\n" + step
     if names != ["checks", "tests", "hard-eng"]:
         return content
     checks, _, rest = content.partition("\n  tests:\n")
+    if not checks.rstrip("\n").endswith("--shard rest"):
+        return content
     upload = "      - name: Keep the shard reports\n"
     return (
         checks.rstrip("\n")

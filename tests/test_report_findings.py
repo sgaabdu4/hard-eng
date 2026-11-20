@@ -318,6 +318,14 @@ def test_a_health_only_fallow_report_prints_its_complexity_findings(
     assert failed("fallow", path, tmp_path, capsys).splitlines() == [SLOW_LINE]
 
 
+def test_a_standalone_fallow_health_report_prints_its_findings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps({"kind": "health", "findings": [SLOW]}))
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [SLOW_LINE]
+
+
 def test_the_findings_of_all_kinds_are_all_printed(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
