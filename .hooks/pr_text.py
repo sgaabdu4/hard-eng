@@ -183,12 +183,18 @@ def pr_text_command(root: Path, pr: str) -> int:
     """Run the CI text check on a pull request, given by URL or number; 1 with the reason on a fault."""
     from shipping import _pr_url, git, origin_repository
 
+    repository = origin_repository(git(root, "remote", "get-url", "origin").strip())
     if pr.isdecimal():
-        repository = origin_repository(git(root, "remote", "get-url", "origin").strip())
         number = int(pr)
     else:
         owner, name, number = _pr_url(pr)
-        repository = f"{owner}/{name}"
+        if f"{owner}/{name}".lower() != repository.lower():
+            print(
+                f"Hard Eng: the PR URL repository does not match origin ({repository}); "
+                "its policy is the one that this checkout holds",
+                file=sys.stderr,
+            )
+            return 1
     problem = pull_problem(fetch_pull(root, repository, number), root, number)
     if problem:
         print(f"Hard Eng: {problem}", file=sys.stderr)

@@ -682,7 +682,7 @@ def finding_lines(path: Path, directory: Path | None = None) -> list[str]:
         set_aside_generated_clones(report, directory)
         audit = report.get("kind") == "audit"
         found: list[str] = []
-        for kind, items in report["dead_code" if audit else "check"].items():
+        for kind, items in report.get("dead_code" if audit else "check", {}).items():
             if not isinstance(items, list) or kind == "workspace_diagnostics":
                 continue
             for item in items:

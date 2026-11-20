@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-A builder can run the PR text rules of CI before and after a PR opens, the quick check judges a committed plan when no base branch is known, and a failed Fallow gate prints every finding and keeps its JSON in CI. Non-goals: any other PR text rule, any other plan rule, any change to the Fallow limits.
+A builder can run the PR text rules of CI on a PR after it opens and after each edit, the quick check judges a committed plan when no base branch is known, and a failed Fallow gate prints every finding and keeps its JSON in CI. Non-goals: any other PR text rule, any other plan rule, any change to the Fallow limits.
 
 ## Sources + coverage
 
@@ -20,6 +20,8 @@ Single source: the PR text rules had one owner, `body_problem`, and `event_probl
 
 Blockers: None
 Handoff: Approval
+Review declined: A draft body cannot be checked before the PR opens :: the maintainer asked for a `--pr` command, and the body rules also run in `ship ready` and CI; a body file option is an extra feature.
+Review declined: `ship ready` loses the dependency bot exemption :: `ship ready` refused such a PR before this change too, through `body_problem`, which stays in the same expression; nothing new is refused.
 Authority: Autonomous mode. The maintainer assigned these three faults, named the branch and the checks; the PR is not merged here.
 
 ## Acceptance + steps
@@ -29,6 +31,7 @@ Authority: Autonomous mode. The maintainer assigned these three faults, named th
 - [x] `ship --stage ready` reads the PR text, including the UI form, before the check results; a UI path PR with no pictures and a failing check was refused for the check before → `tests/test_pr_text.py::test_ready_refuses_a_ui_change_without_pictures_or_a_note`
 - [x] The quick check judges a plan that the branch changed and committed when no branch point is found, in a clean tree → `tests/test_quick_plan_scope.py::test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known`
 - [x] A failed Fallow gate prints each complexity and CRAP finding, in the combined and the audit report, and every other finding with no cut at 20 → `tests/test_report_findings.py::test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings`
+- [x] A health only Fallow report prints its findings; a PR URL of another repository is refused; a base that resolves keeps the plan check off untouched plans; a workflow from before the step gains it → `tests/test_report_findings.py::test_a_health_only_fallow_report_prints_its_complexity_findings`, `tests/test_pr_text.py::test_the_pr_text_command_refuses_a_url_of_another_repository`, `tests/test_quick_plan_scope.py::test_a_base_that_resolves_keeps_the_check_off_untouched_plans`, `tests/test_shard_workflow.py::test_a_workflow_from_before_the_fallow_report_step_gains_it`
 - [x] The CI template uploads the Fallow JSON only on failure → `tests/test_shard_workflow.py::test_the_workflow_keeps_the_fallow_report_only_when_a_check_fails`
 
 ## Baseline + execution

@@ -726,7 +726,7 @@ def project_workflows(root: Path) -> list[Path]:
 def adapt_ci(
     root: Path, source: Path, config: GateConfig, changes: dict[str, str]
 ) -> None:
-    from shards import split_test_shards
+    from shards import add_fallow_report, split_test_shards
 
     name = ".github/workflows/hard-eng.yml"
     workflows = project_workflows(root)
@@ -743,6 +743,10 @@ def adapt_ci(
         )
         migrated = migrate_affected_tools(root, source, config, migrated)
         migrated = migrate_docs_token(migrate_impact_token(migrated))
+        template = source / TEMPLATE
+        migrated = add_fallow_report(
+            template.read_text() if template.is_file() else "", migrated
+        )
         migrated = migrate_swift_runner(
             config, migrate_runner_variable(migrate_launcher(source, migrated))
         )

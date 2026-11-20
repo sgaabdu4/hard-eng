@@ -592,3 +592,17 @@ def test_ready_refuses_a_ui_change_without_pictures_or_a_note(
         [{"filename": "src/App.tsx"}],
     )
     _ready_outcome(fixture, fake, monkeypatch, "UI changes require distinct")
+
+
+def test_the_pr_text_command_refuses_a_url_of_another_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path)
+    (tmp_path / "other").mkdir()
+    fake = FakeGitHub(_pull(_fixture(tmp_path / "other")), [])
+    _patch_gh(monkeypatch, fake)
+    assert pr_text_command(root, "https://github.com/other/widget/pull/1") == 1
+    assert "does not match origin" in capsys.readouterr().err
+    assert fake.calls == []

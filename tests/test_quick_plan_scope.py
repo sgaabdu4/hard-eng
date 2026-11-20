@@ -31,3 +31,14 @@ def test_the_quick_check_judges_a_committed_plan_when_no_base_branch_is_known(
     root = committed_bad_plan(tmp_path)
     with pytest.raises(ValueError, match="N/A needs an inline reason"):
         change_size.judged_stage(root, base, None)
+
+
+def test_a_base_that_resolves_keeps_the_check_off_untouched_plans(
+    tmp_path: Path,
+) -> None:
+    root = committed_bad_plan(tmp_path)
+    base = git(root, "rev-parse", "HEAD")
+    (root / "features/new").mkdir(parents=True)
+    (root / "features/new/PLAN.md").write_text(plan_document())
+    commit(root, "add a plan that is fine")
+    assert change_size.judged_stage(root, base, None) == "Complete"
