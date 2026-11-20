@@ -121,6 +121,7 @@ CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
 PUSH_LOOKUP_SECONDS = 120
 RELEASE_GATE_SECONDS = 3720
 RERUN = "Rerun this job once the Canary run for develop's push has finished."
+RELEASED_INSIDE = "the candidate reached main inside a release, so it has no older release to update from"
 AGENTS = ("claude", "codex")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
@@ -464,16 +465,14 @@ def install_last_release(
     log: IO[str],
     checkout: Path = SOURCE,
 ) -> None:
-    """Install the release users have: the main tip a main push replaced, else the candidate's merge base with main."""
+    """Install the release users have: the candidate's merge base with main, or for a main commit, the main tip that it replaced."""
     old = work.with_name(f"{work.name}.release")
-    released = os.environ.get("CANARY_RELEASED") or output(
-        ["git", "merge-base", revision, "origin/main"], checkout
-    )
+    released = output(["git", "merge-base", revision, "origin/main"], checkout)
     if released == output(["git", "rev-parse", revision], checkout):
-        raise Failed(
-            "the candidate is already on main, so it has no older release to update "
-            "from; run the canary on a newer develop commit"
-        )
+        main = output(["git", "rev-list", "--first-parent", "origin/main"], checkout)
+        if released not in main.split():
+            raise Failed(f"{RELEASED_INSIDE}; run the canary on a newer develop commit")
+        released = output(["git", "rev-parse", f"{released}^1"], checkout)
     must(
         work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)]
     )
