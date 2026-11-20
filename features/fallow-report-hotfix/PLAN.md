@@ -20,6 +20,9 @@ Single source: the finding cut at 20 had one owner, `FINDING_LIMIT` in `reports.
 
 Blockers: None
 Handoff: Approval
+Review declined: An older workflow with a shell command after the check in the same run block gets invalid YAML from the SDK migration :: only a customised file that predates dynamic SDK setup and holds extra shell lines after the check reaches it; Hard Eng generates no such file, and the same fix on develop would split the hotfix from develop. Stated limit.
+Review declined: The upload matches only `fallow.json` and skips hidden folders :: Hard Eng writes its Fallow report as `coverage/fallow.json`, a name and a folder that the upload reads; a custom report name or a hidden folder is the project's own choice. Stated limit.
+Review declined: Existing generated Swift workflows miss the upload :: those layouts have their own jobs, and the migration edits only the one job and the split layout that it can prove it generated; a project with that layout gets the step when its workflow is next generated. Stated limit.
 Authority: Autonomous mode. The maintainer assigned the Fallow fix and named the hotfix route. Merge: maintainer, chat 2026-11-20, "yes" to sending the Fallow fix to main as a hotfix.
 
 ## Acceptance + steps
