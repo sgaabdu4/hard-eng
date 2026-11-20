@@ -136,7 +136,8 @@ def first_batches(count: int, workers: int) -> list[range]:
 
 
 @pytest.mark.parametrize(
-    ("workers", "tests", "count"), [(4, 330, 12), (14, 2000, 12), (4, 5, 4)]
+    ("workers", "tests", "count"),
+    [(4, 330, 12), (14, 2000, 12), (4, 5, 4), (4, 12, 12)],
 )
 def test_each_worker_starts_with_its_share_of_the_scan_cases(
     monkeypatch: pytest.MonkeyPatch, workers: int, tests: int, count: int
@@ -147,13 +148,13 @@ def test_each_worker_starts_with_its_share_of_the_scan_cases(
     scans = [Case(True) for _ in range(count)]
     items = [*plain, *scans]
     pytest_collection_modifyitems(cast("list[pytest.Item]", items))
+    batches = first_batches(tests, workers)
     held = [
         [scans.index(items[place]) for place in batch if items[place] in scans]
-        for batch in first_batches(tests, workers)
+        for batch in batches
     ]
-    assert sorted(number for numbers in held for number in numbers) == list(
-        range(count)
-    )
+    first = sorted(number for numbers in held for number in numbers)
+    assert first == list(range(min(count, sum(map(len, batches)))))
     assert max(map(len, held)) - min(map(len, held)) <= 1
     assert all(
         len([number for number in numbers if number < 4]) <= 1 for numbers in held
@@ -180,7 +181,14 @@ def test_a_filtered_run_spreads_the_scans_that_remain() -> None:
         capture_output=True,
         text=True,
         check=True,
-        env={**os.environ, "PYTEST_XDIST_WORKER_COUNT": "4"},
+        env={
+            **{
+                key: value
+                for key, value in os.environ.items()
+                if key != "PYTEST_ADDOPTS"
+            },
+            "PYTEST_XDIST_WORKER_COUNT": "4",
+        },
     ).stdout.splitlines()
     names = [line for line in listed if "::" in line]
     held = [

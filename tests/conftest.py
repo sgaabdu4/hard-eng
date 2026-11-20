@@ -2,6 +2,7 @@
 
 import atexit
 import importlib.util
+import itertools
 import json
 import os
 import re
@@ -621,13 +622,17 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     scans = [item for item in items if item.get_closest_marker("scan")]
     rest = [item for item in items if not item.get_closest_marker("scan")]
     workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1"))
+    if len(items) < 2 * workers:
+        items[:] = [*scans, *rest]
+        return
     batch = max(len(items) // workers // 4, 2)
-
-    def place(number: int) -> int:
-        if len(items) < 2 * workers:
-            return number
-        return number % workers * batch + number // workers
-
-    for number in sorted(range(len(scans)), key=place):
-        rest.insert(place(number), scans[number])
-    items[:] = rest
+    first: list[list[pytest.Item]] = [[] for _ in range(workers)]
+    later: list[pytest.Item] = []
+    for number, scan in enumerate(scans):
+        held = first[number % workers]
+        (held if len(held) < batch else later).append(scan)
+    filler = iter([*rest, *later])
+    ordered: list[pytest.Item] = []
+    for held in first:
+        ordered += [*held, *itertools.islice(filler, batch - len(held))]
+    items[:] = [*ordered, *filler]
