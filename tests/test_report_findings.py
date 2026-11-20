@@ -148,8 +148,10 @@ SLOW: JsonObject = {
     "cyclomatic": 21,
     "cognitive": 16,
     "crap": 40.0,
+    "coverage_pct": 12.5,
+    "coverage_source": "istanbul",
 }
-SLOW_LINE = "scan: src/a.ts:3 complexity route (exceeded crap; cyclomatic 21, cognitive 16, crap 40.0)"
+SLOW_LINE = "scan: src/a.ts:3 complexity route (exceeded crap; cyclomatic 21, cognitive 16, crap 40.0, coverage_pct 12.5, coverage_source istanbul)"
 
 
 @pytest.mark.parametrize("form", ["combined", "audit"])
