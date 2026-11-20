@@ -336,3 +336,12 @@ def test_a_workflow_from_before_the_fallow_report_step_gains_it(
     config = suite_config(2)
     path.write_text(shards.split_job(old, "1, 2") or "")
     assert generated(tmp_path, SOURCE, config) == shards.split_job(template, "1, 2")
+
+
+def test_a_workflow_that_does_not_end_with_the_check_step_is_left_alone() -> None:
+    import shards
+
+    template = WORKFLOW_TEMPLATE.read_text()
+    step = template[template.index("      - name: Keep the Fallow report") :]
+    old = template.replace(step, "") + "    outputs:\n      done: yes\n"
+    assert shards.add_fallow_report(template, old) == old

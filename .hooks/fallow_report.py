@@ -701,7 +701,8 @@ def finding_lines(path: Path, directory: Path | None = None) -> list[str]:
                 for copy in group["instances"]
             ]
             found.append("copied code " + " ".join(copies))
-        health = report.get("complexity" if audit else "health")
+        health = report if report.get("kind") == "health" else None
+        health = health or report.get("complexity" if audit else "health")
         items = health.get("findings") if isinstance(health, dict) else None
         found += [complexity_line(i) for i in items or [] if isinstance(i, dict)]
         return found
