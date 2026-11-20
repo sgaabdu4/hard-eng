@@ -127,13 +127,30 @@ class Case:
         return name if self.scan else None
 
 
-def test_scan_cases_start_apart_and_the_other_tests_keep_their_order() -> None:
-    """HE-HOT-PATH: xdist gives a worker neighbouring tests, so the long scans must not be neighbours."""
-    plain = [Case(False) for _ in range(640)]
-    scans = [Case(True) for _ in range(3)]
+@pytest.mark.parametrize(("workers", "tests"), [(4, 330), (14, 2000)])
+def test_each_worker_starts_with_its_share_of_the_scan_cases(
+    monkeypatch: pytest.MonkeyPatch, workers: int, tests: int
+) -> None:
+    """HE-HOT-PATH: xdist's first batch gives each worker a run of neighbouring tests, so neighbouring scans go to different workers."""
+    monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", str(workers))
+    plain = [Case(False) for _ in range(tests - 12)]
+    scans = [Case(True) for _ in range(12)]
     items = [*plain, *scans]
     pytest_collection_modifyitems(cast("list[pytest.Item]", items))
-    assert [items.index(scan) for scan in scans] == [0, 10, 20]
+    batch = max(tests // workers // 4, 2)
+    held = [
+        [
+            scans.index(case)
+            for case in items[worker * batch : (worker + 1) * batch]
+            if case in scans
+        ]
+        for worker in range(workers)
+    ]
+    assert sorted(number for numbers in held for number in numbers) == list(range(12))
+    assert max(map(len, held)) - min(map(len, held)) <= 1
+    assert all(
+        len([number for number in numbers if number < 4]) <= 1 for numbers in held
+    )
     assert [case for case in items if case not in scans] == plain
 
 
