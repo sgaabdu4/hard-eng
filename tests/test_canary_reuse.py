@@ -261,8 +261,11 @@ def test_each_shipping_check_runs_on_a_push_to_each_branch_that_ship_delivers_to
     checks = json.loads((release_canary.SOURCE / "hard-eng.gates.json").read_text())
     pushed: dict[str, set[str]] = {}
     for path in (release_canary.SOURCE / ".github/workflows").glob("*.yml"):
+        events = yaml.safe_load(path.read_text())[True]
+        if not isinstance(events, dict):
+            events = dict.fromkeys([events] if isinstance(events, str) else events)
+        push = events.get("push") or {}
         workflow = yaml.safe_load(path.read_text())
-        push = workflow[True].get("push") or {}
         for job in workflow["jobs"].values():
             pushed.setdefault(job.get("name", ""), set()).update(
                 push.get("branches", [])
