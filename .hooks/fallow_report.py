@@ -654,8 +654,9 @@ def own_place(item: JsonObject) -> tuple[str, str] | None:
     if "path" in item:
         return located(item["path"], item.get("line")), ""
     if "from_path" in item:
-        return located(item["from_path"], item.get("line")), str(
-            item.get("to_path", "")
+        through = f" via {item['via_path']}" if item.get("via_path") else ""
+        return located(item["from_path"], item.get("line")), (
+            f"{item.get('to_path', '')}{through}"
         )
     for key in ("imported_from", "used_in"):
         sites = item.get(key)
