@@ -141,8 +141,8 @@ def stopped_line(number: int) -> str:
     return (
         f"Hard Eng: the pre-push check was stopped by {signal.Signals(number).name} "
         "before it finished. The stop is not a fault in the project, and neither is "
-        "the FAIL line of a gate that it ended. Fix a failure printed before the "
-        "stop, then run the push again."
+        "a gate that the stop ended. Fix any other failure printed above, then run "
+        "the push again."
     )
 
 
