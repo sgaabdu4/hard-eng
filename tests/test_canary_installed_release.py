@@ -60,6 +60,10 @@ def test_a_main_commit_installs_the_main_tip_that_it_replaced(
 ) -> None:
     """A push, manual run or rerun on main checks a main commit; its first parent is the release users had."""
     shas = released_history(tmp_path)
+    checkout = tmp_path / "checkout"
+    git(checkout, "checkout", "-q", "main")
+    git(checkout, "merge", "-q", "--no-ff", "-m", "next release", "develop")
+    git(checkout, "update-ref", "refs/remotes/origin/main", "HEAD")
     assert installed(tmp_path, monkeypatch, shas["merged"]) == shas["base"]
 
 
