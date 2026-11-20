@@ -21,7 +21,7 @@ Single source: the chunk counts, the Semgrep job cap and the expected parse gaps
 
 Blockers: None
 Handoff: Approval
-Authority: Autonomous. The maintainer assigned this change.
+Authority: Autonomous. The maintainer assigned this change. Merge: maintainer, chat 2026-11-20, "yes" to the request to merge PR 665 and PR 666 into `develop`; this PR merges into `develop` by rebase after CI passes.
 Decisions:
 
 1. Each of the two tests takes a chunk index. Chunk `i` holds each fixture whose place in the sorted name list is `i` modulo the chunk count, so each chunk mixes languages and sizes. Four chunks for the 481 annotated fixtures; eight for the 1,828 reported inputs.
@@ -61,5 +61,5 @@ E2E: N/A — no user journey changes.
 Real service: N/A — no outside service is called.
 Retro: (1) The fault escaped to the base branch: no check tied the hot path tests to the gate time limit → None — the gate limit already failed the push, and this change shortens the tests. (2) The first split looked right but the measure showed no gain on the whole suite; the extra Semgrep starts raised the CPU use on a saturated machine → None — the cap in Decision 4 fixed it, found by the advisor review of the timings. (3) The agent check test split cost seven times the CPU, so it was restored → None. (4) The independent review found that xdist had put all 12 cases on one worker in my own full runs, which I had not read → None — the hook in Decision 7 fixed it and a full run showed 12 workers. (5) The Ready run found a type fault in the new code (an untyped empty list) → None — fixed before the commit.
 
-Delivery target: PR
+Delivery target: Merge
 Delivery: Pending — required remote proof.
