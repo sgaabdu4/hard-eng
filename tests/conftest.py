@@ -613,3 +613,13 @@ def build_primary(
 @pytest.fixture
 def primary(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return build_primary(repository, tmp_path, monkeypatch)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Start each long scan case in the first batch of a different xdist worker, because xdist hands a worker a run of neighbouring tests."""
+    scans = [item for item in items if item.get_closest_marker("scan")]
+    rest = [item for item in items if not item.get_closest_marker("scan")]
+    stride = max(1, len(items) // 64)
+    for number, scan in enumerate(scans):
+        rest.insert(number * stride, scan)
+    items[:] = rest
