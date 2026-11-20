@@ -59,8 +59,9 @@ def test_a_pre_push_stopped_by_a_signal_says_the_check_did_not_finish(
     assert hook.returncode == 128 + signal_number
     assert (
         f"Hard Eng: the pre-push check was stopped by {signal_number.name} before it "
-        "finished. The stop is not a fault in the project. Fix any failure printed "
-        "above, then run the push again."
+        "finished. The stop is not a fault in the project, and neither is the FAIL "
+        "line of a gate that it ended. Fix a failure printed before the stop, then "
+        "run the push again."
     ) in output
 
 

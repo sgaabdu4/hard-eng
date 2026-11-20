@@ -806,7 +806,9 @@ def test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_when_mutation_will_run
     assert marker.exists()
 
 
-@pytest.mark.parametrize("path", ["component/inner", "packages/../component/inner"])
+@pytest.mark.parametrize(
+    "path", ["component/inner", "packages/../component/inner", "packages/../other"]
+)
 def test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_for_a_package_in_a_submodule(
     runner: ModuleType,
     tmp_path: Path,
