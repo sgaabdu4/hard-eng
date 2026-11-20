@@ -756,6 +756,86 @@ def test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_c
     assert (pushed.push(monkeypatch, revision, pushed.base) != 0) is leaks
 
 
+def watch_checkout_setup(
+    pushed: Pushed, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Mock]:
+    """A post-checkout hook that leaves a marker, and a spy on the setup of the pushed copy."""
+    pushed.add_submodule(pushed.root)
+    git(pushed.root, "commit", "-qm", "add a component")
+    marker = pushed.root.parent / "post-checkout-ran"
+    hook = pushed.root / ".git/hooks/post-checkout"
+    hook.write_text(f"#!/bin/sh\ntouch '{marker}'\n")
+    hook.chmod(0o755)
+    prepare = Mock(wraps=ship_actions.prepare_checkout)
+    monkeypatch.setattr(ship_actions, "prepare_checkout", prepare)
+    return marker, prepare
+
+
+def test_a_base_that_leaves_checks_to_ci_sets_up_no_copy_for_the_secret_scan(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pushed = leaves_checks_to_ci(runner, tmp_path, shipping_policy, monkeypatch)
+    pushed.task()
+    marker, prepare = watch_checkout_setup(pushed, monkeypatch)
+    revision = git(pushed.root, "rev-parse", "HEAD").strip()
+    calls = recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    assert calls == [["check", "--commit-secrets", "--base", pushed.base]]
+    prepare.assert_not_called()
+    assert not marker.exists()
+
+
+def test_a_base_that_leaves_checks_to_ci_sets_up_the_copy_when_mutation_will_run(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pushed = leaves_checks_to_ci(
+        runner, tmp_path, shipping_policy, monkeypatch, mutation=30.0
+    )
+    pushed.task()
+    marker, prepare = watch_checkout_setup(pushed, monkeypatch)
+    revision = git(pushed.root, "rev-parse", "HEAD").strip()
+    recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    prepare.assert_called_once()
+    assert marker.exists()
+
+
+def test_a_push_that_runs_the_full_check_still_sets_up_the_copy(
+    pushed: Pushed, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pushed.task()
+    marker, prepare = watch_checkout_setup(pushed, monkeypatch)
+    revision = git(pushed.root, "rev-parse", "HEAD").strip()
+    recorded_runs(monkeypatch)
+    assert pushed.push(monkeypatch, revision, pushed.base) == 0
+    prepare.assert_called_once()
+    assert marker.exists()
+
+
+def test_a_changed_working_tree_gitleaks_config_does_not_hide_a_pushed_secret(
+    runner: ModuleType,
+    tmp_path: Path,
+    shipping_policy: ShippingPolicy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pushed = leaves_checks_to_ci(runner, tmp_path, shipping_policy, monkeypatch)
+    (pushed.root / "token.txt").write_text(f"token = {a_secret()}\n")
+    pushed.task("add a token")
+    (pushed.root / "token.txt").unlink()
+    revision = pushed.task("remove the token again")
+    (pushed.root / ".gitleaks.toml").write_text(
+        '[extend]\nuseDefault = false\n[allowlist]\nregexes = [".*"]\n'
+    )
+    (pushed.root / ".gitleaksignore").write_text("*\n")
+    assert pushed.push(monkeypatch, revision, pushed.base) != 0
+
+
 @pytest.mark.parametrize(
     ("key", "edits", "fails"),
     [("ci", True, True), ("local", True, False), ("ci", False, False)],
