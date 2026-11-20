@@ -653,6 +653,10 @@ def own_place(item: JsonObject) -> tuple[str, str] | None:
     """Where a finding without a path of its own sits, and what names it."""
     if "path" in item:
         return located(item["path"], item.get("line")), ""
+    if "from_path" in item:
+        return located(item["from_path"], item.get("line")), str(
+            item.get("to_path", "")
+        )
     for key in ("imported_from", "used_in"):
         sites = item.get(key)
         if isinstance(sites, list) and sites and isinstance(sites[0], dict):
