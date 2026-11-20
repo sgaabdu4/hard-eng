@@ -4,7 +4,7 @@ import json
 import signal
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -144,7 +144,7 @@ def _restore(
 
 
 @contextmanager
-def _stop_as_exit() -> Iterator[None]:
+def _stop_as_exit() -> Generator[None]:
     """A stop signal raises, so the protection is put back before the process ends."""
 
     def stop(number: int, _frame: object) -> None:
