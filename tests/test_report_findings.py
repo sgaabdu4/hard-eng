@@ -341,6 +341,17 @@ def test_a_standalone_fallow_health_report_prints_its_findings(
     assert failed("fallow", path, tmp_path, capsys).splitlines() == [SLOW_LINE]
 
 
+def test_a_boundary_violation_prints_where_it_imports_from_and_to(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = {"from_path": "src/ui/u.ts", "to_path": "src/db/q.ts", "line": 1, "col": 8}
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps({"check": {"boundary_violations": [item]}}))
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [
+        "scan: src/ui/u.ts:1 boundary_violations src/db/q.ts"
+    ]
+
+
 def test_the_findings_of_all_kinds_are_all_printed(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
