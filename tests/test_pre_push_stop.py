@@ -146,3 +146,25 @@ def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
     output = capsys.readouterr().out
     assert ("so this gate was ended before it finished" in output) is ended
     assert ("diagnostics are missing" in output) is not ended
+
+
+def test_a_gate_that_failed_by_itself_gets_no_stop_note_even_after_a_stop(
+    runner: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def stop(*_arguments: object) -> None:
+        process_group.STOP_SIGNAL[:] = [signal.SIGTERM]
+        process_group.STOPPED.set()
+
+    monkeypatch.setattr(reports, "emit_dart_test_failure", stop)
+    check = {"name": "scan", "command": [sys.executable, "-c", "raise SystemExit(1)"]}
+    group = {"path": ".", "checks": [check]}
+    try:
+        assert runner.run_gate(group, check, 30, threading.Lock()) is True
+    finally:
+        process_group.STOPPED.clear()
+        process_group.STOP_SIGNAL.clear()
+    output = capsys.readouterr().out
+    assert "FAIL scan (exit 1;" in output
+    assert "was stopped" not in output
