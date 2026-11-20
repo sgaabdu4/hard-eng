@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
-from typing import IO, TYPE_CHECKING
+from typing import IO, TYPE_CHECKING, TextIO
 
 import gate_times
 import swift_setup
@@ -455,7 +455,7 @@ def prepared_command(
     return command
 
 
-def judge_scanner_log(scanner: str | None, log: IO[str], code: int) -> None:
+def judge_scanner_log(scanner: str | None, log: TextIO, code: int) -> None:
     """A gate that the stop killed left no complete log to judge."""
     from process_group import stopped_note
     from reports import validate_scanner_log
