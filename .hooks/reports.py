@@ -758,7 +758,11 @@ def scanner_result(
     True when the scanner exited 1 and no release fixes any vulnerability it reported.
     """
     if code == 0:
-        validate_scanner_report(scanner, gate, path, command, directory, timeout)
+        try:
+            validate_scanner_report(scanner, gate, path, command, directory, timeout)
+        except ValueError:
+            print_findings(scanner, gate, path, directory)
+            raise
     elif scanner in {"osv", "osv-image"} and path.is_file():
         try:
             if code == 1 and scanner == "osv" and osv_unfixed_only(path):
@@ -767,19 +771,23 @@ def scanner_result(
         except ValueError as error:
             print(error)
     elif scanner in FINDING_READERS:
-        read = FINDING_READERS[scanner]
-        lines = (
-            fallow_findings(path, directory) if read is fallow_findings else read(path)
-        )
-        if (more := len(lines) - FINDING_LIMIT) > 0:
-            lines[FINDING_LIMIT:] = [f"{more} more findings in {path}"]
-        for line in lines:
-            print(f"{gate['name']}: {line}")
+        lines = print_findings(scanner, gate, path, directory)
         if scanner == "import-linter" and missing_build_system(lines, directory):
             print(
                 f"{gate['name']}: Add a [build-system] table to pyproject.toml and run `uv sync`."
             )
     return False
+
+
+def print_findings(scanner: str, gate: Gate, path: Path, directory: Path) -> list[str]:
+    """Every finding that the report holds, one line each: a CI run keeps no report file to read the rest in."""
+    if scanner not in FINDING_READERS:
+        return []
+    read = FINDING_READERS[scanner]
+    lines = fallow_findings(path, directory) if read is fallow_findings else read(path)
+    for line in lines:
+        print(f"{gate['name']}: {line}")
+    return lines
 
 
 def missing_build_system(lines: list[str], directory: Path) -> bool:
@@ -900,7 +908,6 @@ SCANNERS = {
     "jscpd": validate_jscpd,
 }
 
-FINDING_LIMIT = 20
 FINDING_READERS = {
     "gitleaks": gitleaks_findings,
     "react-doctor": react_findings,

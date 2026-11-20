@@ -465,7 +465,7 @@ def generated_tools(
     configure_ci(root, SOURCE, config, changes)
     workflow = changes[".github/workflows/hard-eng.yml"]
     job = yaml.safe_load(workflow)["jobs"]["hard-eng"]
-    checks = job["steps"][-1]
+    checks = next(s for s in job["steps"] if s.get("name") == "Run required checks")
     fallback = checks["env"]["SDK_TOOLS"].split(" || '", 1)[1].split("'", 1)[0]
     output = subprocess.check_output(
         ["bash", "-c", 'bun() { printf "%s\\n" "$*"; }\n' + checks["run"]],
