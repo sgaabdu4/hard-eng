@@ -462,11 +462,12 @@ def publish(root: Path, merge: bool = True) -> int:
     if pushed.returncode:
         print(
             f"The push of {UPDATE_BRANCH} failed; the lines above give the reason. "
-            "If a failing check is printed above, the new release found a fault "
-            f"in this project: fix it on the branch {UPDATE_BRANCH} in its own "
-            f"worktree, as its own commit, then run `{UPDATE_COMMAND}` again. "
-            "If the check was stopped before it finished, or no failing check is "
-            f"printed, the project is not at fault: run `{UPDATE_COMMAND}` again."
+            "If the check was stopped before it finished, the project is not at "
+            f"fault: run `{UPDATE_COMMAND}` again. Otherwise, if a failing check is "
+            "printed above, the new release found a fault in this project: fix it "
+            f"on the branch {UPDATE_BRANCH} in its own worktree, as its own commit, "
+            f"then run `{UPDATE_COMMAND}` again. If no failing check is printed, the "
+            f"project is not at fault: run `{UPDATE_COMMAND}` again."
         )
         return 1
     title = REPAIR_TITLE if repair else f"Update Hard Eng to {revision[:12]}"
