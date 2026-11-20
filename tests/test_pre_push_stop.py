@@ -116,6 +116,7 @@ def gate_output_after(
     monkeypatch: pytest.MonkeyPatch,
     code: str,
     invalid: bool,
+    stopped: bool = True,
 ) -> str:
     """Run one gate whose check exits by `code`, with a stop that lands after its output was written."""
 
@@ -128,7 +129,8 @@ def gate_output_after(
 
     if invalid:
         monkeypatch.setattr(reports, "validate_scanner_log", refuse)
-    monkeypatch.setattr(reports, "emit_dart_test_failure", stop)
+    if stopped:
+        monkeypatch.setattr(reports, "emit_dart_test_failure", stop)
     check = {"name": "scan", "command": [sys.executable, "-c", code]}
     group = {"path": ".", "checks": [check]}
     try:
@@ -140,10 +142,11 @@ def gate_output_after(
 
 
 @pytest.mark.parametrize(
-    ("code", "ended"),
+    ("code", "stopped", "ended"),
     [
-        ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", True),
-        ("raise SystemExit(1)", False),
+        ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", True, True),
+        ("raise SystemExit(1)", True, False),
+        ("raise SystemExit(1)", False, False),
     ],
 )
 def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
@@ -151,9 +154,10 @@ def test_only_a_gate_that_a_stop_killed_loses_its_scanner_log_judgement(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     code: str,
+    stopped: bool,
     ended: bool,
 ) -> None:
-    output = gate_output_after(runner, capsys, monkeypatch, code, True)
+    output = gate_output_after(runner, capsys, monkeypatch, code, True, stopped)
     assert ("so this gate was ended before it finished" in output) is ended
     assert ("diagnostics are missing" in output) is not ended
 
