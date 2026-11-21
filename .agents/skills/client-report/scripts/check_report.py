@@ -10,7 +10,13 @@ SHOWN = ("alt",)
 INLINE = {"a", "b", "code", "em", "i", "mark", "small", "span", "strong", "u"}
 BLOCK = "\x00"
 PLACEHOLDER = re.compile(r"\[[^\]\x00]*\]")
-SECTIONS = ("How it was checked", "Not checked")
+SECTIONS = (
+    "Where it stands",
+    "What is live",
+    "How it was checked",
+    "Not checked",
+    "Everything left",
+)
 TEMPLATE = "docs/client-report/template.html"
 HEADING = re.compile(r"h[1-6]")
 SYMBOLS = re.compile(r"\s*([{};,])\s*|(:)\s+")
@@ -111,14 +117,14 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
-def saved_template() -> Path:
+def saved_template() -> Path | None:
     done = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
         check=False,
     )
-    return Path(done.stdout.strip() if done.returncode == 0 else ".") / TEMPLATE
+    return Path(done.stdout.strip()) / TEMPLATE if done.returncode == 0 else None
 
 
 def main() -> int:
@@ -128,7 +134,11 @@ def main() -> int:
     parser.add_argument("report", type=Path)
     parser.add_argument("--template", type=Path, default=None)
     args = parser.parse_args()
-    found = problems(args.report, args.template or saved_template())
+    template = args.template or saved_template()
+    if template is None:
+        print("run inside the project's git checkout")
+        return 1
+    found = problems(args.report, template)
     print("".join(f"{line}\n" for line in found), end="")
     return 1 if found else 0
 
