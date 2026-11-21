@@ -1,6 +1,7 @@
 """Strict loading of the shipping policy in hard-eng.gates.json."""
 
 import json
+import sys
 from pathlib import Path
 from typing import cast
 
@@ -425,6 +426,32 @@ def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
 ) -> None:
     source = Path(__file__).resolve().parents[1] / name
     assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()), sharded=True)
+
+
+def test_a_run_inside_the_workflow_loads_the_ci_policy_without_pyyaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = _ci_project(tmp_path)
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    with pytest.raises(ImportError):
+        ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG, workflow_checked=True)
+    with pytest.raises(shipping.ShippingError, match="secrets-history"):
+        ci_jobs.load_checked_policy(
+            root,
+            cast(GateConfig, {"packages": [], "shared": []}),
+            workflow_checked=True,
+        )
+
+
+def test_a_local_policy_loads_without_pyyaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    _write(root)
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG, workflow_checked=True)
 
 
 def test_the_rest_job_alone_is_the_whole_check_when_no_gate_is_sharded(

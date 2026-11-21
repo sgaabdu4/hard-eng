@@ -6,9 +6,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import cast
 
+import gate_config
 import pytest
 import test_shards
-from gate_config import Gate
+from conftest import configure
+from gate_config import Gate, Group
 from test_shards import add_to_settings, log_lines, pytest_group, shard_gate
 
 shard_project = test_shards.shard_project
@@ -86,3 +88,21 @@ def test_a_local_check_reads_no_variable_and_no_gate_without_shards(
         assert "every shard would run it whole" not in printed
         assert "moves the pytest or coverage.py settings" not in printed
         assert "run" in log_lines(shard_project)
+
+
+def test_the_merge_loads_the_groups_as_a_run_inside_the_workflow(
+    runner: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    options: list[dict[str, object]] = []
+
+    def load_groups(*_arguments: object, **given: object) -> list[Group]:
+        options.append(given)
+        return []
+
+    configure(runner.ROOT, [])
+    monkeypatch.setattr(gate_config, "load_groups", load_groups)
+    assert runner.check(base="0" * 40, plan_stage="Complete", shard="merge") == 0
+    assert options == [{"dependents": True, "workflow_checked": True}]
+    options.clear()
+    assert runner.check(base="0" * 40, plan_stage="Complete", shard="rest") == 0
+    assert options[0] == {"dependents": True, "workflow_checked": False}
