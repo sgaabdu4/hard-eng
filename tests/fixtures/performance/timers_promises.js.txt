@@ -1,0 +1,13 @@
+const { setTimeout } = require("timers/promises");
+
+export async function waitForRetry(delay) {
+  // ruleid: next-frame-call-javascript
+  await setTimeout();
+  // ruleid: next-frame-call-javascript
+  await setTimeout(0);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(16);
+  await setTimeout(17);
+  await setTimeout(200);
+  await setTimeout(delay);
+}
