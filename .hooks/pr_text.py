@@ -25,7 +25,6 @@ NON_LABEL_STATEMENT = re.compile(
     r"|click\b|acc(?:Title|Descr)\b|title\b(?![ \t]*[\[({>]))"
 )
 ENTITY_CODE = re.compile(r"#\w+;")
-STATEMENT_END = re.compile(r';(?=(?:[^"]*"[^"]*")*[^"]*$)')
 DASH_LABEL = re.compile(r"(?:--|==|-\.)[ \t]+(.+?)[ \t]+(?:-->|==>|\.->|---|===|-\.-)")
 QUOTED_PIPE_LABEL = re.compile(r'\|("[^"\n]*")\|')
 PIPE_LABEL = re.compile(r"\|([^|\n]*)\|")
@@ -33,8 +32,8 @@ ATTRIBUTE_LABEL = re.compile(
     r"""(\w[\w-]*)@\{[^}\n]*?label:[ \t]*["']([^"'\n]*)["'][^}\n]*\}"""
 )
 SHAPE_LABEL = re.compile(
-    r"(\w[\w-]*)(?:\(\(\(|\(\[|\[\(|\(\(|\[\[|\{\{|\[[/\\]?|[({>])[ \t]*"
-    r'("[^"\n]*"|.*?)[ \t]*(?:\)\)\)|\]\)|\)\]|\)\)|\]\]|\}\}|[/\\]?\]|[)}])'
+    r"(\w[\w-]*)(\(\(\(|\(\[|\[\(|\(\(|\[\[|\{\{|\[[/\\]?|[({>])[ \t]*"
+    r'("[^"\n]*"|.*?)[ \t]*(\)\)\)|\]\)|\)\]|\)\)|\]\]|\}\}|[/\\]?\]|[)}])'
 )
 ACC_BLOCK = re.compile(r"accDescr[ \t]*\{")
 CLASS_SUFFIX = re.compile(r":::[\w-]+")
@@ -117,6 +116,25 @@ def _diagrams(body: str) -> list[str]:
     ]
 
 
+def _split_statements(line: str) -> list[str]:
+    """Split a line at semicolons that are outside quotes and brackets."""
+    parts: list[str] = []
+    depth = 0
+    quoted = False
+    start = 0
+    for index, char in enumerate(line):
+        if char == '"':
+            quoted = not quoted
+        elif not quoted and char in "([{":
+            depth += 1
+        elif not quoted and char in ")]}":
+            depth = max(depth - 1, 0)
+        elif char == ";" and not quoted and depth == 0:
+            parts.append(line[start:index])
+            start = index + 1
+    return [*parts, line[start:]]
+
+
 def _flow_statements(block: str) -> list[str]:
     lines = [line.strip() for line in block.split("\n")]
     if lines and lines[0] == "---" and "---" in lines[1:]:
@@ -140,7 +158,7 @@ def _flow_statements(block: str) -> list[str]:
                 return []
             header = True
             line = line[head.end() :]
-        statements.extend(STATEMENT_END.split(ENTITY_CODE.sub("\x00", line)))
+        statements.extend(_split_statements(ENTITY_CODE.sub("\x00", line)))
     return [
         statement.strip()
         for statement in statements
@@ -152,9 +170,18 @@ def _statement_labels(statement: str, defined: set[str]) -> tuple[list[str], lis
     """The label texts a statement defines, and the node IDs it only mentions."""
     labels: list[str] = []
 
+    def attribute(match: re.Match[str]) -> str:
+        defined.add(match.group(1))
+        labels.append(match.group(2).strip())
+        return " "
+
     def node(match: re.Match[str]) -> str:
         defined.add(match.group(1))
-        labels.append(match.group(2).strip().strip('"'))
+        label = match.group(3).strip().strip('"')
+        closer = match.group(4)
+        if closer in ("/]", "\\]") and match.group(2) not in ("[/", "[\\"):
+            label += closer[0]
+        labels.append(label)
         return " "
 
     def edge(match: re.Match[str]) -> str:
@@ -162,7 +189,7 @@ def _statement_labels(statement: str, defined: set[str]) -> tuple[list[str], lis
         return " "
 
     statement = QUOTED_PIPE_LABEL.sub(edge, statement)
-    statement = SHAPE_LABEL.sub(node, ATTRIBUTE_LABEL.sub(node, statement))
+    statement = SHAPE_LABEL.sub(node, ATTRIBUTE_LABEL.sub(attribute, statement))
     statement = DASH_LABEL.sub(edge, PIPE_LABEL.sub(edge, statement))
     rest = ARROW.sub(" ", CLASS_SUFFIX.sub(" ", statement))
     return labels, BARE_ID.findall(rest)

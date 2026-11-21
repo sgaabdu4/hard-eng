@@ -246,6 +246,20 @@ def test_the_refusal_explains_entity_codes_and_gives_a_bare_id_example() -> None
     assert 'A["Pull request<br>opened"]' in bare
 
 
+def test_a_trailing_slash_in_a_plain_square_label_is_text() -> None:
+    assert body_problem(_with(_flow("A[Moved to src/]"))) is None
+    problem = body_problem(_with(_flow("A[Also moved under src/]")))
+    assert problem is not None
+    assert '"Also moved under src/"' in problem
+
+
+def test_a_semicolon_inside_an_unquoted_bracket_label_stays_in_the_label() -> None:
+    problem = body_problem(_with(_flow("A[done; later releases come]")))
+    assert problem is not None
+    assert '"done; later releases come"' in problem
+    assert body_problem(_with(_flow("A[a; b]; B[c; d]"))) is None
+
+
 def test_accessibility_text_is_not_a_label() -> None:
     lines = ('accTitle: "A long title for the whole picture"', "A[ok] --> B[ok]")
     assert body_problem(_with(_flow(*lines))) is None
