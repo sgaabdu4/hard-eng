@@ -816,3 +816,42 @@ def test_the_timer_messages_name_the_fix_at_the_cause(language: str) -> None:
     assert "Fix the order of events at its cause: run the work from the" in text
     assert "owns it." in text
     assert "suppress" not in text.lower()
+
+
+def test_hidden_deferral_respects_timers_promises_argument_order() -> None:
+    """HE-HOT-PATH: the partial-parse fallback reads the first argument as delay for timers/promises."""
+    from hot_paths import hidden_deferral
+
+    esm = 'import { setTimeout } from "node:timers/promises";\n'
+    assert hidden_deferral("await setTimeout(200);", ".ts", esm) is None
+    assert hidden_deferral("await setTimeout(200, 0);", ".ts", esm) is None
+    assert hidden_deferral('await setTimeout(10, "value");', ".ts", esm) is not None
+    assert hidden_deferral("await setTimeout(undefined, 0);", ".ts", esm) is not None
+    assert hidden_deferral("await setTimeout();", ".ts", esm) is not None
+    assert hidden_deferral("window.setTimeout(work, 0);", ".ts", esm) is not None
+
+    aliased = 'import { setTimeout as sleep } from "node:timers/promises";\n'
+    assert hidden_deferral("await sleep(200, 0);", ".ts", aliased) is None
+    assert hidden_deferral("await sleep(0);", ".ts", aliased) is not None
+    assert hidden_deferral("await sleep(undefined, 0);", ".ts", aliased) is not None
+    assert hidden_deferral("setTimeout(flush, 0);", ".ts", aliased) is not None
+    assert hidden_deferral("setTimeout(flush, 200);", ".ts", aliased) is None
+
+    combined = 'import timers, { setTimeout } from "node:timers/promises";\n'
+    assert hidden_deferral("await setTimeout(200, 0);", ".ts", combined) is None
+    assert (
+        hidden_deferral('await setTimeout(10, "value");', ".ts", combined) is not None
+    )
+
+    local_cjs = (
+        "function helper() {\n"
+        '  const { setTimeout } = require("node:timers/promises");\n'
+        "  return setTimeout(200);\n"
+        "}\n"
+        "setTimeout(flush, 0);\n"
+    )
+    assert hidden_deferral("setTimeout(flush, 0);", ".js", local_cjs) is not None
+    assert hidden_deferral("setTimeout(flush, 200);", ".js", local_cjs) is None
+    top_cjs = 'const { setTimeout } = require("node:timers/promises");\n'
+    assert hidden_deferral("await setTimeout(200, 0);", ".js", top_cjs) is None
+    assert hidden_deferral('await setTimeout(10, "value");', ".js", top_cjs) is not None
