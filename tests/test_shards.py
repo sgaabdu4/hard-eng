@@ -680,11 +680,7 @@ def test_the_gate_job_runs_with_bare_python(
             str(groups),
         ],
         cwd=merge_project,
-        env={
-            "PATH": str(tools),
-            "HOME": str(tmp_path),
-            "GITHUB_ACTIONS": "true",
-        },
+        env={"PATH": str(tools), "HOME": str(tmp_path), "GITHUB_ACTIONS": "true"},
         capture_output=True,
         text=True,
         check=False,
