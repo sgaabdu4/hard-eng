@@ -213,6 +213,7 @@ def ui_problem(
     """The screen-evidence form of a PR that changes a UI file; CI has no captures, so it checks forms only."""
     from look import block_problem
     from plan_parent import named_parents
+    from plans import is_plan_path
     from ship_evidence import UI_APPEARANCE_UNCHANGED, attachment_urls
     from shipping import ShippingError, gh
     from ui_proof import (
@@ -249,8 +250,7 @@ def ui_problem(
     plans = [
         str(item["filename"])
         for item in files
-        if str(item["filename"]).lower().endswith("plan.md")
-        and item.get("status") != "removed"
+        if is_plan_path(Path(str(item["filename"]))) and item.get("status") != "removed"
     ]
     if not plans and (problem := reference_problem("", visible, body, note)):
         return problem
