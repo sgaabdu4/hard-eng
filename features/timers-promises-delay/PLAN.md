@@ -8,24 +8,24 @@ Status: Complete
 
 ## Sources + coverage
 
-Sources: N/A — post-release fault fix authorized by the user in chat on 2026-11-21 ("Don't ask me again to work autonomously"); no external source document.
+Sources: N/A — post-release follow-up fix for the `node:timers/promises` false positive; no external source document.
 
 ## Repository context
 
-Owners: `.agents/skills/he/semgrep/performance.yaml` (`next-frame-call-javascript`); `tests/fixtures/performance/timers.ts.txt`, `timers.js.txt`, `timers_promises.ts.txt`, `timers_promises.js.txt`; `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
-Same cause: the single-argument callback pattern `setTimeout($F)` matched `setTimeout(delay)` from `node:timers/promises` because both share the name `setTimeout` with opposite parameter order (`(callback, delay)` vs `(delay, value)`).
-Single source: `.agents/skills/he/semgrep/performance.yaml` is the only rule definition; no duplicate rule exists.
+Owners: `.agents/skills/he/semgrep/performance.yaml` (`next-frame-call-javascript`); `.hooks/hot_paths.py` (`hidden_deferral`, `refuse_hidden_deferrals`); `tests/fixtures/performance/timers.ts.txt`, `timers.js.txt`, `timers_promises.ts.txt`, `timers_promises.js.txt`, `timers_promises_alias.ts.txt`; `tests/test_hot_paths.py`.
+Same cause: the single-argument callback pattern `setTimeout($F)` and the partial-parse fallback read the second argument as delay, matching `setTimeout(delay)` from `node:timers/promises` because both share the name `setTimeout` with opposite parameter order (`(callback, delay)` vs `(delay, value)`).
+Single source: `.agents/skills/he/semgrep/performance.yaml` is the Semgrep rule owner and `.hooks/hot_paths.py` is the partial-parse fallback owner.
 
 ## Decisions + authorization
 
 Blockers: None.
 Handoff: Approval
-Authority: Autonomous — user authorized autonomous execution of the post-release follow-ups on 2026-11-21.
+Authority: Human-loop — post-release follow-up authorized in chat on 2026-11-21.
 
 ## Acceptance + steps
 
-- [x] `setTimeout` imported from `node:timers/promises` or `timers/promises` passes for delays `>= 17 ms`, runtime delay variables, and second-argument return values such as `setTimeout(200, 0)`, while still failing for `setTimeout()`, `setTimeout(0)`, `setTimeout(ZERO)`, `setTimeout(16)` and `setTimeout(10, "value")` → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines`.
-- [x] Callback-style global `setTimeout(fn)`, `setTimeout(fn, 0)` and `setTimeout(fn, 16)` remain refused and real delays `>= 17 ms` remain allowed → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` and `tests/test_hot_paths.py::test_the_annotated_chunks_cover_every_fixture_and_every_rule`.
+- [x] `setTimeout` imported from `node:timers/promises` or `timers/promises` (unaliased or aliased, ESM or CommonJS) passes for delays `>= 17 ms`, runtime delay variables, and second-argument return values such as `setTimeout(200, 0)`, while still failing for `setTimeout()`, `setTimeout(0)`, `setTimeout(undefined, ...)`, `setTimeout(ZERO)`, `setTimeout(16)` and `setTimeout(10, "value")` → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` and `tests/test_hot_paths.py::test_hidden_deferral_respects_timers_promises_argument_order`.
+- [x] Callback-style global `setTimeout(fn)`, `setTimeout(fn, 0)` and `setTimeout(fn, 16)` remain refused (including alongside an aliased `timers/promises` import) and real delays `>= 17 ms` remain allowed → `tests/test_hot_paths.py::test_each_rule_finds_exactly_the_annotated_lines` and `tests/test_hot_paths.py::test_the_annotated_chunks_cover_every_fixture_and_every_rule`.
 
 ## Baseline + execution
 
