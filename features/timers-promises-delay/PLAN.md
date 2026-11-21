@@ -44,7 +44,8 @@ N/A — Semgrep rule and test fixtures only; no visible UI.
 ## Verification
 
 Result: Passed
-Evidence: Failing-first reproduction confirmed `timers_promises.ts.txt` failed before the edit; after editing `.agents/skills/he/semgrep/performance.yaml`, `uv run --with pytest pytest tests/test_hot_paths.py -k "test_each_rule_finds_exactly_the_annotated_lines or test_the_annotated_chunks_cover_every_fixture_and_every_rule"` passed (5 passed in 23.43 s), and `hard-eng.py check --quick --base origin/develop --plan-stage Complete` passed.
+Evidence: Failing-first reproduction confirmed `timers_promises.ts.txt` failed before the edit; after editing `.agents/skills/he/semgrep/performance.yaml` and `.hooks/hot_paths.py`, `uv run --with pytest pytest tests/test_hot_paths.py -k "test_each_rule_finds_exactly_the_annotated_lines or test_the_annotated_chunks_cover_every_fixture_and_every_rule or test_hidden_deferral_respects_timers_promises_argument_order"` passed, and `hard-eng.py check --quick --base origin/develop --plan-stage Complete` passed.
+Review declined: constant-propagated identifier delay such as `const ZERO = 0; await setTimeout(ZERO)` inside a Semgrep `PartialParsing` gap :: the regex fallback in `.hooks/hot_paths.py` has never evaluated constant bindings for callback `setTimeout(fn, ZERO)` either; full constant propagation belongs to Semgrep, which covers `timers_promises.ts.txt` when parsed.
 E2E: N/A — static Semgrep rule change with no user journey.
 Real service: N/A — local Semgrep rule and fixtures call no outside service.
 Retro: Always distinguish Node promise-based APIs that reuse browser global names with reversed argument order when writing single-argument Semgrep patterns.

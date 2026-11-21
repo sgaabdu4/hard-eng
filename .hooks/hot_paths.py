@@ -53,8 +53,12 @@ JS_TIMEOUT = re.compile(
     re.DOTALL,
 )
 PROMISE_TIMER_ESM = re.compile(
-    r"import\s*\{([^}]*)\}\s*from\s*[\"'](?:node:)?timers/promises[\"']",
+    r"import\s*(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*[\"'](?:node:)?timers/promises[\"']",
     re.DOTALL,
+)
+PROMISE_TIMER_CJS_TOP = re.compile(
+    r"^(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\s*\(\s*[\"'](?:node:)?timers/promises[\"']\s*\)",
+    re.DOTALL | re.MULTILINE,
 )
 PROMISE_TIMER_CJS = re.compile(
     r"\{([^}]*)\}\s*=\s*require\s*\(\s*[\"'](?:node:)?timers/promises[\"']\s*\)",
@@ -143,13 +147,14 @@ def call_arguments(text: str, start: int, suffix: str) -> list[str] | None:
     return None
 
 
-def promise_timer_names(source: str) -> set[str]:
+def promise_timer_names(source: str, snippet: str) -> set[str]:
     names: set[str] = set()
-    for pattern, binding in (
-        (PROMISE_TIMER_ESM, PROMISE_TIMER_ESM_BINDING),
-        (PROMISE_TIMER_CJS, PROMISE_TIMER_CJS_BINDING),
+    for text, pattern, binding in (
+        (source, PROMISE_TIMER_ESM, PROMISE_TIMER_ESM_BINDING),
+        (source, PROMISE_TIMER_CJS_TOP, PROMISE_TIMER_CJS_BINDING),
+        (snippet, PROMISE_TIMER_CJS, PROMISE_TIMER_CJS_BINDING),
     ):
-        for block in pattern.findall(source):
+        for block in pattern.findall(text):
             for match in binding.finditer(block):
                 names.add(match[1] or "setTimeout")
     return names
@@ -206,7 +211,7 @@ def hidden_deferral(text: str, suffix: str, file_text: str | None = None) -> str
                 return " ".join(call[0].split())
         return None
     full = cleaned if file_text is None else code_without_comments(file_text, suffix)
-    return hidden_js_timeout(cleaned, suffix, promise_timer_names(full))
+    return hidden_js_timeout(cleaned, suffix, promise_timer_names(full, cleaned))
 
 
 def span_text(lines: list[str], span: Span) -> str:
