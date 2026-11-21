@@ -191,8 +191,9 @@ def test_a_dirty_tree_is_not_reviewed(
     assert not log.exists()
 
 
+@pytest.mark.parametrize("reply", ["VERDICT: clean", "incomplete output"])
 def test_a_commit_during_the_review_voids_it(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reply: str
 ) -> None:
     big(branch)
     reviewed = git(branch, "rev-parse", "HEAD")
@@ -201,11 +202,13 @@ def test_a_commit_during_the_review_voids_it(
     script.write_text(
         f"#!{sys.executable}\nimport subprocess\n"
         "subprocess.run(['git', 'commit', '-q', '--allow-empty', '-m', 'during'], check=True)\n"
-        "print('VERDICT: clean')\n"
+        f"print({reply!r})\n"
     )
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    fallback = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 1
+    assert not fallback.exists()
     record = json.loads(
         challenge.store(branch, reviewed).with_suffix(".json").read_text()
     )
@@ -360,30 +363,14 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     ]
 
 
-def test_moved_head_without_verdict_or_on_timeout_does_not_fall_back(
+def test_moved_head_on_timeout_does_not_fall_back(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    big(branch)
-    reviewed = git(branch, "rev-parse", "HEAD")
-    (tmp_path / "bin").mkdir()
-    script = tmp_path / "bin" / "codex"
-    script.write_text(
-        f"#!{sys.executable}\nimport subprocess\n"
-        "subprocess.run(['git', 'commit', '-q', '--allow-empty', '-m', 'during'], check=True)\n"
-        "print('incomplete output')\n"
-    )
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
-    fallback = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
-    monkeypatch.setenv("CLAUDECODE", "1")
-    assert challenge.challenge(branch, None, None) == 1
-    assert not fallback.exists()
-    record = json.loads(
-        challenge.store(branch, reviewed).with_suffix(".json").read_text()
-    )
-    assert "HEAD moved" in record["outcome"]
-
     import subprocess
 
+    big(branch)
+    fallback = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
     timed_out = git(branch, "rev-parse", "HEAD")
 
     def move_and_timeout(*_args: object, **_kwargs: object) -> object:
