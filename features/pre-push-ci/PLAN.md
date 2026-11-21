@@ -24,7 +24,7 @@ Authority: Autonomous — the user asked for it in chat on 2026-11-21 ("do it no
 
 ## Acceptance + steps
 
-- [x] The setting meets both conditions → `load_checked_policy` on this branch printed `policy ok`: the `secrets-history` gate is present, `scan_git_history` is on, and `.github/workflows/hard-eng.yml` runs `hard-eng.py check` on every pull request.
+- [x] The setting meets both conditions → `tests/test_shipping_policy.py::test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check` (this repository's workflow runs the whole check); `load_checked_policy` on this branch printed `policy ok`: the `secrets-history` gate is present, `scan_git_history` is on, and `.github/workflows/hard-eng.yml` runs `hard-eng.py check` on every pull request.
 - [x] Pre-push under a base that says `"ci"` runs only the secret scan → `pre_push_mutation_seconds` is 0 in this repository, so no mutation run is left (default 120); `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_runs_one_cheap_check_and_no_full_gate_when_mutation_is_off` covers the code path with mutation off.
 - [x] The shard merge job loads the "ci" policy with no PyYAML → `tests/test_shipping_policy.py::test_a_run_inside_the_workflow_loads_the_ci_policy_without_pyyaml` and `tests/test_shard_local.py::test_the_merge_loads_the_groups_as_a_run_inside_the_workflow`; a "local" policy still loads: `tests/test_shipping_policy.py::test_a_local_policy_loads_without_pyyaml`.
 - [x] A leaked secret is still refused → `tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci`.
