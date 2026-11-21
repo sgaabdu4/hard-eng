@@ -36,6 +36,7 @@ SHAPE_LABEL = re.compile(
     r"(\w[\w-]*)(?:\(\[|\[\(|\(\(|\[\[|\{\{|\[[/\\]?|[({>])[ \t]*"
     r'("[^"\n]*"|.*?)[ \t]*(?:\]\)|\)\]|\)\)|\]\]|\}\}|[/\\]?\]|[)}])'
 )
+ACC_BLOCK = re.compile(r"accDescr[ \t]*\{")
 CLASS_SUFFIX = re.compile(r":::[\w-]+")
 ARROW = re.compile(r"[<>ox]?(?:--+|==+|-\.+)[>ox]?|~~~+|&")
 BARE_ID = re.compile(r"\w[\w-]*")
@@ -129,7 +130,7 @@ def _flow_statements(block: str) -> list[str]:
             continue
         if line.startswith("%%{") and "}%%" not in line:
             closing = "}%%"
-        if line.startswith("accDescr") and "{" in line and "}" not in line:
+        if ACC_BLOCK.match(line) and "}" not in line:
             closing = "}"
         if not line or line.startswith("%%"):
             continue
