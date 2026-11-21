@@ -33,7 +33,7 @@ Decision: PDF by Chrome `--print-to-pdf` as the brief names it. The browser tool
 - [x] The same CSS with other spacing, and words such as `MP4`, `Stage 1`, `4 December`, a CSS class `A1` and `B2.png`, pass → `tests/test_client_report.py::test_a_report_with_the_same_css_and_plain_words_is_accepted` and `::test_code_like_words_in_css_and_file_names_are_not_text`.
 - [x] The command prints each problem and exits 1, or prints nothing and exits 0 → `tests/test_client_report.py::test_the_command_exits_with_the_problems`.
 - [x] Sample requests pick `client-report`, and no two descriptions are too alike → `tests/test_skill_routing.py::test_every_request_picks_its_own_skill` and `::test_no_two_descriptions_are_too_alike`.
-- [x] The skill links resolve and the files stay under the size limit → `tests/test_skill_links.py`.
+- [x] The skill links resolve and the files stay under the size limit → `tests/test_skill_links.py::test_distributed_skill_links_resolve`, `::test_distributed_skills_call_scripts_by_path_from_any_folder` and `::test_distributed_skills_fit_the_codex_skill_limit`.
 - [x] The starter makes a readable multi-page PDF with no blank gap, cut picture or unreadable text → N/A — a page look is a human check; the sample run is under Verification.
 
 ## Baseline + execution
