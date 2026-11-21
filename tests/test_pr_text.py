@@ -232,6 +232,20 @@ def test_a_closing_fence_longer_than_its_opener_ends_the_block() -> None:
     assert body_problem("Undo: x\n" + _DIAGRAM * 2 + swallowed + "Not checked: x\n")
 
 
+def test_a_triple_round_node_of_13_characters_passes_and_14_is_refused() -> None:
+    assert body_problem(_with(_flow("A(((abcdefghijklm)))"))) is None
+    assert body_problem(_with(_flow("A(((abcdefghijklmn)))"))) is not None
+
+
+def test_the_refusal_explains_entity_codes_and_gives_a_bare_id_example() -> None:
+    entity = body_problem(_with(_flow('A["Sort #quot;jars#quot; now"]')))
+    assert entity is not None
+    assert "entity code" in entity
+    bare = body_problem(_with(_flow("PullRequestOpened --> Done")))
+    assert bare is not None
+    assert 'A["Pull request<br>opened"]' in bare
+
+
 def test_accessibility_text_is_not_a_label() -> None:
     lines = ('accTitle: "A long title for the whole picture"', "A[ok] --> B[ok]")
     assert body_problem(_with(_flow(*lines))) is None

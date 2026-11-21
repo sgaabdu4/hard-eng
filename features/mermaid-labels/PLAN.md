@@ -9,6 +9,7 @@ A PR body passes `ready` and CI's `pr text` only when every node and edge label 
 ## Sources + coverage
 
 Sources: N/A — the request is the only source: the user report of 2026-11-21 that node labels in PR diagrams are cut off, with the cause measured by the coordinator.
+Reviewer: a second reader of the Ship line and the check, 2026-11-21, read only the line and `.hooks/pr_text.py`. Five findings, all fixed: the line now says a bare node ID counts; each line is counted on its own with a `<br>` starting a new line; the sentences have 20 words or fewer, in words and not symbols, and name flowcharts; the triple-round node `A(((text)))` is read whole; the refusal explains entity codes and gives the `A["Pull request<br>opened"]` example.
 
 ## Repository context
 
