@@ -64,7 +64,7 @@ def test_a_changed_selector_or_style_tag_attribute_is_refused(tmp_path: Path) ->
     spaced = write(
         tmp_path,
         "spaced.html",
-        style="<style>\n.box.fix  {\n  color : red ;\n}\n</style>",
+        style="<style>\n.box.fix  {\n  color:   red ;\n}\n</style>",
     )
     differs = [
         (
@@ -75,6 +75,16 @@ def test_a_changed_selector_or_style_tag_attribute_is_refused(tmp_path: Path) ->
     assert problems(selector, template) == differs
     assert problems(media, template) == differs
     assert problems(spaced, template) == []
+
+
+def test_a_space_added_before_a_pseudo_class_is_refused(tmp_path: Path) -> None:
+    template = write(
+        tmp_path, "template.html", style="<style>:root:not(.a) { color: red; }</style>"
+    )
+    changed = write(
+        tmp_path, "changed.html", style="<style>:root :not(.a) { color: red; }</style>"
+    )
+    assert len(problems(changed, template)) == 1
 
 
 def test_a_stylesheet_link_in_any_spelling_is_refused(tmp_path: Path) -> None:
@@ -94,6 +104,12 @@ def test_a_code_split_by_inline_tags_is_refused_and_block_text_is_not_joined(
 ) -> None:
     template = write(tmp_path, "template.html")
     split = write(tmp_path, "split.html", body="<p>See <strong>A</strong>1.</p>")
+    tipped = write(
+        tmp_path, "tipped.html", body='<p>A<span title="Reference">1</span></p>'
+    )
+    assert problems(tipped, template) == [
+        "text holds the code 'A1'; write the item in full"
+    ]
     apart = write(tmp_path, "apart.html", body="<h2>Stage A</h2><p>1 test passes.</p>")
     assert problems(split, template) == [
         "text holds the code 'A1'; write the item in full"
