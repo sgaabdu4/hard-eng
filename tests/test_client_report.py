@@ -7,14 +7,21 @@ from pathlib import Path
 from conftest import SOURCE
 
 SKILL = SOURCE / ".agents/skills/client-report"
-sys.path.insert(0, str(SKILL / "scripts"))
-sys.dont_write_bytecode = True
-
-from check_report import problems
+SCRIPT = SKILL / "scripts/check_report.py"
 
 STYLE = "<style>body { color: #111; } .live { background: #0a0; }</style>"
 PAGE = "<!doctype html><html><head><title>Report</title>{style}</head><body>{body}</body></html>"
 BODY = "<h1>Changes for Friday 4 December</h1><p>Stage 1 starts.</p>"
+
+
+def problems(report: Path, template: Path) -> list[str]:
+    done = subprocess.run(
+        [sys.executable, "-B", str(SCRIPT), str(report), "--template", str(template)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout.splitlines()
 
 
 def write(folder: Path, name: str, style: str = STYLE, body: str = BODY) -> Path:
@@ -173,7 +180,7 @@ def test_the_command_exits_with_the_problems(tmp_path: Path) -> None:
     template = write(tmp_path, "template.html")
     good = write(tmp_path, "good.html")
     bad = write(tmp_path, "bad.html", body="<p>See A1.</p>")
-    command = [sys.executable, str(SKILL / "scripts/check_report.py")]
+    command = [sys.executable, "-B", str(SCRIPT)]
     refused = subprocess.run(
         [*command, str(bad), "--template", str(template)],
         capture_output=True,
