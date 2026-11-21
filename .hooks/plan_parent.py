@@ -98,7 +98,11 @@ def named_parents(texts: Mapping[str, str]) -> set[str]:
         for line in PARENT_LINE.findall(text.split("\n## ", 1)[0]):
             parent = held.get(PurePosixPath(line).as_posix().lower())
             folder = PurePosixPath(parent).parent if parent else None
-            if folder and PurePosixPath(name).parent.is_relative_to(folder):
+            if (
+                parent != name
+                and folder
+                and PurePosixPath(name).parent.is_relative_to(folder)
+            ):
                 found.add(parent)
     return found
 

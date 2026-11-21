@@ -249,7 +249,8 @@ def ui_problem(
     plans = [
         str(item["filename"])
         for item in files
-        if str(item["filename"]).endswith("PLAN.md") and item.get("status") != "removed"
+        if str(item["filename"]).lower().endswith("plan.md")
+        and item.get("status") != "removed"
     ]
     if not plans and (problem := reference_problem("", visible, body, note)):
         return problem
