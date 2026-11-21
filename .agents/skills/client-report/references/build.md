@@ -2,7 +2,7 @@
 
 ## Order and content
 
-The starter holds each section in this order. Delete a section that has nothing to say, except the last four.
+The starter holds each section in this order. Delete a section that has nothing to say, except "Where it stands", "What is live", "How it was checked", "Not checked" and "Everything left".
 
 1. Title and date. "Where it stands" and "What finishes it": one or two lines each.
 2. Box "What is needed before each next stage": name each stage, then numbered items written in full, what does not block it, and its limits.
@@ -17,9 +17,11 @@ Words: about 80% ASD-STE100, sentences of 20 words or fewer, one fact in each se
 
 ## Make the file
 
-- Copy `docs/client-report/template.html` to the report folder. Change text, rows and picture names only. Add no `style` attribute and no stylesheet link. A new look needs the user's approval and a new template commit.
-- Put the pictures next to the report file.
-- `python3 <skill>/scripts/check_report.py <report.html>` refuses CSS that differs from the template, and codes such as A1 in the text. Fix the report, never the check.
+- Copy `docs/client-report/template.html` to `docs/client-report/<date>/report.html`. Change text, rows and picture names only. Add no `style` attribute and no stylesheet link. A new look needs the user's approval and a new template commit.
+- First report, no template yet: copy `assets/starter.html` to `docs/client-report/template.html` unchanged, and to the report path. Commit both only after the user approves the report. The template keeps its placeholder text.
+- Put the pictures next to `report.html`. Name each file as the report's `img src` says, and copy the saved picture to that name: `cp .hard-eng/browser/<name>-560.png docs/client-report/<date>/<img src name>`.
+- Crop a picture: `uv run --no-project --with pillow python -I -c "import sys; from PIL import Image; Image.open(sys.argv[1]).crop(tuple(map(int, sys.argv[3:7]))).save(sys.argv[2])" in.png out.png left top right bottom`.
+- Run the check always this way, so the Python version is the same everywhere: `uv run --no-project --python '>=3.12' python -I <skill>/scripts/check_report.py docs/client-report/<date>/report.html`. It finds the template from the git top level. It refuses CSS that differs from the template, codes such as A1, leftover `[...]` text, and a report without "How it was checked" and "Not checked". Fix the report, never the check.
 
 ## PDF and the page look
 
@@ -28,4 +30,4 @@ Words: about 80% ASD-STE100, sentences of 20 words or fewer, one fact in each se
 - The template's print CSS uses block layout, `break-inside: avoid` on table cells, figures and boxes, and `@page` margins. Colour labels print because of `print-color-adjust: exact`.
 - Render every page: `pdftoppm -r 90 -png report.pdf page` when it exists. Else `uv run --no-project --with pymupdf python -I -c "import sys,pymupdf; [p.get_pixmap(dpi=90).save(f'{sys.argv[2]}-{i+1}.png') for i,p in enumerate(pymupdf.open(sys.argv[1]))]" report.pdf page`.
 - Open each page image. Look for blank gaps over a quarter of a page, cut-off pictures, text that cannot be read, and a heading alone at the foot of a page. Fix the report, print again, look again. Write down what you saw on each page.
-- Keep the PDF, pictures and page images out of git unless the user asks.
+- Track `report.html` and its pictures in `docs/client-report/<date>/`: the next report takes its "before" pictures from them. Keep the PDF and page images out of git unless the user asks.

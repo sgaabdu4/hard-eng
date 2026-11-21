@@ -1,12 +1,15 @@
 import argparse
 import re
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import override
 
 CODE = re.compile(r"\b[A-Z][0-9]+\b")
 SHOWN = ("alt",)
 INLINE = {"a", "b", "code", "em", "i", "mark", "small", "span", "strong", "u"}
+PLACEHOLDER = re.compile(r"\[[^\]\n]*\]")
+SECTIONS = ("How it was checked", "Not checked")
+TEMPLATE = "docs/client-report/template.html"
 SYMBOLS = re.compile(r"\s*([{};,])\s*|(:)\s+")
 
 
@@ -19,7 +22,6 @@ class Page(HTMLParser):
         self.linked_sheet = False
         self.inside = ""
 
-    @override
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.inside = tag if tag in {"style", "script"} else ""
         if tag == "style":
@@ -32,13 +34,11 @@ class Page(HTMLParser):
         rel = dict(attrs).get("rel") or ""
         self.linked_sheet |= tag == "link" and "stylesheet" in rel.lower().split()
 
-    @override
     def handle_endtag(self, tag: str) -> None:
         self.inside = ""
         if tag not in INLINE:
             self.text.append(" ")
 
-    @override
     def handle_data(self, data: str) -> None:
         if self.inside == "style":
             self.css.append(data)
@@ -78,11 +78,31 @@ def problems(report: Path, template: Path) -> list[str]:
         found.append("report sets style in a tag; use a class from the template")
     if page.linked_sheet:
         found.append("report links a stylesheet; the template holds all CSS")
+    shown = "".join(page.text)
+    found += [
+        f"report lacks the section {name!r}"
+        for name in SECTIONS
+        if name.lower() not in shown.lower()
+    ]
+    found += [
+        f"text holds the placeholder {mark!r}; replace it with real text"
+        for mark in PLACEHOLDER.findall(shown)
+    ]
     found += [
         f"text holds the code {code!r}; write the item in full"
-        for code in CODE.findall("".join(page.text))
+        for code in CODE.findall(shown)
     ]
     return found
+
+
+def saved_template() -> Path:
+    done = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return Path(done.stdout.strip() if done.returncode == 0 else ".") / TEMPLATE
 
 
 def main() -> int:
@@ -90,11 +110,9 @@ def main() -> int:
         description="Check a client report against its saved template."
     )
     parser.add_argument("report", type=Path)
-    parser.add_argument(
-        "--template", type=Path, default=Path("docs/client-report/template.html")
-    )
+    parser.add_argument("--template", type=Path, default=None)
     args = parser.parse_args()
-    found = problems(args.report, args.template)
+    found = problems(args.report, args.template or saved_template())
     print("".join(f"{line}\n" for line in found), end="")
     return 1 if found else 0
 

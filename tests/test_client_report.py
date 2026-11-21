@@ -26,9 +26,18 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
-def write(folder: Path, name: str, style: str = STYLE, body: str = BODY) -> Path:
+SECTIONS = "<h2>How it was checked</h2><p>One check ran.</p><h3>Not checked</h3><p>Nothing else.</p>"
+
+
+def write(
+    folder: Path,
+    name: str,
+    style: str = STYLE,
+    body: str = BODY,
+    sections: str = SECTIONS,
+) -> Path:
     path = folder / name
-    path.write_text(PAGE.format(style=style, body=body))
+    path.write_text(PAGE.format(style=style, body=body + sections))
     return path
 
 
@@ -200,3 +209,64 @@ def test_the_command_exits_with_the_problems(tmp_path: Path) -> None:
         "text holds the code 'A1'; write the item in full\n",
     )
     assert (accepted.returncode, accepted.stdout) == (0, "")
+
+
+def test_a_report_without_the_check_sections_is_refused(tmp_path: Path) -> None:
+    template = write(tmp_path, "template.html")
+    none = write(tmp_path, "none.html", sections="")
+    half = write(
+        tmp_path, "half.html", sections="<h2>How it was checked</h2><p>One.</p>"
+    )
+    assert problems(none, template) == [
+        "report lacks the section 'How it was checked'",
+        "report lacks the section 'Not checked'",
+    ]
+    assert problems(half, template) == ["report lacks the section 'Not checked'"]
+    assert problems(write(tmp_path, "full.html"), template) == []
+
+
+def test_leftover_placeholder_text_is_refused_and_plain_brackets_pass(
+    tmp_path: Path,
+) -> None:
+    template = write(tmp_path, "template.html")
+    left = write(
+        tmp_path,
+        "left.html",
+        body='<p>[Date]</p><img alt="[Before: what the screen shows]" src="x.png">',
+    )
+    assert problems(left, template) == [
+        "text holds the placeholder '[Date]'; replace it with real text",
+        "text holds the placeholder '[Before: what the screen shows]'; replace it with real text",
+    ]
+    fine = write(tmp_path, "fine.html", body="<p>Stage 1 (our team tests).</p>")
+    assert problems(fine, template) == []
+
+
+def test_the_command_finds_the_template_from_the_git_top_level(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    folder = tmp_path / "docs/client-report"
+    folder.mkdir(parents=True)
+    write(folder, "template.html")
+    inside = tmp_path / "work/report"
+    inside.mkdir(parents=True)
+    report = write(inside, "report.html")
+    bare = tmp_path.parent / (tmp_path.name + "-bare")
+    bare.mkdir()
+    loose = write(bare, "report.html")
+
+    def run(path: Path) -> tuple[int, str]:
+        done = subprocess.run(
+            [sys.executable, "-B", str(SCRIPT), path.name],
+            cwd=path.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return done.returncode, done.stdout
+
+    assert run(report) == (0, "")
+    code, out = run(loose)
+    assert code == 1
+    assert out.startswith("no saved template at ")
