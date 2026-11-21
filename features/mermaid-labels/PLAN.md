@@ -1,6 +1,6 @@
 # PR diagrams: short label lines that GitHub does not cut
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -51,12 +51,13 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — the static gates, the review and the Complete check.
+Result: Passed
+Evidence: Focused tests: `tests/test_pr_text.py` 151 passed. Full suite on the first head: 7324 passed and 1 failed, `tests/test_dart_coverage.py::test_native_dart_lcov_omits_declaration_only_libraries`, whose `dart test` hit its 90 s limit on a Mac at load 600; it does not read the PR text code. Ruff (format, lint, complexity, annotations), Pyrefly and Vulture report no finding. Hook timing, compiled modules, two runs each: import 228 ms and 75 ms before, 228 ms and 188 ms after, within the noise of a loaded Mac; 200 body checks took 1.9 ms to 55.9 ms before and 4.4 ms after. Seven reviews ran; fixes made for the reachable findings, declines listed below. Pre-push result: Pending.
 Review declined: a Mermaid fence inside a blockquote, and the inline code text `<!--` hiding later diagrams :: both need a PR body that quotes or explains Markdown syntax; the size rule already reads comments and fences the same way, and one shared Markdown parser would add a dependency for no reported case.
 Review declined: a node named `title` in an edge, `accDescr` after a semicolon, and links with no spaces before a reused long ID :: each needs a hand-written diagram form that PR bodies do not use, and a fix needs a full Mermaid grammar; a miss only lets a long label through to the viewer, as before this change.
 Review declined: an apostrophe inside a double-quoted attribute label, pipes inside two adjacent quoted node labels, a long source ID joined to an attribute node with no spaces, and a top-level four-space-indented example :: each needs a form PR bodies do not use; the indented-fence rule flipped between two reviews, and a diagram nested in a list is the common case, so it stays counted.
 Review declined: a single-line `accTitle` that follows an `accDescr` line holding a brace and itself holds a semicolon :: needs two accessibility lines with those exact characters, which PR diagrams do not carry; the text is metadata and a miss only refuses a PR that can be edited.
+Review declined: a literal line of mixed fence characters, and a four-space-indented closer, inside a fenced Markdown example that sits between two real diagrams :: each needs an example of Markdown syntax inside a PR body, and the miss is bounded the same as the other declined forms; a stricter fence parser would copy a Markdown parser into a hook.
 E2E: N/A — the change is a pure check of PR text, proved by the tests above.
 Real service: N/A — no service is called; the GitHub viewer facts come from the coordinator's measurement.
 Retro: (1) User correction: "diagram labels cut off" → `tests/test_pr_text.py::test_a_mermaid_label_line_over_13_characters_is_refused_by_name`.
