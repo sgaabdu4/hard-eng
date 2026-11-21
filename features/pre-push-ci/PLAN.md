@@ -52,3 +52,5 @@ Real service: N/A — the change calls no outside service.
 Retro: (1) The first push was refused because a `hard-eng.gates.json` change always needs a plan → None — the refusal named the step. (2) User correction: builders ran the full check by hand and again at the push → `features/pre-push-ci/PLAN.md` acceptance line 1; builders now push once and CI runs the full check.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop, then a later branch push prints that the full check is left to CI.
+
+Review declined: a local shard merge under the default local policy needs PyYAML or uv :: Hard Eng needs uv for every other local check, and the merge reads reports only after a check run that already needed it; no project runs a merge on a machine with neither.

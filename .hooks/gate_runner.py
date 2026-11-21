@@ -641,11 +641,11 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
     )
 
 
-@keeping("references", "listings")
 def merging_in_workflow(shard: str | None) -> bool:
     return shard == "merge" and os.environ.get("GITHUB_ACTIONS") == "true"
 
 
+@keeping("references", "listings")
 def check(
     timeout: float | None = None,
     base: str | None = None,
