@@ -38,3 +38,9 @@ flowchart TD
 - Repair scope = all actual enforced baseline failures, including pre-existing debt and findings unrelated to the task or surfaced by a newer tool release; age, effort or relevance is not an exemption. Correct proven false positives only under the existing [native exception rule](gates.md#adapt--repair-checks). Reuse valid user authorization; otherwise ask for the missing repair/delivery scope.
 - Repair is the sole failed-baseline implementation route: record failures, bounded repair steps + intended proof before edits. Preserve the original failed evidence; after repair, record the passing rerun as current baseline and complete normal build checks. Never declare Ready while checks fail.
 - Feature resumes only after the repair revision is on the intended main branch and required CI/delivery checks pass. An open PR or local pass is insufficient. Keep repair and feature plans/diffs separate; apply the feature's original authorization and readiness rules after updating its baseline.
+
+## Step plans
+
+- One effort over several PRs keeps one parent plan at Ready. Each step PR carries a Complete child plan at `features/<slug>/<step>/PLAN.md` with only that step's boxes, and a `Parent:` line under Status naming the parent plan's path.
+- The check needs the parent to exist, sit above the child's folder, have no `Parent:` of its own and be Ready or Complete. A Ready parent that rides along in a step PR does not fail the Complete stage.
+- The last step's PR ticks the parent's boxes from the children's results and sets it Complete; a parent cannot be Complete while a step plan is not.
