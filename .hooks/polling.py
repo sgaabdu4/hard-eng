@@ -1,4 +1,4 @@
-"""Claude Code PreToolUse hook: refuse a merge that skips ship, and deny foreground polling (HE-NO-FOREGROUND-POLL)."""
+"""PreToolUse hook (Claude Code and Antigravity): refuse a merge that skips ship, and deny foreground polling (HE-NO-FOREGROUND-POLL)."""
 
 import json
 import sys
@@ -8,6 +8,11 @@ REASON = (
     "HE-NO-FOREGROUND-POLL: this command waits in the foreground with sleep. "
     "Start the long job once with run_in_background: true; "
     "the harness tells you when it exits. Read its output file after that notice."
+)
+AGY_REASON = (
+    "HE-NO-FOREGROUND-POLL: this command waits in the foreground with sleep. "
+    "Do not poll with sleep; start the long job directly with a short WaitMsBeforeAsync "
+    "(or use the schedule tool for a timer), and wait for the harness exit notice."
 )
 
 
@@ -49,7 +54,9 @@ def watched_gh(command: str) -> bool:
     )
 
 
-def deny(reason: str) -> dict[str, object]:
+def deny(reason: str, agy: bool = False) -> dict[str, object]:
+    if agy:
+        return {"decision": "deny", "reason": reason}
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -59,27 +66,45 @@ def deny(reason: str) -> dict[str, object]:
     }
 
 
-def decision(payload: object) -> dict[str, object] | None:
-    if not isinstance(payload, dict):
-        return None
+def _parse_command(payload: dict[str, object]) -> tuple[str, bool, bool, str] | None:
+    tool_call = payload.get("toolCall")
+    if isinstance(tool_call, dict):
+        args = tool_call.get("args")
+        if (
+            tool_call.get("name") != "run_command"
+            or not isinstance(args, dict)
+            or not isinstance(command := args.get("CommandLine"), str)
+        ):
+            return None
+        skip_poll = bool(payload.get("parentConversationId")) or (
+            args.get("IsDaemon") is True
+        )
+        cwd = str(payload.get("cwd") or args.get("Cwd") or ".")
+        return command, True, skip_poll, cwd
     tool_input = payload.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if payload.get("tool_name") != "Bash" or not isinstance(command, str):
         return None
+    skip_poll = bool(payload.get("agent_id")) or (
+        isinstance(tool_input, dict) and tool_input.get("run_in_background") is True
+    )
+    return command, False, skip_poll, str(payload.get("cwd") or ".")
+
+
+def decision(payload: object) -> dict[str, object] | None:
+    if not isinstance(payload, dict) or (parsed := _parse_command(payload)) is None:
+        return None
+    command, agy, skip_poll, cwd = parsed
     if watched_gh(command):
         from merge_guard import merge_problem
 
-        if problem := merge_problem(command, str(payload.get("cwd") or ".")):
-            return deny(f"Merge refused: {problem}")
-    if payload.get("agent_id") or (
-        isinstance(tool_input, dict) and tool_input.get("run_in_background") is True
-    ):
-        return None
-    if "sleep" not in command and "select(" not in command:
+        if problem := merge_problem(command, cwd):
+            return deny(f"Merge refused: {problem}", agy)
+    if skip_poll or ("sleep" not in command and "select(" not in command):
         return None
     from wait_text import polls
 
-    return deny(REASON) if polls(command) else None
+    return deny(AGY_REASON if agy else REASON, agy) if polls(command) else None
 
 
 def respond(decide: Callable[[object], dict[str, object] | None]) -> int:

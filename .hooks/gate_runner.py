@@ -927,7 +927,7 @@ def main() -> int:
     )
     challenging.add_argument(
         "--host",
-        choices=("claude", "codex"),
+        choices=("claude", "codex", "agy"),
         help="The running agent, only when it cannot be detected",
     )
     commands.add_parser(
@@ -950,7 +950,7 @@ def main() -> int:
     shipping.add_argument("--merge-method", choices=("rebase",), default="rebase")
     for event in ("session", "stop"):
         hook = commands.add_parser(event, help=f"Handle a native {event} hook")
-        hook.add_argument("agent", choices=("claude", "codex"))
+        hook.add_argument("agent", choices=("claude", "codex", "agy"))
     args = parser.parse_args()
     if args.command == "check":
         return check_command(args)

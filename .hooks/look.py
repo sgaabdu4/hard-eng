@@ -304,7 +304,7 @@ def records_for(root: Path, head: str) -> list[dict[str, object]]:
 def look_command(root: Path, argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="hard-eng.py look")
     parser.add_argument("images", nargs="+")
-    parser.add_argument("--host", choices=("claude", "codex"))
+    parser.add_argument("--host", choices=("claude", "codex", "agy"))
     args = parser.parse_args(argv)
     images = [Path(image) for image in args.images]
     if missing := [str(image) for image in images if not image.is_file()]:
