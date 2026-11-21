@@ -223,6 +223,21 @@ def test_a_report_without_the_check_sections_is_refused(tmp_path: Path) -> None:
     ]
     assert problems(half, template) == ["report lacks the section 'Not checked'"]
     assert problems(write(tmp_path, "full.html"), template) == []
+    prose = write(
+        tmp_path,
+        "prose.html",
+        sections="<p>How it was checked is below. Email was not checked.</p>",
+    )
+    assert problems(prose, template) == [
+        "report lacks the section 'How it was checked'",
+        "report lacks the section 'Not checked'",
+    ]
+    assert (
+        problems(
+            write(tmp_path, "h4.html", sections=SECTIONS.replace("h2", "h4")), template
+        )
+        == []
+    )
 
 
 def test_leftover_placeholder_text_is_refused_and_plain_brackets_pass(
@@ -237,6 +252,10 @@ def test_leftover_placeholder_text_is_refused_and_plain_brackets_pass(
     assert problems(left, template) == [
         "text holds the placeholder '[Date]'; replace it with real text",
         "text holds the placeholder '[Before: what the screen shows]'; replace it with real text",
+    ]
+    wrapped = write(tmp_path, "wrapped.html", body="<p>[One line for\neach check.]</p>")
+    assert problems(wrapped, template) == [
+        "text holds the placeholder '[One line for each check.]'; replace it with real text"
     ]
     fine = write(tmp_path, "fine.html", body="<p>Stage 1 (our team tests).</p>")
     assert problems(fine, template) == []
