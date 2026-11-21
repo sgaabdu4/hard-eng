@@ -8,6 +8,7 @@ from conftest import SOURCE
 
 SKILL = SOURCE / ".agents/skills/client-report"
 sys.path.insert(0, str(SKILL / "scripts"))
+sys.dont_write_bytecode = True
 
 from check_report import problems
 
