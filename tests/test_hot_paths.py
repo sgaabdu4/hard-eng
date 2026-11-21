@@ -836,3 +836,26 @@ def test_hidden_deferral_respects_timers_promises_argument_order() -> None:
     assert hidden_deferral("await sleep(undefined, 0);", ".ts", aliased) is not None
     assert hidden_deferral("setTimeout(flush, 0);", ".ts", aliased) is not None
     assert hidden_deferral("setTimeout(flush, 200);", ".ts", aliased) is None
+
+    combined = 'import timers, { setTimeout } from "node:timers/promises";\n'
+    assert hidden_deferral("await setTimeout(200, 0);", ".ts", combined) is None
+    assert (
+        hidden_deferral('await setTimeout(10, "value");', ".ts", combined) is not None
+    )
+
+    local_cjs = (
+        "function helper() {\n"
+        '  const { setTimeout } = require("node:timers/promises");\n'
+        "  return setTimeout(200);\n"
+        "}\n"
+        "setTimeout(flush, 0);\n"
+    )
+    assert hidden_deferral("setTimeout(flush, 0);", ".js", local_cjs) is not None
+    assert (
+        hidden_deferral(
+            '  const { setTimeout } = require("node:timers/promises");\n  await setTimeout(200, 0);',
+            ".js",
+            local_cjs,
+        )
+        is None
+    )
