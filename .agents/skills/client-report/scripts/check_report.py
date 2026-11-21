@@ -49,7 +49,7 @@ class Page(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         self.inside = ""
         self.in_heading &= not HEADING.fullmatch(tag)
-        if tag not in INLINE:
+        if tag not in INLINE and tag != "br":
             self.text.append(BLOCK)
 
     @override
