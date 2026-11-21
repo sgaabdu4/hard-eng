@@ -256,6 +256,11 @@ def test_valid_short_labels_in_these_forms_stay_valid(lines: tuple[str, ...]) ->
     assert body_problem(_with(_flow(*lines))) is None
 
 
+def test_a_one_line_description_with_a_brace_does_not_hide_later_labels() -> None:
+    lines = ("accDescr: Show the { symbol", f'A["{_TOO_LONG}"]')
+    assert body_problem(_with(_flow(*lines))) is not None
+
+
 def test_a_bare_node_id_that_was_never_given_a_label_is_checked() -> None:
     assert body_problem(_with(_flow("Checkout-validation --> B[ok]"))) is not None
 
