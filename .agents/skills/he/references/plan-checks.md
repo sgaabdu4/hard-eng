@@ -41,6 +41,7 @@ flowchart TD
 
 ## Step plans
 
-- One effort over several PRs keeps one parent plan at Ready. Each step PR carries a Complete child plan at `features/<slug>/<step>/PLAN.md` with only that step's boxes, and a `Parent:` line under Status naming the parent plan's path.
-- The check needs the parent to exist, sit above the child's folder, have no `Parent:` of its own and be Ready or Complete. A Ready parent that rides along in a step PR does not fail the Complete stage.
-- The last step's PR ticks the parent's boxes from the children's results and sets it Complete; a parent cannot be Complete while a step plan is not.
+- One effort over several PRs keeps one parent plan, Ready until the last step. Each step PR carries its own Complete plan at `features/<slug>/<step>/PLAN.md` with only that step's boxes, and a `Parent:` line under Status with the parent plan's path.
+- The check needs the parent to exist, sit in a folder above the step's folder, have no `Parent:` line and be Ready or Complete. A Complete parent needs every step Complete.
+- A step PR may add or edit its Ready parent; the Complete stage ignores that parent when the PR holds a Complete step of it.
+- The last step's PR ticks the parent's boxes from the steps' results and sets the parent Complete.
