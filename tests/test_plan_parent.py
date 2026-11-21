@@ -246,3 +246,11 @@ def test_a_lowercase_step_file_name_is_read_by_the_pr_text_check(
     assert "ux_reference says N/A" in str(
         pr_problem(tmp_path / "b", monkeypatch, plans)
     )
+
+
+def test_an_ordinary_document_named_plan_is_not_read_as_a_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plans = pair()
+    plans["docs/rollout/plan.md"] = "# Notes\nStatus: Ready\n"
+    assert pr_problem(tmp_path / "a", monkeypatch, plans) is None
