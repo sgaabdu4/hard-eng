@@ -177,7 +177,9 @@ def test_a_step_cannot_be_open_while_its_parent_is_complete(
         validate_plans(repository, base="HEAD", stage="Ready")
 
 
-def pr_problem(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plans: dict[str, str]):
+def pr_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plans: dict[str, str]
+) -> str | None:
     from test_pr_text import _VALID
 
     files: list[dict[str, object]] = [VISIBLE_FILE]
