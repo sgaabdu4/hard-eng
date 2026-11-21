@@ -346,13 +346,21 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     assert settings["enableTerminalSandbox"] is True
     assert "write_file(*)" in settings["permissions"]["deny"]
     assert "mcp(*)" in settings["permissions"]["deny"]
-    assert settings["permissions"]["allow"] == ["read_file(*)"]
-    assert str(branch) in argv[5]
+    assert settings["permissions"]["allow"] == [f"read_file({branch.resolve()}/)"]
+    assert str(branch.resolve()) in argv[5]
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
 
+    worktree = tmp_path / "linked-worktree"
+    git(branch, "worktree", "add", "-q", "-b", "linked", str(worktree), "HEAD")
+    linked_settings = json.loads(challenge.agy_read_only_settings(worktree))
+    assert linked_settings["permissions"]["allow"] == [
+        f"read_file({worktree.resolve()}/)",
+        f"read_file({(branch / '.git').resolve()}/)",
+    ]
 
-def test_moved_head_without_verdict_does_not_fall_back(
+
+def test_moved_head_without_verdict_or_on_timeout_does_not_fall_back(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     big(branch)
@@ -373,6 +381,22 @@ def test_moved_head_without_verdict_does_not_fall_back(
         challenge.store(branch, reviewed).with_suffix(".json").read_text()
     )
     assert "HEAD moved" in record["outcome"]
+
+    import subprocess
+
+    timed_out = git(branch, "rev-parse", "HEAD")
+
+    def move_and_timeout(*_args: object, **_kwargs: object) -> object:
+        git(branch, "commit", "-q", "--allow-empty", "-m", "during timeout")
+        raise subprocess.TimeoutExpired(["codex"], 1)
+
+    monkeypatch.setattr(challenge, "run_in_group", move_and_timeout)
+    assert challenge.challenge(branch, None, None) == 1
+    assert not fallback.exists()
+    timeout_record = json.loads(
+        challenge.store(branch, timed_out).with_suffix(".json").read_text()
+    )
+    assert "HEAD moved" in timeout_record["outcome"]
 
 
 def shipment(root: Path) -> Shipment:

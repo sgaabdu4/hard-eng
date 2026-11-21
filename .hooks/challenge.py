@@ -46,26 +46,42 @@ REVIEWER_ORDER: dict[str, tuple[str, ...]] = {
     "codex": ("claude", "agy"),
     "agy": ("codex", "claude"),
 }
-AGY_READ_ONLY_SETTINGS = json.dumps(
-    {
-        "agentMode": "default",
-        "toolPermission": "proceed-in-sandbox",
-        "enableTerminalSandbox": True,
-        "permissions": {
-            "deny": [
-                "write_file(*)",
-                "mcp(*)",
-                "read_url(*)",
-                "execute_url(*)",
-                "download_url(*)",
-            ],
-            "allow": [
-                "read_file(*)",
-            ],
+
+
+def agy_read_only_paths(root: Path) -> list[Path]:
+    """Concrete repo and Git metadata directories mounted read-only in Antigravity's sandbox."""
+    paths = [root.resolve()]
+    for query in ("--git-common-dir", "--git-dir"):
+        try:
+            directory = Path(
+                git_text(root, "rev-parse", "--path-format=absolute", query)
+            ).resolve()
+        except subprocess.CalledProcessError:
+            continue
+        if not any(directory.is_relative_to(existing) for existing in paths):
+            paths.append(directory)
+    return paths
+
+
+def agy_read_only_settings(root: Path) -> str:
+    return json.dumps(
+        {
+            "agentMode": "default",
+            "toolPermission": "proceed-in-sandbox",
+            "enableTerminalSandbox": True,
+            "permissions": {
+                "deny": [
+                    "write_file(*)",
+                    "mcp(*)",
+                    "read_url(*)",
+                    "execute_url(*)",
+                    "download_url(*)",
+                ],
+                "allow": [f"read_file({path}/)" for path in agy_read_only_paths(root)],
+            },
         },
-    },
-    separators=(",", ":"),
-)
+        separators=(",", ":"),
+    )
 
 
 def reviewers_for(host: str | None) -> tuple[str, ...]:
@@ -110,9 +126,10 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
             prompt,
         ]
     if reviewer == "agy":
+        repo = root.resolve()
         location = (
-            f"The repository to inspect read-only is at {root}. "
-            f"Run git with `git -C {shlex.quote(str(root))}` and read files under {root}.\n"
+            f"The repository to inspect read-only is at {repo}. "
+            f"Run git with `git -C {shlex.quote(str(repo))}` and read files under {repo}.\n"
         )
         return [
             "agy",
@@ -120,7 +137,7 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
             "--sandbox",
             "--disable-slash-commands",
             "--settings",
-            AGY_READ_ONLY_SETTINGS,
+            agy_read_only_settings(root),
             location + prompt,
         ]
     # A Bash(git diff *) rule would also allow --output=<file>; built-in read-only git forms refuse it.
@@ -323,6 +340,8 @@ def review(
     except FileNotFoundError:
         return f"not done: {reviewer} is not installed", ""
     except subprocess.TimeoutExpired:
+        if git_text(root, "rev-parse", "HEAD") != revision:
+            return f"not done: HEAD moved from {revision} during the review", ""
         return f"not done: {reviewer} timed out after {TIMEOUT_SECONDS}s", ""
     if git_text(root, "rev-parse", "HEAD") != revision:
         return f"not done: HEAD moved from {revision} during the review", result.stdout
