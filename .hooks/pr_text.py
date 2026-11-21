@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_FENCE = re.compile(
-    r"^[ \t]*(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^[ \t]*\1[ \t]*$|\Z)",
+    r"^[ \t]*(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^[ \t]*\1[`~]*[ \t]*$|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 MAX_LABEL_CHARACTERS = 13
