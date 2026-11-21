@@ -158,6 +158,71 @@ def test_a_graph_block_is_counted_like_a_flowchart() -> None:
     assert body_problem(_with(diagram)) is not None
 
 
+def test_a_compact_link_between_short_labels_passes() -> None:
+    assert body_problem(_with(_flow('Pick["Open"]-->Pack["Check"]'))) is None
+
+
+def test_a_compact_link_with_one_long_label_names_that_label() -> None:
+    problem = body_problem(_with(_flow(f'Pick["Open"]-->Pack["{_TOO_LONG}"]')))
+    assert problem is not None
+    assert f'"{_TOO_LONG}"' in problem
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "TidyThePantryShelves --> B[ok]",
+        "A>Tidy the pantry shelves]",
+        'A["ok"]; B["Tidy the pantry shelves"]',
+    ],
+)
+def test_a_long_node_id_or_asymmetric_or_second_statement_label_is_refused(
+    line: str,
+) -> None:
+    assert body_problem(_with(_flow(line))) is not None
+
+
+def test_an_asymmetric_node_of_13_characters_passes() -> None:
+    assert body_problem(_with(_flow("A>Tidy shelves!] --> B[ok]"))) is None
+
+
+@pytest.mark.parametrize(
+    "preamble",
+    [
+        "\n",
+        '%%{init: {"theme": "base"}}%%\n',
+        "%% a note\n\n",
+    ],
+)
+def test_a_blank_line_or_directive_before_the_header_does_not_hide_labels(
+    preamble: str,
+) -> None:
+    diagram = f'```mermaid\n{preamble}flowchart TD\n    A["{_TOO_LONG}"]\n```\n'
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_label_after_a_semicolon_on_the_header_line_is_checked() -> None:
+    diagram = f'```mermaid\nflowchart TD; A["{_TOO_LONG}"]\n```\n'
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_four_backtick_block_is_checked() -> None:
+    diagram = f'````mermaid\nflowchart TD\n    A["{_TOO_LONG}"]\n````\n'
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_mermaid_example_inside_another_fence_or_comment_is_not_checked() -> None:
+    bad = f'```mermaid\nflowchart TD\n    A["{_TOO_LONG}"]\n```\n'
+    wrapped = "````markdown\n" + bad + "````\n"
+    assert body_problem(_with(_flow("A[ok]")) + wrapped) is None
+    assert body_problem(_with(_flow("A[ok]")) + f"<!--\n{bad}-->\n") is None
+
+
+def test_accessibility_text_is_not_a_label() -> None:
+    lines = ('accTitle: "A long title for the whole picture"', "A[ok] --> B[ok]")
+    assert body_problem(_with(_flow(*lines))) is None
+
+
 def _lines(count: int, width: int = 49) -> str:
     return ("a" * width + "\n") * count
 
