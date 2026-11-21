@@ -696,7 +696,8 @@ def check(
             ROOT,
             plans.plan_base(ROOT, base, plan_stage),
             dependents=dependents,
-            workflow_checked=shard == "merge",
+            workflow_checked=shard == "merge"
+            and os.environ.get("GITHUB_ACTIONS") == "true",
         )
         groups = quick_groups(language_groups(every, languages), quick, installed)
         if shard:
