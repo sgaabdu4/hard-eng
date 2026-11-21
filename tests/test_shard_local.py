@@ -90,7 +90,7 @@ def test_a_local_check_reads_no_variable_and_no_gate_without_shards(
         assert "run" in log_lines(shard_project)
 
 
-def test_the_merge_loads_the_groups_as_a_run_inside_the_workflow(
+def test_only_a_merge_inside_the_workflow_skips_the_workflow_check(
     runner: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     options: list[dict[str, object]] = []
@@ -101,8 +101,13 @@ def test_the_merge_loads_the_groups_as_a_run_inside_the_workflow(
 
     configure(runner.ROOT, [])
     monkeypatch.setattr(gate_config, "load_groups", load_groups)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert runner.check(base="0" * 40, plan_stage="Complete", shard="merge") == 0
     assert options == [{"dependents": True, "workflow_checked": True}]
+    options.clear()
+    monkeypatch.delenv("GITHUB_ACTIONS")
+    assert runner.check(base="0" * 40, plan_stage="Complete", shard="merge") == 0
+    assert options == [{"dependents": True, "workflow_checked": False}]
     options.clear()
     assert runner.check(base="0" * 40, plan_stage="Complete", shard="rest") == 0
     assert options[0] == {"dependents": True, "workflow_checked": False}

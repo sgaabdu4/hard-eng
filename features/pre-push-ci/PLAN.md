@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-A push to a branch whose base is `develop` runs the commit secret scan and the plan and changed-line text checks, with no full check and no mutation run; CI runs the full check, sharded on hosted machines. This repository's CI has no mutation step, so the push no longer runs mutation testing at all (the user asked for it off). The shard merge job reads the shipping policy on a runner with no PyYAML, so the merge skips the workflow check, because it already runs inside that workflow. Non-goals: any change to CI jobs or to installed projects' defaults.
+A push to a branch whose base is `develop` runs the commit secret scan and the plan and changed-line text checks, with no full check and no mutation run; CI runs the full check, sharded on hosted machines. This repository's CI has no mutation step, so the push no longer runs mutation testing at all (the user asked for it off). The shard merge job reads the shipping policy on a runner with no PyYAML, so a merge inside GitHub Actions skips the workflow check, because it already runs inside that workflow; a local merge still checks it. Non-goals: any change to CI jobs or to installed projects' defaults.
 
 ## Sources + coverage
 
@@ -26,7 +26,7 @@ Authority: Autonomous — the user asked for it in chat on 2026-11-21 ("do it no
 
 - [x] The setting meets both conditions → `tests/test_shipping_policy.py::test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check` (this repository's workflow runs the whole check); `load_checked_policy` on this branch printed `policy ok`: the `secrets-history` gate is present, `scan_git_history` is on, and `.github/workflows/hard-eng.yml` runs `hard-eng.py check` on every pull request.
 - [x] Pre-push under a base that says `"ci"` runs the secret scan and the text checks, no full check → `pre_push_mutation_seconds` is 0 in this repository, so no mutation run is left (default 120); `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_runs_one_cheap_check_and_no_full_gate_when_mutation_is_off` covers the code path with mutation off.
-- [x] The shard merge job loads the "ci" policy with no PyYAML → `tests/test_shipping_policy.py::test_a_run_inside_the_workflow_loads_the_ci_policy_without_pyyaml` and `tests/test_shard_local.py::test_the_merge_loads_the_groups_as_a_run_inside_the_workflow`; a "local" policy still loads: `tests/test_shipping_policy.py::test_a_local_policy_loads_without_pyyaml`.
+- [x] The shard merge job loads the "ci" policy with no PyYAML → `tests/test_shipping_policy.py::test_a_run_inside_the_workflow_loads_the_ci_policy_without_pyyaml` and `tests/test_shard_local.py::test_only_a_merge_inside_the_workflow_skips_the_workflow_check`; a "local" policy still loads: `tests/test_shipping_policy.py::test_a_local_policy_loads_without_pyyaml`.
 - [x] A leaked secret is still refused → `tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci`.
 
 ## Baseline + execution
@@ -37,7 +37,7 @@ Execution: One builder, this session.
 
 ## Risks + recovery
 
-A fault that only the full check finds now reaches CI before a person sees it, not the push. CI is a required check on every PR, so it still blocks the merge. Recovery: remove the `pre_push_checks` line. Declined review finding: the shard merge skips the workflow check even in a local run, because the `rest` and shard jobs of the same workflow still run the full policy load, so a removed workflow fails there.
+A fault that only the full check finds now reaches CI before a person sees it, not the push. CI is a required check on every PR, so it still blocks the merge. Recovery: remove the `pre_push_checks` line.
 
 ## ux_reference
 
