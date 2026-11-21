@@ -260,11 +260,28 @@ def test_a_bare_node_id_that_was_never_given_a_label_is_checked() -> None:
     assert body_problem(_with(_flow("Checkout-validation --> B[ok]"))) is not None
 
 
-def test_a_four_space_indented_fence_is_not_a_diagram() -> None:
-    indented = "    " + _DIAGRAM.replace("\n", "\n    ")
-    assert (
-        body_problem("Undo: x\n" + _DIAGRAM + indented + "Not checked: x\n") is not None
+def test_a_diagram_nested_in_a_list_item_is_checked() -> None:
+    nested = (
+        "1. **After**\n\n    "
+        + _flow(f'A["{_TOO_LONG}"]').replace("\n", "\n    ")
+        + "\n"
     )
+    assert body_problem(_with(_flow("A[ok]")) + nested) is not None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'A -->|"Fix | lint | type"| B',
+        'A -->|"Call validate(x)"| B',
+        "A@{ shape: rect, label: 'Publish the pull request' }",
+        "A(/api/checkouts/)",
+    ],
+)
+def test_a_long_quoted_edge_single_quote_attribute_or_slash_label_is_refused(
+    line: str,
+) -> None:
+    assert body_problem(_with(_flow(line))) is not None
 
 
 def _lines(count: int, width: int = 49) -> str:

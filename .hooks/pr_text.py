@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_FENCE = re.compile(
-    r"^ {0,3}(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^ {0,3}\1|\Z)",
+    r"^[ \t]*(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^[ \t]*\1|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 MAX_LABEL_CHARACTERS = 13
@@ -27,11 +27,14 @@ NON_LABEL_STATEMENT = re.compile(
 ENTITY_CODE = re.compile(r"#\w+;")
 STATEMENT_END = re.compile(r';(?=(?:[^"]*"[^"]*")*[^"]*$)')
 DASH_LABEL = re.compile(r"(?:--|==|-\.)[ \t]+(.+?)[ \t]+(?:-->|==>|\.->|---|===|-\.-)")
+QUOTED_PIPE_LABEL = re.compile(r'\|("[^"\n]*")\|')
 PIPE_LABEL = re.compile(r"\|([^|\n]*)\|")
-ATTRIBUTE_LABEL = re.compile(r'(\w[\w-]*)@\{[^}\n]*?label:[ \t]*"([^"\n]*)"[^}\n]*\}')
+ATTRIBUTE_LABEL = re.compile(
+    r"""(\w[\w-]*)@\{[^}\n]*?label:[ \t]*["']([^"'\n]*)["'][^}\n]*\}"""
+)
 SHAPE_LABEL = re.compile(
-    r"(\w[\w-]*)(?:\(\[|\[\(|\(\(|\[\[|\{\{|[\[({>])[/\\]?[ \t]*"
-    r'("[^"\n]*"|.*?)[ \t]*[/\\]?(?:\]\)|\)\]|\)\)|\]\]|\}\}|[\])}])'
+    r"(\w[\w-]*)(?:\(\[|\[\(|\(\(|\[\[|\{\{|\[[/\\]?|[({>])[ \t]*"
+    r'("[^"\n]*"|.*?)[ \t]*(?:\]\)|\)\]|\)\)|\]\]|\}\}|[/\\]?\]|[)}])'
 )
 CLASS_SUFFIX = re.compile(r":::[\w-]+")
 ARROW = re.compile(r"[<>ox]?(?:--+|==+|-\.+)[>ox]?|~~~+|&")
@@ -157,6 +160,7 @@ def _statement_labels(statement: str, defined: set[str]) -> tuple[list[str], lis
         labels.append(match.group(1).strip().strip('"'))
         return " "
 
+    statement = QUOTED_PIPE_LABEL.sub(edge, statement)
     statement = SHAPE_LABEL.sub(node, ATTRIBUTE_LABEL.sub(node, statement))
     statement = DASH_LABEL.sub(edge, PIPE_LABEL.sub(edge, statement))
     rest = ARROW.sub(" ", CLASS_SUFFIX.sub(" ", statement))
