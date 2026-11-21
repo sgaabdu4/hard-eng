@@ -36,7 +36,7 @@ class Page(HTMLParser):
         if tag == "style":
             self.css.append(f"<style {sorted(attrs)}>;")
         if tag not in INLINE:
-            self.text.append(BLOCK)
+            self.text.append(" " if tag == "br" else BLOCK)
             if self.in_heading:
                 self.headings[-1] += " "
         for name, value in attrs:
