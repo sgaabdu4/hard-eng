@@ -4,7 +4,7 @@
 
 **A workflow for one developer who builds with coding agents.**
 
-Hard Eng adds skills, hooks and checks to your repository. Your agent (Claude Code or Codex) then takes each task through four stages. A fifth stage, Learn, runs a retro at the end of each task. It also runs when a failure repeats or a decision must last.
+Hard Eng adds skills, hooks and checks to your repository. Your agent (Claude Code, Codex or Antigravity) then takes each task through four stages. A fifth stage, Learn, runs a retro at the end of each task. It also runs when a failure repeats or a decision must last.
 
 ```mermaid
 flowchart LR
@@ -83,7 +83,7 @@ You or your agent still write `PRODUCT.md` and `DESIGN.md`, because only you kno
 
 Setup also:
 
-- Adds shared rules at the top of `AGENTS.md`. Codex and Claude Code (v2.1.277 or later) read this file.
+- Adds shared rules at the top of `AGENTS.md`. Codex, Antigravity and Claude Code (v2.1.277 or later) read this file.
 - Removes Claude instruction files that only import or link to `AGENTS.md`.
 - Stops at any other Claude instruction file. This includes `CLAUDE.local.md`, and such files in subfolders or parent folders. Then do this:
   1. Move its shared rules into `AGENTS.md`.
@@ -245,7 +245,7 @@ flowchart LR
   G --> K
 ```
 
-- Before a big change ships, the agent runs `python3 .hooks/hard-eng.py challenge`, and the other agent reviews the change. Codex reviews Claude Code work. Claude Code reviews Codex work. When the review cannot run or finish, the PR still ships and says that the review was not done.
+- Before a big change ships, the agent runs `python3 .hooks/hard-eng.py challenge`, and another agent reviews the change. Claude Code falls back through Codex then Antigravity; Codex through Claude Code then Antigravity; Antigravity through Codex then Claude Code. When no reviewer can run or finish, the PR still ships and says that the review was not done.
 - For visible changes, the agent compares the before and after states. It posts an image pair only when the look changed.
 - The agent checks outgoing text for secrets, personal data and private project details.
 - The PR body has three required parts. `ship` refuses a PR without them.
@@ -397,7 +397,7 @@ Skills guide the agent. Hooks and checks enforce.
 | When | What runs |
 | --- | --- |
 | Session start | Reports the last update result. Starts the next update in the background, which also tidies merged idle branches and Rust build folders. |
-| Claude runs a shell command | Denies a main-session wait that sleeps in the foreground ([HE-NO-FOREGROUND-POLL](.agents/skills/he/references/requirements.md#he-no-foreground-poll)). The agent runs the job in the background and gets a notice when it exits. |
+| Claude or Antigravity runs a shell command | Denies a main-session wait that sleeps in the foreground ([HE-NO-FOREGROUND-POLL](.agents/skills/he/references/requirements.md#he-no-foreground-poll)). The agent runs the job in the background and gets a notice when it exits. |
 | Agent stops | Checks the plan handoff. After code changes, runs [quick checks](#quick-checks) on this session's changes. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then gives a [mutation report](#mutation-report). |
 | `git worktree add` | Prepares the [new worktree](#new-worktrees): local files, the hooks folder and submodules. |

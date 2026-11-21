@@ -39,8 +39,8 @@ For Claude Code, setup approves the `.mcp.json` servers it writes through `enabl
 
 For Codex, project trust controls loading; hook trust is separate. Inspect `codex mcp list` inside the target root. Use `codex mcp login <name>` for an unauthenticated OAuth server. A newly written entry may require reconnecting or starting a fresh task before tools appear. State that limitation; never claim installation failed solely because the current task cannot see newly configured tools. Do not change global trust/config or create a duplicate global server.
 
-Project instructions live in `AGENTS.md`, read natively by Codex and Claude Code v2.1.277+. Remove redundant Claude import files; review unique rules, relative imports and scope before migrating custom files. Never copy private local instructions into tracked shared files. Ancestor project Claude files can suppress AGENTS loading and need separate cleanup at their owner.
+Project instructions live in `AGENTS.md`, read natively by Codex, Antigravity and Claude Code v2.1.277+. Remove redundant Claude import files; review unique rules, relative imports and scope before migrating custom files. Never copy private local instructions into tracked shared files. Ancestor project Claude files can suppress AGENTS loading and need separate cleanup at their owner.
 
-Generated configurations target Codex and Claude Code. Retire other harness registrations during an authorized migration; retain shared instructions and distinct assertions in the supported owners before removing custom integrations.
+Generated configurations target Codex, Claude Code and Antigravity. Retire other harness registrations during an authorized migration; retain shared instructions and distinct assertions in the supported owners before removing custom integrations.
 
 Probe relevant integrations once when setting them up or relying on them, not every tool call. Unrelated service outages must not trigger a mandatory startup sweep. Keep keys and personal/project details out of public scaffold files and PRs.
