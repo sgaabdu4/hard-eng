@@ -91,17 +91,18 @@ def named_parents(texts: Mapping[str, str]) -> set[str]:
     from plans import is_plan_path
 
     held = {PurePosixPath(name).as_posix().lower(): name for name in texts}
-    found = set()
+    found: set[str] = set()
     for name, text in texts.items():
         if not is_plan_path(Path(name)):
             continue
         for line in PARENT_LINE.findall(text.split("\n## ", 1)[0]):
             parent = held.get(PurePosixPath(line).as_posix().lower())
-            folder = PurePosixPath(parent).parent if parent else None
             if (
-                parent != name
-                and folder
-                and PurePosixPath(name).parent.is_relative_to(folder)
+                parent
+                and parent != name
+                and PurePosixPath(name).parent.is_relative_to(
+                    PurePosixPath(parent).parent
+                )
             ):
                 found.add(parent)
     return found
