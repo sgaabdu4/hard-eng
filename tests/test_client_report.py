@@ -1,9 +1,11 @@
 """The client report check refuses a report that left the saved template or shows cross-reference codes."""
 
+import importlib
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from conftest import SOURCE
 
 SKILL = SOURCE / ".agents/skills/client-report"
@@ -15,13 +17,13 @@ BODY = "<h1>Changes for Friday 4 December</h1><p>Stage 1 starts.</p>"
 
 
 def problems(report: Path, template: Path) -> list[str]:
-    done = subprocess.run(
-        [sys.executable, "-B", str(SCRIPT), str(report), "--template", str(template)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return done.stdout.splitlines()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sys, "dont_write_bytecode", True)
+        patch.syspath_prepend(str(SCRIPT.parent))
+        found: list[str] = importlib.import_module("check_report").problems(
+            report, template
+        )
+    return found
 
 
 def write(folder: Path, name: str, style: str = STYLE, body: str = BODY) -> Path:
