@@ -38,7 +38,7 @@ Authority: Autonomous — Hard Eng design is the maintainer's delegated call; th
 ## Baseline + execution
 
 Result: Passed
-Evidence: 2026-11-21, develop 8c9b8b2a: `tests/test_plans.py`, `tests/test_plan_*.py`, `tests/test_change_size.py` and `tests/test_skill_links.py` all passed on the starting code before the change.
+Evidence: 2026-11-21, develop 8c9b8b2a checked out in the task worktree: `pytest tests/test_plans.py tests/test_plan_acceptance.py tests/test_plan_controls.py tests/test_plan_coverage.py tests/test_plan_runs.py tests/test_planning_handoffs.py tests/test_change_size.py tests/test_skill_links.py` gave 491 passed, exit 0.
 Execution: One builder in a task worktree; the independent review runs on the finished branch.
 
 ## Risks + recovery
