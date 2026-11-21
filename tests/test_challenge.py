@@ -18,7 +18,7 @@ from test_plans import edit, sized_branch
 
 FAKE = """#!{python}
 import json, os, sys
-log = {{"argv": sys.argv[1:], "stdin_is_null": os.path.samestat(os.fstat(0), os.stat(os.devnull)), "markers": sorted(k for k in os.environ if k == "CLAUDECODE" or k.startswith("CODEX_"))}}
+log = {{"argv": sys.argv[1:], "stdin_is_null": os.path.samestat(os.fstat(0), os.stat(os.devnull)), "markers": sorted(k for k in os.environ if k in {{"CLAUDECODE", "GEMINI_HOME"}} or k.startswith(("CODEX_", "ANTIGRAVITY_", "AGY_")))}}
 open({log!r}, "w").write(json.dumps(log))
 sys.stderr.write({error!r})
 print({output!r})
@@ -45,6 +45,7 @@ def fake_cli(
 def branch(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     git(repository, "branch", "-M", "main")
     (repository / "app.py").write_text("value = 1\n")
     commit(repository, "base")
@@ -64,36 +65,51 @@ def small(root: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("claude", "codex", "host", "reviewer"),
+    ("claude", "codex", "agy", "host", "reviewers"),
     [
-        ("1", None, None, "codex"),
-        (None, "thread", None, "claude"),
-        (None, None, "codex", "claude"),
-        (None, None, "claude", "codex"),
+        ("1", None, None, None, ("codex", "agy")),
+        (None, "thread", None, None, ("claude", "agy")),
+        (None, None, "1", None, ("codex", "claude")),
+        (None, None, None, "codex", ("claude", "agy")),
+        (None, None, None, "claude", ("codex", "agy")),
+        (None, None, None, "agy", ("codex", "claude")),
     ],
 )
 def test_reviewer_is_the_other_agent_of_the_running_host(
     monkeypatch: pytest.MonkeyPatch,
     claude: str | None,
     codex: str | None,
+    agy: str | None,
     host: str | None,
-    reviewer: str,
+    reviewers: tuple[str, ...],
 ) -> None:
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     if claude:
         monkeypatch.setenv("CLAUDECODE", claude)
     if codex:
         monkeypatch.setenv("CODEX_THREAD_ID", codex)
-    assert challenge.reviewer_for(host) == reviewer
+    if agy:
+        monkeypatch.setenv("ANTIGRAVITY_AGENT", agy)
+    assert challenge.reviewers_for(host) == reviewers
+    assert challenge.reviewer_for(host) == reviewers[0]
 
 
-@pytest.mark.parametrize("markers", [{}, {"CLAUDECODE": "1", "CODEX_THREAD_ID": "t"}])
+@pytest.mark.parametrize(
+    "markers",
+    [
+        {},
+        {"CLAUDECODE": "1", "CODEX_THREAD_ID": "t"},
+        {"CLAUDECODE": "1", "ANTIGRAVITY_AGENT": "1"},
+    ],
+)
 def test_unknown_or_ambiguous_host_asks_for_the_host(
     monkeypatch: pytest.MonkeyPatch, markers: dict[str, str]
 ) -> None:
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     for name, value in markers.items():
         monkeypatch.setenv(name, value)
     with pytest.raises(ValueError, match="--host"):
@@ -108,8 +124,11 @@ def test_the_reviewer_does_not_inherit_host_markers(
     monkeypatch.setenv("CLAUDECODE", "1")
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
     monkeypatch.setenv("CODEX_SANDBOX", "seatbelt")
+    monkeypatch.setenv("ANTIGRAVITY_AGENT", "1")
+    monkeypatch.setenv("AGY_CLI_DISABLE_AUTO_UPDATE", "1")
+    monkeypatch.setenv("GEMINI_HOME", str(tmp_path / "gemini-home"))
     challenge.challenge(branch, None, "claude")
-    assert json.loads(log.read_text())["markers"] == ["CODEX_HOME"]
+    assert json.loads(log.read_text())["markers"] == ["CODEX_HOME", "GEMINI_HOME"]
 
 
 def test_the_prompt_pins_the_reviewed_revision_and_treats_repo_text_as_data(
@@ -153,6 +172,7 @@ def test_no_branch_point_records_not_done_without_calling_the_reviewer(
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("CLAUDECODE", "1")
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     assert challenge.challenge(repository, None, None) == 1
     assert "branch point" in record_of(repository)["outcome"]
     assert not log.exists()
@@ -273,6 +293,7 @@ def test_unavailable_reviewer_records_not_done(
         monkeypatch.setenv("PATH", str(tmp_path / "bin"))
     else:
         fake_cli(tmp_path / "bin", "codex", "", code, error)
+        fake_cli(tmp_path / "bin", "agy", "", code, "agy unavailable")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 1
     record = json.loads(
@@ -282,6 +303,40 @@ def test_unavailable_reviewer_records_not_done(
     )
     assert record["outcome"].startswith("not done: ")
     assert reason in record["outcome"]
+
+
+def test_challenge_falls_back_to_second_reviewer_when_first_fails(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    agy_log = fake_cli(tmp_path / "bin", "agy", "Looks solid.\nVERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert agy_log.is_file()
+    record = record_of(branch)
+    assert (record["reviewer"], record["outcome"]) == ("agy", "clean")
+
+
+def test_agy_reviewer_runs_read_only_with_session_settings(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "claude", "", 1, "quota exhausted")
+    log = fake_cli(tmp_path / "bin", "agy", "app.py:1 bug\nVERDICT: findings")
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread")
+    assert challenge.challenge(branch, None, None) == 0
+    ran = json.loads(log.read_text())
+    argv = ran["argv"]
+    assert ran["stdin_is_null"]
+    assert argv[:3] == ["-p", "--disable-slash-commands", "--settings"]
+    settings = json.loads(argv[3])
+    assert "write_file(*)" in settings["permissions"]["deny"]
+    assert "mcp(*)" in settings["permissions"]["deny"]
+    assert "read_file(*)" in settings["permissions"]["allow"]
+    assert "command(git diff)" in settings["permissions"]["allow"]
+    record = record_of(branch)
+    assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
 
 
 def shipment(root: Path) -> Shipment:

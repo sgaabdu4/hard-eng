@@ -38,16 +38,67 @@ HISTORY_BYTES, REVIEW_BYTES, DECLINED_BYTES = 24_000, 8_000, 4_000
 RESETS = ("branch: Created from", "branch: Reset to")
 
 
-def reviewer_for(host: str | None) -> str:
-    """The agent that reviews: the one the running host is not."""
-    claude = os.environ.get("CLAUDECODE") == "1"
-    if host is None and claude != bool(os.environ.get("CODEX_THREAD_ID")):
-        host = "claude" if claude else "codex"
+REVIEWER_ORDER: dict[str, tuple[str, ...]] = {
+    "claude": ("codex", "agy"),
+    "codex": ("claude", "agy"),
+    "agy": ("codex", "claude"),
+}
+AGY_READ_ONLY_SETTINGS = json.dumps(
+    {
+        "agentMode": "default",
+        "toolPermission": "request-review",
+        "permissions": {
+            "deny": [
+                "write_file(*)",
+                "mcp(*)",
+                "read_url(*)",
+                "execute_url(*)",
+                "download_url(*)",
+                r"command(regex:git\s+.*--output.*)",
+            ],
+            "allow": [
+                "read_file(*)",
+                "command(git diff)",
+                "command(git log)",
+                "command(git show)",
+                "command(git status)",
+                "command(git rev-parse)",
+                "command(git merge-base)",
+                "command(rg)",
+                "command(ls)",
+                "command(find)",
+            ],
+        },
+    },
+    separators=(",", ":"),
+)
+
+
+def reviewers_for(host: str | None) -> tuple[str, ...]:
+    """Ordered fallback reviewers: the other agents, never the running host."""
     if host is None:
+        detected = [
+            name
+            for name, active in (
+                ("claude", os.environ.get("CLAUDECODE") == "1"),
+                ("codex", bool(os.environ.get("CODEX_THREAD_ID"))),
+                ("agy", os.environ.get("ANTIGRAVITY_AGENT") == "1"),
+            )
+            if active
+        ]
+        if len(detected) == 1:
+            host = detected[0]
+    if host not in REVIEWER_ORDER:
         raise ValueError(
-            "Cannot tell whether Claude Code or Codex is running; pass --host claude or --host codex"
+            "Cannot tell whether Claude Code, Codex or Antigravity is running; "
+            "pass --host claude, --host codex or --host agy"
         )
-    return "codex" if host == "claude" else "claude"
+    return REVIEWER_ORDER[host]
+
+
+def reviewer_for(host: str | None) -> str:
+    """The primary reviewer for the running host."""
+    return reviewers_for(host)[0]
 
 
 def command(reviewer: str, prompt: str, root: Path) -> list[str]:
@@ -62,6 +113,15 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
             "features.plugins=false",
             "--cd",
             str(root),
+            prompt,
+        ]
+    if reviewer == "agy":
+        return [
+            "agy",
+            "-p",
+            "--disable-slash-commands",
+            "--settings",
+            AGY_READ_ONLY_SETTINGS,
             prompt,
         ]
     # A Bash(git diff *) rule would also allow --output=<file>; built-in read-only git forms refuse it.
@@ -87,6 +147,7 @@ def without_host_markers() -> dict[str, str]:
         for name, value in os.environ.items()
         if name != "CLAUDECODE"
         and (name == "CODEX_HOME" or not name.startswith("CODEX_"))
+        and not name.startswith(("ANTIGRAVITY_", "AGY_"))
     }
 
 
@@ -288,8 +349,19 @@ def covered_point(root: Path, base: str | None) -> tuple[str | None, str | None]
     return start, (point if complete and earlier.get("covers") == point else None)
 
 
+def unavailable(outcome: str, reviewer: str) -> bool:
+    return outcome.startswith(
+        (
+            f"not done: {reviewer} is not installed",
+            f"not done: {reviewer} timed out",
+            f"not done: {reviewer} exited ",
+        )
+    )
+
+
 def challenge(root: Path, base: str | None, host: str | None) -> int:
-    reviewer = reviewer_for(host)
+    candidates = reviewers_for(host)
+    reviewer = candidates[0]
     revision = git_text(root, "rev-parse", "HEAD")
     start, covers = covered_point(root, base)
     if base is not None and covers is None:
@@ -298,7 +370,17 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
             "",
         )
     else:
-        outcome, output = review(root, reviewer, start, revision)
+        reasons: list[str] = []
+        outcome, output = "", ""
+        for candidate in candidates:
+            reviewer = candidate
+            outcome, output = review(root, candidate, start, revision)
+            if not unavailable(outcome, candidate):
+                break
+            reasons.append(outcome.removeprefix("not done: "))
+        else:
+            reviewer = candidates[0]
+            outcome = "not done: " + "; ".join(reasons)
     path = store(root, revision)
     path.parent.mkdir(parents=True, exist_ok=True)
     if outcome.startswith("not done") and path.with_suffix(".json").is_file():

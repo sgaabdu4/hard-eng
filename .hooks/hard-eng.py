@@ -11,11 +11,18 @@ if sys.version_info < PYTHON_FLOOR:
         f"here is {sys.version_info[0]}.{sys.version_info[1]}. No check or hook ran. "
         "Put a newer python3 first on PATH."
     )
-    event = sys.argv[1:2]
-    if event == ["stop"] and json.load(sys.stdin).get("stop_hook_active") is not True:
-        print(json.dumps({"decision": "block", "reason": refusal}))
-    elif event in (["stop"], ["session"]):
-        print(json.dumps({"systemMessage": refusal}))
+    event, agy = sys.argv[1:2], sys.argv[2:3] == ["agy"]
+    if event == ["stop"]:
+        data = json.load(sys.stdin)
+        active = True in (data.get("stop_hook_active"), data.get("continuationActive"))
+        block = {"decision": "continue" if agy else "block", "reason": refusal}
+        done: dict[str, str] = {} if agy else {"systemMessage": refusal}
+        print(json.dumps(done if active else block))
+    elif event == ["session"]:
+        step = {"systemMessage": {"systemMessage": refusal}}
+        print(
+            json.dumps({"injectSteps": [step]} if agy else {"systemMessage": refusal})
+        )
     else:
         sys.exit(refusal)
     sys.exit(0)
@@ -23,15 +30,13 @@ if sys.version_info < PYTHON_FLOOR:
 if (
     __name__ == "__main__"
     and sys.argv[1:2] in (["session"], ["stop"])
-    and sys.argv[2:] in (["claude"], ["codex"])
+    and sys.argv[2:] in (["claude"], ["codex"], ["agy"])
 ):
     from pathlib import Path
 
     from agent_hooks import handle_event
 
-    raise SystemExit(
-        handle_event(Path(__file__).resolve().parents[1], sys.argv[1], sys.argv[2])
-    )
+    raise SystemExit(handle_event(Path(__file__).resolve().parents[1], *sys.argv[1:3]))
 
 if __name__ == "__main__":
     from gate_runner import run

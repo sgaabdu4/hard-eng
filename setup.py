@@ -100,7 +100,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
     from gate_config import json_file
     from project_files import parse_project_text, read_project_file
-    from settings_merge import merge
+    from settings_merge import configure_agent_hooks
 
     codex_config = root / ".codex/config.toml"
     if codex_config.exists():
@@ -120,43 +120,10 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
 
     command = 'python3 "$(git rev-parse --show-toplevel)/.hooks/hard-eng.py"'
     for agent, name in agent_hooks.HOOK_FILES.items():
-        hooks: JsonObject = {}
-        for event, native in agent_hooks.hook_events(agent).items():
-            timeout = agent_hooks.HOOK_TIMEOUTS.get(event, 10)
-            status_message = (
-                agent_hooks.CODEX_HOOK_STATUS.get(event) if agent == "codex" else None
-            )
-            hooks[native] = [
-                agent_hooks.owned_hook_entry(
-                    agent, event, command, timeout, status_message=status_message
-                )
-            ]
-        if agent == "claude":
-            hooks["PostToolUseFailure"] = [agent_hooks.FAILURE_HOOK]
-            hooks["PreToolUse"] = list(agent_hooks.CLAUDE_TOOL_HOOKS)
         target = root / name
         text = target.read_text() if target.exists() else "{}"
         current: JsonObject = parse_project_text(text, name)
-        if current.get("disableAllHooks"):
-            raise ValueError(f"{agent} hooks are disabled; ask before changing that")
-        agent_hooks.remove_routine_hooks(current, agent, command)
-        additions: JsonObject = {"hooks": hooks}
-        if agent == "claude":
-            from mcp_setup import retire_claude_integrations
-
-            retire_claude_integrations(current)
-            current.setdefault("advisorModel", "fable")
-            current.setdefault("outputStyle", "Plain STE")
-            current.setdefault(
-                "attribution", {"commit": "", "pr": "", "sessionUrl": False}
-            )
-            current.setdefault("autoCompactWindow", 500000)
-            current.setdefault("bashOutputMaxChars", 10000)
-            current.setdefault("subagentPromptCacheTtl", "1h")
-            env = current.get("env")
-            if not (isinstance(env, dict) and "CLAUDE_CODE_FORK_SUBAGENT" in env):
-                additions["env"] = {"CLAUDE_CODE_FORK_SUBAGENT": "0"}
-        merged = merge(current, additions)
+        merged = configure_agent_hooks(agent, current, command)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
     from mcp_setup import retire_copilot_hooks

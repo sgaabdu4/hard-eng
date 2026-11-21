@@ -7,7 +7,7 @@ This file holds the scaffold's purpose, its current status and the requirements 
 - This repository is the Hard Eng scaffold, added to existing projects so they can follow Hard Eng principles. Setup affects only the target repository.
 - The scaffold checks for Hard Eng changes at agent session start and updates its installed setup under the update rules below.
 - The scaffold adds gates for the entire project based on its actual tech stack.
-- The scaffold supports Claude and Codex with applicable service integrations. Context Mode and Codebase Memory MCP are retired (user instruction, 2026-09-28).
+- The scaffold supports Claude, Codex and Antigravity with applicable service integrations. Context Mode and Codebase Memory MCP are retired (user instruction, 2026-09-28).
 - The scaffold prepends its `AGENTS.md` instructions to the project's `AGENTS.md`. Updates replace the previously added Hard Eng section, keeping it once at the top and preserving the project's own content below. Shared project rules use `AGENTS.md`; redundant Claude instruction wrappers are retired after preserving unique scoped rules.
 
 ## Current status
@@ -32,7 +32,7 @@ Remaining acceptance gaps:
 Each item is agreed but not yet fully implemented or proven. Tick work happens in a feature plan; when a rule is enforced, add it to the registry and remove it here.
 
 - [ ] Scaffold setup: install instructions, skills, stack-appropriate gates and agent integrations, and turn on enforcement at agent completion, pre-push and CI.
-- [ ] Integration scope: change only the repository where setup runs, with project-local Claude and Codex MCP and hook configuration and no user-wide plugin activation.
+- [ ] Integration scope: change only the repository where setup runs, with project-local Claude, Codex and Antigravity MCP and hook configuration and no user-wide plugin activation.
 - [ ] Gate results: findings, crashes and incomplete scans fail; an unrun check is never reported as passed; each scanner's result is verified.
 - [ ] Test quality: tests assert independently expected outcomes and relevant failures; a regression test catches the original defect. Coverage and mock-call checks alone do not prove behavior.
 - [ ] Tool versions: gates use the newest tool release that is at least two days old on every run, updated independently of Hard Eng.
@@ -41,7 +41,7 @@ Each item is agreed but not yet fully implemented or proven. Tick work happens i
 - [ ] Source security: Semgrep scans JavaScript, TypeScript, Python, Dart and Flutter with applicable rules and fails on findings or scan errors.
 - [ ] Scanner exceptions: only narrow exceptions for proven false positives or intended patterns, with reason and evidence; the rule stays active elsewhere.
 - [ ] Focused test selection: reject command-line or configuration filters that shrink the expected Python, JavaScript or Dart test suite; scanner scopes cover the tests.
-- [ ] AI hook lifecycle: session start checks updates and gives MCP readiness guidance; completion runs code checks; Claude PreToolUse hooks only deny foreground polling and note real-app previews on Artifact calls. See [the learning decision](docs/adr/0001-learning-prevention-and-decisions.md).
+- [ ] AI hook lifecycle: session start checks updates and gives MCP readiness guidance; completion runs code checks; Claude and Antigravity PreToolUse hooks deny foreground polling, and Claude also notes real-app previews on Artifact calls. See [the learning decision](docs/adr/0001-learning-prevention-and-decisions.md).
 - [ ] AI completion: failed gates need another repair attempt; a broken verification hook needs repair before completion is claimed; repeated Stop loops are prevented.
 - [ ] Full checks: pre-push and CI run every required check under the check-scope rules; task completion runs quick static gates on the session's own change (user decision, 2026-10-15).
 - [ ] JavaScript and TypeScript gates: Biome, type checks, tests, applicable build and Fallow; React adds React Doctor.

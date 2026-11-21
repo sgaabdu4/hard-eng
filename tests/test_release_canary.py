@@ -541,6 +541,15 @@ def test_only_new_projects_get_agent_sessions() -> None:
         assert release_canary.agents_for((kind, "x"), agents) == agents
 
 
+def test_agent_command_supports_agy(tmp_path: Path) -> None:
+    assert release_canary.agent_command("agy", tmp_path) == [
+        "agy",
+        "-p",
+        "--dangerously-skip-permissions",
+        release_canary.TASK,
+    ]
+
+
 def test_ci_names_every_new_project_without_a_newest_passing_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

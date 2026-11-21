@@ -486,7 +486,7 @@ def test_claude_timestamp_does_not_skip_startup(
     assert (repository / ".hard-eng/sessions/native.json").exists()
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex"])
+@pytest.mark.parametrize("agent", ["claude", "codex", "agy"])
 @pytest.mark.parametrize("offline", [False, True])
 def test_session_reports_update_status_without_running_update(
     repository: Path,
@@ -503,28 +503,34 @@ def test_session_reports_update_status_without_running_update(
     monkeypatch.setattr(
         update, "update", Mock(side_effect=AssertionError("startup waited on update"))
     )
-    monkeypatch.setattr(sys, "stdin", io.StringIO('{"session_id":"startup"}'))
+    key = "conversationId" if agent == "agy" else "session_id"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({key: "startup"})))
     assert agent_hooks.handle_event(repository, "session", agent) == 0
     output = json.loads(capsys.readouterr().out)
     starter.assert_called_once_with(repository)
-    context = output["hookSpecificOutput"]["additionalContext"]
+    context = (
+        output["injectSteps"][0]["systemMessage"]["systemMessage"]
+        if agent == "agy"
+        else output["hookSpecificOutput"]["additionalContext"]
+    )
     expected = (
         "Hard Eng update failed: offline"
         if offline
         else "Hard Eng update started in the background"
     )
     assert context.startswith(expected)
-    assert output["systemMessage"] == "Hard Eng startup: " + " ".join(
-        context.splitlines()[:2]
-    )
-    assert "Gates: not runnable" in output["systemMessage"]
-    assert "MCPs:" not in output["systemMessage"]
+    if agent != "agy":
+        assert output["systemMessage"] == "Hard Eng startup: " + " ".join(
+            context.splitlines()[:2]
+        )
+        assert "Gates: not runnable" in output["systemMessage"]
+        assert "MCPs:" not in output["systemMessage"]
     assert (repository / ".hard-eng/sessions/startup.json").exists()
 
 
-@pytest.mark.parametrize("agent", ["claude", "codex"])
+@pytest.mark.parametrize("agent", ["claude", "codex", "agy"])
 @pytest.mark.parametrize("override", [False, True])
-def test_only_claude_is_told_to_read_override(
+def test_only_claude_and_agy_are_told_to_read_override(
     repository: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -534,13 +540,17 @@ def test_only_claude_is_told_to_read_override(
     if override:
         (repository / "AGENTS.override.md").write_text("# Local\n")
     monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
-    monkeypatch.setattr(sys, "stdin", io.StringIO('{"session_id":"override"}'))
+    key = "conversationId" if agent == "agy" else "session_id"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({key: "override"})))
     assert agent_hooks.handle_event(repository, "session", agent) == 0
-    context = json.loads(capsys.readouterr().out)["hookSpecificOutput"][
-        "additionalContext"
-    ]
+    raw = json.loads(capsys.readouterr().out)
+    context = (
+        raw["injectSteps"][0]["systemMessage"]["systemMessage"]
+        if agent == "agy"
+        else raw["hookSpecificOutput"]["additionalContext"]
+    )
     told = "AGENTS.override.md → read it now + follow it." in context
-    assert told == (override and agent == "claude")
+    assert told == (override and agent in {"claude", "agy"})
 
 
 def test_session_reports_stopped_codex_brokers(

@@ -148,6 +148,7 @@ def existing_servers(root: Path, service: str) -> list[JsonObject]:
         ".mcp.json",
         ".github/mcp.json",
         ".codex/config.toml",
+        ".agents/mcp_config.json",
     ):
         path = root / name
         if not path.exists():
@@ -611,12 +612,39 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> list[str]:
         changes[settings_name] = json_file(root, settings)
     approve_claude_servers(root, changes, sorted(detected.keys() & existing.keys()))
     codex_retired, codex_config = configure_codex_mcp(root, changes, detected)
-    retired += codex_retired + retire_copilot_mcp(root, existing, codex_config)
+    agy_retired = configure_agy_mcp(root, changes, detected)
+    retired += (
+        codex_retired + agy_retired + retire_copilot_mcp(root, existing, codex_config)
+    )
     if any(not contained(root, root / name) for name in retired):
         raise ValueError(
             "Retired files are reached through a linked directory; preserve the shared targets before setup"
         )
     return retired
+
+
+def configure_agy_mcp(
+    root: Path, changes: dict[str, str], detected: dict[str, JsonObject]
+) -> list[str]:
+    name = ".agents/mcp_config.json"
+    target = root / name
+    current: JsonObject = read_project_file(target, root) if target.exists() else {}
+    before = json.dumps(current)
+    existing = current.setdefault("mcpServers", {})
+    if not isinstance(existing, dict):
+        raise TypeError(f"Conflicting MCP servers in {name}; expected an object")
+    for server in {
+        key for key, settings in existing.items() if retired_server(key, settings)
+    }:
+        del existing[server]
+    for plugin in sorted(detected.keys() - existing.keys()):
+        existing[plugin] = detected[plugin]
+    if json.dumps(current) == before:
+        return []
+    if current == {"mcpServers": {}}:
+        return [name] if target.exists() else []
+    changes[name] = json_file(root, current)
+    return []
 
 
 def configure_codex_mcp(

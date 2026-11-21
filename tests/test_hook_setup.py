@@ -46,18 +46,24 @@ def test_hook_registrations_invoke_shared_runner(
     for agent, path, events in (
         ("claude", ".claude/settings.json", "SessionStart Stop"),
         ("codex", ".codex/hooks.json", "SessionStart Stop"),
+        ("agy", ".agents/hooks.json", "SessionStart Stop"),
     ):
-        hooks = json.loads((root / path).read_text())["hooks"]
+        raw = json.loads((root / path).read_text())
+        hooks = raw["hard-eng"] if agent == "agy" else raw["hooks"]
         if agent == "claude":
             assert hooks.pop("PreToolUse") == [
                 agent_hooks.POLL_HOOK,
                 agent_hooks.PREVIEW_HOOK,
             ]
             assert hooks.pop("PostToolUseFailure") == [agent_hooks.FAILURE_HOOK]
+        if agent == "agy":
+            import settings_merge
+
+            assert hooks.pop("PreToolUse") == [settings_merge.AGY_POLL_HOOK]
         assert set(hooks) == set(events.split())
         for event, native in zip(("session", "stop"), events.split(), strict=True):
             (registration,) = hooks[native]
-            (handler,) = registration["hooks"]
+            handler = registration if agent == "agy" else registration["hooks"][0]
             command = handler["command"]
             result = subprocess.run(
                 ["sh", "-c", command],
@@ -316,7 +322,7 @@ def test_installed_cli_rejects_retired_agents(
     )
     assert result.returncode == 2
     assert "invalid choice" in result.stderr
-    assert "{claude,codex}" in result.stderr
+    assert "{claude,codex,agy}" in result.stderr
     assert not (root / ".github/hooks/hard-eng.json").exists()
     assert not (root / ".github/mcp.json").exists()
 
@@ -445,10 +451,12 @@ OLD_PYTHON = (
 )
 
 
-def on_old_python(event: str, payload: object) -> subprocess.CompletedProcess[str]:
+def on_old_python(
+    event: str, payload: object, agent: str = "claude"
+) -> subprocess.CompletedProcess[str]:
     entry = str(SOURCE / ".hooks/hard-eng.py")
     return subprocess.run(
-        [sys.executable, "-c", OLD_PYTHON, entry, event, "claude"],
+        [sys.executable, "-c", OLD_PYTHON, entry, event, agent],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
@@ -460,9 +468,12 @@ def test_old_python_gets_a_plain_refusal_before_any_import() -> None:
     blocked = on_old_python("stop", {})
     again = on_old_python("stop", {"stop_hook_active": True})
     session = on_old_python("session", {})
+    agy_blocked = on_old_python("stop", {}, "agy")
+    agy_again = on_old_python("stop", {"continuationActive": True}, "agy")
+    agy_session = on_old_python("session", {}, "agy")
     check = on_old_python("check", {})
     ast.parse((SOURCE / ".hooks/hard-eng.py").read_text(), feature_version=(3, 9))
-    for run in (blocked, again, session, check):
+    for run in (blocked, again, session, agy_blocked, agy_again, agy_session, check):
         assert "Traceback" not in run.stderr, run.stderr
     stop = json.loads(blocked.stdout)
     assert stop["decision"] == "block"
@@ -472,6 +483,14 @@ def test_old_python_gets_a_plain_refusal_before_any_import() -> None:
         assert run.returncode == 0
         (message,) = json.loads(run.stdout).items()
         assert message == ("systemMessage", stop["reason"])
+    assert json.loads(agy_blocked.stdout) == {
+        "decision": "continue",
+        "reason": stop["reason"],
+    }
+    assert json.loads(agy_again.stdout) == {}
+    assert json.loads(agy_session.stdout) == {
+        "injectSteps": [{"systemMessage": {"systemMessage": stop["reason"]}}]
+    }
     assert check.returncode == 1
     assert stop["reason"] in check.stderr
 
@@ -525,12 +544,13 @@ def test_the_hook_script_is_a_small_launcher() -> None:
     ]
 
 
+@pytest.mark.parametrize("agent", ["claude", "agy"])
 @pytest.mark.parametrize("event", ["session", "stop"])
-def test_a_hook_event_loads_no_gate_module(event: str) -> None:
-    run = drive(LAUNCHER_DRIVER, event, "claude")
+def test_a_hook_event_loads_no_gate_module(agent: str, event: str) -> None:
+    run = drive(LAUNCHER_DRIVER, event, agent)
     assert run.returncode == 0, run.stderr
     code, calls, loaded = json.loads(run.stdout)
-    assert (code, calls, loaded) == (0, [[event, "claude"]], [])
+    assert (code, calls, loaded) == (0, [[event, agent]], [])
 
 
 EVENT_DRIVER = (
@@ -643,3 +663,105 @@ def test_python_floor_has_one_value() -> None:
     project = tomllib.loads((SOURCE / "pyproject.toml").read_text())["project"]
     assert project["requires-python"] == f">={major}.{minor}"
     assert f"Python {major}.{minor} or later" in (SOURCE / "README.md").read_text()
+
+
+def test_agy_hooks_preserve_custom_hooks_and_refuse_disabled(
+    installer: ModuleType, repository: Path
+) -> None:
+    root = installer_project(repository)
+    target = root / ".agents/hooks.json"
+    target.parent.mkdir(parents=True)
+    custom_hook = {"SessionStart": [{"type": "command", "command": "echo hi"}]}
+    own_stop = {"type": "command", "command": "echo project-stop", "timeout": 10}
+    target.write_text(
+        json.dumps({"custom": custom_hook, "hard-eng": {"Stop": [own_stop]}})
+    )
+    installer.install(root)
+    saved = json.loads(target.read_text())
+    assert saved["custom"] == custom_hook
+    assert own_stop in saved["hard-eng"]["Stop"]
+    assert len(saved["hard-eng"]["Stop"]) == 2
+    before = snapshot(root)
+    installer.install(root)
+    assert snapshot(root) == before
+
+    target.write_text(json.dumps({"hard-eng": {"enabled": False}}))
+    with pytest.raises(ValueError, match="agy hooks are disabled"):
+        installer.configure_hooks(root, {})
+
+
+def test_agy_stop_contract_maps_block_to_continue_and_respects_idle_and_continuation(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import io
+
+    (repository / ".git/info/exclude").write_text(".hard-eng/\n")
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"conversationId":"agy-1"}'))
+    assert agent_hooks.handle_event(repository, "session", "agy") == 0
+    started = json.loads(capsys.readouterr().out)
+    assert "injectSteps" in started
+    assert (repository / ".hard-eng/sessions/agy-1.json").is_file()
+
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO('{"conversationId":"agy-sub","parentConversationId":"agy-1"}'),
+    )
+    assert agent_hooks.handle_event(repository, "session", "agy") == 0
+    assert json.loads(capsys.readouterr().out) == {"injectSteps": []}
+    assert not (repository / ".hard-eng/sessions/agy-sub.json").exists()
+
+    from unittest.mock import Mock
+
+    (repository / "change.txt").write_text("edited\n")
+    monkeypatch.setattr(agent_hooks, "run_check", Mock(return_value=(1, "FAIL lint")))
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"conversationId":"agy-1"}'))
+    assert agent_hooks.handle_event(repository, "stop", "agy") == 0
+    blocked = json.loads(capsys.readouterr().out)
+    assert blocked["decision"] == "continue"
+    assert "FAIL lint" in blocked["reason"]
+    assert set(blocked) == {"decision", "reason"}
+
+    for bypass in (
+        {"conversationId": "agy-1", "continuationActive": True},
+        {"conversationId": "agy-1", "fullyIdle": False},
+        {"conversationId": "agy-1", "parentConversationId": "root-1"},
+        {"conversationId": "agy-1", "terminationReason": "USER_CANCELED"},
+    ):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(bypass)))
+        assert agent_hooks.handle_event(repository, "stop", "agy") == 0
+        assert json.loads(capsys.readouterr().out) == {}
+
+    seen: list[bool] = []
+
+    def record_check(_root: Path, _base: str, building: bool) -> tuple[int, str]:
+        seen.append(building)
+        return (0, "Hard Eng: quick checks passed")
+
+    plan = repository / "features/agy/PLAN.md"
+    plan.parent.mkdir(parents=True)
+    from conftest import plan_document
+
+    plan.write_text(
+        plan_document()
+        .replace("Status: Complete", "Status: Ready")
+        .replace("Result: Passed\nEvidence: check", "Result: Pending\nEvidence: check")
+    )
+    monkeypatch.setattr(agent_hooks, "run_check", record_check)
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            json.dumps(
+                {
+                    "conversationId": "agy-1",
+                    "finalModelOutput": "Ready for ship — local verification done.",
+                }
+            )
+        ),
+    )
+    assert agent_hooks.handle_event(repository, "stop", "agy") == 0
+    assert json.loads(capsys.readouterr().out) == {}
+    assert seen == [False]

@@ -144,18 +144,23 @@ def test_appwrite_target_survives_repeat_setup_without_reasking(
         assert not (tmp_path / ".mcp.json").exists()
         executable_launcher(tmp_path, "scripts/appwrite-mcp")
     installer.install(tmp_path)
-    names = (".mcp.json", ".codex/config.toml")
+    names = (".mcp.json", ".codex/config.toml", ".agents/mcp_config.json")
     before = {name: (tmp_path / name).read_bytes() for name in names}
     monkeypatch.delenv("APPWRITE_ENDPOINT")
     installer.install(tmp_path)
     assert before == {name: (tmp_path / name).read_bytes() for name in names}
-    settings = tomllib.loads(before[".codex/config.toml"].decode())["mcp_servers"][
-        "appwrite"
-    ]
-    assert settings == (
+    expected = (
         {"url": "https://mcp.appwrite.io/"}
         if cloud
         else {"command": "./scripts/appwrite-mcp"}
+    )
+    settings = tomllib.loads(before[".codex/config.toml"].decode())["mcp_servers"][
+        "appwrite"
+    ]
+    assert settings == expected
+    assert (
+        json.loads(before[".agents/mcp_config.json"])["mcpServers"]["appwrite"]
+        == expected
     )
 
 
@@ -473,6 +478,11 @@ def test_installer_registers_only_detected_service_mcps(
         )
     if "appwrite" in expected:
         assert servers["appwrite"] == {"url": "https://mcp.appwrite.io/"}
+    agy = json.loads(changes.get(".agents/mcp_config.json", '{"mcpServers": {}}'))[
+        "mcpServers"
+    ]
+    assert agy.keys() & optional == expected
+    assert agy == servers
 
 
 @pytest.mark.parametrize("service", ["sentry", "dart", "marionette"])
@@ -643,3 +653,35 @@ def test_sentry_reuses_project_scope_and_rejects_conflicting_scope(
     with pytest.raises(ValueError, match="Conflicting Sentry"):
         sentry_server(tmp_path)
     assert target.read_text() == original
+
+
+def test_agy_mcp_preserves_custom_servers_and_retires_obsolete_ones(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    agy = tmp_path / ".agents/mcp_config.json"
+    agy.parent.mkdir(parents=True)
+    own = {"command": "project-mcp"}
+    agy.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "context-mode": {"command": "npx", "args": ["context-mode"]},
+                    "own": own,
+                }
+            }
+        )
+    )
+    changes: dict[str, str] = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {"own": own}
+    }
+    agy.write_text(
+        json.dumps(
+            {"mcpServers": {"codebase-memory-mcp": {"command": "codebase-memory-mcp"}}}
+        )
+    )
+    changes = {}
+    assert ".agents/mcp_config.json" in installer.configure_mcp(tmp_path, changes)
+    assert ".agents/mcp_config.json" not in changes
