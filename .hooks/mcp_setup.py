@@ -129,6 +129,10 @@ def repository_launcher(root: Path, command: object) -> str | None:
     return command
 
 
+def server_url(server: JsonObject) -> object:
+    return server.get("url") or server.get("serverUrl")
+
+
 def appwrite_cloud_url(value: object) -> bool:
     return value in (APPWRITE_CLOUD_MCP_URL, APPWRITE_CLOUD_MCP_URL.rstrip("/"))
 
@@ -191,7 +195,9 @@ def appwrite_server(root: Path) -> JsonObject | None:
             "Conflicting Appwrite launcher definitions; resolve the intended service before setup"
         )
     configured_launcher = next(iter(launchers), None)
-    configured_cloud = any(appwrite_cloud_url(server.get("url")) for server in existing)
+    configured_cloud = any(
+        appwrite_cloud_url(server_url(server)) for server in existing
+    )
     cloud = (
         appwrite_cloud_endpoint(endpoint_value)
         if endpoint_value is not None
@@ -248,7 +254,7 @@ def sentry_server(root: Path) -> JsonObject | None:
     existing = existing_servers(root, "sentry")
     host = service_value(existing, "SENTRY_HOST")
     cloud = host is not None and (host == "sentry.io" or host.endswith(".sentry.io"))
-    targets = {str(server.get("url") or server.get("command")) for server in existing}
+    targets = {str(server_url(server) or server.get("command")) for server in existing}
     if os.environ.get("SENTRY_MCP_URL"):
         targets.add(os.environ["SENTRY_MCP_URL"])
     if len(targets) > 1:

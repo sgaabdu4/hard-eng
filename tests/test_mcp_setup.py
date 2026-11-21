@@ -685,3 +685,38 @@ def test_agy_mcp_preserves_custom_servers_and_retires_obsolete_ones(
     changes = {}
     assert ".agents/mcp_config.json" in installer.configure_mcp(tmp_path, changes)
     assert ".agents/mcp_config.json" not in changes
+
+
+def test_agy_server_url_matches_claude_url_for_sentry_and_appwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mcp_setup import APPWRITE_CLOUD_MCP_URL, appwrite_server, sentry_server
+
+    monkeypatch.delenv("SENTRY_HOST", raising=False)
+    monkeypatch.delenv("SENTRY_MCP_URL", raising=False)
+    monkeypatch.delenv("APPWRITE_ENDPOINT", raising=False)
+    sentry_url = "https://mcp.sentry.dev/mcp/example/app"
+    (tmp_path / ".mcp.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "sentry": {"type": "http", "url": sentry_url},
+                    "appwrite": {"type": "http", "url": APPWRITE_CLOUD_MCP_URL},
+                }
+            }
+        )
+    )
+    agy = tmp_path / ".agents/mcp_config.json"
+    agy.parent.mkdir(parents=True)
+    agy.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "sentry": {"serverUrl": sentry_url},
+                    "appwrite": {"serverUrl": APPWRITE_CLOUD_MCP_URL},
+                }
+            }
+        )
+    )
+    assert sentry_server(tmp_path) == {"url": sentry_url}
+    assert appwrite_server(tmp_path) == {"url": APPWRITE_CLOUD_MCP_URL}

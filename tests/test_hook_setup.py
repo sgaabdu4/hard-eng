@@ -488,6 +488,14 @@ def test_old_python_gets_a_plain_refusal_before_any_import() -> None:
         "reason": stop["reason"],
     }
     assert json.loads(agy_again.stdout) == {}
+    for bypass in (
+        {"parentConversationId": "parent-1"},
+        {"terminationReason": "USER_CANCELED"},
+        {"fullyIdle": False},
+    ):
+        skipped = on_old_python("stop", bypass, "agy")
+        assert "Traceback" not in skipped.stderr, skipped.stderr
+        assert json.loads(skipped.stdout) == {}
     assert json.loads(agy_session.stdout) == {
         "injectSteps": [{"systemMessage": {"systemMessage": stop["reason"]}}]
     }

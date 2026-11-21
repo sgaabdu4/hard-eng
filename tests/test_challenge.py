@@ -18,7 +18,7 @@ from test_plans import edit, sized_branch
 
 FAKE = """#!{python}
 import json, os, sys
-log = {{"argv": sys.argv[1:], "stdin_is_null": os.path.samestat(os.fstat(0), os.stat(os.devnull)), "markers": sorted(k for k in os.environ if k in {{"CLAUDECODE", "GEMINI_HOME"}} or k.startswith(("CODEX_", "ANTIGRAVITY_", "AGY_")))}}
+log = {{"argv": sys.argv[1:], "cwd": os.getcwd(), "stdin_is_null": os.path.samestat(os.fstat(0), os.stat(os.devnull)), "markers": sorted(k for k in os.environ if k in {{"CLAUDECODE", "GEMINI_HOME"}} or k.startswith(("CODEX_", "ANTIGRAVITY_", "AGY_")))}}
 open({log!r}, "w").write(json.dumps(log))
 sys.stderr.write({error!r})
 print({output!r})
@@ -158,6 +158,7 @@ def test_a_reply_without_an_exact_verdict_is_not_a_review(
 ) -> None:
     big(branch)
     fake_cli(tmp_path / "bin", "codex", output)
+    fake_cli(tmp_path / "bin", "agy", output)
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 1
     assert record_of(branch)["outcome"].startswith("not done: codex gave no")
@@ -305,11 +306,20 @@ def test_unavailable_reviewer_records_not_done(
     assert reason in record["outcome"]
 
 
+@pytest.mark.parametrize(
+    ("code", "output", "error"),
+    [(1, "", "Not signed in"), (0, "Looks fine without exact verdict", "")],
+)
 def test_challenge_falls_back_to_second_reviewer_when_first_fails(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    branch: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: int,
+    output: str,
+    error: str,
 ) -> None:
     big(branch)
-    fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    fake_cli(tmp_path / "bin", "codex", output, code, error)
     agy_log = fake_cli(tmp_path / "bin", "agy", "Looks solid.\nVERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 0
@@ -329,12 +339,15 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     ran = json.loads(log.read_text())
     argv = ran["argv"]
     assert ran["stdin_is_null"]
-    assert argv[:3] == ["-p", "--disable-slash-commands", "--settings"]
-    settings = json.loads(argv[3])
+    assert Path(ran["cwd"]).resolve() != branch.resolve()
+    assert argv[:4] == ["-p", "--sandbox", "--disable-slash-commands", "--settings"]
+    settings = json.loads(argv[4])
     assert "write_file(*)" in settings["permissions"]["deny"]
     assert "mcp(*)" in settings["permissions"]["deny"]
     assert "read_file(*)" in settings["permissions"]["allow"]
-    assert "command(git diff)" in settings["permissions"]["allow"]
+    assert "command(find)" not in settings["permissions"]["allow"]
+    assert any("git\\s+-C" in rule for rule in settings["permissions"]["allow"])
+    assert str(branch) in argv[5]
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
 

@@ -9,6 +9,11 @@ REASON = (
     "Start the long job once with run_in_background: true; "
     "the harness tells you when it exits. Read its output file after that notice."
 )
+AGY_REASON = (
+    "HE-NO-FOREGROUND-POLL: this command waits in the foreground with sleep. "
+    "Start the long job once with a short WaitMsBeforeAsync (for example 500) so it runs in the background; "
+    "the harness tells you when it exits. Read its output file after that notice."
+)
 
 
 def decision(payload: object) -> dict[str, object] | None:
@@ -44,7 +49,7 @@ def decision(payload: object) -> dict[str, object] | None:
     if not polls(command):
         return None
     if agy:
-        return {"decision": "deny", "reason": REASON}
+        return {"decision": "deny", "reason": AGY_REASON}
     return {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

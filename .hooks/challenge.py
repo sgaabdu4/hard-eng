@@ -2,7 +2,10 @@
 
 import json
 import os
+import shlex
 import subprocess
+import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 
 from change_size import size_verdict
@@ -54,19 +57,13 @@ AGY_READ_ONLY_SETTINGS = json.dumps(
                 "read_url(*)",
                 "execute_url(*)",
                 "download_url(*)",
-                r"command(regex:git\s+.*--output.*)",
+                r"command(regex:git\s+.*(?:--output|--ext-diff|-c\b).*)",
             ],
             "allow": [
                 "read_file(*)",
-                "command(git diff)",
-                "command(git log)",
-                "command(git show)",
-                "command(git status)",
-                "command(git rev-parse)",
-                "command(git merge-base)",
+                r"command(regex:^git\s+-C\s+(?:'[^']+'|\"[^\"]+\"|\S+)\s+(?:diff|log|show|status|rev-parse|merge-base)(?:\s|$))",
                 "command(rg)",
                 "command(ls)",
-                "command(find)",
             ],
         },
     },
@@ -116,13 +113,18 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
             prompt,
         ]
     if reviewer == "agy":
+        location = (
+            f"The repository to inspect read-only is at {root}. "
+            f"Run git with `git -C {shlex.quote(str(root))}` and read files under {root}.\n"
+        )
         return [
             "agy",
             "-p",
+            "--sandbox",
             "--disable-slash-commands",
             "--settings",
             AGY_READ_ONLY_SETTINGS,
-            prompt,
+            location + prompt,
         ]
     # A Bash(git diff *) rule would also allow --output=<file>; built-in read-only git forms refuse it.
     return [
@@ -305,16 +307,22 @@ def review(
             "",
         )
     prompt = prompt_for(root, point, revision)
+    workspace_context = (
+        tempfile.TemporaryDirectory(prefix="hard-eng-challenge-")
+        if reviewer == "agy"
+        else nullcontext(str(root))
+    )
     try:
-        result = run_in_group(
-            command(reviewer, prompt, root),
-            cwd=root,
-            env=without_host_markers(),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=TIMEOUT_SECONDS,
-        )
+        with workspace_context as workspace:
+            result = run_in_group(
+                command(reviewer, prompt, root),
+                cwd=Path(workspace),
+                env=without_host_markers(),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=TIMEOUT_SECONDS,
+            )
     except FileNotFoundError:
         return f"not done: {reviewer} is not installed", ""
     except subprocess.TimeoutExpired:
@@ -355,6 +363,7 @@ def unavailable(outcome: str, reviewer: str) -> bool:
             f"not done: {reviewer} is not installed",
             f"not done: {reviewer} timed out",
             f"not done: {reviewer} exited ",
+            f"not done: {reviewer} gave no exact VERDICT line",
         )
     )
 
