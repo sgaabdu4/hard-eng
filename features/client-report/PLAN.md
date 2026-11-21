@@ -52,7 +52,7 @@ N/A — skill text, a script and a document template; no screen of this product 
 
 ## Verification
 
-Result: Pending
+Result: Passed
 Evidence: `tests/test_client_report.py` 14 passed; `tests/test_skill_routing.py` and `tests/test_skill_links.py` passed; static gates (format, lint, complexity, annotations, types, dead-code, biome, duplicates, security, secrets) passed. The full test run passed 7287 of 7289; one failure was this branch's (bytecode written into the skill folder by the test import, fixed with `sys.dont_write_bytecode`), and `tests/test_tidy.py::test_session_start_tidies_in_the_background_and_reports_at_the_next_start` failed once under a load average above 600 and passed when run alone.
 Reader: a second reader that read only the skill files found 12 gaps: template found from the current folder, missing check sections passed, `[...]` placeholders passed, `typing.override` failed on Python below 3.12, unclear section list, no source of "before" pictures, template content, chart order, missing sign-in, app address and picture steps, a rule kept in two places, and a trigger that was too wide. All 12 are fixed in this change; the later storage, sign-in and audience wording was reviewed by the Codex review only, so a second reader pass on it stays open; the four script gaps have failing-first tests.
 Review: the independent review at 085604ae found nine items. Fixed: missing `override` decorators, changed selector and `media` attribute not seen, `rel` spelling, a code split by inline tags, picture height guidance, unquoted path, first-report wording, plan record. Not run as a separate item: none.
