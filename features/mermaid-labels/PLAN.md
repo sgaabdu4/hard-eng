@@ -31,8 +31,8 @@ Authority: Autonomous — the coordinator named the rule, the owner line and the
 - [x] An entity code such as `#quot;` counts as one character → `tests/test_pr_text.py::test_an_entity_code_counts_as_one_character`
 - [x] A later block and a `graph` block are checked → `tests/test_pr_text.py::test_a_long_label_in_a_later_block_is_refused`, `tests/test_pr_text.py::test_a_graph_block_is_counted_like_a_flowchart`
 - [x] `subgraph`, `style`, `classDef`, `%%` comments, `linkStyle`, `direction` and front matter are not counted → `tests/test_pr_text.py::test_lines_that_are_not_labels_are_not_counted`, `tests/test_pr_text.py::test_front_matter_is_not_counted`
-- [x] The `checks.md` line states the limit, the reason and the `TD` or `LR` choice → `tests/test_skill_links.py`
-- [x] No PR body template or example in the repository holds a refused label: every refused block is a skill flowchart or a README diagram, which stay as they are.
+- [x] The `checks.md` line states the limit, the reason and the `TD` or `LR` choice → N/A — prose; the check above enforces the limit
+- [x] No PR body template or example in the repository holds a refused label: every refused block is a skill flowchart or a README diagram, which stay as they are → N/A — a scan of the repository, no behavior changes
 
 ## Baseline + execution
 
