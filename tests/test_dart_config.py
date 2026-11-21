@@ -142,7 +142,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
-    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.13.4"}
+    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.14.0"}
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
@@ -199,7 +199,8 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
         ("flutter_skill_lints", "^0.9.1", True),
         ("flutter_skill_lints", None, False),
         ("flutter_skill_lints", "0.13.0", True),
-        ("flutter_skill_lints", "^0.13.4", False),
+        ("flutter_skill_lints", "^0.13.4", True),
+        ("flutter_skill_lints", "^0.14.0", False),
         ("flutter_skill_lints", ">=0.11.0 <0.12.0", False),
         ("flutter_skill_lints", {"path": "../custom-plugin"}, False),
         (
@@ -797,7 +798,7 @@ def test_a_flutter_package_without_flutter_skill_lints_is_refused(
     with pytest.raises(ValueError, match=r"flutter_skill_lints"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
 
-    options["plugins"] = {"flutter_skill_lints": "^0.13.4"}
+    options["plugins"] = {"flutter_skill_lints": "^0.14.0"}
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
 
