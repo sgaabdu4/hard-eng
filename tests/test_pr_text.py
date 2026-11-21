@@ -62,6 +62,102 @@ def test_mermaid_blocks_in_tilde_fences_count_like_backtick_fences() -> None:
     assert body_problem("Undo: revert.\n" + tilde + "Not checked: x\n") is not None
 
 
+def _flow(*lines: str, head: str = "flowchart TD") -> str:
+    body = "\n".join(f"    {line}" for line in lines)
+    return f"```mermaid\n{head}\n{body}\n```\n"
+
+
+def _with(diagram: str) -> str:
+    return "Undo: revert.\n" + _DIAGRAM + diagram + "Not checked: x\n"
+
+
+_FORMS = [
+    'A["{}"] --> B["ok"]',
+    "A[{}] --> B[ok]",
+    "A({}) --> B(ok)",
+    "A([{}]) --> B([ok])",
+    "A{{{}}} --> B{{ok}}",
+    "A{{{{{}}}}} --> B{{{{ok}}}}",
+    "A[({})] --> B[(ok)]",
+    "A(({})) --> B((ok))",
+    "A[[{}]] --> B[[ok]]",
+    "A[ok] -->|{}| B[ok]",
+    'A[ok] -->|"{}"| B[ok]',
+    "A[ok] -- {} --> B[ok]",
+    "A[ok] -.-> B({})",
+    "A[ok] ==> B[ok] --> C[{}]",
+]
+_TOO_LONG = "Tidy the pantry shelves"
+
+
+@pytest.mark.parametrize("form", _FORMS)
+def test_a_mermaid_label_line_over_13_characters_is_refused_by_name(
+    form: str,
+) -> None:
+    problem = body_problem(_with(_flow(form.format(_TOO_LONG))))
+    assert problem is not None
+    assert f'"{_TOO_LONG}"' in problem
+    assert "<br>" in problem
+
+
+@pytest.mark.parametrize("form", _FORMS)
+def test_mermaid_labels_of_13_characters_or_fewer_pass_in_every_form(
+    form: str,
+) -> None:
+    assert body_problem(_with(_flow(form.format("Tidy shelves!")))) is None
+
+
+def test_a_label_of_14_characters_is_refused() -> None:
+    assert body_problem(_with(_flow('A["Tidy shelves!!"]'))) is not None
+
+
+@pytest.mark.parametrize("tag", ["<br>", "<br/>", "<br />", "<BR>"])
+def test_each_line_of_a_label_split_by_a_break_counts_alone(tag: str) -> None:
+    ok = _with(_flow(f'A["Tidy shelves{tag}Wipe jars{tag}Sweep up"]'))
+    assert body_problem(ok) is None
+    bad = _with(_flow(f'A["Tidy shelves{tag}Wipe the counters"]'))
+    problem = body_problem(bad)
+    assert problem is not None
+    assert '"Wipe the counters"' in problem
+
+
+def test_an_entity_code_counts_as_one_character() -> None:
+    assert body_problem(_with(_flow('A["Sort #quot;jars#quot;"]'))) is None
+    problem = body_problem(_with(_flow('A["Sort #quot;jars#quot; now"]')))
+    assert problem is not None
+
+
+def test_a_long_label_in_a_later_block_is_refused() -> None:
+    body = _with(_flow("A[ok] --> B[ok]") + _flow(f'C["{_TOO_LONG}"]'))
+    assert body_problem(body) is not None
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ("subgraph The whole pantry cleanup", "A[ok]", "end"),
+        ("A[ok]", "style A fill:#ffffff,stroke:#333333,stroke-width:2px"),
+        ("A[ok]", "classDef important fill:#f9f,stroke:#333333"),
+        ("A[ok]", "%% a long comment line that nobody draws"),
+        ("A[ok] --> B[ok]", "linkStyle 0 stroke:#ff3,stroke-width:4px"),
+        ("direction LR", "A[ok]:::important"),
+    ],
+)
+def test_lines_that_are_not_labels_are_not_counted(lines: tuple[str, ...]) -> None:
+    assert body_problem(_with(_flow(*lines))) is None
+
+
+def test_front_matter_is_not_counted() -> None:
+    front = "---\ntitle: A long title for the whole picture\n---\n"
+    diagram = f"```mermaid\n{front}flowchart TD\n    A[ok] --> B[ok]\n```\n"
+    assert body_problem(_with(diagram)) is None
+
+
+def test_a_graph_block_is_counted_like_a_flowchart() -> None:
+    diagram = _flow(f'A["{_TOO_LONG}"]', head="graph TD")
+    assert body_problem(_with(diagram)) is not None
+
+
 def _lines(count: int, width: int = 49) -> str:
     return ("a" * width + "\n") * count
 

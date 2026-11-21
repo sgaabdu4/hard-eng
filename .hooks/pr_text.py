@@ -15,6 +15,23 @@ if TYPE_CHECKING:
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_BLOCK = re.compile(r"^[ \t]*(?:```|~~~)[ \t]*mermaid\b", re.MULTILINE)
+MERMAID_FENCE = re.compile(
+    r"^[ \t]*(```|~~~)[ \t]*mermaid\b[^\n]*\n(.*?)(?:^[ \t]*\1|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+MAX_LABEL_CHARACTERS = 13
+FLOW_HEAD = re.compile(r"(?:flowchart|graph)\b")
+NON_LABEL_LINE = re.compile(
+    r"(?:%%|subgraph\b|end\b|style\b|classDef\b|class\b|linkStyle\b|direction\b|click\b)"
+)
+QUOTED_LABEL = re.compile(r'"([^"\n]*)"')
+PIPE_LABEL = re.compile(r"\|([^|\n]*)\|")
+DASH_LABEL = re.compile(r"(?:--|==|-\.)[ \t]+(.+?)[ \t]+(?:-->|==>|\.->|---|===|-\.-)")
+SHAPE_LABEL = re.compile(
+    r"[\w-]+(?:\(\[|\[\(|\(\(|\[\[|\{\{|[\[({])(.*?)[\])}]+(?=\s|;|$)"
+)
+LINE_BREAK = re.compile(r"<br[ \t]*/?>", re.IGNORECASE)
+ENTITY_CODE = re.compile(r"#\w+;")
 NOT_CHECKED_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?Not checked:(.*)$", re.MULTILINE)
 EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
 DEPENDENCY_BOTS = frozenset({"dependabot[bot]", "renovate[bot]"})
@@ -81,6 +98,39 @@ def _size_problem(body: str) -> str | None:
     return None
 
 
+def _flow_lines(block: str) -> list[str]:
+    lines = [line.strip() for line in block.replace("\r\n", "\n").split("\n")]
+    if lines and lines[0] == "---":
+        lines = lines[lines.index("---", 1) + 1 :] if "---" in lines[1:] else []
+    if not lines or not FLOW_HEAD.match(lines[0].lstrip()):
+        return []
+    return [line for line in lines[1:] if line and not NON_LABEL_LINE.match(line)]
+
+
+def _label_problem(body: str) -> str | None:
+    """Name the first flowchart label line over the limit; None when all fit."""
+    for fence in MERMAID_FENCE.finditer(body):
+        for line in _flow_lines(fence.group(2)):
+            labels = QUOTED_LABEL.findall(line)
+            rest = QUOTED_LABEL.sub('""', line)
+            labels += PIPE_LABEL.findall(rest)
+            rest = PIPE_LABEL.sub("", rest)
+            labels += DASH_LABEL.findall(rest)
+            labels += SHAPE_LABEL.findall(DASH_LABEL.sub("", rest))
+            for label in labels:
+                for part in LINE_BREAK.split(label):
+                    shown = part.strip()
+                    size = len(ENTITY_CODE.sub("x", shown))
+                    if size > MAX_LABEL_CHARACTERS:
+                        return (
+                            f'Mermaid label line "{shown}" has {size} characters; '
+                            f"the limit is {MAX_LABEL_CHARACTERS}, because GitHub cuts longer "
+                            "lines at zoom levels other than 100%. "
+                            "Split the label with <br> into shorter lines"
+                        )
+    return None
+
+
 def body_problem(body: str) -> str | None:
     """Name what a PR body lacks or has too much of; None when it passes."""
     if not UNDO_LINE.search(body):
@@ -91,6 +141,8 @@ def body_problem(body: str) -> str | None:
             "one of the old flow and one of the new flow for each main change, "
             "or two or more of the new flows when no old flow exists"
         )
+    if problem := _label_problem(body):
+        return problem
     for found in NOT_CHECKED_LINE.findall(body):
         if not EMPTY_ANSWER.fullmatch(found.strip().rstrip(".")):
             return _size_problem(body)
