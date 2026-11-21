@@ -54,6 +54,7 @@ N/A — no screen changes; Hard Eng has no app UI.
 Result: Pending
 Evidence: Pending — the static gates, the review and the Complete check.
 Review declined: a Mermaid fence inside a blockquote, and the inline code text `<!--` hiding later diagrams :: both need a PR body that quotes or explains Markdown syntax; the size rule already reads comments and fences the same way, and one shared Markdown parser would add a dependency for no reported case.
+Review declined: a node named `title` in an edge, `accDescr` after a semicolon, and links with no spaces before a reused long ID :: each needs a hand-written diagram form that PR bodies do not use, and a fix needs a full Mermaid grammar; a miss only lets a long label through to the viewer, as before this change.
 E2E: N/A — the change is a pure check of PR text, proved by the tests above.
 Real service: N/A — no service is called; the GitHub viewer facts come from the coordinator's measurement.
 Retro: (1) User correction: "diagram labels cut off" → `tests/test_pr_text.py::test_a_mermaid_label_line_over_13_characters_is_refused_by_name`.
