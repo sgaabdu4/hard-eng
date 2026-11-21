@@ -224,6 +224,14 @@ def test_a_literal_mermaid_opener_inside_a_markdown_fence_does_not_end_it() -> N
     assert body_problem(body) is None
 
 
+def test_a_closing_fence_longer_than_its_opener_ends_the_block() -> None:
+    longer = _DIAGRAM.replace("```\n", "````\n")
+    body = "Undo: x\n" + _DIAGRAM + longer + "Not checked: x\n"
+    assert body_problem(body) is None
+    swallowed = "```text\nnote\n````\n" + _flow(f'A["{_TOO_LONG}"]')
+    assert body_problem("Undo: x\n" + _DIAGRAM * 2 + swallowed + "Not checked: x\n")
+
+
 def test_accessibility_text_is_not_a_label() -> None:
     lines = ('accTitle: "A long title for the whole picture"', "A[ok] --> B[ok]")
     assert body_problem(_with(_flow(*lines))) is None
