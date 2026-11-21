@@ -33,8 +33,8 @@ ATTRIBUTE_LABEL = re.compile(
     r"""(\w[\w-]*)@\{[^}\n]*?label:[ \t]*["']([^"'\n]*)["'][^}\n]*\}"""
 )
 SHAPE_LABEL = re.compile(
-    r"(\w[\w-]*)(?:\(\[|\[\(|\(\(|\[\[|\{\{|\[[/\\]?|[({>])[ \t]*"
-    r'("[^"\n]*"|.*?)[ \t]*(?:\]\)|\)\]|\)\)|\]\]|\}\}|[/\\]?\]|[)}])'
+    r"(\w[\w-]*)(?:\(\(\(|\(\[|\[\(|\(\(|\[\[|\{\{|\[[/\\]?|[({>])[ \t]*"
+    r'("[^"\n]*"|.*?)[ \t]*(?:\)\)\)|\]\)|\)\]|\)\)|\]\]|\}\}|[/\\]?\]|[)}])'
 )
 ACC_BLOCK = re.compile(r"accDescr[ \t]*\{")
 CLASS_SUFFIX = re.compile(r":::[\w-]+")
@@ -183,12 +183,17 @@ def _label_problem(body: str) -> str | None:
             for part in LINE_BREAK.split(label):
                 shown = part.strip()
                 if len(shown) > MAX_LABEL_CHARACTERS:
+                    note = (
+                        "; each entity code such as #quot; counts as one character"
+                        if "\x00" in shown
+                        else ""
+                    )
                     return (
                         f'Mermaid label line "{shown.replace(chr(0), "#;")}" has '
                         f"{len(shown)} characters; the limit is {MAX_LABEL_CHARACTERS}, "
                         "because GitHub cuts longer lines at zoom levels other than 100%. "
-                        "Split the label with <br> into shorter lines, "
-                        "or give a long node ID a short one"
+                        'Split the label with <br> into shorter lines, such as A["Pull request<br>opened"]'
+                        f"{note}"
                     )
     return None
 
