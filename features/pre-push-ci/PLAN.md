@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-A push to a branch whose base is `develop` runs only the commit secret scan; CI runs the full check, sharded on hosted machines. Non-goals: any change to the pre-push code, to CI, or to installed projects' defaults.
+A push to a branch whose base is `develop` runs only the commit secret scan; CI runs the full check, sharded on hosted machines and mutation testing included. The shard merge job reads the shipping policy on a runner with no PyYAML, so the merge skips the workflow check, because it already runs inside that workflow. Non-goals: any change to CI jobs or to installed projects' defaults.
 
 ## Sources + coverage
 
@@ -12,7 +12,7 @@ Sources: N/A — the request is the user's chat message ("why can't all the othe
 
 ## Repository context
 
-Owners: `hard-eng.gates.json` `shipping` (the setting); `.hooks/ci_jobs.py::load_checked_policy` (its two conditions); `.hooks/ship_actions.py::base_leaves_checks_to_ci` (it takes effect only when the remote base says `"ci"`).
+Owners: `hard-eng.gates.json` `shipping` (the setting); `.hooks/ci_jobs.py::load_checked_policy` (its two conditions); `.hooks/ship_actions.py::base_leaves_checks_to_ci` (it takes effect only when the remote base says `"ci"`); `.hooks/gate_runner.py::check` and `gate_config.load_groups` (the merge passes `workflow_checked`).
 Same cause: N/A — no earlier change of this setting here. Installed projects already use `"ci"` through the same code.
 Single source: N/A — one key in the one config file; no copy.
 
@@ -25,7 +25,8 @@ Authority: Autonomous — the user asked for it in chat on 2026-11-21 ("do it no
 ## Acceptance + steps
 
 - [x] The setting meets both conditions → `load_checked_policy` on this branch printed `policy ok`: the `secrets-history` gate is present, `scan_git_history` is on, and `.github/workflows/hard-eng.yml` runs `hard-eng.py check` on every pull request.
-- [x] Pre-push under a base that says `"ci"` runs only the secret scan → `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_runs_one_cheap_check_and_no_full_gate_when_mutation_is_off` (existing test of the code path this setting turns on).
+- [x] Pre-push under a base that says `"ci"` runs only the secret scan → `pre_push_mutation_seconds` is 0 in this repository, so no mutation run is left (default 120); `tests/test_push_check.py::test_a_base_that_leaves_checks_to_ci_runs_one_cheap_check_and_no_full_gate_when_mutation_is_off` covers the code path with mutation off.
+- [x] The shard merge job loads the "ci" policy with no PyYAML → `tests/test_shipping_policy.py::test_a_run_inside_the_workflow_loads_the_ci_policy_without_pyyaml` and `tests/test_shard_local.py::test_the_merge_loads_the_groups_as_a_run_inside_the_workflow`; a "local" policy still loads: `tests/test_shipping_policy.py::test_a_local_policy_loads_without_pyyaml`.
 - [x] A leaked secret is still refused → `tests/test_push_check.py::test_the_commit_secret_scan_blocks_a_leaked_secret_when_checks_are_left_to_ci`.
 
 ## Baseline + execution

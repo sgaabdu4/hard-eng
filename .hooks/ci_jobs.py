@@ -368,8 +368,10 @@ def migrate_runner_variable(content: str) -> str:
     return content
 
 
-def load_checked_policy(root: Path, config: GateConfig) -> None:
-    """Load the shipping policy; leaving the push check to CI needs that CI and a commit secret scan."""
+def load_checked_policy(
+    root: Path, config: GateConfig, workflow_checked: bool = False
+) -> None:
+    """Load the shipping policy; leaving the push check to CI needs that CI and a commit secret scan. A run inside the workflow needs no check of the workflow."""
     from shipping import ShippingError, load_policy
 
     policy = load_policy(root)
@@ -383,7 +385,7 @@ def load_checked_policy(root: Path, config: GateConfig) -> None:
             "scan_git_history on: pre-push still scans the pushed commits for secrets"
         )
     sharded = any("shards" in g for p in config["packages"] for g in p["checks"])
-    if gap := ci_check_gap(root, sharded):
+    if not workflow_checked and (gap := ci_check_gap(root, sharded)):
         raise ShippingError(
             f'shipping pre_push_checks "ci" needs a workflow that runs `hard-eng.py check` '
             f"on every pull request: {gap}. Branch protection cannot be read offline, "

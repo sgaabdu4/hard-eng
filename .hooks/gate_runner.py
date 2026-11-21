@@ -693,7 +693,10 @@ def check(
         )
         start = clean_start(lock, ROOT, base, plan_stage, partial)
         every = load_groups(
-            ROOT, plans.plan_base(ROOT, base, plan_stage), dependents=dependents
+            ROOT,
+            plans.plan_base(ROOT, base, plan_stage),
+            dependents=dependents,
+            workflow_checked=shard == "merge",
         )
         groups = quick_groups(language_groups(every, languages), quick, installed)
         if shard:

@@ -854,6 +854,7 @@ def load_groups(
     *,
     dependents: bool = True,
     starting: bool = False,
+    workflow_checked: bool = False,
 ) -> list[Group]:
     from plans import validate_documents
 
@@ -872,7 +873,7 @@ def load_groups(
     if "shipping" in config:
         from ci_jobs import load_checked_policy
 
-        load_checked_policy(root, config)
+        load_checked_policy(root, config, workflow_checked)
     raw = listed_names(root)
     listed = repository_files(root, raw)
     start = len(str(root)) + 1
