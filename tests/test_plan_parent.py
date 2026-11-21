@@ -230,3 +230,19 @@ def test_a_parent_path_with_a_dot_segment_is_found(
     step_branch(repository, completed_plan, ready_plan(completed_plan))
     write(repository, CHILD, with_parent(completed_plan, "./features/effort/PLAN.md"))
     assert check(repository) == "Complete"
+
+
+def test_a_lowercase_step_file_name_is_read_by_the_pr_text_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plans = pair()
+    plans[CHILD.replace("PLAN", "plan")] = plans.pop(CHILD)
+    assert pr_problem(tmp_path / "a", monkeypatch, plans) is None
+    plans = {
+        PARENT: plans[PARENT].replace(
+            "Status: Ready", "Parent: ./" + PARENT + "\nStatus: Ready"
+        )
+    }
+    assert "ux_reference says N/A" in str(
+        pr_problem(tmp_path / "b", monkeypatch, plans)
+    )
