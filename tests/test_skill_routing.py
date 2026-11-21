@@ -123,6 +123,14 @@ ROUTES = [
         "building-flutter-apps",
     ),
     (
+        "Make a PDF report for the client that shows what we changed, with before and after pictures",
+        "client-report",
+    ),
+    (
+        "Send the client a PDF of the changes and the questions they must answer",
+        "client-report",
+    ),
+    (
         "Run the Trello coordinator now: answer every card comment and move cards with proof",
         "trello-coordinator",
     ),
