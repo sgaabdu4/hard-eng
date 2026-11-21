@@ -177,24 +177,56 @@ def test_a_step_cannot_be_open_while_its_parent_is_complete(
         validate_plans(repository, base="HEAD", stage="Ready")
 
 
+def pr_problem(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plans: dict[str, str]):
+    from test_pr_text import _VALID
+
+    files: list[dict[str, object]] = [VISIBLE_FILE]
+    files += [{"filename": name, "status": "added"} for name in plans]
+    body = f"{_VALID}\n{UNCHANGED_NOTE}"
+    return ci_problem(tmp_path, monkeypatch, body, files, plans)
+
+
+MOCK = "N/A — the redesign mock sits in the parent plan"
+UNCHANGED = "N/A — unchanged: ![Before](a.png) ![After](a.png) — Home screen"
+
+
+def pair(parent_line: str = f"Parent: {PARENT}") -> dict[str, str]:
+    reference = "\n\n## ux_reference\n{}\n\n## Verification\n"
+    return {
+        PARENT: "# Effort\nStatus: Ready" + reference.format(MOCK),
+        CHILD: f"# Step\nStatus: Complete\n{parent_line}" + reference.format(UNCHANGED),
+    }
+
+
 def test_the_pr_text_check_skips_a_parent_plan_beside_its_step(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from test_pr_text import _VALID
-
-    mock = "N/A — the redesign mock sits in the parent plan"
-    unchanged = "N/A — unchanged: ![Before](a.png) ![After](a.png) — Home screen"
-    parent = f"# Effort\nStatus: Ready\n\n## ux_reference\n{mock}\n\n## Verification\n"
-    step = f"# Step\nStatus: Complete\nParent: {PARENT}\n\n## ux_reference\n{unchanged}\n\n## Verification\n"
-    files: list[dict[str, object]] = [
-        VISIBLE_FILE,
-        {"filename": PARENT, "status": "added"},
-        {"filename": CHILD, "status": "added"},
-    ]
-    body = f"{_VALID}\n{UNCHANGED_NOTE}"
-    plans = {PARENT: parent, CHILD: step}
-    assert ci_problem(tmp_path / "a", monkeypatch, body, files, plans) is None
-    plans[CHILD] = step.replace(f"Parent: {PARENT}\n", "")
-    assert "ux_reference says N/A" in str(
-        ci_problem(tmp_path / "b", monkeypatch, body, files, plans)
+    assert pr_problem(tmp_path / "a", monkeypatch, pair()) is None
+    assert (
+        pr_problem(
+            tmp_path / "b", monkeypatch, pair("Parent: ./features/Effort/plan.md")
+        )
+        is None
     )
+    unlinked = pair("Parent: features/other/PLAN.md")
+    assert "ux_reference says N/A" in str(
+        pr_problem(tmp_path / "c", monkeypatch, unlinked)
+    )
+
+
+def test_a_document_that_names_a_plan_as_its_parent_does_not_skip_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plans = pair()
+    plans["docs/rollout/PLAN.md"] = plans.pop(CHILD)
+    assert "ux_reference says N/A" in str(
+        pr_problem(tmp_path / "a", monkeypatch, plans)
+    )
+
+
+def test_a_parent_path_with_a_dot_segment_is_found(
+    repository: Path, completed_plan: str
+) -> None:
+    step_branch(repository, completed_plan, ready_plan(completed_plan))
+    write(repository, CHILD, with_parent(completed_plan, "./features/effort/PLAN.md"))
+    assert check(repository) == "Complete"
