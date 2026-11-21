@@ -49,12 +49,65 @@ def test_a_report_that_sets_style_in_a_tag_or_links_a_sheet_is_refused(
     ]
 
 
+def test_a_changed_selector_or_style_tag_attribute_is_refused(tmp_path: Path) -> None:
+    template = write(
+        tmp_path, "template.html", style="<style>.box.fix { color: red; }</style>"
+    )
+    selector = write(
+        tmp_path, "selector.html", style="<style>.box .fix { color: red; }</style>"
+    )
+    media = write(
+        tmp_path,
+        "media.html",
+        style='<style media="screen">.box.fix { color: red; }</style>',
+    )
+    spaced = write(
+        tmp_path,
+        "spaced.html",
+        style="<style>\n.box.fix  {\n  color : red ;\n}\n</style>",
+    )
+    differs = [
+        (
+            "report CSS differs from the saved template; "
+            "copy the template and change only the text"
+        )
+    ]
+    assert problems(selector, template) == differs
+    assert problems(media, template) == differs
+    assert problems(spaced, template) == []
+
+
+def test_a_stylesheet_link_in_any_spelling_is_refused(tmp_path: Path) -> None:
+    template = write(tmp_path, "template.html")
+    linked = write(
+        tmp_path,
+        "linked.html",
+        style=STYLE + '<link rel=" StyleSheet " href="other.css">',
+    )
+    assert problems(linked, template) == [
+        "report links a stylesheet; the template holds all CSS"
+    ]
+
+
+def test_a_code_split_by_inline_tags_is_refused_and_block_text_is_not_joined(
+    tmp_path: Path,
+) -> None:
+    template = write(tmp_path, "template.html")
+    split = write(tmp_path, "split.html", body="<p>See <strong>A</strong>1.</p>")
+    apart = write(tmp_path, "apart.html", body="<h2>Stage A</h2><p>1 test passes.</p>")
+    assert problems(split, template) == [
+        "text holds the code 'A1'; write the item in full"
+    ]
+    assert problems(apart, template) == []
+
+
 def test_a_missing_template_is_refused(tmp_path: Path) -> None:
     report = write(tmp_path, "report.html")
     assert problems(report, tmp_path / "template.html") == [
         (
             f"no saved template at {tmp_path / 'template.html'}; "
-            "copy assets/starter.html there, commit it, then build the report"
+            "copy assets/starter.html there, show the user the report, "
+            "and commit it only after approval"
         )
     ]
 

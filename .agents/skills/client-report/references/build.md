@@ -24,7 +24,7 @@ Words: about 80% ASD-STE100, sentences of 20 words or fewer, one fact in each se
 ## PDF and the page look
 
 - Chrome prints the PDF. The path is for macOS; use the installed Chrome on another system:
-  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer --print-to-pdf=report.pdf file://$PWD/report.html`
+  `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer --print-to-pdf=report.pdf "file://$PWD/report.html"`
 - The template's print CSS uses block layout, `break-inside: avoid` on table cells, figures and boxes, and `@page` margins. Colour labels print because of `print-color-adjust: exact`.
 - Render every page: `pdftoppm -r 90 -png report.pdf page` when it exists. Else `uv run --no-project --with pymupdf python -I -c "import sys,pymupdf; [p.get_pixmap(dpi=90).save(f'{sys.argv[2]}-{i+1}.png') for i,p in enumerate(pymupdf.open(sys.argv[1]))]" report.pdf page`.
 - Open each page image. Look for blank gaps over a quarter of a page, cut-off pictures, text that cannot be read, and a heading alone at the foot of a page. Fix the report, print again, look again. Write down what you saw on each page.

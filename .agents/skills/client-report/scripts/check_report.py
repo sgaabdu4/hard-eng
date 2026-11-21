@@ -2,9 +2,12 @@ import argparse
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import override
 
 CODE = re.compile(r"\b[A-Z][0-9]+\b")
 SHOWN = ("alt", "title", "aria-label")
+INLINE = {"a", "b", "code", "em", "i", "mark", "small", "span", "strong", "u"}
+SYMBOLS = re.compile(r"\s*([{}:;,>+~])\s*")
 
 
 class Page(HTMLParser):
@@ -16,16 +19,26 @@ class Page(HTMLParser):
         self.linked_sheet = False
         self.inside = ""
 
+    @override
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.inside = tag if tag in {"style", "script"} else ""
+        if tag == "style":
+            self.css.append(f"<style {sorted(attrs)}>")
+        if tag not in INLINE:
+            self.text.append(" ")
         for name, value in attrs:
             self.inline_style |= name == "style"
-            self.text += [value or ""] if name in SHOWN else []
-        self.linked_sheet |= tag == "link" and ("rel", "stylesheet") in attrs
+            self.text += [" ", value or "", " "] if name in SHOWN else []
+        rel = dict(attrs).get("rel") or ""
+        self.linked_sheet |= tag == "link" and "stylesheet" in rel.lower().split()
 
+    @override
     def handle_endtag(self, tag: str) -> None:
         self.inside = ""
+        if tag not in INLINE:
+            self.text.append(" ")
 
+    @override
     def handle_data(self, data: str) -> None:
         if self.inside == "style":
             self.css.append(data)
@@ -40,7 +53,7 @@ def read(path: Path) -> Page:
 
 
 def squeeze(css: list[str]) -> str:
-    return re.sub(r"\s+", "", "".join(css))
+    return SYMBOLS.sub(r"\1", re.sub(r"\s+", " ", "".join(css))).strip()
 
 
 def problems(report: Path, template: Path) -> list[str]:
@@ -48,7 +61,8 @@ def problems(report: Path, template: Path) -> list[str]:
         return [
             (
                 f"no saved template at {template}; "
-                "copy assets/starter.html there, commit it, then build the report"
+                "copy assets/starter.html there, show the user the report, "
+                "and commit it only after approval"
             )
         ]
     page = read(report)
@@ -64,7 +78,7 @@ def problems(report: Path, template: Path) -> list[str]:
         found.append("report links a stylesheet; the template holds all CSS")
     found += [
         f"text holds the code {code!r}; write the item in full"
-        for code in CODE.findall(" ".join(page.text))
+        for code in CODE.findall("".join(page.text))
     ]
     return found
 

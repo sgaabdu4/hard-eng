@@ -1,6 +1,6 @@
 # Client report skill
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -52,8 +52,13 @@ N/A — skill text, a script and a document template; no screen of this product 
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: Required — sample report from invented data: a local static page as the app, picture steps, PDF, every page image; Complete needs the page-by-page record.
+Result: Passed
+Evidence: `tests/test_client_report.py` 10 passed; `tests/test_skill_routing.py` and `tests/test_skill_links.py` passed; static gates (format, lint, complexity, annotations, types, dead-code, biome, duplicates, security, secrets) passed. The full test run passed 7287 of 7289; one failure was this branch's (bytecode written into the skill folder by the test import, fixed with `sys.dont_write_bytecode`), and `tests/test_tidy.py::test_session_start_tidies_in_the_background_and_reports_at_the_next_start` failed once under a load average above 600 and passed when run alone.
+Reader: not run by a second agent, because the builder brief forbids subagents. The independent Codex review read the skill and reference text; its findings were fixed.
+Review: the independent review at 085604ae found nine items. Fixed: missing `override` decorators, changed selector and `media` attribute not seen, `rel` spelling, a code split by inline tags, picture height guidance, unquoted path, first-report wording, plan record. Not run as a separate item: none.
+E2E: Passed. Sample report from invented data (an invented plant shop, a manager and a clerk role) on a local static page. Pictures: `browser measure` at width 560 with an injected 4 px outline, offset 4 px, no transition, 600 ms wait; the order list emails showed as `[hidden]`. Chrome printed a 4 page A4 PDF. Every page was rendered to an image (`pdftoppm`, and `pymupdf` as the fallback) and looked at. Page 1: title, stages box, correction box, first rows of the live table; no gap. Page 2: the table end row, then both before and after pictures side by side, red lines visible, captions under each; empty space under them because the next block (the clerk picture) did not fit, which is the intended no-cut behaviour. Page 3: clerk picture with its red line, the "no live copy" note, checks, not checked, our team list, first question box. Page 4: remaining questions, lists, undo steps; end half empty. No cut-off picture, no unreadable text, no heading alone at a page foot. The first run at width 800 gave tall pictures with blank space in them; width 560 fixed it.
 Real service: N/A — no outside service is called; the sample used a local static page by design.
-Retro: Pending
+Retro: (1) The full test run found a bytecode file that the new test wrote into a copied skill folder -> `sys.dont_write_bytecode` in the test; no rule change, the existing setup test caught it. (2) The review found the check weaker than its claim (selector and media changes passed) -> tests added first; None for the rules.
+
+Delivery target: PR
+Delivery: Pending — draft PR into develop; no merge until develop is open.
