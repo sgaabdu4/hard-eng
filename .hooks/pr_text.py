@@ -264,7 +264,7 @@ def ui_problem(
             return f"The plan {plan} cannot be read at the PR head ({error})"
     parents = named_parents(texts)
     for plan, text in texts.items():
-        if plan.lower() not in parents and (
+        if plan not in parents and (
             problem := reference_problem(text, visible, body, note)
         ):
             return problem

@@ -87,12 +87,20 @@ def may_ride_along(
 
 
 def named_parents(texts: Mapping[str, str]) -> set[str]:
-    """The lowercase paths that the plan texts name in a Parent line."""
-    return {
-        found.lower()
-        for text in texts.values()
-        for found in PARENT_LINE.findall(text.split("\n## ", 1)[0])
-    }
+    """The plans among the texts that another plan below their folder names as its parent."""
+    from plans import is_plan_path
+
+    held = {PurePosixPath(name).as_posix().lower(): name for name in texts}
+    found = set()
+    for name, text in texts.items():
+        if not is_plan_path(Path(name)):
+            continue
+        for line in PARENT_LINE.findall(text.split("\n## ", 1)[0]):
+            parent = held.get(PurePosixPath(line).as_posix().lower())
+            folder = PurePosixPath(parent).parent if parent else None
+            if folder and PurePosixPath(name).parent.is_relative_to(folder):
+                found.add(parent)
+    return found
 
 
 def close_problem(root: Path, path: Path) -> None:
