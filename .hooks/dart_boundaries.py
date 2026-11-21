@@ -140,6 +140,52 @@ def validate_dart_plugins(options: "JsonObject") -> None:
         )
 
 
+def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[Path]:
+    raw = options.get("include")
+    entries = [raw] if isinstance(raw, str) else raw if isinstance(raw, list) else []
+    base = root.resolve()
+    found: list[Path] = []
+    for entry in entries:
+        if not isinstance(entry, str) or entry.startswith("package:"):
+            continue
+        candidate = (path.parent / entry).resolve()
+        if candidate.is_file() and candidate.is_relative_to(base):
+            found.append(candidate)
+    return found
+
+
+def migrate_included_dart_plugins(
+    root: Path,
+    path: Path,
+    options: "JsonObject",
+    source: Path,
+    changes: dict[str, str],
+    seen: set[Path] | None = None,
+) -> None:
+    from copy import deepcopy
+
+    import yaml
+
+    from project_setup import migrate_dart_plugins
+
+    visited = seen if seen is not None else {path.resolve()}
+    for included in local_dart_includes(root, path, options):
+        if included in visited:
+            continue
+        visited.add(included)
+        relative = included.relative_to(root.resolve()).as_posix()
+        raw = changes.get(relative)
+        child = cast(
+            "JsonObject",
+            yaml.safe_load(raw) if raw is not None else dart_options(included),
+        )
+        original = deepcopy(child)
+        migrate_dart_plugins(child, source)
+        if child != original:
+            changes[relative] = yaml.safe_dump(child, sort_keys=False)
+        migrate_included_dart_plugins(root, included, child, source, changes, visited)
+
+
 def dart_options(path: Path) -> DartOptions:
     try:
         import yaml
@@ -226,6 +272,7 @@ def validate_dart_exclusions(
     children: frozenset[str] = frozenset(),
     holder: Path | None = None,
     origin: Path | None = None,
+    marked: frozenset[str] = frozenset(),
 ) -> None:
     """Refuse excludes of project files; holder is the file that writes them, and a holder in a parent folder is that folder's own options, included here. An inherited pattern is judged from origin, the folder of the options file the analyzer reads."""
     from project_setup import FLUTTER_PLATFORM_ROOTS, dependency_command
@@ -286,7 +333,7 @@ def validate_dart_exclusions(
             and (Path(name).suffix == ".dart" or (directory / name).is_symlink())
         )
     names = [str(path.relative_to(directory)) for path in matches]
-    generated = generated_sources(directory, names)
+    generated = generated_sources(directory, names) | marked
     for path in matches:
         relative = path.relative_to(directory)
         if ".dart_tool/**" in values and relative.parts[0] == ".dart_tool":

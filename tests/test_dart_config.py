@@ -811,3 +811,41 @@ def test_a_flutter_package_without_flutter_skill_lints_is_refused(
     pubspec.write_text("name: tool\nenvironment:\n  sdk: ^3.9.0\n")
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
+
+
+def test_dart_setup_migrates_locally_included_plugin_profile(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """An included local analysis profile with an older plugin pin must migrate alongside the root options."""
+    shared = tmp_path / "shared_options.yaml"
+    shared.write_text(
+        yaml.safe_dump(
+            {"plugins": {"flutter_skill_lints": "^0.13.4", "riverpod_lint": "^3.1.9"}},
+            sort_keys=False,
+        )
+    )
+    package = tmp_path / "app"
+    package.mkdir()
+    (package / "pubspec.yaml").write_text(
+        "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n"
+    )
+    (package / "analysis_options.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "include": "../shared_options.yaml",
+                "plugins": {"flutter_skill_lints": "^0.13.4"},
+            },
+            sort_keys=False,
+        )
+    )
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, package, {"path": "app", "checks": []}, changes)
+    for name, content in changes.items():
+        (tmp_path / name).write_text(content)
+    assert (
+        yaml.safe_load(shared.read_text())["plugins"]["flutter_skill_lints"]
+        == "^0.14.0"
+    )
+    runner.validate_typing(package, "dart", ["lib"])

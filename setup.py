@@ -223,6 +223,7 @@ def apply_dart_typing(
     required: dict[str, JsonObject],
     directory: Path,
     children: frozenset[str] = frozenset(),
+    marked: frozenset[str] = frozenset(),
 ) -> None:
     from dart_boundaries import dart_rule_settings, validate_dart_exclusions
     from settings_merge import merge
@@ -258,7 +259,7 @@ def apply_dart_typing(
                     current.pop("strict-raw-types", None)
                 merge(current, settings, (section, group))
             else:
-                validate_dart_exclusions(directory, current, children)
+                validate_dart_exclusions(directory, current, children, marked=marked)
 
 
 def configure_dart(
@@ -278,16 +279,23 @@ def configure_dart(
         add_exclusions,
         dart_options,
         localization_exclusions,
+        migrate_included_dart_plugins,
     )
 
     options = cast("JsonObject", dart_options(target)) if target.exists() else {}
     original = deepcopy(options)
     existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
+    migrate_included_dart_plugins(root, target, options, SOURCE, changes)
+    localized = localization_exclusions(directory)
     apply_dart_typing(
-        options, cast("dict[str, JsonObject]", DART_TYPING), directory, children
+        options,
+        cast("dict[str, JsonObject]", DART_TYPING),
+        directory,
+        children,
+        marked=localized,
     )
-    add_exclusions(options, children | localization_exclusions(directory))
+    add_exclusions(options, children | localized)
     content = (
         existing
         if target.exists() and options == original
