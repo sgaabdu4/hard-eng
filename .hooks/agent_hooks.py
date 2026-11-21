@@ -214,7 +214,7 @@ def project_pre_push(root: Path, hook: Path) -> Path:
 
 def hook_events(agent: str) -> dict[str, str]:
     if agent not in HOOK_FILES:
-        raise ValueError("Unsupported native agent; use Claude or Codex")
+        raise ValueError("Unsupported native agent; use Claude, Codex or Antigravity")
     return {"session": "SessionStart", "stop": "Stop"}
 
 
@@ -320,6 +320,7 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
 HOOK_FILES = {
     "claude": ".claude/settings.json",
     "codex": ".codex/hooks.json",
+    "agy": ".agents/hooks.json",
 }
 
 
@@ -431,7 +432,9 @@ def context_output(native: str, message: str) -> JsonObject:
 
 
 def session_state(root: Path, payload: JsonObject) -> Path | None:
-    identifier = payload.get("session_id", payload.get("sessionId"))
+    identifier = payload.get(
+        "session_id", payload.get("sessionId", payload.get("conversationId"))
+    )
     if not isinstance(identifier, str) or not HOOK_IDENTIFIER.fullmatch(identifier):
         return None
     return root / ".hard-eng/sessions" / (identifier + ".json")
@@ -808,15 +811,26 @@ def unchanged_notice(root: Path, notice: str) -> JsonObject:
 
 
 def paused_turn(payload: JsonObject) -> JsonObject | None:
-    if payload.get("stop_hook_active") is True:
+    if (
+        payload.get("parentConversationId")
+        or payload.get("terminationReason") == "USER_CANCELED"
+    ):
+        return {}
+    if (
+        payload.get("stop_hook_active") is True
+        or payload.get("continuationActive") is True
+    ):
         return {
             "systemMessage": "Report blockers honestly; don't claim a pass; no stop-hook loop."
         }
     tasks = payload.get("background_tasks")
-    if isinstance(tasks, list) and any(
-        isinstance(task, dict)
-        and task.get("type") in {"subagent", "workflow", "teammate"}
-        for task in tasks
+    if payload.get("fullyIdle") is False or (
+        isinstance(tasks, list)
+        and any(
+            isinstance(t, dict)
+            and t.get("type") in {"subagent", "workflow", "teammate"}
+            for t in tasks
+        )
     ):
         return {
             "systemMessage": "Hard Eng: background agents still editing; checks run after they finish. Don't claim done."
@@ -889,7 +903,10 @@ def checked_changes(
 
     base, current, changed, notice, tip = scope
     claim = str(
-        payload.get("last_assistant_message", payload.get("lastAssistantMessage"))
+        payload.get(
+            "last_assistant_message",
+            payload.get("lastAssistantMessage", payload.get("finalModelOutput")),
+        )
     )
     # HE Build keeps a plan Ready until its final gate; only its handoff needs Complete.
     building = not SHIP_CLAIM.search(claim) and build_in_progress(
@@ -944,6 +961,7 @@ def checked_changes(
 
 
 def handle_event(root: Path, event: str, agent: str) -> int:
+    output: JsonObject
     try:
         payload = json.load(sys.stdin)
         if not isinstance(payload, dict):
@@ -953,23 +971,28 @@ def handle_event(root: Path, event: str, agent: str) -> int:
             raise ValueError("Unsupported native hook event")
         if event == "stop":
             output = completion(root, payload, agent)
+        elif agent == "agy" and payload.get("parentConversationId"):
+            output = {"injectSteps": []}
         else:
             message = session_context(root, payload)
-            # Codex loads AGENTS.override.md natively; Claude loads only AGENTS.md.
-            if agent == "claude" and (root / "AGENTS.override.md").is_file():
+            # Codex loads AGENTS.override.md natively; Claude and Antigravity load AGENTS.md.
+            if agent in {"claude", "agy"} and (root / "AGENTS.override.md").is_file():
                 message += "\nProject rules also in AGENTS.override.md → read it now + follow it."
             output = context_output(native, message)
-            output["systemMessage"] = "Hard Eng startup: " + " ".join(
-                message.splitlines()[:2]
-            )
+            summary = "Hard Eng startup: " + " ".join(message.splitlines()[:2])
+            output["systemMessage"] = message if agent == "agy" else summary
     except (OSError, ValueError, TypeError) as error:
         message = (
             f"Hard Eng hook failed: {error}. Continue; don't claim verification passed."
         )
         output = (
-            {"systemMessage": message}
-            if event != "stop"
-            else {"decision": "block", "reason": message}
+            {"decision": "block", "reason": message}
+            if event == "stop"
+            else {"systemMessage": message}
         )
+    if agent == "agy" and "injectSteps" not in output:
+        from settings_merge import agy_event_output
+
+        output = agy_event_output(event, output)
     print(json.dumps(output))
     return 0

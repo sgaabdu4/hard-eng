@@ -115,6 +115,7 @@ PUSH_LOOKUP_SECONDS = 120
 RELEASE_GATE_SECONDS = 3720
 RERUN = "Rerun this job once the Canary run for develop's push has finished."
 AGENTS = ("claude", "codex")
+SELECTABLE_AGENTS = (*AGENTS, "agy")
 TASK = (
     "Follow AGENTS.md and the full Hard Eng workflow, including any plan it requires. "
     "In this project's main language, add a function that returns the sum of two "
@@ -456,6 +457,8 @@ def prepare(
 def agent_command(agent: str, work: Path) -> list[str]:
     if agent == "claude":
         return ["claude", "-p", "--dangerously-skip-permissions", TASK]
+    if agent == "agy":
+        return ["agy", "-p", "--dangerously-skip-permissions", TASK]
     # Codex lists untrusted project hooks but runs none; this release's hooks are under test.
     return [
         *("codex", "exec", "--enable", "hooks", "--dangerously-bypass-hook-trust"),
@@ -608,7 +611,7 @@ def minutes(seconds: float) -> str:
 def time_summary(times: list[tuple[str, str, float]], wall: float) -> list[str]:
     """Time per stage, so the next speed change starts from numbers; stays local."""
     lines = [f"Time: {minutes(wall)} from start to end."]
-    for stage in ("prepare", *AGENTS):
+    for stage in ("prepare", *SELECTABLE_AGENTS):
         spent = sorted(
             (seconds, label) for name, label, seconds in times if name == stage
         )
@@ -777,7 +780,10 @@ def arguments() -> argparse.Namespace:
         "--kind", action="append", choices=KINDS, help="rerun only these targets"
     )
     parser.add_argument(
-        "--agent", action="append", choices=AGENTS, help="rerun only these agents"
+        "--agent",
+        action="append",
+        choices=SELECTABLE_AGENTS,
+        help="rerun only these agents",
     )
     parser.add_argument(
         "--target",

@@ -117,3 +117,55 @@ def test_registered_hook_allows_commands_outside_a_repository(tmp_path: Path) ->
         check=False,
     )
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+
+
+def test_agy_run_command_foreground_sleep_wait_is_denied() -> None:
+    """HE-NO-FOREGROUND-POLL denies Antigravity main-session sleep loops and outputs nothing when allowed."""
+    blocked = json.loads(
+        run(
+            {
+                "toolCall": {
+                    "id": "call-1",
+                    "name": "run_command",
+                    "args": {"CommandLine": "while ! test -f done; do sleep 2; done"},
+                }
+            }
+        )
+    )
+    assert blocked["decision"] == "deny"
+    assert "HE-NO-FOREGROUND-POLL" in blocked["reason"]
+    assert "Do not poll with sleep" in blocked["reason"]
+    assert "WaitMsBeforeAsync" in blocked["reason"]
+    assert "run_in_background" not in blocked["reason"]
+    for allowed in (
+        {
+            "toolCall": {
+                "id": "call-2",
+                "name": "run_command",
+                "args": {"CommandLine": "sleep 600", "IsDaemon": True},
+            }
+        },
+        {
+            "parentConversationId": "parent-1",
+            "toolCall": {
+                "id": "call-3",
+                "name": "run_command",
+                "args": {"CommandLine": "sleep 600"},
+            },
+        },
+        {
+            "toolCall": {
+                "id": "call-4",
+                "name": "run_command",
+                "args": {"CommandLine": "pytest -x"},
+            }
+        },
+        {
+            "toolCall": {
+                "id": "call-5",
+                "name": "read_file",
+                "args": {"Path": "sleep 600"},
+            }
+        },
+    ):
+        assert run(allowed) == ""
