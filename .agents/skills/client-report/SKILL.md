@@ -10,12 +10,12 @@ Output = one PDF for a client: what is live, what changed, what is left, who mus
 ## Routes
 
 ```mermaid
-flowchart LR
-  T{Template at docs/client-report/template.html?} -->|Yes| R[Reuse it]
-  T -->|No| S[Copy assets/starter.html there, get approval, commit]
+flowchart TD
+  T{"Saved<br>template<br>in project?"} -->|Yes| R["Reuse it"]
+  T -->|No| S["Copy starter<br>there, get<br>approval,<br>commit"]
   S --> R
-  R --> P[references/pictures.md]
-  P --> B[references/build.md]
+  R --> P["Pictures<br>guide"]
+  P --> B["Build<br>guide"]
   click P "references/pictures.md"
   click B "references/build.md"
 ```
