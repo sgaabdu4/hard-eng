@@ -123,7 +123,14 @@ def test_only_a_merge_inside_the_workflow_skips_the_python_runtime_setup(
     monkeypatch.setattr(
         tool_setup, "ensure_python_runtime", lambda: started.append("runtime")
     )
-    monkeypatch.setattr(runner, "check", lambda **_options: 0)
+
+    def checked(**_options: object) -> int:
+        return 0
+
+    def no_filter(_arguments: Namespace) -> list[str]:
+        return []
+
+    monkeypatch.setattr(runner, "check", checked)
     monkeypatch.setenv("GITHUB_ACTIONS", actions)
     arguments = Namespace(
         shard="merge",
@@ -134,6 +141,6 @@ def test_only_a_merge_inside_the_workflow_skips_the_python_runtime_setup(
         related_tests=False,
         quick=False,
     )
-    monkeypatch.setattr(runner, "language_filter", lambda _arguments: [])
+    monkeypatch.setattr(runner, "language_filter", no_filter)
     assert runner.check_command(arguments) == 0
     assert bool(started) is provided
