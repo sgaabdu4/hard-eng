@@ -3,8 +3,8 @@
 Pictures use the [browser command](../../e2e/references/browser.md). Install or run no other browser tool.
 
 - The live app address comes from the project's docs. If they do not name it, ask the user. Never guess it.
-- A role with no saved sign-in, or a sign-in that fails: stop and ask the user, unless the user already asked for a test copy: then use one and say so in the report. Never choose a test copy yourself. Build the rest of the report and list the states in "Pictures with no live copy"; send nothing until the user answers.
-- "Before" pictures: take them from the last approved report's folder (`docs/client-report/<date>`, else `.hard-eng/client-report/<date>`), only if that report marked them as live. Never reuse a test copy as a live picture. With none, list the state under "Pictures with no live copy".
+- A role with no saved sign-in, or a sign-in that fails: stop and ask the user, unless the user already asked for a test copy: then use one and say so in the report. Never choose a test copy yourself. Build the rest of the report and list the states in "Pictures with no live copy"; send nothing until the user answers, unless they already authorized a test copy.
+- "Before" pictures: take them from the last approved report's folder (the newest approved folder, in `docs/client-report/<date>` or `.hard-eng/client-report/<date>`; a private folder counts when the user approved it), only if that report marked them as live. Never reuse a test copy as a live picture. With none, list the state under "Pictures with no live copy".
 - Sign in once for each role: `python3 .hooks/hard-eng.py browser signin <role> --session NAME`. Never open, print or copy the sign-in values.
 - Per picture, with one `--session` name and the role's `--state` on the first step: `set viewport 560 520`, `open <live url>`, `wait --load networkidle`. Press only tabs and rows. Never save, send, delete or submit.
 - Mark each part the text names. Run one `eval` that adds a style to the page, then `wait 600`:
