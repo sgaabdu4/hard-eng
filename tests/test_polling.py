@@ -134,6 +134,7 @@ def test_agy_run_command_foreground_sleep_wait_is_denied() -> None:
     )
     assert blocked["decision"] == "deny"
     assert "HE-NO-FOREGROUND-POLL" in blocked["reason"]
+    assert "Do not poll with sleep" in blocked["reason"]
     assert "WaitMsBeforeAsync" in blocked["reason"]
     assert "run_in_background" not in blocked["reason"]
     for allowed in (

@@ -49,7 +49,8 @@ REVIEWER_ORDER: dict[str, tuple[str, ...]] = {
 AGY_READ_ONLY_SETTINGS = json.dumps(
     {
         "agentMode": "default",
-        "toolPermission": "request-review",
+        "toolPermission": "proceed-in-sandbox",
+        "enableTerminalSandbox": True,
         "permissions": {
             "deny": [
                 "write_file(*)",
@@ -57,13 +58,9 @@ AGY_READ_ONLY_SETTINGS = json.dumps(
                 "read_url(*)",
                 "execute_url(*)",
                 "download_url(*)",
-                r"command(regex:git\s+.*(?:--output|--ext-diff|-c\b).*)",
             ],
             "allow": [
                 "read_file(*)",
-                r"command(regex:^git\s+-C\s+(?:'[^']+'|\"[^\"]+\"|\S+)\s+(?:diff|log|show|status|rev-parse|merge-base)(?:\s|$))",
-                "command(rg)",
-                "command(ls)",
             ],
         },
     },
@@ -327,14 +324,14 @@ def review(
         return f"not done: {reviewer} is not installed", ""
     except subprocess.TimeoutExpired:
         return f"not done: {reviewer} timed out after {TIMEOUT_SECONDS}s", ""
+    if git_text(root, "rev-parse", "HEAD") != revision:
+        return f"not done: HEAD moved from {revision} during the review", result.stdout
     if result.returncode != 0:
         reason = result.stderr.strip().rpartition("\n")[2] or "no error output"
         return f"not done: {reviewer} exited {result.returncode}: {reason}", ""
     lines = result.stdout.strip().splitlines() or [""]
     if lines[-1].strip() not in VERDICTS:
         return f"not done: {reviewer} gave no exact VERDICT line", result.stdout
-    if git_text(root, "rev-parse", "HEAD") != revision:
-        return f"not done: HEAD moved from {revision} during the review", result.stdout
     return VERDICTS[lines[-1].strip()], result.stdout
 
 

@@ -342,14 +342,37 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     assert Path(ran["cwd"]).resolve() != branch.resolve()
     assert argv[:4] == ["-p", "--sandbox", "--disable-slash-commands", "--settings"]
     settings = json.loads(argv[4])
+    assert settings["toolPermission"] == "proceed-in-sandbox"
+    assert settings["enableTerminalSandbox"] is True
     assert "write_file(*)" in settings["permissions"]["deny"]
     assert "mcp(*)" in settings["permissions"]["deny"]
-    assert "read_file(*)" in settings["permissions"]["allow"]
-    assert "command(find)" not in settings["permissions"]["allow"]
-    assert any("git\\s+-C" in rule for rule in settings["permissions"]["allow"])
+    assert settings["permissions"]["allow"] == ["read_file(*)"]
     assert str(branch) in argv[5]
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
+
+
+def test_moved_head_without_verdict_does_not_fall_back(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    reviewed = git(branch, "rev-parse", "HEAD")
+    (tmp_path / "bin").mkdir()
+    script = tmp_path / "bin" / "codex"
+    script.write_text(
+        f"#!{sys.executable}\nimport subprocess\n"
+        "subprocess.run(['git', 'commit', '-q', '--allow-empty', '-m', 'during'], check=True)\n"
+        "print('incomplete output')\n"
+    )
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    fallback = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 1
+    assert not fallback.exists()
+    record = json.loads(
+        challenge.store(branch, reviewed).with_suffix(".json").read_text()
+    )
+    assert "HEAD moved" in record["outcome"]
 
 
 def shipment(root: Path) -> Shipment:
