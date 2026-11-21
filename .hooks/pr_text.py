@@ -15,25 +15,27 @@ if TYPE_CHECKING:
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
 MERMAID_FENCE = re.compile(
-    r"^[ \t]*(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^[ \t]*\1|\Z)",
+    r"^ {0,3}(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^ {0,3}\1|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 MAX_LABEL_CHARACTERS = 13
 FLOW_HEAD = re.compile(r"(?:flowchart|graph)\b(?:[ \t]+(?:TD|TB|BT|RL|LR)\b)?[ \t]*;?")
-NON_LABEL_LINE = re.compile(
+NON_LABEL_STATEMENT = re.compile(
     r"(?:%%|subgraph\b|end\b|style\b|classDef\b|class\b|linkStyle\b|direction\b"
-    r"|click\b|acc(?:Title|Descr)\b|title\b)"
+    r"|click\b|acc(?:Title|Descr)\b|title\b(?![ \t]*[\[({>]))"
 )
 ENTITY_CODE = re.compile(r"#\w+;")
+STATEMENT_END = re.compile(r';(?=(?:[^"]*"[^"]*")*[^"]*$)')
 DASH_LABEL = re.compile(r"(?:--|==|-\.)[ \t]+(.+?)[ \t]+(?:-->|==>|\.->|---|===|-\.-)")
-PIPE_LABEL = re.compile(r'\|("[^"\n]*"|[^|\n]*)\|')
+PIPE_LABEL = re.compile(r"\|([^|\n]*)\|")
+ATTRIBUTE_LABEL = re.compile(r'(\w[\w-]*)@\{[^}\n]*?label:[ \t]*"([^"\n]*)"[^}\n]*\}')
 SHAPE_LABEL = re.compile(
-    r"\w[\w-]*(?:\(\[|\[\(|\(\(|\[\[|\{\{|[\[({>])[ \t]*(\"[^\"\n]*\"|.*?)[ \t]*"
-    r"(?:\]\)|\)\]|\)\)|\]\]|\}\}|[\])}])"
+    r"(\w[\w-]*)(?:\(\[|\[\(|\(\(|\[\[|\{\{|[\[({>])[/\\]?[ \t]*"
+    r'("[^"\n]*"|.*?)[ \t]*[/\\]?(?:\]\)|\)\]|\)\)|\]\]|\}\}|[\])}])'
 )
 CLASS_SUFFIX = re.compile(r":::[\w-]+")
 ARROW = re.compile(r"[<>ox]?(?:--+|==+|-\.+)[>ox]?|~~~+|&")
-BARE_ID = re.compile(r"[A-Za-z0-9_]+")
+BARE_ID = re.compile(r"\w[\w-]*")
 LINE_BREAK = re.compile(r"<br[ \t]*/?>", re.IGNORECASE)
 NOT_CHECKED_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?Not checked:(.*)$", re.MULTILINE)
 EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
@@ -117,11 +119,15 @@ def _flow_statements(block: str) -> list[str]:
         lines = lines[lines.index("---", 1) + 1 :]
     statements: list[str] = []
     header = False
-    skipping = False
+    closing = ""
     for line in lines:
-        if skipping or line.startswith("%%{"):
-            skipping = "}%%" not in line
+        if closing:
+            closing = "" if closing in line else closing
             continue
+        if line.startswith("%%{") and "}%%" not in line:
+            closing = "}%%"
+        if line.startswith("accDescr") and "{" in line and "}" not in line:
+            closing = "}"
         if not line or line.startswith("%%"):
             continue
         if not header:
@@ -130,40 +136,55 @@ def _flow_statements(block: str) -> list[str]:
                 return []
             header = True
             line = line[head.end() :]
-        elif NON_LABEL_LINE.match(line):
-            continue
-        statements.extend(ENTITY_CODE.sub("\x00", line).split(";"))
-    return statements
+        statements.extend(STATEMENT_END.split(ENTITY_CODE.sub("\x00", line)))
+    return [
+        statement.strip()
+        for statement in statements
+        if statement.strip() and not NON_LABEL_STATEMENT.match(statement.strip())
+    ]
 
 
-def _statement_labels(statement: str) -> list[str]:
+def _statement_labels(statement: str, defined: set[str]) -> tuple[list[str], list[str]]:
+    """The label texts a statement defines, and the node IDs it only mentions."""
     labels: list[str] = []
-    for pattern in (DASH_LABEL, PIPE_LABEL, SHAPE_LABEL):
 
-        def take(match: re.Match[str]) -> str:
-            labels.append(match.group(1).strip().strip('"'))
-            return " "
+    def node(match: re.Match[str]) -> str:
+        defined.add(match.group(1))
+        labels.append(match.group(2).strip().strip('"'))
+        return " "
 
-        statement = pattern.sub(take, statement)
+    def edge(match: re.Match[str]) -> str:
+        labels.append(match.group(1).strip().strip('"'))
+        return " "
+
+    statement = SHAPE_LABEL.sub(node, ATTRIBUTE_LABEL.sub(node, statement))
+    statement = DASH_LABEL.sub(edge, PIPE_LABEL.sub(edge, statement))
     rest = ARROW.sub(" ", CLASS_SUFFIX.sub(" ", statement))
-    return labels + BARE_ID.findall(rest)
+    return labels, BARE_ID.findall(rest)
 
 
 def _label_problem(body: str) -> str | None:
     """Name the first flowchart label line over the limit; None when all fit."""
     for block in _diagrams(body):
+        defined: set[str] = set()
+        labels: list[str] = []
+        mentioned: list[str] = []
         for statement in _flow_statements(block):
-            for label in _statement_labels(statement):
-                for part in LINE_BREAK.split(label):
-                    shown = part.strip()
-                    if len(shown) > MAX_LABEL_CHARACTERS:
-                        return (
-                            f'Mermaid label line "{shown.replace(chr(0), "#;")}" has '
-                            f"{len(shown)} characters; the limit is {MAX_LABEL_CHARACTERS}, "
-                            "because GitHub cuts longer lines at zoom levels other than 100%. "
-                            "Split the label with <br> into shorter lines, "
-                            "or give a long node ID a short one"
-                        )
+            found, bare = _statement_labels(statement, defined)
+            labels += found
+            mentioned += bare
+        labels += [name for name in mentioned if name not in defined]
+        for label in labels:
+            for part in LINE_BREAK.split(label):
+                shown = part.strip()
+                if len(shown) > MAX_LABEL_CHARACTERS:
+                    return (
+                        f'Mermaid label line "{shown.replace(chr(0), "#;")}" has '
+                        f"{len(shown)} characters; the limit is {MAX_LABEL_CHARACTERS}, "
+                        "because GitHub cuts longer lines at zoom levels other than 100%. "
+                        "Split the label with <br> into shorter lines, "
+                        "or give a long node ID a short one"
+                    )
     return None
 
 
