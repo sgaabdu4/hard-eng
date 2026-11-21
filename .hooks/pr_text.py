@@ -212,6 +212,8 @@ def ui_problem(
 ) -> str | None:
     """The screen-evidence form of a PR that changes a UI file; CI has no captures, so it checks forms only."""
     from look import block_problem
+    from plan_parent import named_parents
+    from plans import is_plan_path
     from ship_evidence import UI_APPEARANCE_UNCHANGED, attachment_urls
     from shipping import ShippingError, gh
     from ui_proof import (
@@ -248,16 +250,23 @@ def ui_problem(
     plans = [
         str(item["filename"])
         for item in files
-        if str(item["filename"]).endswith("PLAN.md") and item.get("status") != "removed"
+        if is_plan_path(Path(str(item["filename"]))) and item.get("status") != "removed"
     ]
     if not plans and (problem := reference_problem("", visible, body, note)):
         return problem
+    texts = {}
     for plan in plans:
         endpoint = f"repos/{owner}/{name}/contents/{plan}?ref={head_sha}"
         try:
-            text = gh(root, "api", "-H", "Accept: application/vnd.github.raw", endpoint)
+            texts[plan] = gh(
+                root, "api", "-H", "Accept: application/vnd.github.raw", endpoint
+            )
         except ShippingError as error:
             return f"The plan {plan} cannot be read at the PR head ({error})"
-        if problem := reference_problem(text, visible, body, note):
+    parents = named_parents(texts)
+    for plan, text in texts.items():
+        if plan not in parents and (
+            problem := reference_problem(text, visible, body, note)
+        ):
             return problem
     return None
