@@ -289,3 +289,21 @@ def test_the_command_finds_the_template_from_the_git_top_level(
     code, out = run(loose)
     assert code == 1
     assert out.startswith("no saved template at ")
+
+
+def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
+    tmp_path: Path,
+) -> None:
+    template = write(tmp_path, "template.html")
+    broken = write(
+        tmp_path,
+        "broken.html",
+        sections=SECTIONS.replace("How it was checked", "How it was<br>checked"),
+    )
+    rows = write(
+        tmp_path,
+        "rows.html",
+        body="<table><tr><td>[</td></tr><tr><td>Previous layer</td></tr><tr><td>]</td></tr></table>",
+    )
+    assert problems(broken, template) == []
+    assert problems(rows, template) == []
