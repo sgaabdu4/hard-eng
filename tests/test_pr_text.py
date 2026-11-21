@@ -218,6 +218,12 @@ def test_a_mermaid_example_inside_another_fence_or_comment_is_not_checked() -> N
     assert body_problem(_with(_flow("A[ok]")) + f"<!--\n{bad}-->\n") is None
 
 
+def test_a_literal_mermaid_opener_inside_a_markdown_fence_does_not_end_it() -> None:
+    example = "```markdown\n```mermaid\nflowchart TD\n```\n"
+    body = "Undo: x\n" + _DIAGRAM + example + _DIAGRAM + "Not checked: x\n"
+    assert body_problem(body) is None
+
+
 def test_accessibility_text_is_not_a_label() -> None:
     lines = ('accTitle: "A long title for the whole picture"', "A[ok] --> B[ok]")
     assert body_problem(_with(_flow(*lines))) is None
