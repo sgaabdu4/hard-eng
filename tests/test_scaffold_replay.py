@@ -279,3 +279,35 @@ def test_the_full_check_of_an_update_loads_the_gates_file_with_its_release(
     else:
         with pytest.raises(ValueError, match="the deployment check must run `trivy`"):
             update.check_scaffold_update(target, base)
+
+
+def test_an_update_that_adds_codex_rules_stays_a_verified_scaffold_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    rules = target / ".codex/rules/hard-eng.rules"
+    assert rules.is_file()
+    rules.unlink()
+    base = commit(target, "installed before codex rules existed")
+    release_now(source, monkeypatch, "next release")
+
+    update.update(target)
+
+    changed = set(git(target, "diff", "--name-only", base).splitlines())
+    assert ".codex/rules/hard-eng.rules" in changed
+    assert all(update.maybe_installed(name) for name in changed)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, base)
+    assert update.installed_update_paths(target, base) == changed
+    assert change_size.update_only(target, base, changed)
+    expected = rules.read_text()
+    rules.write_text("# tampered\n")
+    commit(target, "tampered codex rules")
+    assert not update.check_scaffold_update(target, base)
+    copy = target.parent / "elsewhere.rules"
+    copy.write_text(expected)
+    rules.unlink()
+    rules.symlink_to(copy)
+    commit(target, "symlinked codex rules")
+    with pytest.raises(ValueError, match=r"\.codex/rules/hard-eng\.rules is a symlink"):
+        update.check_scaffold_update(target, base)

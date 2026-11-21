@@ -1,0 +1,27 @@
+import { setTimeout } from "node:timers/promises";
+
+const ZERO = 0;
+const RETRY_MS = 200;
+
+export async function waitForRetry(delay: number, signal?: AbortSignal) {
+  // ruleid: next-frame-call-javascript
+  await setTimeout();
+  // ruleid: next-frame-call-javascript
+  await setTimeout(0);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(undefined);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(undefined, 0, { signal });
+  // ruleid: next-frame-call-javascript
+  await setTimeout(ZERO);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(16);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(10, "value");
+  await setTimeout(17);
+  await setTimeout(200);
+  await setTimeout(RETRY_MS);
+  await setTimeout(delay);
+  await setTimeout(200, "value");
+  await setTimeout(200, 0);
+}
