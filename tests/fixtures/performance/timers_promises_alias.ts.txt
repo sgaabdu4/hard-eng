@@ -1,0 +1,15 @@
+import { setTimeout as sleep } from "node:timers/promises";
+
+export async function waitAliased(flush: () => void, signal?: AbortSignal) {
+  // ruleid: next-frame-call-javascript
+  setTimeout(flush, 0);
+  // ruleid: next-frame-call-javascript
+  await sleep();
+  // ruleid: next-frame-call-javascript
+  await sleep(0);
+  // ruleid: next-frame-call-javascript
+  await sleep(undefined, 0, { signal });
+  await sleep(200);
+  await sleep(200, 0);
+  setTimeout(flush, 200);
+}

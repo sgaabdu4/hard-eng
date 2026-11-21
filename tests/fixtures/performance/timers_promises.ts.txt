@@ -3,11 +3,15 @@ import { setTimeout } from "node:timers/promises";
 const ZERO = 0;
 const RETRY_MS = 200;
 
-export async function waitForRetry(delay: number) {
+export async function waitForRetry(delay: number, signal?: AbortSignal) {
   // ruleid: next-frame-call-javascript
   await setTimeout();
   // ruleid: next-frame-call-javascript
   await setTimeout(0);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(undefined);
+  // ruleid: next-frame-call-javascript
+  await setTimeout(undefined, 0, { signal });
   // ruleid: next-frame-call-javascript
   await setTimeout(ZERO);
   // ruleid: next-frame-call-javascript
