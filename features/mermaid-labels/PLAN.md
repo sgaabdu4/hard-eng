@@ -66,5 +66,5 @@ E2E: N/A — the change is a pure check of PR text, proved by the tests above.
 Real service: N/A — no service is called; the GitHub viewer facts come from the coordinator's measurement.
 Retro: (1) User correction: "diagram labels cut off" → `tests/test_pr_text.py::test_a_mermaid_label_line_over_13_characters_is_refused_by_name`.
 
-Delivery target: PR
-Delivery: Pending — draft PR against develop; develop is frozen.
+Delivery target: Merge
+Delivery: Pending — rebased on develop after release 658; awaiting CI and merge into develop.
