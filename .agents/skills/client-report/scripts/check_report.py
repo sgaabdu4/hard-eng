@@ -1,14 +1,15 @@
 import argparse
 import re
 import subprocess
-from typing import override
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import override
 
 CODE = re.compile(r"\b[A-Z][0-9]+\b")
 SHOWN = ("alt",)
 INLINE = {"a", "b", "code", "em", "i", "mark", "small", "span", "strong", "u"}
-PLACEHOLDER = re.compile(r"\[[^\]\n]*\]")
+BLOCK = "\x00"
+PLACEHOLDER = re.compile(r"\[[^\]\x00]*\]")
 SECTIONS = ("How it was checked", "Not checked")
 TEMPLATE = "docs/client-report/template.html"
 HEADING = re.compile(r"h[1-6]")
@@ -35,10 +36,12 @@ class Page(HTMLParser):
         if tag == "style":
             self.css.append(f"<style {sorted(attrs)}>;")
         if tag not in INLINE:
-            self.text.append(" ")
+            self.text.append(BLOCK)
+            if self.in_heading:
+                self.headings[-1] += " "
         for name, value in attrs:
             self.inline_style |= name == "style"
-            self.text += [" ", value or "", " "] if name in SHOWN else []
+            self.text += [BLOCK, value or "", BLOCK] if name in SHOWN else []
         rel = dict(attrs).get("rel") or ""
         self.linked_sheet |= tag == "link" and "stylesheet" in rel.lower().split()
 
@@ -47,7 +50,7 @@ class Page(HTMLParser):
         self.inside = ""
         self.in_heading &= not HEADING.fullmatch(tag)
         if tag not in INLINE:
-            self.text.append(" ")
+            self.text.append(BLOCK)
 
     @override
     def handle_data(self, data: str) -> None:
