@@ -223,6 +223,50 @@ def test_accessibility_text_is_not_a_label() -> None:
     assert body_problem(_with(_flow(*lines))) is None
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        'A["Draft; check; send"]',
+        'A["Fix | lint | type"]',
+        'A --> |"Draft; check; send"| B',
+        'title["Publish the pull request"]',
+        'A@{ shape: rect, label: "Publish the pull request" }',
+        'A[/"Publish the pull request"/]',
+    ],
+)
+def test_a_long_label_in_a_quote_a_title_node_or_attribute_form_is_refused(
+    line: str,
+) -> None:
+    assert body_problem(_with(_flow(line))) is not None
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ('A["Check A | B"]-->B["Check X | Y"]',),
+        ('CheckoutValidation["Check"]', "CheckoutValidation --> B[Pay]"),
+        ("B[Pay]", "CheckoutValidation --> B", 'CheckoutValidation["Check"]'),
+        ('A["Open"]; classDef completedPayment fill:#f96',),
+        ("accDescr {", "Waiting for reauthentication", "}", "A[ok]"),
+        ('A[/"Confirm order"/]',),
+        ('A@{ shape: rect, label: "Pay now" }',),
+    ],
+)
+def test_valid_short_labels_in_these_forms_stay_valid(lines: tuple[str, ...]) -> None:
+    assert body_problem(_with(_flow(*lines))) is None
+
+
+def test_a_bare_node_id_that_was_never_given_a_label_is_checked() -> None:
+    assert body_problem(_with(_flow("Checkout-validation --> B[ok]"))) is not None
+
+
+def test_a_four_space_indented_fence_is_not_a_diagram() -> None:
+    indented = "    " + _DIAGRAM.replace("\n", "\n    ")
+    assert (
+        body_problem("Undo: x\n" + _DIAGRAM + indented + "Not checked: x\n") is not None
+    )
+
+
 def _lines(count: int, width: int = 49) -> str:
     return ("a" * width + "\n") * count
 
