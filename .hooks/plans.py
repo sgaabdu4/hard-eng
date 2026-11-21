@@ -823,7 +823,7 @@ def validate_plans(
     for path, status in statuses.items():
         if STAGES.index(status) < STAGES.index(stage):
             # A Draft plan claims no implementation, and a Ready parent holds the open steps; both may ride along with finished work.
-            if reached and may_ride_along(root, path, status, statuses):
+            if reached and may_ride_along(root, path, status, statuses, stage):
                 continue
             steps = {"Draft": DRAFT_STEP, "Ready": f". {BUILD_STEP}" * typed}
             step = steps[status] if stage == "Complete" and not explicit_stage else ""
