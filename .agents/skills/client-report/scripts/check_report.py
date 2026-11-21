@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import override
 
 CODE = re.compile(r"\b[A-Z][0-9]+\b")
-SHOWN = ("alt", "title", "aria-label")
+SHOWN = ("alt",)
 INLINE = {"a", "b", "code", "em", "i", "mark", "small", "span", "strong", "u"}
-SYMBOLS = re.compile(r"\s*([{}:;,>+~])\s*")
+SYMBOLS = re.compile(r"\s*([{};,])\s*|(:)\s+")
 
 
 class Page(HTMLParser):
@@ -23,7 +23,7 @@ class Page(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.inside = tag if tag in {"style", "script"} else ""
         if tag == "style":
-            self.css.append(f"<style {sorted(attrs)}>")
+            self.css.append(f"<style {sorted(attrs)}>;")
         if tag not in INLINE:
             self.text.append(" ")
         for name, value in attrs:
@@ -53,7 +53,9 @@ def read(path: Path) -> Page:
 
 
 def squeeze(css: list[str]) -> str:
-    return SYMBOLS.sub(r"\1", re.sub(r"\s+", " ", "".join(css))).strip()
+    return SYMBOLS.sub(
+        lambda m: m.group(1) or ":", re.sub(r"\s+", " ", "".join(css))
+    ).strip()
 
 
 def problems(report: Path, template: Path) -> list[str]:
