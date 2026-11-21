@@ -14,24 +14,27 @@ if TYPE_CHECKING:
     from shipping import _PullRequest
 
 UNDO_LINE = re.compile(r"^[ \t]*Undo:[ \t]*\S", re.MULTILINE)
-MERMAID_BLOCK = re.compile(r"^[ \t]*(?:```|~~~)[ \t]*mermaid\b", re.MULTILINE)
 MERMAID_FENCE = re.compile(
-    r"^[ \t]*(```|~~~)[ \t]*mermaid\b[^\n]*\n(.*?)(?:^[ \t]*\1|\Z)",
+    r"^[ \t]*(`{3,}|~{3,})[ \t]*(\w*)[^\n]*\n?(.*?)(?:^[ \t]*\1|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 MAX_LABEL_CHARACTERS = 13
-FLOW_HEAD = re.compile(r"(?:flowchart|graph)\b")
+FLOW_HEAD = re.compile(r"(?:flowchart|graph)\b(?:[ \t]+(?:TD|TB|BT|RL|LR)\b)?[ \t]*;?")
 NON_LABEL_LINE = re.compile(
-    r"(?:%%|subgraph\b|end\b|style\b|classDef\b|class\b|linkStyle\b|direction\b|click\b)"
+    r"(?:%%|subgraph\b|end\b|style\b|classDef\b|class\b|linkStyle\b|direction\b"
+    r"|click\b|acc(?:Title|Descr)\b|title\b)"
 )
-QUOTED_LABEL = re.compile(r'"([^"\n]*)"')
-PIPE_LABEL = re.compile(r"\|([^|\n]*)\|")
-DASH_LABEL = re.compile(r"(?:--|==|-\.)[ \t]+(.+?)[ \t]+(?:-->|==>|\.->|---|===|-\.-)")
-SHAPE_LABEL = re.compile(
-    r"[\w-]+(?:\(\[|\[\(|\(\(|\[\[|\{\{|[\[({])(.*?)[\])}]+(?=\s|;|$)"
-)
-LINE_BREAK = re.compile(r"<br[ \t]*/?>", re.IGNORECASE)
 ENTITY_CODE = re.compile(r"#\w+;")
+DASH_LABEL = re.compile(r"(?:--|==|-\.)[ \t]+(.+?)[ \t]+(?:-->|==>|\.->|---|===|-\.-)")
+PIPE_LABEL = re.compile(r'\|("[^"\n]*"|[^|\n]*)\|')
+SHAPE_LABEL = re.compile(
+    r"\w[\w-]*(?:\(\[|\[\(|\(\(|\[\[|\{\{|[\[({>])[ \t]*(\"[^\"\n]*\"|.*?)[ \t]*"
+    r"(?:\]\)|\)\]|\)\)|\]\]|\}\}|[\])}])"
+)
+CLASS_SUFFIX = re.compile(r":::[\w-]+")
+ARROW = re.compile(r"[<>ox]?(?:--+|==+|-\.+)[>ox]?|~~~+|&")
+BARE_ID = re.compile(r"[A-Za-z0-9_]+")
+LINE_BREAK = re.compile(r"<br[ \t]*/?>", re.IGNORECASE)
 NOT_CHECKED_LINE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?Not checked:(.*)$", re.MULTILINE)
 EMPTY_ANSWER = re.compile(r"(?:none|nothing|n/a)?[ \t]*[-—–]*", re.IGNORECASE)
 DEPENDENCY_BOTS = frozenset({"dependabot[bot]", "renovate[bot]"})
@@ -98,35 +101,68 @@ def _size_problem(body: str) -> str | None:
     return None
 
 
-def _flow_lines(block: str) -> list[str]:
-    lines = [line.strip() for line in block.replace("\r\n", "\n").split("\n")]
-    if lines and lines[0] == "---":
-        lines = lines[lines.index("---", 1) + 1 :] if "---" in lines[1:] else []
-    if not lines or not FLOW_HEAD.match(lines[0].lstrip()):
-        return []
-    return [line for line in lines[1:] if line and not NON_LABEL_LINE.match(line)]
+def _diagrams(body: str) -> list[str]:
+    """The text of each Mermaid block that GitHub draws; examples in other fences and comments do not count."""
+    text = HTML_COMMENT.sub(_blank, body.replace("\r\n", "\n"))
+    return [
+        fence.group(3)
+        for fence in MERMAID_FENCE.finditer(text)
+        if fence.group(2).lower() == "mermaid"
+    ]
+
+
+def _flow_statements(block: str) -> list[str]:
+    lines = [line.strip() for line in block.split("\n")]
+    if lines and lines[0] == "---" and "---" in lines[1:]:
+        lines = lines[lines.index("---", 1) + 1 :]
+    statements: list[str] = []
+    header = False
+    skipping = False
+    for line in lines:
+        if skipping or line.startswith("%%{"):
+            skipping = "}%%" not in line
+            continue
+        if not line or line.startswith("%%"):
+            continue
+        if not header:
+            head = FLOW_HEAD.match(line)
+            if not head:
+                return []
+            header = True
+            line = line[head.end() :]
+        elif NON_LABEL_LINE.match(line):
+            continue
+        statements.extend(ENTITY_CODE.sub("\x00", line).split(";"))
+    return statements
+
+
+def _statement_labels(statement: str) -> list[str]:
+    labels: list[str] = []
+    for pattern in (DASH_LABEL, PIPE_LABEL, SHAPE_LABEL):
+
+        def take(match: re.Match[str]) -> str:
+            labels.append(match.group(1).strip().strip('"'))
+            return " "
+
+        statement = pattern.sub(take, statement)
+    rest = ARROW.sub(" ", CLASS_SUFFIX.sub(" ", statement))
+    return labels + BARE_ID.findall(rest)
 
 
 def _label_problem(body: str) -> str | None:
     """Name the first flowchart label line over the limit; None when all fit."""
-    for fence in MERMAID_FENCE.finditer(body):
-        for line in _flow_lines(fence.group(2)):
-            labels = QUOTED_LABEL.findall(line)
-            rest = QUOTED_LABEL.sub('""', line)
-            labels += PIPE_LABEL.findall(rest)
-            rest = PIPE_LABEL.sub("", rest)
-            labels += DASH_LABEL.findall(rest)
-            labels += SHAPE_LABEL.findall(DASH_LABEL.sub("", rest))
-            for label in labels:
+    for block in _diagrams(body):
+        for statement in _flow_statements(block):
+            for label in _statement_labels(statement):
                 for part in LINE_BREAK.split(label):
                     shown = part.strip()
-                    size = len(ENTITY_CODE.sub("x", shown))
-                    if size > MAX_LABEL_CHARACTERS:
+                    if len(shown) > MAX_LABEL_CHARACTERS:
                         return (
-                            f'Mermaid label line "{shown}" has {size} characters; '
-                            f"the limit is {MAX_LABEL_CHARACTERS}, because GitHub cuts longer "
-                            "lines at zoom levels other than 100%. "
-                            "Split the label with <br> into shorter lines"
+                            f'Mermaid label line "{shown.replace(chr(0), "#;")}" has '
+                            f"{len(shown)} characters; the limit is {MAX_LABEL_CHARACTERS}, "
+                            "because GitHub cuts longer lines at zoom levels other than 100%. "
+                            "Split the label with <br> into shorter lines, "
+                            "or give a long node ID a short one"
                         )
     return None
 
@@ -135,7 +171,7 @@ def body_problem(body: str) -> str | None:
     """Name what a PR body lacks or has too much of; None when it passes."""
     if not UNDO_LINE.search(body):
         return "PR body needs a line that starts `Undo:` and lists the undo steps"
-    if len(MERMAID_BLOCK.findall(body)) < 2:
+    if len(_diagrams(body)) < 2:
         return (
             "PR body needs a `Before and after` part with two or more Mermaid diagrams: "
             "one of the old flow and one of the new flow for each main change, "
