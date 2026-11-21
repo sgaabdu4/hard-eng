@@ -1,10 +1,10 @@
 """A step plan names its parent plan; the parent closes only after every step."""
 
 import re
-from collections.abc import Collection
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 
-from plans import header_status, plan_files
+from plans import STAGES, header_status, plan_files
 
 PARENT_LINE = re.compile(r"(?m)^Parent:[ \t]*(.*?)[ \t]*$")
 
@@ -46,9 +46,18 @@ def parent_problem(root: Path, path: Path) -> None:
         raise ValueError(f"Parent {name} must sit above this plan's folder")
     if parent_name(parent) is not None:
         raise ValueError(f"Parent {name} has its own Parent; steps have one level")
-    status = header_status(parent.read_text())
-    if status == "Draft":
-        raise ValueError(f"Parent {name} is Draft; it must be Ready or Complete")
+    status_problem(
+        name, header_status(parent.read_text()), header_status(path.read_text())
+    )
+
+
+def status_problem(name: str, parent: str, step: str) -> None:
+    if parent not in {"Ready", "Complete"}:
+        raise ValueError(f"Parent {name} is {parent}; it must be Ready or Complete")
+    if parent == "Complete" and step != "Complete":
+        raise ValueError(
+            f"Parent {name} is Complete; this step is {step} and must not be open"
+        )
 
 
 def steps(root: Path, parent: Path) -> list[Path]:
@@ -64,12 +73,26 @@ def steps(root: Path, parent: Path) -> list[Path]:
 
 
 def may_ride_along(
-    root: Path, path: Path, status: str, judged: Collection[Path]
+    root: Path, path: Path, status: str, judged: Mapping[Path, str], stage: str
 ) -> bool:
     """A Draft claims no implementation; a Ready parent holds the open steps."""
     return status == "Draft" or (
-        status == "Ready" and any(step in judged for step in steps(root, path))
+        status == "Ready"
+        and any(
+            STAGES.index(judged[step]) >= STAGES.index(stage)
+            for step in steps(root, path)
+            if step in judged
+        )
     )
+
+
+def named_parents(texts: Mapping[str, str]) -> set[str]:
+    """The lowercase paths that the plan texts name in a Parent line."""
+    return {
+        found.lower()
+        for text in texts.values()
+        for found in PARENT_LINE.findall(text.split("\n## ", 1)[0])
+    }
 
 
 def close_problem(root: Path, path: Path) -> None:
