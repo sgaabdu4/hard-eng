@@ -26,7 +26,14 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
-SECTIONS = "<h2>How it was checked</h2><p>One check ran.</p><h3>Not checked</h3><p>Nothing else.</p>"
+NAMES = (
+    "Where it stands",
+    "What is live",
+    "How it was checked",
+    "Not checked",
+    "Everything left",
+)
+SECTIONS = "".join(f"<h2>{name}</h2><p>Text.</p>" for name in NAMES)
 
 
 def write(
@@ -211,33 +218,26 @@ def test_the_command_exits_with_the_problems(tmp_path: Path) -> None:
     assert (accepted.returncode, accepted.stdout) == (0, "")
 
 
-def test_a_report_without_the_check_sections_is_refused(tmp_path: Path) -> None:
+def test_a_report_without_the_kept_sections_is_refused(tmp_path: Path) -> None:
     template = write(tmp_path, "template.html")
     none = write(tmp_path, "none.html", sections="")
+    lacking = [f"report lacks the section {name!r}" for name in NAMES]
+    assert problems(none, template) == lacking
     half = write(
-        tmp_path, "half.html", sections="<h2>How it was checked</h2><p>One.</p>"
+        tmp_path,
+        "half.html",
+        sections="".join(f"<h2>{name}</h2>" for name in NAMES[:2]),
     )
-    assert problems(none, template) == [
-        "report lacks the section 'How it was checked'",
-        "report lacks the section 'Not checked'",
-    ]
-    assert problems(half, template) == ["report lacks the section 'Not checked'"]
+    assert problems(half, template) == lacking[2:]
     assert problems(write(tmp_path, "full.html"), template) == []
     prose = write(
         tmp_path,
         "prose.html",
-        sections="<p>How it was checked is below. Email was not checked.</p>",
+        sections="<p>What is live is below. Email was not checked.</p>",
     )
-    assert problems(prose, template) == [
-        "report lacks the section 'How it was checked'",
-        "report lacks the section 'Not checked'",
-    ]
-    assert (
-        problems(
-            write(tmp_path, "h4.html", sections=SECTIONS.replace("h2", "h4")), template
-        )
-        == []
-    )
+    assert problems(prose, template) == lacking
+    h4 = write(tmp_path, "h4.html", sections=SECTIONS.replace("h2", "h4"))
+    assert problems(h4, template) == []
 
 
 def test_leftover_placeholder_text_is_refused_and_plain_brackets_pass(
@@ -288,7 +288,9 @@ def test_the_command_finds_the_template_from_the_git_top_level(
     assert run(report) == (0, "")
     code, out = run(loose)
     assert code == 1
-    assert out.startswith("no saved template at ")
+    assert out == "run inside the project's git checkout\n"
+    (tmp_path / "docs/client-report/template.html").unlink()
+    assert run(report)[1].startswith("no saved template at ")
 
 
 def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
