@@ -1,6 +1,7 @@
 import argparse
 import re
 import subprocess
+from typing import override
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -10,6 +11,7 @@ INLINE = {"a", "b", "code", "em", "i", "mark", "small", "span", "strong", "u"}
 PLACEHOLDER = re.compile(r"\[[^\]\n]*\]")
 SECTIONS = ("How it was checked", "Not checked")
 TEMPLATE = "docs/client-report/template.html"
+HEADING = re.compile(r"h[1-6]")
 SYMBOLS = re.compile(r"\s*([{};,])\s*|(:)\s+")
 
 
@@ -21,9 +23,15 @@ class Page(HTMLParser):
         self.inline_style = False
         self.linked_sheet = False
         self.inside = ""
+        self.headings: list[str] = []
+        self.in_heading = False
 
+    @override
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.inside = tag if tag in {"style", "script"} else ""
+        if HEADING.fullmatch(tag):
+            self.in_heading = True
+            self.headings.append("")
         if tag == "style":
             self.css.append(f"<style {sorted(attrs)}>;")
         if tag not in INLINE:
@@ -34,16 +42,21 @@ class Page(HTMLParser):
         rel = dict(attrs).get("rel") or ""
         self.linked_sheet |= tag == "link" and "stylesheet" in rel.lower().split()
 
+    @override
     def handle_endtag(self, tag: str) -> None:
         self.inside = ""
+        self.in_heading &= not HEADING.fullmatch(tag)
         if tag not in INLINE:
             self.text.append(" ")
 
+    @override
     def handle_data(self, data: str) -> None:
         if self.inside == "style":
             self.css.append(data)
         elif not self.inside:
             self.text.append(data)
+            if self.in_heading:
+                self.headings[-1] += data
 
 
 def read(path: Path) -> Page:
@@ -82,11 +95,11 @@ def problems(report: Path, template: Path) -> list[str]:
     found += [
         f"report lacks the section {name!r}"
         for name in SECTIONS
-        if name.lower() not in shown.lower()
+        if name.lower() not in {" ".join(h.split()).lower() for h in page.headings}
     ]
     found += [
         f"text holds the placeholder {mark!r}; replace it with real text"
-        for mark in PLACEHOLDER.findall(shown)
+        for mark in PLACEHOLDER.findall(" ".join(shown.split()))
     ]
     found += [
         f"text holds the code {code!r}; write the item in full"
