@@ -642,6 +642,10 @@ def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool 
 
 
 @keeping("references", "listings")
+def merging_in_workflow(shard: str | None) -> bool:
+    return shard == "merge" and os.environ.get("GITHUB_ACTIONS") == "true"
+
+
 def check(
     timeout: float | None = None,
     base: str | None = None,
@@ -696,8 +700,7 @@ def check(
             ROOT,
             plans.plan_base(ROOT, base, plan_stage),
             dependents=dependents,
-            workflow_checked=shard == "merge"
-            and os.environ.get("GITHUB_ACTIONS") == "true",
+            workflow_checked=merging_in_workflow(shard),
         )
         groups = quick_groups(language_groups(every, languages), quick, installed)
         if shard:
@@ -830,7 +833,7 @@ def check_command(args: "Namespace") -> int:
     from process_group import exit_when_stopped
     from tool_setup import ensure_python_runtime
 
-    if args.shard != "merge":
+    if not merging_in_workflow(args.shard):
         ensure_python_runtime()
     exit_when_stopped()
     if args.commit_secrets:
