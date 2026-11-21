@@ -21,6 +21,8 @@ Single source: `.hooks/agent_hooks.py::HOOK_FILES` owns the map of supported age
 
 Blockers: None
 Handoff: Approval
+Review declined: On Linux without unprivileged user namespaces, Antigravity ignores --sandbox and may deny git diff on stderr while exiting 0 with a VERDICT line :: challenge.py enforces the same returncode and exact VERDICT contract across Claude, Codex and Antigravity without parsing unstable CLI stderr text, and keeping proceed-in-sandbox with no command allow rules is intentional so unsandboxed host commands cannot run when the OS sandbox is unavailable. Stated limit.
+Review declined: A checkout cloned with git clone --reference borrows objects from an alternate store outside the mounted Git directories :: standard clones and worktrees store all objects under --git-common-dir and --git-dir (both mounted read-only); mounting arbitrary paths from objects/info/alternates widens sandbox read mounts for a rare reference-clone setup. Stated limit.
 Authority: Autonomous — the user approved the plan and chose Autonomous mode in chat on 2026-11-21, including testing on a greenfield and brownfield project in Antigravity, and approved delivering as a hotfix PR to `main` followed by joining `main` into `develop` on 2026-11-21.
 Decisions:
 
