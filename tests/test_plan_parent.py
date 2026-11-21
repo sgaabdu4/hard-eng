@@ -7,6 +7,7 @@ import pytest
 from conftest import commit, ready_plan
 from plans import plan_files, validate_plans
 from test_plans import edit, released_branch
+from test_ui_quality import UNCHANGED_NOTE, VISIBLE_FILE, ci_problem
 
 PARENT = "features/effort/PLAN.md"
 CHILD = "features/effort/step-1/PLAN.md"
@@ -136,3 +137,64 @@ def test_a_ready_plan_with_no_step_still_blocks_a_complete_check(
     commit(repository, "work")
     with pytest.raises(ValueError, match="plan is Ready; this check requires Complete"):
         validate_plans(repository, stage="Complete")
+
+
+def test_a_ready_parent_does_not_ride_along_with_a_draft_step(
+    repository: Path, completed_plan: str
+) -> None:
+    released_branch(repository)
+    write(repository, PARENT, ready_plan(completed_plan))
+    write(
+        repository,
+        CHILD,
+        with_parent(completed_plan.replace("Status: Complete", "Status: Draft")),
+    )
+    write(repository, "features/other/PLAN.md", completed_plan)
+    edit(repository, "a.py", 2)
+    commit(repository, "work")
+    with pytest.raises(ValueError, match="plan is Ready; this check requires Complete"):
+        validate_plans(repository, stage="Complete")
+
+
+def test_a_parent_with_an_unknown_status_fails(
+    repository: Path, completed_plan: str
+) -> None:
+    step_branch(
+        repository,
+        completed_plan,
+        completed_plan.replace("Status: Complete", "Status: In progress"),
+    )
+    with pytest.raises(ValueError, match="Parent .* must be Ready or Complete"):
+        check(repository)
+
+
+def test_a_step_cannot_be_open_while_its_parent_is_complete(
+    repository: Path, completed_plan: str
+) -> None:
+    step_branch(repository, completed_plan, completed_plan)
+    write(repository, CHILD, with_parent(ready_plan(completed_plan)))
+    with pytest.raises(ValueError, match="Parent .* is Complete; .* open"):
+        validate_plans(repository, base="HEAD", stage="Ready")
+
+
+def test_the_pr_text_check_skips_a_parent_plan_beside_its_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from test_pr_text import _VALID
+
+    mock = "N/A — the redesign mock sits in the parent plan"
+    unchanged = "N/A — unchanged: ![Before](a.png) ![After](a.png) — Home screen"
+    parent = f"# Effort\nStatus: Ready\n\n## ux_reference\n{mock}\n\n## Verification\n"
+    step = f"# Step\nStatus: Complete\nParent: {PARENT}\n\n## ux_reference\n{unchanged}\n\n## Verification\n"
+    files: list[dict[str, object]] = [
+        VISIBLE_FILE,
+        {"filename": PARENT, "status": "added"},
+        {"filename": CHILD, "status": "added"},
+    ]
+    body = f"{_VALID}\n{UNCHANGED_NOTE}"
+    plans = {PARENT: parent, CHILD: step}
+    assert ci_problem(tmp_path / "a", monkeypatch, body, files, plans) is None
+    plans[CHILD] = step.replace(f"Parent: {PARENT}\n", "")
+    assert "ux_reference says N/A" in str(
+        ci_problem(tmp_path / "b", monkeypatch, body, files, plans)
+    )
