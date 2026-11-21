@@ -12,4 +12,4 @@ Pictures use the [browser command](../../e2e/references/browser.md). Install or 
   Do not use `--ring`: it draws a 3 px box.
 - Then `browser measure --session NAME --name <name>`. It hides emails and phone numbers and saves `.hard-eng/browser/<name>-<width>.png`. Look at each image: the command misses names and other personal data. Crop or leave out a picture that shows one.
 - Width 560 keeps the text readable at half page width. `measure` saves the whole page, so open a page or state that is short, or scroll the part into view and crop the image. A picture taller than about 1,200 px at width 560 does not fit beside another on one printed page.
-- Caption each picture with what the red line marks. Under "Pictures with no live copy", list each state with no live picture, with the reason.
+- Caption each picture with what the red line marks and its source: "live" or "test copy". Under "Pictures with no live copy", list each state with no live picture, with the reason.

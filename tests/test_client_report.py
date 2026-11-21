@@ -309,5 +309,11 @@ def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
     assert problems(inside, template) == [
         "text holds the placeholder '[One line for each check.]'; replace it with real text"
     ]
+    closed = write(
+        tmp_path, "closed.html", body="<p>[One line for<br />each check.]</p>"
+    )
+    assert problems(closed, template) == [
+        "text holds the placeholder '[One line for each check.]'; replace it with real text"
+    ]
     assert problems(broken, template) == []
     assert problems(rows, template) == []
