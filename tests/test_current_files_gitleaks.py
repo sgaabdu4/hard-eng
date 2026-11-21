@@ -603,6 +603,83 @@ def test_secrets_files_gate_rejects_scan_targets_outside_its_snapshot(
         )
 
 
+NARROWING = [
+    ["-b", "baseline.json"],
+    ["--baseline-path=baseline.json"],
+    ["-i", "ignored"],
+    ["--gitleaks-ignore-path", "ignored"],
+    ["--enable-rule", "generic-api-key"],
+    ["--enable-rule=generic-api-key"],
+    ["--max-target-megabytes", "1"],
+    ["--max-target-megabytes=1"],
+    ["-c", "other.toml"],
+    ["--config=other.toml"],
+    ["-cother.toml"],
+    ["--exit-code", "0"],
+    ["--exit-code=0"],
+    ["--pre-commit"],
+    ["--staged"],
+    ["--max-decode-depth=0"],
+]
+SCAN_FORMS = {
+    "secrets-files": ["gitleaks", "dir", ".", "--report-path", "r.sarif"],
+    "secrets-history": [
+        "gitleaks",
+        "git",
+        ".",
+        "--log-opts=--all",
+        "--report-path",
+        "r.sarif",
+    ],
+}
+
+
+@pytest.mark.parametrize("role", SCAN_FORMS)
+@pytest.mark.parametrize("flags", NARROWING)
+def test_a_secret_scan_that_narrows_or_baselines_fails(
+    tmp_path: Path, role: str, flags: list[str]
+) -> None:
+    """HE-NO-SWITCH-OFF: a baseline, an ignore path, a rule list, a size cap, a foreign config or an exit code of zero hides findings."""
+    base = SCAN_FORMS[role]
+    report = {"type": "gitleaks", "path": "r.sarif"}
+
+    def checked(command: list[str]) -> None:
+        validate_gate(
+            {"name": role, "role": role, "command": command, "report": report},
+            tmp_path,
+            set(),
+        )
+
+    checked(base)
+    checked([*base, "--config", ".gitleaks.toml"])
+    checked([*base, "--redact=100", "--no-banner", "--report-format", "sarif"])
+    with pytest.raises(ValueError, match=r"HE-NO-SWITCH-OFF.*secret scan"):
+        checked([*base, *flags])
+
+
+def test_a_history_gate_must_scan_every_commit(tmp_path: Path) -> None:
+    """HE-NO-SWITCH-OFF: the history gate runs `gitleaks git .` over `--log-opts=--all`, never a narrower range."""
+    report = {"type": "gitleaks", "path": "r.sarif"}
+    forms = [
+        ["gitleaks", "git", ".", "--report-path", "r.sarif"],
+        ["gitleaks", "git", ".", "--log-opts=main..HEAD", "--report-path", "r.sarif"],
+        ["gitleaks", "git", "/tmp", "--log-opts=--all", "--report-path", "r.sarif"],
+        ["gitleaks", "dir", ".", "--log-opts=--all", "--report-path", "r.sarif"],
+    ]
+    for command in forms:
+        with pytest.raises(ValueError, match="secrets-history requires"):
+            validate_gate(
+                {
+                    "name": "h",
+                    "role": "secrets-history",
+                    "command": command,
+                    "report": report,
+                },
+                tmp_path,
+                set(),
+            )
+
+
 def test_history_scan_covers_only_commits_a_known_base_lacks(
     repository: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -616,11 +693,20 @@ def test_history_scan_covers_only_commits_a_known_base_lacks(
         *full[4:],
     ]
     assert base[:7] in capsys.readouterr().out
-    pushable = [*full[:3], "--log-opts=--branches --remotes --tags HEAD", *full[4:]]
+    pushable = [*full[:3], "--log-opts=--remotes --tags HEAD", *full[4:]]
     for unknown in (None, "0" * 40, "missing-reference", "--all"):
         assert gitleaks_scan.new_commits_command(full, repository, unknown) == pushable
     custom = [*full[:3], "--log-opts=main..HEAD"]
     assert gitleaks_scan.new_commits_command(custom, repository, "HEAD") == custom
+
+
+def scanned_commits(repository: Path) -> list[str]:
+    """The commits that a history scan with no known base reads."""
+    full = ["gitleaks", "git", ".", "--log-opts=--all"]
+    options = gitleaks_scan.new_commits_command(full, repository, None)[3]
+    return git_output(
+        repository, "log", "--format=%H", *options.removeprefix("--log-opts=").split()
+    ).split()
 
 
 def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
@@ -635,13 +721,30 @@ def test_full_history_scan_skips_private_refs_and_keeps_detached_head(
     git_output(repository, "branch", "-qD", "scratch")
     git_output(repository, "commit", "-q", "--allow-empty", "-m", "detached")
     detached = git_output(repository, "rev-parse", "HEAD")
-    full = ["gitleaks", "git", ".", "--log-opts=--all"]
-    options = gitleaks_scan.new_commits_command(full, repository, None)[3]
-    scanned = git_output(
-        repository, "log", "--format=%H", *options.removeprefix("--log-opts=").split()
-    ).split()
+    scanned = scanned_commits(repository)
     assert detached in scanned
     assert private not in scanned
+
+
+def test_the_history_scan_covers_remote_branches_and_tags(repository: Path) -> None:
+    """CI fetches HEAD, the remote branches and every tag, so a commit that only a pushed tag reaches is scanned; a local-only branch is not."""
+    git_output(repository, "checkout", "-qb", "scratch")
+    git_output(repository, "commit", "-q", "--allow-empty", "-m", "local branch")
+    branch_only = git_output(repository, "rev-parse", "HEAD")
+    git_output(repository, "checkout", "-q", "--detach", "HEAD~1")
+    git_output(repository, "commit", "-q", "--allow-empty", "-m", "tagged")
+    git_output(repository, "tag", "local-only")
+    tag_only = git_output(repository, "rev-parse", "HEAD")
+    git_output(repository, "checkout", "-q", "--detach", "HEAD~1")
+    git_output(repository, "commit", "-q", "--allow-empty", "-m", "on a remote")
+    remote = git_output(repository, "rev-parse", "HEAD")
+    git_output(repository, "update-ref", "refs/remotes/origin/main", remote)
+    git_output(repository, "commit", "-q", "--allow-empty", "-m", "head")
+    head = git_output(repository, "rev-parse", "HEAD")
+    scanned = scanned_commits(repository)
+    assert {head, remote} <= set(scanned)
+    assert tag_only in scanned
+    assert branch_only not in scanned
 
 
 @pytest.mark.parametrize("visibility", ["PUBLIC", "PRIVATE"])
@@ -692,3 +795,34 @@ def test_a_timed_out_gate_leaves_no_process_behind(tmp_path: Path) -> None:
     with (tmp_path / "log").open("w") as log, pytest.raises(subprocess.TimeoutExpired):
         run_gate_command("tests", spawner(pid_file), tmp_path, 2, log, log)
     assert gone(pid_file)
+
+
+@pytest.mark.parametrize("role", SCAN_FORMS)
+def test_the_project_config_passes_in_any_spelling_of_its_path(
+    tmp_path: Path, role: str
+) -> None:
+    """HE-NO-SWITCH-OFF: `./.gitleaks.toml` and `--config=.gitleaks.toml` name the project config; another file does not."""
+    base = SCAN_FORMS[role]
+    report = {"type": "gitleaks", "path": "r.sarif"}
+
+    def checked(extra: list[str]) -> None:
+        validate_gate(
+            {"name": role, "role": role, "command": [*base, *extra], "report": report},
+            tmp_path,
+            set(),
+        )
+
+    for extra in (
+        ["--config", "./.gitleaks.toml"],
+        ["--config=./.gitleaks.toml"],
+        ["-c", "./.gitleaks.toml"],
+        ["--config", "sub/../.gitleaks.toml"],
+    ):
+        checked(extra)
+    for extra in (
+        ["--config", "../.gitleaks.toml"],
+        ["--config", "sub/.gitleaks.toml"],
+        ["--config", "/tmp/.gitleaks.toml"],
+    ):
+        with pytest.raises(ValueError, match="HE-NO-SWITCH-OFF"):
+            checked(extra)

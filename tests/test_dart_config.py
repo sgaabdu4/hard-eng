@@ -23,7 +23,7 @@ from gate_config import (
     dart_scan_includes_boundaries,
     generated_sources,
 )
-from project_setup import adapt_package, dependency_command, validate_dart_exclusions
+from project_setup import adapt_package, dependency_command
 from test_setup import repository, run_setup, write_fixture_pubspec
 
 
@@ -105,27 +105,6 @@ def test_a_fault_in_an_included_package_names_the_include_to_remove(
     assert str(error.value).endswith(f": {shared.resolve()}")
 
 
-@pytest.mark.parametrize("content", ["include: ../lib/shared.yaml\n", "analyzer: {}\n"])
-def test_a_nested_settings_file_that_lacks_the_settings_is_named_with_its_step(
-    runner: ModuleType, tmp_path: Path, content: str
-) -> None:
-    """A settings file in a source folder replaces the package's settings for that folder."""
-    (tmp_path / "analysis_options.yaml").write_text(yaml.safe_dump(DART_TYPING))
-    runner.validate_typing(tmp_path, "dart", ["tool"])
-    nested = tmp_path / "tool/analysis_options.yaml"
-    nested.parent.mkdir()
-    nested.write_text(content)
-    with pytest.raises((TypeError, ValueError), match="Dart requires") as error:
-        runner.validate_typing(tmp_path, "dart", ["tool"])
-    assert f": {nested}. This file replaces the package's settings" in str(error.value)
-    assert "or remove it" in str(error.value)
-    nested.unlink()
-    (tmp_path / "analysis_options.yaml").write_text("linter: {}\n")
-    with pytest.raises(TypeError, match="Dart requires analyzer settings") as error:
-        runner.validate_typing(tmp_path, "dart", ["tool"])
-    assert str(error.value).endswith(f": {tmp_path / 'analysis_options.yaml'}")
-
-
 @pytest.mark.parametrize(
     "section,group,rule",
     [
@@ -163,7 +142,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
-    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.13.4"}
+    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.14.0"}
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
@@ -204,12 +183,11 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
             runner.validate_typing(tmp_path, "dart", ["lib"])
     path.write_text(changes["analysis_options.yaml"])
     nested = generated.parent / "analysis_options.yaml"
-    options["analyzer"]["exclude"] = ["lib/**"]
-    nested.write_text(yaml.safe_dump(options))
+    link = "include: ../analysis_options.yaml\n"
+    nested.write_text(link + "analyzer:\n  exclude: ['lib/**']\n")
     with pytest.raises(ValueError, match="cannot exclude project files"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
-    result["analyzer"]["language"]["strict-raw-types"] = True
-    nested.write_text(yaml.safe_dump(result))
+    nested.write_text(link + "analyzer:\n  language:\n    strict-raw-types: true\n")
     with pytest.raises(ValueError, match="obsolete Dart language"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
 
@@ -221,7 +199,8 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
         ("flutter_skill_lints", "^0.9.1", True),
         ("flutter_skill_lints", None, False),
         ("flutter_skill_lints", "0.13.0", True),
-        ("flutter_skill_lints", "^0.13.4", False),
+        ("flutter_skill_lints", "^0.13.4", True),
+        ("flutter_skill_lints", "^0.14.0", False),
         ("flutter_skill_lints", ">=0.11.0 <0.12.0", False),
         ("flutter_skill_lints", {"path": "../custom-plugin"}, False),
         (
@@ -334,133 +313,6 @@ def test_dart_setup_fills_sections_that_hold_only_comments(
     installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
     path.write_text(changes["analysis_options.yaml"])
     runner.validate_typing(tmp_path, "dart")
-
-
-@pytest.mark.parametrize("pattern", ["lib/**", "**/*.dart", "../**"])
-def test_dart_exclusions_reject_project_patterns(tmp_path: Path, pattern: str) -> None:
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, [pattern])
-
-
-def test_dart_exclusions_require_generated_evidence(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    source = tmp_path / "handwritten.g.dart"
-    source.write_text("void important() {}\n")
-    with pytest.raises(ValueError, match="handwritten source"):
-        validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-    attributes = tmp_path / ".gitattributes"
-    attributes.write_text("handwritten.g.dart linguist-generated=true\n")
-    validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-    attributes.unlink()
-    source.write_text("// GENERATED CODE - DO NOT MODIFY BY HAND\nconst value = 1;\n")
-    validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-
-
-@pytest.mark.parametrize("kind", ["directory", "symlink"])
-def test_dart_exclusions_reject_nonfile_matches(tmp_path: Path, kind: str) -> None:
-    path = tmp_path / "hidden.g.dart"
-    if kind == "directory":
-        path.mkdir()
-        (path / "real.dart").write_text("void important() {}\n")
-    else:
-        target = tmp_path / "real.dart"
-        target.write_text("void important() {}\n")
-        path.symlink_to(target)
-    with pytest.raises(ValueError, match="unsafe path"):
-        validate_dart_exclusions(tmp_path, ["**/*.g.dart"])
-
-
-@pytest.mark.parametrize(
-    "kind", ["empty", "generated", "ignored", "handwritten", "tracked", "symlink"]
-)
-def test_flutter_build_exclusion_preserves_source_checks(
-    runner: ModuleType, tmp_path: Path, kind: str
-) -> None:
-    (tmp_path / "pubspec.yaml").write_text(
-        "name: native_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
-    )
-    excludes = ["build/**", "**/*.g.dart"]
-    if kind != "empty":
-        relative = (
-            "build/source.g.dart"
-            if kind in {"ignored", "tracked"}
-            else "build/source.dart"
-        )
-        source = tmp_path / relative
-        source.parent.mkdir()
-        header = (
-            "// GENERATED CODE - DO NOT MODIFY BY HAND\n" if kind == "generated" else ""
-        )
-        source.write_text(header + "void important() {}\n")
-        if kind in {"ignored", "tracked"}:
-            (tmp_path / ".gitignore").write_text("build/\n")
-        if kind == "tracked":
-            git(tmp_path, "add", "-f", relative)
-        if kind == "symlink":
-            source.unlink()
-            target = tmp_path / "outside.dart"
-            target.write_text("void important() {}\n")
-            source.symlink_to(target)
-    if kind in {"handwritten", "tracked", "symlink"}:
-        with pytest.raises(ValueError, match="handwritten source|unsafe path"):
-            validate_dart_exclusions(tmp_path, excludes)
-    else:
-        validate_dart_exclusions(tmp_path, excludes)
-
-
-def test_pure_dart_platform_sources_remain_required(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    (tmp_path / "pubspec.yaml").write_text("name: plain_dart\n")
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, ["web/**"])
-
-
-@pytest.mark.parametrize(
-    "kind",
-    [
-        "empty",
-        "generated",
-        "vendored",
-        "handwritten-untracked",
-        "handwritten-tracked",
-        "handwritten-test-untracked",
-        "handwritten-test-tracked",
-    ],
-)
-def test_flutter_platform_exclusions_require_no_authored_dart(
-    runner: ModuleType, tmp_path: Path, kind: str
-) -> None:
-    (tmp_path / "pubspec.yaml").write_text(
-        "name: platform_exclusions\ndependencies:\n  flutter:\n    sdk: flutter\n"
-    )
-    android = tmp_path / "android"
-    android.mkdir()
-    if kind != "empty":
-        relative = (
-            "android/test/fixture_test.dart"
-            if kind.startswith("handwritten-test")
-            else "android/main.dart"
-        )
-        source = tmp_path / relative
-        source.parent.mkdir(exist_ok=True)
-        source.write_text("void important() {}\n")
-        if kind == "generated":
-            source.write_text("// GENERATED CODE - DO NOT MODIFY BY HAND\n")
-        if kind == "vendored":
-            (tmp_path / ".gitattributes").write_text(
-                "android/main.dart linguist-vendored=true\n"
-            )
-        if kind in {"handwritten-tracked", "handwritten-test-tracked"}:
-            git(tmp_path, "add", relative)
-    if kind.startswith("handwritten"):
-        with pytest.raises(ValueError, match="handwritten source"):
-            validate_dart_exclusions(tmp_path, ["android/**"])
-    else:
-        validate_dart_exclusions(tmp_path, ["android/**"])
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, ["ios/**"])
 
 
 def test_dart_format_discovers_authored_files_and_skips_deleted_or_generated_output(
@@ -709,7 +561,7 @@ def test_the_missing_boundary_error_names_the_file_and_the_key(
     step = re.search(r'Set (".+?": \[.+?\]) .* make (\S+) for', str(caught.value))
     assert step, str(caught.value)
     key, name = step.groups()
-    (tmp_path / name).write_text("{" + key + "}")
+    (tmp_path / name).write_text("{" + key + ', "health": {"max_crap": 30}}')
     for folder in ("domain", "ui"):
         (tmp_path / "lib" / folder).mkdir(parents=True)
         (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
@@ -739,7 +591,8 @@ def test_a_settings_file_that_the_tool_rejects_shows_the_tools_text(
 
 def boundary_tool(monkeypatch: pytest.MonkeyPatch, rules: list[dict[str, str]]) -> None:
     def native_config(*_args: object, **_kwargs: object) -> str:
-        return json.dumps({"config": {"boundaries": rules}})
+        health = {"max_crap": 30}
+        return json.dumps({"config": {"boundaries": rules, "health": health}})
 
     monkeypatch.setattr(subprocess, "check_output", native_config)
 
@@ -787,36 +640,6 @@ NESTED_ROOT: Group = {"path": ".", "language": "dart", "checks": []}
 def nested_group(path: str, language: str = "dart", role: str = "types") -> Group:
     check: Gate = {"name": role, "role": role, "command": ["dart", "analyze", "."]}
     return {"path": path, "language": language, "checks": [check]}
-
-
-def nested_project(root: Path) -> None:
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
-    (root / "pubspec.yaml").write_text("name: outer\n")
-    for name in ("packages/inner", "test/support"):
-        (root / name / "lib").mkdir(parents=True)
-        (root / name / "pubspec.yaml").write_text("name: inner\n")
-        (root / name / "lib/b.dart").write_text("void b() {}\n")
-    git(root, "add", ".")
-
-
-@pytest.mark.parametrize(
-    "pattern,children,accepted",
-    [
-        ("packages/inner/**", {"packages/inner/**"}, True),
-        ("packages/**", {"packages/inner/**"}, False),
-        ("test/support/**", {"packages/inner/**"}, False),
-        ("packages/inner/**", set(), False),
-    ],
-)
-def test_dart_exclusions_accept_only_nested_packages_with_own_types_check(
-    tmp_path: Path, pattern: str, children: set[str], accepted: bool
-) -> None:
-    nested_project(tmp_path)
-    if accepted:
-        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
-        return
-    with pytest.raises(ValueError, match="cannot exclude project files"):
-        validate_dart_exclusions(tmp_path, [pattern], children=frozenset(children))
 
 
 def test_nested_package_exclusions_follow_child_types_checks() -> None:
@@ -955,3 +778,74 @@ def test_one_install_excludes_a_nested_package_that_gets_its_types_check_later(
     before = (gates.read_bytes(), options.read_bytes())
     run_setup(installer, tmp_path)
     assert (gates.read_bytes(), options.read_bytes()) == before
+
+
+def test_a_flutter_package_without_flutter_skill_lints_is_refused(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    """The Flutter rules live in flutter_skill_lints, so a Flutter package without the plugin gets none of them."""
+    options = json.loads(json.dumps(DART_TYPING))
+    path = tmp_path / "analysis_options.yaml"
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    pubspec = tmp_path / "pubspec.yaml"
+    pubspec.write_text("name: app\ndependencies:\n  flutter:\n    sdk: flutter\n")
+    with pytest.raises(ValueError, match=r"flutter_skill_lints") as caught:
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+    assert "building-flutter-apps/references/analysis_options.yaml" in str(caught.value)
+
+    options["plugins"] = {"riverpod_lint": "^3.1.9"}
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    with pytest.raises(ValueError, match=r"flutter_skill_lints"):
+        runner.validate_typing(tmp_path, "dart", ["lib"])
+
+    options["plugins"] = {"flutter_skill_lints": "^0.14.0"}
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    runner.validate_typing(tmp_path, "dart", ["lib"])
+
+    nested = tmp_path / "test"
+    nested.mkdir()
+    options.pop("plugins")
+    (nested / "analysis_options.yaml").write_text("include: ../analysis_options.yaml\n")
+    runner.validate_typing(tmp_path, "dart", ["lib"])
+
+    pubspec.write_text("name: tool\nenvironment:\n  sdk: ^3.9.0\n")
+    path.write_text(yaml.safe_dump(options, sort_keys=False))
+    runner.validate_typing(tmp_path, "dart", ["lib"])
+
+
+def test_dart_setup_migrates_locally_included_plugin_profile(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """An included local analysis profile with an older plugin pin must migrate alongside the root options."""
+    shared = tmp_path / "shared_options.yaml"
+    shared.write_text(
+        yaml.safe_dump(
+            {"plugins": {"flutter_skill_lints": "^0.13.4", "riverpod_lint": "^3.1.9"}},
+            sort_keys=False,
+        )
+    )
+    package = tmp_path / "app"
+    package.mkdir()
+    (package / "pubspec.yaml").write_text(
+        "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n"
+    )
+    (package / "analysis_options.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "include": "../shared_options.yaml",
+                "plugins": {"flutter_skill_lints": "^0.13.4"},
+            },
+            sort_keys=False,
+        )
+    )
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, package, {"path": "app", "checks": []}, changes)
+    for name, content in changes.items():
+        (tmp_path / name).write_text(content)
+    assert (
+        yaml.safe_load(shared.read_text())["plugins"]["flutter_skill_lints"]
+        == "^0.14.0"
+    )
+    runner.validate_typing(package, "dart", ["lib"])

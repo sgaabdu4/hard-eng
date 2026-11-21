@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Staff</title>
+<style>
+body{margin:0;background:#fff;font:16px/1.5 system-ui,sans-serif;color:#1d1d1f}
+main{max-width:640px;margin:24px auto;padding:0 16px}
+label{display:block;margin:16px 0 4px}
+.wrap{position:relative;max-width:320px}
+.wrap input{width:100%;height:44px;box-sizing:border-box;font-size:16px;padding:0 48px 0 12px;border:1px solid #767676;border-radius:8px}
+.wrap .icon{position:absolute;pointer-events:none}
+.row{display:flex;gap:8px;max-width:420px}.row input{flex:1;height:44px;box-sizing:border-box;font-size:16px;padding:0 12px;border:1px solid #767676;border-radius:8px}
+.row button,.bar button{min-width:44px;min-height:44px;font-size:16px}
+.meta{color:#55565c;font-size:14px;margin:0 0 4px}
+</style></head><body><main>
+<form><label for="pw">Password</label><div class="row"><input id="pw" type="password"><button type="button">Show</button></div></form>
+<form role="search"><label for="s1">Find a person</label><div class="wrap"><input id="s1" type="search"></div></form>
+<form role="search"><label for="s2">Find a booking</label><div class="row"><div class="wrap" style="flex:1"><input id="s2" type="search"><svg class="icon" style="left:auto;right:14px;top:12px" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="none" stroke="#1d1d1f" stroke-width="2"/></svg></div><button type="submit">Search</button></div></form>
+</main></body></html>

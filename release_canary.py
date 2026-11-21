@@ -4,6 +4,8 @@ With --ci it only sets up and checks the public new projects, for hard-eng's own
 
 import argparse
 import fcntl
+import importlib.util
+import io
 import json
 import os
 import re
@@ -13,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import tokenize
 from collections.abc import Generator
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
@@ -96,6 +99,10 @@ def test_signing_round_trips_2k_values_within_budget() -> None:
     # Fastest of 5 runs, so a busy shared runner's pause does not fail a fast build.
     assert min(run_seconds() for _ in range(5)) < 1.0
 """
+SWITCH_OFF = re.compile(
+    r"#\s*(noqa\b|(type|pyright|pyrefly):\s*ignore|pylint:\s*disable|pragma:\s*no cover|fmt:\s*(off|skip))"
+)
+EXCUSE = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b")
 KINDS = ("installed", "scaffold", "greenfield", "brownfield")
 # Installed projects prove the release with their full checks; new projects prove the agents.
 AGENT_KINDS = ("scaffold", "greenfield", "brownfield")
@@ -114,6 +121,7 @@ CI_SYSTEMS = ("ubuntu-latest", "macos-latest")
 PUSH_LOOKUP_SECONDS = 120
 RELEASE_GATE_SECONDS = 3720
 RERUN = "Rerun this job once the Canary run for develop's push has finished."
+RELEASED_INSIDE = "the candidate reached main inside a release, so it has no older release to update from"
 AGENTS = ("claude", "codex")
 SELECTABLE_AGENTS = (*AGENTS, "agy")
 TASK = (
@@ -126,17 +134,8 @@ TASK = (
 
 
 DOCUMENTS = {
-    "PRODUCT.md": (
-        "# Canary\n\nA throwaway project for a Hard Eng release trial.\n\n"
-        "## Users\n\nThe Hard Eng maintainer.\n\n"
-        "## Problem\n\nA release must install and pass in a real project.\n\n"
-        "## Product Purpose\n\nGive the release a project to install into.\n\n"
-        "## Boundaries\n\nNo users, data or deployment.\n"
-    ),
-    "DESIGN.md": (
-        "# Canary\n\n## Overview\n\nNo visual design.\n\n"
-        "## Components\n\nNone.\n\n## Do's and Don'ts\n\nKeep it minimal.\n"
-    ),
+    "PRODUCT.md": "# Canary\n\nA throwaway project for a Hard Eng release trial.\n\n## Users\n\nThe Hard Eng maintainer.\n\n## Problem\n\nA release must install and pass in a real project.\n\n## Product Purpose\n\nGive the release a project to install into.\n\n## Boundaries\n\nNo users, data or deployment.\n",
+    "DESIGN.md": "# Canary\n\n## Overview\n\nNo visual design.\n\n## Components\n\nNone.\n\n## Do's and Don'ts\n\nKeep it minimal.\n",
 }
 
 
@@ -363,6 +362,58 @@ def drop_ended_python(work: Path) -> None:
     pyproject.write_text(text.replace('">=3.10"', '">=3.11"', 1))
 
 
+def refactored_source(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    dropped: set[int] = set()
+    previous, kept = 0, False
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+        row, column = token.start
+        line = lines[row - 1]
+        bad = SWITCH_OFF.search(token.string)
+        if line[:column].strip():
+            if bad:
+                ending = line[len(line.rstrip("\r\n")) :]
+                lines[row - 1] = line[:column].rstrip() + ending
+            continue
+        kept = kept and row == previous + 1
+        previous = row
+        if bad or EXCUSE.search(token.string) or kept:
+            dropped.add(row)
+        else:
+            kept = True
+    return "".join(line for row, line in enumerate(lines, 1) if row not in dropped)
+
+
+RUFF_IGNORE = re.compile(r"^ignore = \[\n(?:[ \t]+.*\n)*?\]\n", re.MULTILINE)
+RUFF_FIX = re.compile(r"^fix = true\n", re.MULTILINE)
+RUFF_SELECT = re.compile(r"^select = \[", re.MULTILINE)
+
+
+def refactor_for_strict_checks(work: Path) -> None:
+    """The refactor a real adoption makes first: no type ignores, TODO markers, comment blocks or Ruff ignore list, fix switch or narrowed rule set."""
+    changed = 0
+    for name in output(["git", "ls-files", "*.py"], work).splitlines():
+        path = work / name
+        text = path.read_text()
+        refactored = refactored_source(text)
+        if refactored != text:
+            path.write_text(refactored)
+            changed += 1
+    settings = work / "pyproject.toml"
+    if settings.exists():
+        text = settings.read_text()
+        kept = RUFF_SELECT.sub(
+            "extend-select = [", RUFF_FIX.sub("", RUFF_IGNORE.sub("", text))
+        )
+        if kept != text:
+            settings.write_text(kept)
+            changed += 1
+    if not changed:
+        raise RuntimeError("the brownfield snapshot has nothing left to refactor")
+
+
 def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -> None:
     """Create the target, install Hard Eng from the release and commit."""
     if kind == "brownfield":
@@ -377,6 +428,7 @@ def install_new(kind: str, value: str, source: Path, work: Path, log: IO[str]) -
         # A real adoption first upgrades the snapshot's old dependencies in their own PR.
         drop_ended_python(work)
         must(work, log, "upgrade failed", ["uv", "lock", "--upgrade"])
+        refactor_for_strict_checks(work)
     else:
         work.mkdir()
         must(work, log, "setup failed", ["git", "init", "-q"])
@@ -405,9 +457,14 @@ def install_last_release(
     log: IO[str],
     checkout: Path = SOURCE,
 ) -> None:
-    """Install the release users have: the candidate's merge base with main."""
+    """Install the release users have: the candidate's merge base with main, or for a main commit, the main tip that it replaced."""
     old = work.with_name(f"{work.name}.release")
     released = output(["git", "merge-base", revision, "origin/main"], checkout)
+    if released == output(["git", "rev-parse", revision], checkout):
+        main = output(["git", "rev-list", "--first-parent", "origin/main"], checkout)
+        if released not in main.split():
+            raise Failed(f"{RELEASED_INSIDE}; run the canary on a newer develop commit")
+        released = output(["git", "rev-parse", f"{released}^1"], checkout)
     must(
         work.parent, log, "clone failed", ["git", "clone", "-q", str(source), str(old)]
     )
@@ -455,10 +512,8 @@ def prepare(
 
 
 def agent_command(agent: str, work: Path) -> list[str]:
-    if agent == "claude":
-        return ["claude", "-p", "--dangerously-skip-permissions", TASK]
-    if agent == "agy":
-        return ["agy", "-p", "--dangerously-skip-permissions", TASK]
+    if agent in ("claude", "agy"):
+        return [agent, "-p", "--dangerously-skip-permissions", TASK]
     # Codex lists untrusted project hooks but runs none; this release's hooks are under test.
     return [
         *("codex", "exec", "--enable", "hooks", "--dangerously-bypass-hook-trust"),
@@ -811,6 +866,12 @@ def arguments() -> argparse.Namespace:
 
 def main() -> int:
     args = arguments()
+    if importlib.util.find_spec("yaml") is None:
+        print(
+            "This Python has no yaml, so the check would restart through uv and lose the "
+            "canary's verified release. Run: uv run --locked python release_canary.py ..."
+        )
+        return 1
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     with LOCK.open("a") as handle:
         try:

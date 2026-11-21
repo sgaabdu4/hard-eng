@@ -163,7 +163,10 @@ def without_host_markers() -> dict[str, str]:
         for name, value in os.environ.items()
         if name != "CLAUDECODE"
         and (name == "CODEX_HOME" or not name.startswith("CODEX_"))
-        and not name.startswith(("ANTIGRAVITY_", "AGY_"))
+        and (
+            name == "AGY_CLI_DISABLE_AUTO_UPDATE"
+            or not name.startswith(("ANTIGRAVITY_", "AGY_"))
+        )
     }
 
 
@@ -173,11 +176,9 @@ def git_text(root: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
-def store(root: Path, revision: str) -> Path:
+def store(root: Path, revision: str, kind: str = "challenge") -> Path:
     return (
-        root
-        / git_text(root, "rev-parse", "--git-path", "hard-eng/challenge")
-        / revision
+        root / git_text(root, "rev-parse", "--git-path", f"hard-eng/{kind}") / revision
     )
 
 

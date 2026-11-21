@@ -7,9 +7,15 @@ from pathlib import Path
 
 import gate_config
 import pytest
+import reports
 import update
 from conftest import SOURCE
-from gate_config import Group
+from dart_boundaries import validate_dart_boundaries
+from fallow_report import Report, validate_scanner_command
+from gate_config import Group, JsonObject, JsonValue
+from project_setup import strict_scanner_flags
+
+from setup import configure_dart_scanner
 
 TEMPLATES = SOURCE / ".agents/skills/he/templates"
 SCRIPTS = {
@@ -45,7 +51,7 @@ def swap(group: Group, role: str, command: list[str]) -> Group:
     [
         ("python", "format", ["true"], "ruff format"),
         ("python", "types", ["sh", "-c", "exit 0"], "pyrefly check"),
-        ("python", "dead-code", ["echo", "ruff", "check"], "vulture"),
+        ("python", "dead-code", ["echo", "ruffian", "check"], "vulture"),
         ("python", "dead-code", ["true"], "vulture"),
         ("python", "dead-code", ["skylos", "src", "--strict"], "vulture"),
         ("python", "dead-code", ["uvx", "skylos@latest", "src", "--json"], "vulture"),
@@ -87,7 +93,7 @@ def test_a_shared_scan_must_name_its_tool() -> None:
     ("language", "role", "command"),
     [
         ("python", "lint", ["uvx", "ruff@latest", "check", "."]),
-        ("python", "format", ["bash", "-c", "exec uvx ruff@0.14.0 format --check ."]),
+        ("python", "format", ["uvx", "ruff@0.14.0", "format", "--check", "."]),
         (
             "python",
             "dead-code",
@@ -129,13 +135,8 @@ def test_fixture_gh_ignores_the_developers_sign_in(
     assert not signed_in
 
 
-def test_gate_validation_rejects_javascript_package_manager_drift(
-    tmp_path: Path,
-) -> None:
-    """HE-PERFORMANCE-SUITE: a package needs a performance suite or a reviewed exception."""
-    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
-    (tmp_path / "bun.lock").touch()
-    group: Group = {
+def javascript_group() -> Group:
+    return {
         "path": ".",
         "language": "javascript",
         "sources": ["src"],
@@ -161,6 +162,15 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
             },
         ],
     }
+
+
+def test_gate_validation_rejects_javascript_package_manager_drift(
+    tmp_path: Path,
+) -> None:
+    """HE-PERFORMANCE-SUITE: a package needs a performance suite or a reviewed exception."""
+    (tmp_path / "package.json").write_text('{"packageManager":"bun@1.3.0"}')
+    (tmp_path / "bun.lock").touch()
+    group = javascript_group()
     assert gate_config.validate_group(tmp_path, group, set()) == 7
     performance = group["checks"].pop()
     with pytest.raises(ValueError, match="mandatory performance"):
@@ -194,6 +204,33 @@ def test_gate_validation_rejects_javascript_package_manager_drift(
     group["checks"][0]["command"] = ["bun", "run", "typecheck"]
     with pytest.raises(ValueError, match="must use Bun, not: npx"):
         gate_config.validate_group(tmp_path, group, set())
+
+
+def test_a_react_package_without_its_react_gate_is_refused(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        json.dumps({"packageManager": "bun@1.3.0", "dependencies": {"react": "19"}})
+    )
+    (tmp_path / "bun.lock").touch()
+    group = javascript_group()
+    shared = {"lockfiles", "vulnerabilities", "freshness", "security"}
+    with pytest.raises(ValueError, match="missing mandatory checks: react;"):
+        gate_config.validate_package_services(tmp_path, group, {}, {}, shared)
+    group["checks"].append(
+        {
+            "name": "react-doctor",
+            "role": "react",
+            "command": [
+                "react-doctor",
+                "--blocking",
+                "warning",
+                "--no-respect-inline-disables",
+                "--json-out",
+                "coverage/react-doctor.json",
+            ],
+            "report": {"type": "react-doctor", "path": "coverage/react-doctor.json"},
+        }
+    )
+    gate_config.validate_package_services(tmp_path, group, {}, {}, shared)
 
 
 def test_the_shipped_format_gate_covers_each_installed_workflow() -> None:
@@ -236,3 +273,172 @@ def test_the_import_order_of_the_coverage_package_does_not_depend_on_the_reports
         check=False,
     )
     assert result.returncode == 0, result.stdout
+
+
+def clean_typescript_report(health: JsonObject | None) -> JsonObject:
+    summary: JsonObject = {"files_analyzed": 4, "functions_analyzed": 3}
+    summary |= {
+        "max_cyclomatic_threshold": 20,
+        "max_cognitive_threshold": 15,
+        "max_unit_size_threshold": 60,
+    }
+    summary |= {"max_crap_threshold": 30.0, "functions_above_threshold": 0}
+    summary |= {"severity_critical_count": 0, "severity_high_count": 0}
+    summary |= {"severity_moderate_count": 0}
+    clean: JsonObject = {"findings": [], "summary": summary}
+    check: JsonObject = {"total_issues": 0, "summary": {"total_issues": 0}}
+    check["entry_points"] = {"total": 1}
+    stats: JsonObject = {"clone_groups": 0, "duplication_percentage": 0}
+    groups: list[JsonValue] = []
+    stats |= {"total_files": 1, "total_lines": 5, "total_tokens": 30}
+    report: JsonObject = {"kind": "combined", "check": check}
+    report["dupes"] = {"clone_groups": groups, "stats": stats}
+    report["health"] = clean if health is None else {**clean, **health}
+    kinds = ("rule-packs-not-configured", "coverage-auto-detected", "shallow-clone")
+    kinds += ("change-coupling-skipped", "hotspots-skipped")
+    notes: list[JsonValue] = [{"path": ".", "kind": kind} for kind in kinds]
+    report["workspace_diagnostics"] = notes
+    return report
+
+
+def test_the_typescript_scanner_gate_fails_complex_and_crap_code(
+    tmp_path: Path,
+) -> None:
+    """The TypeScript Fallow gate asks for health, so it fails the complexity and CRAP code that the Dart gate fails."""
+    group = template_group(tmp_path, "javascript")
+    (gate,) = [g for g in group["checks"] if g["role"] == "dead-code-duplicates"]
+    command = gate["command"]
+    assert command[command.index("--only") + 1] == "dead-code,dupes,health"
+
+    old = ["fallow", "--only", "dead-code,dupes", "--fail-on-issues"]
+    report: Report = {"type": "fallow", "path": "coverage/fallow.json"}
+    with pytest.raises(ValueError, match="health"):
+        validate_scanner_command(old, report)
+    package: Group = {"path": ".", "checks": [{"name": "scan", "command": [*old]}]}
+    strict_scanner_flags(package)
+    assert package["checks"][0]["command"] == [*old[:2], "dead-code,dupes,health"] + [
+        "--fail-on-issues"
+    ]
+    validate_scanner_command(package["checks"][0]["command"], report)
+
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps(clean_typescript_report(None)))
+    reports.validate_fallow(path)
+    found: JsonObject = {"findings": [{"path": "a.ts", "exceeded": "crap"}]}
+    off: JsonObject = {"summary": {"max_crap_threshold": 0}}
+    for health in (found, off):
+        path.write_text(json.dumps(clean_typescript_report(health)))
+        with pytest.raises(ValueError, match="CRAP|complexity"):
+            reports.validate_fallow(path)
+    for key in (
+        "max_cyclomatic_threshold",
+        "max_cognitive_threshold",
+        "max_crap_threshold",
+        "max_unit_size_threshold",
+    ):
+        raised = clean_typescript_report(None)
+        health = raised["health"]
+        assert isinstance(health, dict)
+        summary = health["summary"]
+        assert isinstance(summary, dict)
+        summary[key] = 1000.0
+        path.write_text(json.dumps(raised))
+        with pytest.raises(ValueError, match=rf"{key} is above"):
+            reports.validate_fallow(path)
+    skipped = ["fallow", "--skip", "health", "--fail-on-issues"]
+    with pytest.raises(ValueError, match="health"):
+        validate_scanner_command(skipped, report)
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "max_cyclomatic_threshold",
+        "max_cognitive_threshold",
+        "max_crap_threshold",
+        "max_unit_size_threshold",
+    ],
+)
+def test_a_fallow_audit_with_a_raised_health_limit_fails(
+    tmp_path: Path, key: str
+) -> None:
+    """An audit gate is held to the same health limits as a health scan."""
+    combined = clean_typescript_report(None)
+    audit: JsonObject = {"kind": "audit", "command": "audit", "verdict": "pass"}
+    audit |= {"dead_code": combined["check"], "duplication": combined["dupes"]}
+    audit["complexity"] = combined["health"]
+    path = tmp_path / "audit.json"
+    path.write_text(json.dumps(audit))
+    reports.validate_fallow(path)
+    health = combined["health"]
+    assert isinstance(health, dict)
+    summary = health["summary"]
+    assert isinstance(summary, dict)
+    summary[key] = 1000
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match=rf"{key} is above"):
+        reports.validate_fallow(path)
+
+
+def test_a_dart_scanner_gate_needs_the_fallow_equal_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dart Decimate 0.0.76 fails a CRAP score equal to its limit, so 30 fails what Fallow's 30 fails."""
+    for folder in ("domain", "ui"):
+        (tmp_path / "lib" / folder).mkdir(parents=True)
+        (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
+    boundaries: list[JsonValue] = [{"from": "lib/domain", "disallow": "lib/ui"}]
+    command = ["dart-decimate", "check", ".", "--strict"]
+
+    def check_with(health: JsonObject) -> None:
+        config: JsonObject = {"boundaries": boundaries, "health": health}
+
+        def native_config(*_args: object, **_kwargs: object) -> str:
+            return json.dumps({"config": config})
+
+        monkeypatch.setattr(subprocess, "check_output", native_config)
+        validate_dart_boundaries(command, tmp_path, 5)
+
+    refused: list[JsonObject] = [{}, {"max_crap": None}, {"max_crap": 31}]
+    refused.append({"max_crap": 0})
+    for health in refused:
+        with pytest.raises(ValueError, match=r'"health": \{"max_crap": 30\}'):
+            check_with(health)
+    for limit in (30, 12):
+        check_with({"max_crap": limit})
+
+    changes: dict[str, str] = {}
+    configure_dart_scanner(tmp_path, tmp_path, changes)
+    written = json.loads(changes[".dart-decimaterc.json"])
+    assert written["health"] == {"max_crap": 30}
+    starter = SOURCE / ".agents/starters/flutter/.dart-decimaterc.json"
+    assert json.loads(starter.read_text())["health"] == {"max_crap": 30}
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["fallow", "dead-code", "--fail-on-issues"],
+        ["fallow", "dupes", "--fail-on-issues"],
+        ["fallow", "flags", "--fail-on-issues"],
+        ["fallow", "security", "--fail-on-issues"],
+        ["fallow", "similar-code", "--fail-on-issues"],
+        ["fallow", "--fail-on-issues", "dead-code"],
+        ["fallow", "--quiet", "dead-code", "--fail-on-issues"],
+        ["bunx", "fallow@latest", "dead-code", "--fail-on-issues"],
+    ],
+)
+def test_a_fallow_subcommand_without_health_fails(command: list[str]) -> None:
+    """HE-NO-SWITCH-OFF: a Fallow analysis subcommand other than health or audit skips the complexity analysis, like `--only dead-code`."""
+    report: Report = {"type": "fallow", "path": "coverage/fallow.json"}
+    with pytest.raises(
+        ValueError, match=r"Fallow scans must check health[\s\S]*delete this gate"
+    ):
+        validate_scanner_command(command, report)
+    for passing in (
+        ["fallow", "--fail-on-issues"],
+        ["fallow", "health", "--fail-on-issues"],
+        ["fallow", "--only", "dead-code,health", "--fail-on-issues"],
+        ["fallow", "--quiet", "--fail-on-issues"],
+    ):
+        validate_scanner_command(passing, report)

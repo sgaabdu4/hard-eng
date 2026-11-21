@@ -528,6 +528,15 @@ def select_release(source: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(update, "latest_verified", fixed_revision(revision))
 
 
+def test_update_adds_the_strict_scanner_flags_to_an_old_fallow_gate(
+    old_fallow_release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = old_fallow_release
+    select_release(source, monkeypatch)
+    update.update(target)
+    assert "dead-code,dupes,health" in (target / "hard-eng.gates.json").read_text()
+
+
 def test_development_install_does_not_fetch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -546,7 +555,7 @@ def test_development_install_does_not_fetch(
     ("case", "expected"),
     [
         ("feature", {"apps/web"}),
-        ("first-typescript", None),
+        ("first-typescript", {"apps/web"}),
         ("gate-config", None),
         ("unverified", None),
         ("edited-hook", None),
@@ -565,7 +574,7 @@ def test_update_mixed_with_feature_work_checks_only_affected_packages(
     base = git(target, "rev-parse", "HEAD")
     select_release(source, monkeypatch)
     update.update(target)
-    # A first TypeScript file makes setup plan a boundaries gate, so the gate list changes.
+    # A first TypeScript file adds no gate, because the combined Fallow scan already checks the boundary rules.
     page = target / f"apps/web/page.{'ts' if case == 'first-typescript' else 'txt'}"
     page.parent.mkdir(parents=True)
     page.write_text("a page\n")
@@ -849,7 +858,7 @@ def test_retired_families_config_is_regenerated_and_reported(
     assert "skills (script not found)" in notice and "inline (" not in notice
     assert "flagged (script not found)" in notice
     assert "lint (program not found): ['node_modules/.bin/biome'" in notice
-    assert "audit (Fallow audit gates require a native fallow report" in notice
+    assert "audit (HE-NO-SWITCH-OFF" in notice
     assert "removed ([Errno 2] No such file or directory" in notice
     written = (tmp_path / "hard-eng.gates.json").read_text()
     config = json.loads(written)

@@ -126,6 +126,7 @@ def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
         merged = configure_agent_hooks(agent, current, command)
         if merged != json.loads(text):
             changes[name] = json_file(root, merged)
+    changes.update(agent_hooks.codex_rule_change(root))
     from mcp_setup import retire_copilot_hooks
 
     return retire_copilot_hooks(root, command)
@@ -152,7 +153,7 @@ def configure_mcp(root: Path, changes: dict[str, str]) -> list[str]:
 
 
 def configure_typing_checks(package: Group) -> None:
-    from untrusted_input import strict_typing_rules
+    from untrusted_input import retire_covered_annotations, strict_typing_rules
 
     strict_typing_rules(package)
     template = (
@@ -198,6 +199,8 @@ def configure_typing_checks(package: Group) -> None:
                     gate["role"] = "project-" + required["role"]
             required["name"] = "strict-" + required["name"]
             package["checks"].append(required)
+            if required["role"] == "annotations":
+                retire_covered_annotations(package, required)
 
 
 def adopt_root_dart_gates(checks: list[Gate], required: Gate) -> list[list[str]]:
@@ -220,9 +223,9 @@ def apply_dart_typing(
     required: dict[str, JsonObject],
     directory: Path,
     children: frozenset[str] = frozenset(),
+    marked: frozenset[str] = frozenset(),
 ) -> None:
-    from dart_boundaries import dart_rule_settings
-    from project_setup import validate_dart_exclusions
+    from dart_boundaries import dart_rule_settings, validate_dart_exclusions
     from settings_merge import merge
 
     for section, groups in required.items():
@@ -256,7 +259,7 @@ def apply_dart_typing(
                     current.pop("strict-raw-types", None)
                 merge(current, settings, (section, group))
             else:
-                validate_dart_exclusions(directory, current, children)
+                validate_dart_exclusions(directory, current, children, marked=marked)
 
 
 def configure_dart(
@@ -276,16 +279,23 @@ def configure_dart(
         add_exclusions,
         dart_options,
         localization_exclusions,
+        migrate_included_dart_plugins,
     )
 
     options = cast("JsonObject", dart_options(target)) if target.exists() else {}
     original = deepcopy(options)
     existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
+    migrate_included_dart_plugins(root, target, options, SOURCE, changes)
+    localized = localization_exclusions(directory)
     apply_dart_typing(
-        options, cast("dict[str, JsonObject]", DART_TYPING), directory, children
+        options,
+        cast("dict[str, JsonObject]", DART_TYPING),
+        directory,
+        children,
+        marked=localized,
     )
-    add_exclusions(options, children | localization_exclusions(directory))
+    add_exclusions(options, children | localized)
     content = (
         existing
         if target.exists() and options == original
@@ -383,10 +393,14 @@ def configure_dart_scanner(
     root: Path, directory: Path, changes: dict[str, str]
 ) -> None:
     from dart_boundaries import SETTINGS_FILES
+    from fallow_report import HEALTH_LIMITS
     from gate_config import json_file
 
     if not any((directory / name).exists() for name in SETTINGS_FILES):
-        scanner: dict[str, list[str]] = {"ignore_patterns": [".agents/**"]}
+        scanner = {
+            "ignore_patterns": [".agents/**"],
+            "health": {"max_crap": HEALTH_LIMITS["max_crap_threshold"]},
+        }
         path = directory / ".dart-decimaterc.json"
         changes[str(path.relative_to(root))] = json_file(root, scanner)
 
@@ -528,7 +542,7 @@ def configure_shellcheck(
                 "name": "shellcheck",
                 "role": "shell",
                 "parallel": True,
-                "command": ["shellcheck", "--", *scripts],
+                "command": ["shellcheck", "--norc", "--", *scripts],
             }
         )
 
@@ -765,8 +779,6 @@ def plan_install(
         SOURCE_FILE,
         json_file,
         parse_config,
-        repository_files,
-        typescript_packages,
     )
 
     changes[SOURCE_FILE] = json_file(root, install_record(unused))
@@ -791,15 +803,16 @@ def plan_install(
         add_freshness,
         browser_test_coverage,
         drop_unanchored_excludes,
+        retire_boundary_gate,
         strict_scanner_flags,
     )
 
     drop_unanchored_excludes(config)
-    typescript = typescript_packages(root, repository_files(root))
     for package in config.get("packages", []):
         strict_scanner_flags(package)
         add_freshness(root, SOURCE, package)
-        adapt_boundaries(package, typescript)
+        adapt_boundaries(package)
+        retire_boundary_gate(root, package, changes)
         browser_test_coverage(root / package["path"], package)
         configure_semgrep_ignore(root, package, changes)
         configure_typing_checks(package)

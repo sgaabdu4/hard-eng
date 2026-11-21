@@ -1,0 +1,21 @@
+Analyzing app...
+
+  error - lib/area_1/file_1.dart:171:9 - Don't use BuildContext after an await without checking context.mounted. Capture State.context before the await, then check 'if (!context.mounted) return;'. - use_context_mounted_after_await
+  error - lib/area_1/file_1.dart:198:5 - Don't use BuildContext after an await without checking context.mounted. Capture State.context before the await, then check 'if (!context.mounted) return;'. - use_context_mounted_after_await
+  error - lib/area_1/file_1.dart:200:35 - Avoid magic string and numeric literals in executable code. Move contract strings into a dedicated keys/schema/codec/request owner, and move numeric thresholds, grid sizes, or windows into named constants, value objects, or semantic helpers. Do not appease this rule with names that only encode the literal type or value. - avoid_magic_literals
+  error - lib/area_1/file_1.dart:200:47 - Avoid magic string and numeric literals in executable code. Move contract strings into a dedicated keys/schema/codec/request owner, and move numeric thresholds, grid sizes, or windows into named constants, value objects, or semantic helpers. Do not appease this rule with names that only encode the literal type or value. - avoid_magic_literals
+   info - lib/area_2/file_2.dart:73:47 - Avoid type casts. Use pattern matching, a typed boundary, or explicit parsing instead. - avoid_type_casts
+  error - lib/area_2/file_2.dart:109:27 - Use dot shorthand when the surrounding context already supplies the type. Remove the repeated type name. - prefer_dot_shorthands
+  error - lib/area_2/file_2.dart:113:32 - Use dot shorthand when the surrounding context already supplies the type. Remove the repeated type name. - prefer_dot_shorthands
+   info - lib/area_3/file_3.dart:54:25 - Avoid parameter lists with more than four positional or required parameters. Group related inputs into a named type or split the API. - avoid_long_parameter_list
+   info - lib/area_4/file_4.dart:237:43 - Avoid continue statements. Refactor the loop body so continue is no longer needed. - avoid_continue
+   info - lib/area_4/file_4.dart:238:38 - Avoid continue statements. Refactor the loop body so continue is no longer needed. - avoid_continue
+   info - lib/area_5/file_5.dart:23:11 - Avoid type casts. Use pattern matching, a typed boundary, or explicit parsing instead. - avoid_type_casts
+   info - lib/area_6/file_6.dart:54:25 - Avoid parameter lists with more than four positional or required parameters. Group related inputs into a named type or split the API. - avoid_long_parameter_list
+  error - lib/area_7/file_7.dart:73:33 - Avoid `addPostFrameCallback`, which defers work to the next frame. Fix the order of events at its cause: drive the work from state, a listener, a controller that corrects during layout, or the event handler. - avoid_frame_deferral
+   info - lib/area_8/file_8.dart:1:1 - 'package:flutter/material.dart' is deprecated and shouldn't be used. Use package:material_ui/material_ui.dart instead. This feature was deprecated after v3.47.0-0.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib/area_9/file_9.dart:1:1 - 'package:flutter/material.dart' is deprecated and shouldn't be used. Use package:material_ui/material_ui.dart instead. This feature was deprecated after v3.47.0-0.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+  error - lib/area_10/file_10.dart:112:37 - Avoid `endOfFrame`, which defers work to the next frame. Fix the order of events at its cause: drive the work from state, a listener, a controller that corrects during layout, or the event handler. - avoid_frame_deferral
+  error - lib/area_10/file_10.dart:115:37 - Avoid `endOfFrame`, which defers work to the next frame. Fix the order of events at its cause: drive the work from state, a listener, a controller that corrects during layout, or the event handler. - avoid_frame_deferral
+
+17 issues found.

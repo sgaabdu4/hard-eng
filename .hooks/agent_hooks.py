@@ -317,6 +317,26 @@ def remove_routine_hooks(current: JsonObject, agent: str, command: str) -> None:
         del current["outputStyle"]
 
 
+CODEX_RULES_FILE = ".codex/rules/hard-eng.rules"
+CODEX_MERGE_GH = "gh|env gh|command gh|xargs gh|exec gh|/opt/homebrew/bin/gh|/usr/local/bin/gh|/usr/bin/gh"
+CODEX_MERGE_PATTERNS = [
+    [*word.split(), "pr", "merge"] for word in CODEX_MERGE_GH.split("|")
+]
+CODEX_MERGE_RULE = "".join(
+    f"prefix_rule(\n    pattern = {json.dumps(pattern)},\n"
+    '    decision = "forbidden",\n'
+    '    justification = "Merge through python3 .hooks/hard-eng.py ship --pr <PR URL> --stage merge",\n)\n'
+    for pattern in CODEX_MERGE_PATTERNS
+)
+
+
+def codex_rule_change(root: Path) -> dict[str, str]:
+    rules = root / CODEX_RULES_FILE
+    if rules.is_file() and rules.read_text() == CODEX_MERGE_RULE:
+        return {}
+    return {CODEX_RULES_FILE: CODEX_MERGE_RULE}
+
+
 HOOK_FILES = {
     "claude": ".claude/settings.json",
     "codex": ".codex/hooks.json",
@@ -810,38 +830,11 @@ def unchanged_notice(root: Path, notice: str) -> JsonObject:
     return with_freshness(root, {"systemMessage": message})
 
 
-def paused_turn(payload: JsonObject) -> JsonObject | None:
-    if (
-        payload.get("parentConversationId")
-        or payload.get("terminationReason") == "USER_CANCELED"
-    ):
-        return {}
-    if (
-        payload.get("stop_hook_active") is True
-        or payload.get("continuationActive") is True
-    ):
-        return {
-            "systemMessage": "Report blockers honestly; don't claim a pass; no stop-hook loop."
-        }
-    tasks = payload.get("background_tasks")
-    if payload.get("fullyIdle") is False or (
-        isinstance(tasks, list)
-        and any(
-            isinstance(t, dict)
-            and t.get("type") in {"subagent", "workflow", "teammate"}
-            for t in tasks
-        )
-    ):
-        return {
-            "systemMessage": "Hard Eng: background agents still editing; checks run after they finish. Don't claim done."
-        }
-    return None
-
-
 @keeping("listings")
 def completion(root: Path, payload: JsonObject, agent: str | None = None) -> JsonObject:
     from plans import planning_feedback, planning_only
     from project_files import background
+    from settings_merge import paused_turn
 
     if (paused := paused_turn(payload)) is not None:
         return paused

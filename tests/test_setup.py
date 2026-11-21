@@ -168,67 +168,9 @@ def test_react_and_existing_project_scripts_are_gated(
     assert checks["build"]["command"] == ["bun", "run", "build"]
     assert checks["integration"]["command"] == ["bun", "run", "test:integration"]
     assert checks["generated"]["command"] == ["bun", "run", "check:generated"]
-    assert checks["boundaries"]["command"] == ["bun", "run", "lint:boundaries"]
+    assert "boundaries" not in checks
     assert checks["react"]["report"]["type"] == "react-doctor"
     assert checks["tests"]["command"][0] == "bun"
-
-
-@pytest.mark.parametrize(
-    ("source", "required"),
-    [
-        ("src/app.ts", True),
-        ("src/app.tsx", True),
-        ("src/app.mts", True),
-        ("src/app.cts", True),
-        ("src/app.js", False),
-        ("tests/app.test.ts", False),
-        ("src/types.d.ts", False),
-    ],
-)
-def test_typescript_packages_require_boundary_gate(
-    installer: ModuleType, tmp_path: Path, source: str, required: bool
-) -> None:
-    repository(tmp_path)
-    target = tmp_path / source
-    target.parent.mkdir()
-    target.write_text("export const value = 1;\n")
-    config = installer.gate_config(tmp_path)
-    package = config["packages"][0]
-    boundary = [gate for gate in package["checks"] if gate.get("role") == "boundaries"]
-    assert bool(boundary) == required
-    validate_required_checks(tmp_path, config)
-    if required:
-        package["checks"].remove(boundary[0])
-        for path in (".", "./"):
-            package["path"] = path
-            with pytest.raises(ValueError, match="boundaries"):
-                validate_required_checks(tmp_path, config)
-
-
-def test_existing_gate_config_gets_boundary_gate_once(
-    installer: ModuleType, tmp_path: Path
-) -> None:
-    repository(tmp_path)
-    (tmp_path / "app.ts").write_text("export const value = 1;\n")
-    command = ["bun", "run", "lint:boundaries"]
-    config = installer.gate_config(tmp_path)
-    package = config["packages"][0]
-    package["checks"] = [
-        gate for gate in package["checks"] if gate.get("role") != "boundaries"
-    ]
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
-    installer.install(tmp_path)
-    installed = json.loads((tmp_path / "hard-eng.gates.json").read_text())
-    boundary = next(
-        gate
-        for gate in installed["packages"][0]["checks"]
-        if gate.get("role") == "boundaries"
-    )
-    assert boundary["command"] == command
-    boundary["command"] = [command[0], "run", "project-architecture"]
-    (tmp_path / "hard-eng.gates.json").write_text(json.dumps(installed))
-    installer.install(tmp_path)
-    assert json.loads((tmp_path / "hard-eng.gates.json").read_text()) == installed
 
 
 def test_dart_update_consolidates_generated_scans_and_preserves_custom_checks(
@@ -290,7 +232,8 @@ def test_dart_boundary_gate_requires_blocking_project_rules(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rules: object, valid: bool
 ) -> None:
     def native_config(*_args: object, **_kwargs: object) -> str:
-        return json.dumps({"config": {"boundaries": rules}})
+        config = {"boundaries": rules, "health": {"max_crap": 30}}
+        return json.dumps({"config": config})
 
     monkeypatch.setattr(
         subprocess,
@@ -548,9 +491,8 @@ def test_plain_dart_uses_native_coverage_tool(
     assert "--report-on=bin" in checks["tests"]["command"][2]
     assert checks["tests"]["report"]["stdout"] is False
     scanner = tmp_path / ".dart-decimaterc.json"
-    assert json.loads(scanner.read_text()) == {
-        "ignore_patterns": [".agents/**"],
-    }
+    expected = {"ignore_patterns": [".agents/**"], "health": {"max_crap": 30}}
+    assert json.loads(scanner.read_text()) == expected
     assert (
         "dart run coverage:test_with_coverage"
         in (tmp_path / "analysis_options.yaml").read_text()
@@ -597,7 +539,7 @@ def test_workspace_installs_once_and_keeps_child_source_scope(
     validate_required_checks(tmp_path, config)
     assert "language" not in root
     assert not any(gate.get("role") == "boundaries" for gate in root["checks"])
-    assert any(gate.get("role") == "boundaries" for gate in app["checks"])
+    assert not any(gate.get("role") == "boundaries" for gate in app["checks"])
     assert app["sources"] == ["src"]
     assert (
         sum(
@@ -619,12 +561,12 @@ def test_javascript_file_scope_keeps_application_tests_and_declarations(
 ) -> None:
     repository(tmp_path)
     (tmp_path / ".gitignore").write_text("coverage/\n")
-    (tmp_path / ".gitattributes").write_text("env.d.ts linguist-generated=true\n")
+    (tmp_path / ".gitattributes").write_text("types/env.d.ts linguist-generated=true\n")
     for name in (
         "src/app.ts",
         "tests/app.test.ts",
         "types/app.d.ts",
-        "env.d.ts",
+        "types/env.d.ts",
         "coverage/generated.js",
         "vendor/copied.js",
         ".hooks/helper.js",
@@ -782,7 +724,7 @@ def test_missing_project_manifest_fails(installer: ModuleType, tmp_path: Path) -
         ["react-doctor", "src", "--scope", "full", "--blocking", "warning", "--json"],
         ["bun", "x", "react-doctor", "--blocking", "warning"],
         ["dart-decimate", "check", ".", "--boundary-violations"],
-        ["fallow", "dead-code", "--format", "json"],
+        ["fallow", "--format", "json"],
         ["fallow", "audit", "--format", "json"],
     ],
 )

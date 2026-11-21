@@ -110,6 +110,34 @@ def agy_event_output(event: str, output: JsonObject) -> JsonObject:
     return {"injectSteps": [{"systemMessage": {"systemMessage": message}}]}
 
 
+def paused_turn(payload: JsonObject) -> JsonObject | None:
+    if (
+        payload.get("parentConversationId")
+        or payload.get("terminationReason") == "USER_CANCELED"
+    ):
+        return {}
+    if (
+        payload.get("stop_hook_active") is True
+        or payload.get("continuationActive") is True
+    ):
+        return {
+            "systemMessage": "Report blockers honestly; don't claim a pass; no stop-hook loop."
+        }
+    tasks = payload.get("background_tasks")
+    if payload.get("fullyIdle") is False or (
+        isinstance(tasks, list)
+        and any(
+            isinstance(t, dict)
+            and t.get("type") in {"subagent", "workflow", "teammate"}
+            for t in tasks
+        )
+    ):
+        return {
+            "systemMessage": "Hard Eng: background agents still editing; checks run after they finish. Don't claim done."
+        }
+    return None
+
+
 def merge(
     current: JsonObject, additions: JsonObject, path: tuple[str, ...] = ()
 ) -> JsonObject:

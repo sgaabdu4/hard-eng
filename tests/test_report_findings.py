@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 import reports
-from gate_config import Gate, JsonObject
+from gate_config import Gate, JsonObject, JsonValue
 from process_group import parallel_hint
+from test_gate_tools import clean_typescript_report as clean_fallow_report
 from test_reports import REPORTS
 
 PARALLEL = ["uv", "run", "pytest", "-n", "auto"]
@@ -190,14 +191,8 @@ def test_a_failed_fallow_gate_prints_its_complexity_and_crap_findings(
 def test_a_fallow_gate_that_exits_zero_with_a_finding_prints_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    report: JsonObject = {
-        "kind": "audit",
-        "command": "audit",
-        "verdict": "pass",
-        "dead_code": {},
-        "duplication": {},
-        "complexity": {"findings": [SLOW], "summary": {}},
-    }
+    findings: list[JsonValue] = [SLOW]
+    report = clean_fallow_report({"findings": findings})
     path = tmp_path / "fallow.json"
     path.write_text(json.dumps(report))
     with pytest.raises(ValueError, match="complexity"):
@@ -352,6 +347,22 @@ def test_a_boundary_violation_prints_where_it_imports_from_and_to(
     ]
 
 
+def test_a_boundary_violation_through_a_re_export_names_the_file_it_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = {
+        "from_path": "src/ui/u.ts",
+        "to_path": "src/db/q.ts",
+        "via_path": "src/index.ts",
+        "line": 1,
+    }
+    path = tmp_path / "fallow.json"
+    path.write_text(json.dumps({"check": {"boundary_violations": [item]}}))
+    assert failed("fallow", path, tmp_path, capsys).splitlines() == [
+        "scan: src/ui/u.ts:1 boundary_violations src/db/q.ts via src/index.ts"
+    ]
+
+
 def test_the_findings_of_all_kinds_are_all_printed(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -459,7 +470,8 @@ def clones_in(kind: str, *groups: list[str], dead: int = 0) -> dict[str, object]
 
 AUDIT_COMPLEXITY = (
     '{"files_analyzed":1,"functions_analyzed":3,"functions_above_threshold":0,'
-    '"max_crap_threshold":30.0,"severity_critical_count":0,'
+    '"max_cyclomatic_threshold":20,"max_cognitive_threshold":15,'
+    '"max_crap_threshold":30.0,"max_unit_size_threshold":60,"severity_critical_count":0,'
     '"severity_high_count":0,"severity_moderate_count":0}'
 )
 SET_ASIDE = "1 clone group(s) only in generated files set aside"

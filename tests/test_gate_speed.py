@@ -30,8 +30,10 @@ from conftest import (
     configure,
     gate,
     git,
+    hang_one_check,
     init,
     load_module,
+    pass_one_check,
     plan_document,
     running,
     spawner,
@@ -44,12 +46,10 @@ from project_files import keeping
 def test_a_hung_gate_stops_at_three_times_its_last_passing_time(
     runner: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
-    configure(tmp_path, [gate("suite", "pass")])
-    assert runner.check(timeout=120) == 0
+    pass_one_check(runner, tmp_path, monkeypatch)
     times = json.loads((tmp_path / ".git/hard-eng-gate-times.json").read_text())
     assert set(times) == {"./suite"}
-    configure(tmp_path, [gate("suite", "import time; time.sleep(60)")])
+    hang_one_check(tmp_path)
     started = time.monotonic()
     assert runner.check(timeout=120) == 1
     assert time.monotonic() - started < 30
@@ -613,11 +613,12 @@ def generated_repository(tmp_path: Path) -> Path:
     configure(repository, [gate("suite", "pass")])
     for name in ("PRODUCT.md", "DESIGN.md"):
         (repository / name).write_text((SOURCE / name).read_text())
-    (repository / "big.py").write_text("line\n" * 1100)
+    (repository / "src").mkdir()
+    (repository / "src/big.py").write_text("line\n" * 1100)
     (repository / "app").mkdir()
     (repository / "app/package.json").write_text("{}\n")
     (repository / ".gitattributes").write_text(
-        "big.py linguist-generated\napp/package.json linguist-generated\n"
+        "src/big.py linguist-generated\napp/package.json linguist-generated\n"
     )
     commit(repository, "Add generated files")
     return repository
@@ -659,13 +660,13 @@ def test_one_attributes_read_gives_each_rule_the_same_generated_files(
     attributes = repository / ".gitattributes"
     assert gate_config.load_groups(repository)
     attributes.write_text("app/package.json linguist-generated\n")
-    with pytest.raises(ValueError, match="HE-FILE-LENGTH.*big.py: 1100 lines"):
+    with pytest.raises(ValueError, match="HE-FILE-LENGTH.*src/big.py: 1100 lines"):
         gate_config.load_groups(repository)
-    attributes.write_text("big.py linguist-generated\n")
+    attributes.write_text("src/big.py linguist-generated\n")
     with pytest.raises(ValueError, match="package is missing.*: app"):
         gate_config.load_groups(repository)
     attributes.write_text("")
-    assert gate_config.generated_sources(repository, ["big.py"]) == set()
+    assert gate_config.generated_sources(repository, ["src/big.py"]) == set()
 
 
 GIT_STARTS: list[str] = []

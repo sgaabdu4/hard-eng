@@ -19,6 +19,7 @@ from switch_off_forms import (
     SWITCHES,
     TEST_FLAGS,
 )
+from whole_project import validate_whole_project
 
 BLOCK = "Code comments are none by default"
 
@@ -29,7 +30,7 @@ BLOCK = "Code comments are none by default"
         ("app.py", "x = 1\n# first\n# second\n", 2),
         ("app.py", "# one why\nx = 1  # trailing\ny = 2  # trailing\n", None),
         ("app.py", 'DOC = """\n# heading\n# another\n"""\n', None),
-        ("app.py", "# noqa: E501\n# pyright: basic\nx = 1\n", None),
+        ("app.py", "# no" + "qa: E501\n# pyright: basic\nx = 1\n", None),
         ("app.py", "def f(:\n# broken\n# syntax\n", 2),
         ("lib/app.dart", "/// Adds.\n/// Twice.\nint add() => 1;\n", 1),
         ("src/app.ts", "/* one */\nconst a = 1;\n", None),
@@ -38,7 +39,7 @@ BLOCK = "Code comments are none by default"
         ("src/app.js", "/**\n * @param {string} p\n * @returns {number}\n */\n", None),
         ("src/lib.rs", "/// # Errors\n///\n/// Fails on I/O.\npub fn f() {}\n", None),
         ("src/lib.rs", "/// Reads.\n///\n/// # Errors\n/// Fails on I/O.\n", 1),
-        ("app.py", "# why\n# noqa: E501\n# more why\n", 1),
+        ("app.py", "# why\n# no" + "qa: E501\n# more why\n", 1),
         (
             "src/app.ts",
             "// eslint-disable-next-line\n// @ts-expect-error\nf();\n",
@@ -105,12 +106,13 @@ def test_touched_files_answer_for_older_blocks_and_generated_output_is_skipped(
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     old = "# written long ago\n# across two lines\nx = 1\n"
-    for name in ("touched.py", "untouched.py", "generated.g.py"):
+    (root / "lib").mkdir()
+    for name in ("touched.py", "untouched.py", "lib/generated.g.py"):
         (root / name).write_text(old)
-    (root / ".gitattributes").write_text("*.g.py linguist-generated=true\n")
+    (root / ".gitattributes").write_text("lib/generated.g.py linguist-generated=true\n")
     commit(root, "baseline")
     validate_comments(root, "HEAD")
-    (root / "generated.g.py").write_text(old + "y = 2\n")
+    (root / "lib/generated.g.py").write_text(old + "y = 2\n")
     validate_comments(root, "HEAD")
     (root / "touched.py").write_text(old + "y = 2\n")
     with pytest.raises(ValueError, match=r"touched\.py:1 holds a 2-line") as error:
@@ -118,9 +120,10 @@ def test_touched_files_answer_for_older_blocks_and_generated_output_is_skipped(
     assert "untouched.py" not in str(error.value)
 
 
-def test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed(
+def test_the_install_change_fails_older_blocks_in_files_it_touches(
     tmp_path: Path,
 ) -> None:
+    """HE-COMMENT-LINES: the change that installs Hard Eng gets no exemption for older blocks."""
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     old = "# written long ago\n# across two lines\nx = 1\n"
@@ -129,19 +132,20 @@ def test_the_install_change_keeps_older_blocks_in_files_its_tools_fixed(
     (root / ".hooks").mkdir()
     (root / ".hooks/hard-eng.py").write_text("")
     (root / "app.py").write_text(old + "y = 2\n")
-    validate_comments(root, "HEAD")
-    (root / "app.py").write_text(old + "# added with the install\n# on two lines\n")
-    with pytest.raises(ValueError, match=r"app\.py:4 holds a 2-line") as error:
-        validate_comments(root, "HEAD")
-    assert "app.py:1" not in str(error.value)
-    (root / "app.py").write_text(old + "y = 2\n")
-    commit(root, "Install Hard Eng")
-    (root / "app.py").write_text(old + "z = 3\n")
     with pytest.raises(ValueError, match=r"app\.py:1 holds a 2-line"):
         validate_comments(root, "HEAD")
+    (root / "app.py").write_text(old + "# added with the install\n# on two lines\n")
+    with pytest.raises(ValueError, match=r"app\.py:1 holds a 2-line") as error:
+        validate_comments(root, "HEAD")
+    assert "app.py:4 holds a 2-line" in str(error.value)
+    (root / "app.py").write_text("x = 1\ny = 2\n")
+    validate_comments(root, "HEAD")
 
 
-def test_the_install_change_compares_each_older_block_whole(tmp_path: Path) -> None:
+def test_the_install_change_names_each_older_block_with_its_own_line(
+    tmp_path: Path,
+) -> None:
+    """HE-COMMENT-LINES: an older block that spans a blank comment line is judged like any other."""
     init(tmp_path / "repo")
     root = tmp_path / "repo"
     spaced = "x = 1\n# first\n#\n# old reason\n"
@@ -150,7 +154,8 @@ def test_the_install_change_compares_each_older_block_whole(tmp_path: Path) -> N
     (root / ".hooks").mkdir()
     (root / ".hooks/hard-eng.py").write_text("")
     (root / "app.py").write_text(spaced + "y = 2\n")
-    validate_comments(root, "HEAD")
+    with pytest.raises(ValueError, match=r"app\.py:2 holds a 2-line"):
+        validate_comments(root, "HEAD")
     (root / "app.py").write_text(spaced.replace("old reason", "new reason"))
     with pytest.raises(ValueError, match=r"app\.py:2 holds a 2-line"):
         validate_comments(root, "HEAD")
@@ -300,19 +305,22 @@ ROUTE_FILES = (
     "test/a_test.dart",
     "ios/RunnerTests/ATests.swift",
     "config.yml",
-    ".gitleaksignore",
+    "app/.gitleaksignore",
 )
 ROUTES = [next(row for row in SWITCHES if row[0] == name) for name in ROUTE_FILES]
 ROUTES += [row for row in RETRY_FORMS if row[0] == "playwright.config.ts"]
 
 
 @pytest.mark.parametrize(("name", "text", "pattern"), ROUTES)
-def test_switch_off_already_in_the_project_is_not_flagged(
+def test_switch_off_already_in_the_project_fails_the_full_check_only(
     tmp_path: Path, name: str, text: str, pattern: str
 ) -> None:
+    """HE-NO-SWITCH-OFF: the changed-lines check leaves an old switch-off alone; the full check fails it."""
     root = switch_root(tmp_path, name, text)
     (root / name).write_text(text + "\n")
     validate_suppressions(root, "HEAD")
+    with pytest.raises(ValueError, match=OFF):
+        validate_whole_project(root)
 
 
 @pytest.mark.parametrize(("name", "text", "form"), RETRY_FORMS)

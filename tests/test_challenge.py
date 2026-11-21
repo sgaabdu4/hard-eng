@@ -126,9 +126,14 @@ def test_the_reviewer_does_not_inherit_host_markers(
     monkeypatch.setenv("CODEX_SANDBOX", "seatbelt")
     monkeypatch.setenv("ANTIGRAVITY_AGENT", "1")
     monkeypatch.setenv("AGY_CLI_DISABLE_AUTO_UPDATE", "1")
+    monkeypatch.setenv("AGY_SESSION_ID", "nested")
     monkeypatch.setenv("GEMINI_HOME", str(tmp_path / "gemini-home"))
     challenge.challenge(branch, None, "claude")
-    assert json.loads(log.read_text())["markers"] == ["CODEX_HOME", "GEMINI_HOME"]
+    assert json.loads(log.read_text())["markers"] == [
+        "AGY_CLI_DISABLE_AUTO_UPDATE",
+        "CODEX_HOME",
+        "GEMINI_HOME",
+    ]
 
 
 def test_the_prompt_pins_the_reviewed_revision_and_treats_repo_text_as_data(
@@ -482,6 +487,7 @@ def test_a_failed_rerun_replaces_a_completed_review_that_does_not_cover_the_bran
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"reviewer": "codex", "outcome": "clean"}))
     fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    fake_cli(tmp_path / "bin", "agy", "", 1, "Not signed in")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 1
     note = challenge.shipping_note(branch, head)
@@ -552,6 +558,7 @@ def test_a_failed_rerun_keeps_the_completed_review_of_the_same_revision(
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 0
     fake_cli(tmp_path / "bin", "codex", "", 1, "Not signed in")
+    fake_cli(tmp_path / "bin", "agy", "", 1, "Not signed in")
     assert challenge.challenge(branch, None, None) == 0
     record = json.loads(
         challenge.store(branch, git(branch, "rev-parse", "HEAD"))

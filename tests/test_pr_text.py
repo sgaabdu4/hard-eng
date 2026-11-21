@@ -10,7 +10,7 @@ import pytest
 import shipping
 import yaml
 from conftest import SOURCE
-from pr_text import body_problem, event_problem
+from pr_text import body_problem, event_problem, pr_text_command
 from test_shipping import (
     _DIAGRAM,
     _UI_BODY,
@@ -171,7 +171,7 @@ def _event(
             "number": 1,
             "body": body,
             "user": {"login": author},
-            "head": {"ref": head, "repo": {"full_name": repo}},
+            "head": {"ref": head, "sha": "c" * 40, "repo": {"full_name": repo}},
             "base": {"ref": base, "repo": {"full_name": "acme/widget"}},
         }
     }
@@ -284,6 +284,31 @@ def _ui_problem(
     return event_problem(_event(tmp_path, body), root), fake.calls
 
 
+def test_remote_check_reads_the_old_name_of_a_file_moved_out_of_ui_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moved: dict[str, object] = {
+        "filename": "lib/App.tsx",
+        "previous_filename": "src/App.tsx",
+        "status": "renamed",
+    }
+    problem, _ = _ui_problem(tmp_path, monkeypatch, _VALID, [moved])
+    assert problem is not None
+    assert problem.startswith("UI changes require distinct Before and After")
+
+
+def test_remote_check_reads_the_old_name_of_a_moved_file_beside_the_unchanged_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moved: dict[str, object] = {
+        "filename": "lib/App.tsx",
+        "previous_filename": "src/App.tsx",
+        "status": "renamed",
+    }
+    problem, _ = _ui_problem(tmp_path, monkeypatch, f"{_VALID}\n{_UNCHANGED}", [moved])
+    assert "UI appearance: unchanged" in str(problem)
+
+
 def test_remote_check_refuses_a_ui_change_without_pictures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -298,13 +323,34 @@ def test_remote_check_refuses_a_ui_change_without_pictures(
     ]
 
 
-@pytest.mark.parametrize("evidence", [_UI_BODY + "\n", _UNCHANGED])
+def _look_block() -> str:
+    import look
+
+    record: dict[str, object] = {
+        "reviewer": "codex",
+        "session": "a" * 64,
+        "images": [{"sha256": "b" * 64, "read_at": "2026-11-17T10:00:01Z"}],
+        "rules": ["Hierarchy: Pass — one filled button"],
+        "outcome": "clean",
+    }
+    return look.block_text(record)
+
+
+@pytest.mark.parametrize(
+    ("evidence", "changed"),
+    [
+        (_UI_BODY + "\n" + _look_block() + "\n", {"filename": "src/App.ts"}),
+        (_UNCHANGED, {"filename": "src/App.ts", "patch": "-const a = 1\n+const a = 2"}),
+    ],
+    ids=["pictures", "unchanged-note-on-logic"],
+)
 def test_remote_check_accepts_a_ui_change_with_pictures_or_an_unchanged_note(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, evidence: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    evidence: str,
+    changed: dict[str, object],
 ) -> None:
-    problem, _ = _ui_problem(
-        tmp_path, monkeypatch, evidence + _VALID, [{"filename": "src/App.tsx"}]
-    )
+    problem, _ = _ui_problem(tmp_path, monkeypatch, evidence + _VALID, [changed])
     assert problem is None
 
 
@@ -470,3 +516,93 @@ def test_pr_text_job_reads_the_pr_files_with_the_workflow_token_and_nothing_more
         "PR": "${{ github.event.pull_request.number }}",
         "REPO": "${{ github.repository }}",
     }
+
+
+_COMMAND_PROBLEMS = [
+    ("Undo", _VALID.replace("Undo: revert the commits.\n", "")),
+    ("Mermaid", _VALID.replace("mermaid", "text")),
+    ("Not checked", _GOOD),
+]
+
+
+def _command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
+    files: list[dict[str, object]] | None = None,
+    pr: str = "1",
+) -> tuple[int, str]:
+    root = _project(tmp_path, ui_paths=["src/**"])
+    (tmp_path / "pull").mkdir()
+    fake = FakeGitHub(_pull(_fixture(tmp_path / "pull"), body=body), [], files)
+    _patch_gh(monkeypatch, fake)
+    return pr_text_command(root, pr), fake.calls[0][-1]
+
+
+@pytest.mark.parametrize(("part", "body"), _COMMAND_PROBLEMS)
+def test_the_pr_text_command_refuses_a_body_that_lacks_a_part(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    part: str,
+    body: str,
+) -> None:
+    code, asked = _command(tmp_path, monkeypatch, body)
+    assert code == 1
+    assert part in capsys.readouterr().err
+    assert asked == "repos/acme/widget/pulls/1"
+
+
+def test_the_pr_text_command_refuses_a_ui_change_with_no_pictures_or_note(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, _ = _command(tmp_path, monkeypatch, _VALID, [{"filename": "src/App.tsx"}])
+    assert code == 1
+    assert "UI changes require distinct Before and After" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "pr", ["1", "https://github.com/acme/widget/pull/1"], ids=["number", "url"]
+)
+def test_the_pr_text_command_passes_a_good_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    pr: str,
+) -> None:
+    logic: dict[str, object] = {
+        "filename": "src/App.ts",
+        "patch": "-const a = 1\n+const a = 2",
+    }
+    code, asked = _command(tmp_path, monkeypatch, _UNCHANGED + _VALID, [logic], pr)
+    assert code == 0
+    assert asked == "repos/acme/widget/pulls/1"
+    assert "PASS pr-text" in capsys.readouterr().out
+
+
+def test_ready_refuses_a_ui_change_without_pictures_or_a_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, ui_paths=["src/**"])
+    fake = FakeGitHub(
+        _pull(fixture, body=_VALID, mergeable_state="unstable"),
+        [_check(fixture.head, conclusion="failure")],
+        [{"filename": "src/App.tsx"}],
+    )
+    _ready_outcome(fixture, fake, monkeypatch, "UI changes require distinct")
+
+
+def test_the_pr_text_command_refuses_a_url_of_another_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path)
+    (tmp_path / "other").mkdir()
+    fake = FakeGitHub(_pull(_fixture(tmp_path / "other")), [])
+    _patch_gh(monkeypatch, fake)
+    assert pr_text_command(root, "https://github.com/other/widget/pull/1") == 1
+    assert "does not match origin" in capsys.readouterr().err
+    assert fake.calls == []

@@ -1,0 +1,22 @@
+I opened the one image in the folder, `image-1.png`. It's a banner showing a workflow (plan → build → ship → learn), not an app screen, so most of the rules have nothing to check.
+
+- Mistake-proof: Fail — the dashed line at the bottom has arrowheads at all three ends (up into he-build, up into he-ship, right into he-learn), so none of its ends is the start. Someone skimming can't tell whether he-learn feeds back into build and ship, or ship feeds into learn. Give the line one start and arrows pointing one way only.
+- Least effort (clicks): N/A — this is a static image with nothing to click; 0 clicks.
+- Observe: N/A — it doesn't ask anyone to record or confirm anything.
+- Undo: N/A — there are no delete, cancel, refund or money actions.
+- No clutter (kept 24, removed 0): Pass — I kept the title, the one-line subtitle (13 words), 4 card headings, the 2 sub-labels "Implement" and "Verify", the "conditional" badge, 4 accent bars, 5 pictures and 6 arrows or connectors. The badge stays because the dashed line alone doesn't clearly mean "optional". There are no helper sentences or repeated text.
+- Hierarchy: Pass — the big "hard-eng" title is clearly the main element, the subtitle and card headings are quieter, and each card uses one accent colour (teal for plan and build, green for ship and learn).
+- Alignment: Fail — in the he-learn card, the "conditional" badge pushes the heading up a little and moves the green bar and picture about 25 px lower than in the other three cards. The cards' top edges no longer line up across the row. The centred text is all short single lines, which is fine.
+- Spacing: Pass — the gaps between cards are about the same (about 55–60 px), there's more room between cards than inside them, and the text doesn't touch any card edge. The pictures fill their cards on purpose.
+- Design system: N/A — I can't check the project's design tokens from a picture, and I didn't open `DESIGN.md`.
+- Messages: N/A — there are no system or error messages. The subtitle is plain and calm.
+- States: N/A — this is a static image with no empty, loading or failed states.
+- Time: N/A — no times are shown.
+- Audit: N/A — there are no staff or admin actions.
+- Accessibility: Pass — dark text on a cream background has strong contrast, and the green-on-pale-green "conditional" badge looks readable. I couldn't check the image's screen-reader description (alt text) from the file itself.
+- Widths: N/A — it's one fixed-size image, not a layout that changes with screen width.
+- Performance: N/A — the image doesn't load any data. Its file size is the only cost, and I didn't measure it.
+
+Image image-1.png: in the "Verify" panel, a person holds a magnifying glass over a checklist with green ticks.
+
+VERDICT: findings

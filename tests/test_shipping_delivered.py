@@ -1,5 +1,6 @@
 """The delivered stage judges the run that the push to the base branch started."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ def _delivered_fake(
     *,
     push_suites: tuple[int, ...] = (_PUSH_SUITE,),
     elsewhere: tuple[int, ...] = (),
+    release: bool = False,
 ) -> Fixture:
     fixture = _fixture(tmp_path, target="Merge")
     pull = _pull(
@@ -35,6 +37,26 @@ def _delivered_fake(
         merged_at="2026-09-10T11:00:00Z",
         merge_commit_sha=fixture.head,
     )
+    if release:
+        gates = json.loads((fixture.root / "hard-eng.gates.json").read_text())
+        gates["shipping"]["base"] = "develop"
+        (fixture.root / "hard-eng.gates.json").write_text(json.dumps(gates))
+        _native(fixture.root, "commit", "-qam", "base is develop")
+        fixture = Fixture(
+            fixture.root, fixture.plan, _native(fixture.root, "rev-parse", "HEAD")
+        )
+        pull = _pull(
+            fixture,
+            state="closed",
+            merged=True,
+            merged_at="2026-09-10T11:00:00Z",
+            merge_commit_sha=fixture.head,
+            head={
+                "ref": "develop",
+                "sha": fixture.head,
+                "repo": {"full_name": "acme/widget"},
+            },
+        )
     fake = FakeGitHub(pull, [{**check, "head_sha": fixture.head} for check in checks])
     runs = [
         {"id": suite, "check_suite_id": suite, "head_branch": branch}
@@ -112,3 +134,12 @@ def test_delivered_judges_a_check_with_no_push_run_as_before(
     )
     with pytest.raises(shipping.ShippingError, match="not successful"):
         _verify(fixture)
+
+
+def test_delivered_judges_a_release_on_the_branch_it_merged_into(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _delivered_fake(
+        tmp_path, monkeypatch, [_run_of(_PUSH_SUITE, 1, "success")], release=True
+    )
+    assert _verify(fixture).merged_sha

@@ -88,6 +88,20 @@ def test_a_run_that_finds_no_project_fails(
     assert [state for state, _ in posted] == ["pending", "failure"]
 
 
+def test_a_python_without_yaml_stops_before_the_check_loses_its_stand_in(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The check would restart through uv and ask GitHub about a local commit."""
+    monkeypatch.setattr(sys, "argv", ["release_canary.py", "HEAD"])
+
+    def no_module(name: str) -> None:
+        return None
+
+    monkeypatch.setattr(release_canary.importlib.util, "find_spec", no_module)
+    assert release_canary.main() == 1
+    assert "uv run --locked python release_canary.py" in capsys.readouterr().out
+
+
 def test_a_step_past_its_limit_stops_every_process_it_started(tmp_path: Path) -> None:
     """Hung tests and installers must not outlive the step."""
     pid_file = tmp_path / "child.pid"
@@ -724,6 +738,39 @@ def test_the_brownfield_upgrade_drops_the_ended_python(tmp_path: Path) -> None:
         release_canary.drop_ended_python(tmp_path)
 
 
+def test_the_brownfield_refactor_removes_switch_offs_markers_and_comment_blocks(
+    tmp_path: Path,
+) -> None:
+    """A real adoption first refactors what the strict refusals fail: type ignores, TODO markers and comment blocks."""
+    git(tmp_path, "init", "-q")
+    source = tmp_path / "pkg.py"
+    ignore = "# type" + ": ignore"
+    source.write_text(
+        f'"""{ignore} stays in a docstring"""\n'
+        "# one line of why stays\n"
+        f"value = int(text)  {ignore}[arg-type]\n"
+        "# first\n"
+        "# second\n"
+        "# TODO later\n"
+        "\n"
+        "def run() -> int:\n"
+        "    return 1  # trailing note stays\n"
+    )
+    git(tmp_path, "add", "pkg.py")
+    release_canary.refactor_for_strict_checks(tmp_path)
+    assert source.read_text() == (
+        f'"""{ignore} stays in a docstring"""\n'
+        "# one line of why stays\n"
+        "value = int(text)\n"
+        "# first\n"
+        "\n"
+        "def run() -> int:\n"
+        "    return 1  # trailing note stays\n"
+    )
+    with pytest.raises(RuntimeError, match="nothing"):
+        release_canary.refactor_for_strict_checks(tmp_path)
+
+
 def test_the_brownfield_adoption_adds_a_performance_suite_before_adopt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -739,45 +786,13 @@ def test_the_brownfield_adoption_adds_a_performance_suite_before_adopt(
 
     monkeypatch.setattr(release_canary, "must", must)
     monkeypatch.setattr(release_canary, "drop_ended_python", keep_python)
+    monkeypatch.setattr(release_canary, "refactor_for_strict_checks", keep_python)
     work = tmp_path / "work"
     work.mkdir()
     with (tmp_path / "log").open("w") as log:
         release_canary.install_new("brownfield", "itsdangerous", tmp_path, work, log)
     assert [len(found) for found in suites] == [1]
     compile(suites[0][0].read_text(), "suite", "exec")
-
-
-def test_the_last_release_is_the_candidates_merge_base_with_main_not_mains_merge_commit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Users go from main's merge commit to the next one, so the old install is its ancestor."""
-    checkout = tmp_path / "checkout"
-    init(checkout)
-    git(checkout, "checkout", "-qb", "develop")
-    (checkout / "a.txt").write_text("base\n")
-    base = commit(checkout, "base")
-    (checkout / "a.txt").write_text("released\n")
-    released = commit(checkout, "released")
-    git(checkout, "checkout", "-qb", "main", base)
-    git(checkout, "merge", "-q", "--no-ff", "-m", "release", "develop")
-    git(checkout, "update-ref", "refs/remotes/origin/main", "HEAD")
-    git(checkout, "checkout", "-q", "develop")
-    (checkout / "a.txt").write_text("candidate\n")
-    candidate = commit(checkout, "candidate")
-    source = tmp_path / "source"
-    git(tmp_path, "clone", "-q", str(checkout), str(source))
-    git(source, "checkout", "-q", "--detach", candidate)
-    installed_from: list[Path] = []
-
-    def install_new(kind: str, value: str, old: Path, work: Path, log: object) -> None:
-        installed_from.append(old)
-
-    monkeypatch.setattr(release_canary, "install_new", install_new)
-    with (tmp_path / "log").open("w") as log:
-        release_canary.install_last_release(
-            "python", candidate, source, tmp_path / "work", log, checkout
-        )
-    assert git(installed_from[0], "rev-parse", "HEAD") == released
 
 
 def test_the_update_target_moves_an_installed_project_to_the_candidate_from_a_local_host(

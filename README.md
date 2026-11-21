@@ -18,6 +18,19 @@ flowchart LR
 
 [Setup](#1-setup) · [Plan](#2-plan) · [Build](#3-build) · [Ship](#4-ship) · [Learn](#5-learn) · [Checks](#checks) · [What is enforced](#what-is-enforced)
 
+## What "hard" means
+
+Hard Eng is strict on purpose. It refuses bad code. It does not only give a warning.
+
+- **Old code too.** The full `check` reads every tracked file and every new file that Git does not ignore, not only your new lines. The [quick checks](#quick-checks) that run when an agent stops look only at this session's changes. An old case of each rule below fails until someone fixes it.
+- **No switch-offs.** A comment or config line that turns a check off fails, even an old one. Generated output is exempt. So are the folders that Hard Eng installs: `.hooks/`, `.agents/` and `.claude/`.
+- **Fix the cause.** Each of these failures names the fix. For example, a wait with no delay, or a wait for the next frame, fails in app code. The fix is to change the order of events.
+- **No leftover notes.** TODO, FIXME, HACK and XXX in a comment fail. The same words in a string pass. A comment block of two or more lines fails. A markdown file that no other file names fails. README, AGENTS and a few other standard names pass. So do the folders that Hard Eng installs. The comment rules skip generated output and `.agents/` only.
+
+To add Hard Eng to an older project, fix each case of these rules that the first full check finds. Their findings never go into the debt record. Some other checks can record their old findings one time at install. After that, the record can only get smaller ([HE-DEBT-SHRINK-ONLY](.agents/skills/he/references/requirements.md#he-debt-shrink-only)).
+
+For every rule and when it runs, see [What is enforced](#what-is-enforced).
+
 ## 1. Setup
 
 Run this command in the root folder of your Git repository:
@@ -103,7 +116,7 @@ After setup:
 
 ### Updates
 
-- At session start, a hook reports the last update result. It then starts the next update in the background, so a session never waits.
+- At session start, a hook reports the last update result. It then starts the next update in the background, so a session never waits. When that run ends, it removes merged branches that nobody has used for 24 hours, and idle Rust build folders. It keeps anything with a stash, an open pull request or a running process, and it adds one line to the next report when it removed something.
 - One update runs per repository at a time. It writes `.hard-eng/update.log`.
 - The update builds in a separate worktree from the remote base branch. It leaves one commit on the local branch `hard-eng/update`. It never touches your current branch.
 - `python3 .hooks/hard-eng.py update-pr` pushes that branch and opens or reuses the "Update Hard Eng" PR.
@@ -279,7 +292,7 @@ Each project has a `hard-eng.gates.json` file. It lists the check commands, thei
 | Stack | Required checks | Tools | Extra checks when they apply |
 | --- | --- | --- | --- |
 | Python | Format, lint, complexity, strict types, annotations, tests with coverage, dead code, duplicate code, dependencies, performance. | Ruff, Pyrefly, Pytest with coverage, Vulture, jscpd, Deptry. | Import Linter, when the package has real import roots. |
-| JavaScript and TypeScript | Format and lint, focused-test detection, types, typing style, tests with coverage, dead code and duplicates, performance. TypeScript packages also need architecture boundaries. | Biome, TypeScript, the project test runner, Fallow. Zod is the suggested validator. | React Doctor for React. Existing `build`, integration-test, UI-test, generated-code, boundary and `check:fallow` scripts join the gate. |
+| JavaScript and TypeScript | Format and lint, focused-test detection, types, typing style, tests with coverage, dead code and duplicates, performance. The dead-code scan also checks the boundary rules of `.fallowrc.json`. | Biome, TypeScript, the project test runner, Fallow. Zod is the suggested validator. | React Doctor for React. Existing `build`, integration-test, UI-test, generated-code, boundary and `check:fallow` scripts join the gate. |
 | Dart and Flutter | Format, analyzer, tests with coverage, dead code and duplicates, architecture boundaries, performance. | Dart format and analyzer, Dart test with coverage, Dart Decimate. | A boundary rule needs real project prefixes. Flutter build or device proof stays a project task. |
 | Swift in a Flutter app (`ios/`, `macos/`) | Swift format and lint, Xcode build and tests with coverage, duplicates, a Swift Semgrep scan, a reviewed `performance_exception`. | `swift format`, `xcodebuild` with `xcresulttool` and `xccov`, jscpd, Semgrep. | CocoaPods adds `pod install --deployment`. See [Swift groups](#swift-groups). |
 
@@ -383,7 +396,7 @@ Skills guide the agent. Hooks and checks enforce.
 
 | When | What runs |
 | --- | --- |
-| Session start | Reports the last update result. Starts the next update in the background. |
+| Session start | Reports the last update result. Starts the next update in the background, which also tidies merged idle branches and Rust build folders. |
 | Claude or Antigravity runs a shell command | Denies a main-session wait that sleeps in the foreground ([HE-NO-FOREGROUND-POLL](.agents/skills/he/references/requirements.md#he-no-foreground-poll)). The agent runs the job in the background and gets a notice when it exits. |
 | Agent stops | Checks the plan handoff. After code changes, runs [quick checks](#quick-checks) on this session's changes. |
 | `git push` | Checks the pushed commits in a separate worktree, for the changed packages. With Vitest or Jest, runs only the related tests. Then gives a [mutation report](#mutation-report). |
@@ -399,8 +412,8 @@ The [requirement registry](.agents/skills/he/references/requirements.md) holds e
 
 | Rule | Short meaning | Proof |
 | --- | --- | --- |
-| [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off) | A change adds no suppression, no skipped or focused test, no test retry and no scanner ignore marker. It also removes no more `assert` or `expect(` lines from test files than it adds. | Check |
-| [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) | No comment block in a changed source file has more than one line. Generated output and scaffold paths are exempt. | Check |
+| [HE-NO-SWITCH-OFF](.agents/skills/he/references/requirements.md#he-no-switch-off) | The check reads tracked files and new files that Git does not ignore. None holds a suppression, a skipped or focused test or a test retry. None holds a scanner ignore marker or an ignore entry in a scanner config file. Old ones fail too. Generated output and the folders `.hooks/`, `.agents/` and `.claude/` are exempt. A change also removes no more `assert` or `expect(` lines from test files than it adds. | Check |
+| [HE-COMMENT-LINES](.agents/skills/he/references/requirements.md#he-comment-lines) | The check reads tracked source files and new ones that Git does not ignore. None has a comment block of more than one line, or a TODO, FIXME, HACK or XXX marker in a comment. Old ones fail too. Generated output and `.agents/` are exempt. | Check |
 | [HE-DEBT-SHRINK-ONLY](.agents/skills/he/references/requirements.md#he-debt-shrink-only) | In the change that installs Hard Eng, `adopt` can record the old findings one time in `hard-eng.debt.json`. Later changes only remove lines. | Check |
 | [HE-UI-SOURCE](.agents/skills/he/references/requirements.md#he-ui-source) | Added UI lines hold no `transition` on all properties. They also hold none of the listed colour literals outside a theme or token file. | Check |
 | [HE-NO-TEXT-WALLS](.agents/skills/he/references/requirements.md#he-no-text-walls) | On-screen text comes in short blocks. A block has at most 25 words and 3 sentences, and a sentence has at most 20 words. The command `text-walls` lists the hits. | Check |

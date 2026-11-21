@@ -76,6 +76,7 @@ def test_shell_and_workflow_detection(installer: ModuleType, tmp_path: Path) -> 
     gates = {gate["role"]: gate for gate in config["shared"]}
     assert gates["shell"]["command"] == [
         "shellcheck",
+        "--norc",
         "--",
         "a.sh",
         "helper",

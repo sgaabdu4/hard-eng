@@ -2,8 +2,10 @@
 
 import atexit
 import importlib.util
+import itertools
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -167,6 +169,10 @@ def commit(root: Path, message: str) -> str:
 
 
 def init(root: Path) -> None:
+    """A run reads the index once; each test builds its own repository, so a new one forgets the proofs."""
+    import generated_marks
+
+    generated_marks.reset()
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     with (root / ".git/config").open("a") as config:
@@ -318,6 +324,7 @@ def visual_plan(completed_plan: str) -> str:
         "Surface: Existing — /account, rendered by app/account/page.tsx\n"
         "Before: ![Before](https://example.test/account-before.png)\n"
         "Proposed: ![Proposed](https://example.test/account-proposed.png)\n"
+        "Controls: None — the fixture changes only wording.\n"
         "Capture: Native browser test account.spec.ts passed the route and screen assertions.\n"
         "Review: Inspected both account captures at the same viewport; only the proposed label differs.\n"
         + ux_rules_block(),
@@ -493,6 +500,21 @@ def release(
     source_trees.forget_all()
 
 
+@pytest.fixture
+def old_fallow_release(
+    release: tuple[Path, Path, str],
+) -> tuple[Path, Path, str]:
+    """A release whose installed project holds the Fallow gate as an older release wrote it, with no health analysis."""
+    path = release[1] / "hard-eng.gates.json"
+    config = json.loads(path.read_text())
+    checks = [gate for package in config["packages"] for gate in package["checks"]]
+    gate = next(gate for gate in checks if gate.get("role") == "dead-code-duplicates")
+    gate["command"] = [part.removesuffix(",health") for part in gate["command"]]
+    path.write_text(json.dumps(config))
+    commit(release[1], "old Fallow gate")
+    return release
+
+
 def remove_application(target: Path) -> None:
     """The installed project keeps no package: no manifest and no group."""
     (target / "package.json").unlink()
@@ -523,7 +545,94 @@ def gate(name: str, code: str, **options: object) -> dict[str, object]:
     return {"name": name, "command": [sys.executable, "-c", code], **options}
 
 
+def pass_one_check(
+    runner: ModuleType, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import gate_times
+
+    monkeypatch.setattr(gate_times, "GATE_FLOOR_SECONDS", 1)
+    configure(root, [gate("suite", "pass")])
+    assert runner.check(timeout=120) == 0
+
+
+def hang_one_check(root: Path) -> None:
+    configure(root, [gate("suite", "import time; time.sleep(60)")])
+
+
 def configure(root: Path, checks: list[dict[str, object]]) -> None:
     (root / "hard-eng.gates.json").write_text(
         json.dumps({"packages": [], "shared": checks})
     )
+
+
+@pytest.fixture
+def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
+    from test_browser import serve_pages
+
+    yield from serve_pages(tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def browser(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    from test_browser import load_browser
+
+    return load_browser(monkeypatch)
+
+
+OLD = int(time.time()) - 3 * 86400
+GITIGNORE = "__pycache__/\nnode_modules/\n.hard-eng/\n.venv/\n.env\ntarget/\nbuild/\n"
+
+
+def old_log(log: Path) -> None:
+    log.write_text(re.sub(r"(> )\d+( [+-]\d{4})", rf"\g<1>{OLD}\g<2>", log.read_text()))
+
+
+def git_path(root: Path, name: str) -> Path:
+    return Path(git(root, "rev-parse", "--path-format=absolute", "--git-path", name))
+
+
+def age_branch(root: Path, name: str) -> None:
+    old_log(git_path(root, f"logs/refs/heads/{name}"))
+
+
+def build_primary(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    (repository / ".gitignore").write_text(GITIGNORE)
+    (repository / "tracked.txt").write_text("one\n")
+    (repository / "Cargo.toml").write_text("[package]\n")
+    commit(repository, "files")
+    remote = add_origin(repository)
+    web = "https://github.com/fixture/project.git"
+    git(repository, "remote", "set-url", "origin", web)
+    git(repository, "config", f"url.{remote}.insteadOf", web)
+    age_branch(repository, "main")
+    return repository
+
+
+@pytest.fixture
+def primary(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    return build_primary(repository, tmp_path, monkeypatch)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Start each long scan case in the first batch of a different xdist worker, because xdist hands a worker a run of neighbouring tests, or one test each in a small run."""
+    scans = [item for item in items if item.get_closest_marker("scan")]
+    rest = [item for item in items if not item.get_closest_marker("scan")]
+    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1"))
+    if len(items) < 2 * workers:
+        items[:] = [*scans, *rest]
+        return
+    batch = max(len(items) // workers // 4, 2)
+    first: list[list[pytest.Item]] = [[] for _ in range(workers)]
+    later: list[pytest.Item] = []
+    for number, scan in enumerate(scans):
+        held = first[number % workers]
+        (held if len(held) < batch else later).append(scan)
+    filler = iter([*rest, *later])
+    ordered: list[pytest.Item] = []
+    for held in first:
+        ordered += [*held, *itertools.islice(filler, batch - len(held))]
+    items[:] = [*ordered, *filler]

@@ -1,0 +1,36 @@
+import 'dart:async';
+
+Future<void> defer(void Function() work) async {
+  // ruleid: next-frame-call-dart
+  scheduleMicrotask(work);
+  // ruleid: next-frame-call-dart
+  Future.microtask(work);
+  // ruleid: next-frame-call-dart
+  Future<void>.microtask(work);
+  // ruleid: next-frame-call-dart
+  Future.delayed(Duration.zero, work);
+  // ruleid: next-frame-call-dart
+  Future.delayed(const Duration(milliseconds: 0), work);
+  // ruleid: next-frame-call-dart
+  Future.delayed(const Duration(milliseconds: 16), work);
+  // ruleid: next-frame-call-dart
+  Future<void>.delayed(Duration.zero, work);
+  // ruleid: next-frame-call-dart
+  Timer.run(work);
+  // ruleid: next-frame-call-dart
+  Timer(Duration.zero, work);
+  // ruleid: next-frame-call-dart
+  Timer(const Duration(milliseconds: 5), work);
+  // ruleid: next-frame-call-dart
+  Future(work);
+  // ruleid: next-frame-call-dart
+  Future<void>(work);
+  // ruleid: next-frame-call-dart
+  await null;
+  Future.delayed(const Duration(milliseconds: 17), work);
+  Future.delayed(const Duration(seconds: 1), work);
+  Timer(const Duration(milliseconds: 250), work);
+  Timer.periodic(const Duration(seconds: 1), (_) => work());
+  final value = Future.value(1);
+  await Future.wait([value]);
+}

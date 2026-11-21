@@ -24,6 +24,24 @@ from test_shipping import (
 )
 
 
+def _image(_root: Path, _url: str) -> bytes:
+    return b"image"
+
+
+def _no_problem(*_arguments: object) -> None:
+    return None
+
+
+def isolate_attachments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The attachment rules are tested apart from the measured and look checks, which have their own tests."""
+    import look
+    import ui_proof
+
+    monkeypatch.setattr(look, "block_problem", _no_problem)
+    monkeypatch.setattr(ui_proof, "download", _image)
+    monkeypatch.setattr(ui_proof, "evidence_problem", _no_problem)
+
+
 def test_unchanged_ui_needs_comparison_note_without_uploads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -51,20 +69,35 @@ def test_a_pr_that_changes_no_ui_file_needs_no_ui_evidence(
     assert not any("--method" in call for call in fake.calls)
 
 
+_GH_IMAGE_BODY = (
+    "Before:\n\n![before](https://github.com/user-attachments/assets/old-image)\n\n"
+    "After:\n\n![after](https://github.com/user-attachments/assets/new-image)"
+)
+
+
 @pytest.mark.parametrize(
     ("body", "content_type"),
     [
         (_UI_BODY, "image/png"),
+        (_GH_IMAGE_BODY, "image/png"),
         (_NATIVE_VIDEO_BODY, "video/mp4"),
         (_NATIVE_VIDEO_BODY_CRLF, "video/mp4"),
         (_MIXED_UI_BODY, "image/png"),
         (_UI_BODY + "\n\n" + _NATIVE_VIDEO_BODY, "image/png"),
     ],
-    ids=["images", "native-video", "native-video-crlf", "mixed", "two-pairs"],
+    ids=[
+        "images",
+        "labelled-images",
+        "native-video",
+        "native-video-crlf",
+        "mixed",
+        "two-pairs",
+    ],
 )
 def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str, content_type: str
 ) -> None:
+    isolate_attachments(monkeypatch)
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     fake = _ui_fake(fixture, body=body)
     fake.attachment_response = f"HTTP/2 206 Partial Content\ncontent-type: {content_type}\ncontent-length: 1\ncontent-range: bytes 0-0/85098\n"
@@ -93,6 +126,7 @@ def test_ui_changes_accept_image_video_and_mixed_attachments_that_reject_head(
         "Before: ![old](https://example.invalid/old)\nAfter: ![new](https://github.com/user-attachments/assets/new-image)",
         "Before: ![old](https://github.com/user-attachments/assets/same)\nAfter: ![new](https://github.com/user-attachments/assets/same)",
         "Before:\n\nhttps://github.com/user-attachments/assets/old-video",
+        "![a](https://github.com/user-attachments/assets/old-image)\n\n![b](https://github.com/user-attachments/assets/new-image)",
         "Before:\n\nhttps://example.invalid/old-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
         "Before:\n\nhttps://github.com/user-attachments/assets/old-video\n\nBefore:\n\nhttps://github.com/user-attachments/assets/extra-video\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
         "Before:\n\nhttps://github.com/user-attachments/assets/old-video?query\n\nAfter:\n\nhttps://github.com/user-attachments/assets/new-video",
@@ -131,6 +165,7 @@ def test_ui_changes_reject_unavailable_or_wrong_attachment_type(
 def test_ui_evidence_falls_back_to_a_plain_get_when_the_ranged_request_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    isolate_attachments(monkeypatch)
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     fake = _ui_fake(fixture)
     plain = "HTTP/1.1 200 OK\ncontent-type: image/png\ncontent-length: 85098\n"
@@ -154,12 +189,14 @@ def test_ui_evidence_falls_back_to_a_plain_get_when_the_ranged_request_fails(
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 
-def test_missing_ui_evidence_names_the_upload_command(
+def test_missing_ui_evidence_names_the_labels_and_the_upload_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     _patch_gh(monkeypatch, _ui_fake(fixture, body="Pictures to follow."))
-    with pytest.raises(shipping.ShippingError, match="gh pr edit .*--attach"):
+    with pytest.raises(
+        shipping.ShippingError, match=r"(?s)`Before:`.*`After:`.*gh pr edit .*--attach"
+    ):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
 
 

@@ -2,6 +2,7 @@
 
 Usage: uv run python tests/agent_checks.py [--client codex|claude] [--model M]
     [--effort E] [--case NAME] [--repeat N] [--source REV] [--bare] [--judge]
+    [--feature-map]
 
 Each case installs this source (or --source REV) into a disposable Git fixture,
 runs one non-interactive agent session kept apart from the user's own agent
@@ -25,11 +26,9 @@ which Git ignores and setup never installs. pytest and CI do not run agents.
 """
 
 import argparse
-import ast
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -44,10 +43,11 @@ from typing import NamedTuple
 
 from agent_actions import (
     Action,
-    claude_actions,
-    codex_actions,
+    event_usage,
     loaded_skills,
 )
+from agent_browser import FEATURE_MAP, PROMPT, judge_browser, prepare_browser_app
+from agent_clients import CLIENTS, Access, Client
 from agent_fixtures import (
     CALC,
     CONTROLS,
@@ -56,8 +56,10 @@ from agent_fixtures import (
     PRODUCT,
     RUBRIC,
     TESTS,
+    changed_names,
     install_hard_eng,
     installed_source,
+    parse_sites,
     prepare_defective_commit,
     prepare_escaped_bug,
     prepare_failed_baseline,
@@ -71,9 +73,7 @@ from agent_fixtures import (
     real_run_failures,
     sources_judge,
 )
-from challenge import without_host_markers
 from conftest import SOURCE, commit, git, init
-from process_group import run_in_group
 
 
 class Ungraded(Exception):
@@ -87,6 +87,7 @@ class Run(NamedTuple):
     log: list[str]
     actions: list[Action]
     grade: Callable[[str, str], dict[str, object] | None] | None = None
+    events: Path | None = None
 
 
 class Outcome(NamedTuple):
@@ -100,6 +101,8 @@ class Case(NamedTuple):
     prompt: str
     prepare: Callable[[Path], None]
     judge: Callable[[Run], list[str]]
+    access: Access = "sandboxed"
+    feature_map: str = ""
 
 
 def run(fixture: Run, *command: str) -> int:
@@ -114,9 +117,7 @@ def run(fixture: Run, *command: str) -> int:
 
 def changed(fixture: Run) -> set[str]:
     """Committed, staged, unstaged and untracked changes since the case base."""
-    tracked = git(fixture.root, "diff", "--name-only", fixture.base)
-    untracked = git(fixture.root, "ls-files", "--others", "--exclude-standard")
-    return {name for name in (tracked + "\n" + untracked).splitlines() if name}
+    return changed_names(fixture.root, fixture.base)
 
 
 def ready_feature_plans(fixture: Run, feature: str) -> list[str]:
@@ -436,28 +437,6 @@ def judge_escaped_bug(fixture: Run) -> list[str]:
     return failures + loads_skill("he-learn")(fixture)
 
 
-PARSERS = {"split", "partition", "findall", "finditer", "splitlines", "int"}
-
-
-def called(node: ast.AST) -> str:
-    function = node.func if isinstance(node, ast.Call) else None
-    if isinstance(function, ast.Attribute):
-        return function.attr
-    return function.id if isinstance(function, ast.Name) else ""
-
-
-def parse_sites(root: Path) -> int:
-    """Functions that take the input text apart or convert it, in the project's source files that are not tests."""
-    listed = git(root, "ls-files", "--cached", "--others", "--exclude-standard", "*.py")
-    return sum(
-        any(called(node) in PARSERS for node in ast.walk(function))
-        for name in listed.splitlines()
-        if not name.startswith(".") and not Path(name).name.startswith("test_")
-        for function in ast.walk(ast.parse((root / name).read_text()))
-        if isinstance(function, ast.FunctionDef)
-    )
-
-
 def judge_repeated_block(fixture: Run) -> list[str]:
     behaviour = (
         "from report import max_line, mean_line, total_line; "
@@ -576,11 +555,24 @@ CASES = [
         prepare_repeated_block,
         judge_repeated_block,
     ),
+    Case(
+        "browser-proof",
+        PROMPT,
+        prepare_browser_app,
+        judge_browser,
+        "approved",
+        FEATURE_MAP,
+    ),
 ]
 
 
 def fixture(
-    root: Path, case: Case, source: Path = SOURCE, *, bare: bool = False
+    root: Path,
+    case: Case,
+    source: Path = SOURCE,
+    *,
+    bare: bool = False,
+    feature_map: bool = False,
 ) -> str:
     """A committed project with this source installed, then the case's own state."""
     init(root)
@@ -595,267 +587,11 @@ def fixture(
     commit(root, "Project baseline")
     install_hard_eng(root, source, bare=bare)
     commit(root, "Install Hard Eng")
+    if feature_map and case.feature_map:
+        # The case's first commit takes the map in, so its last commit stays the change.
+        (root / "FEATURES.md").write_text(case.feature_map)
     case.prepare(root)
     return git(root, "rev-parse", "HEAD")
-
-
-class Agent(NamedTuple):
-    """What one client run observably produced; incomplete runs are never judged."""
-
-    completed: bool
-    message: str
-    settings: dict[str, object]
-    problems: list[str]
-    actions: list[Action]
-
-
-class Ready(NamedTuple):
-    """The client's version, and why it cannot run, if it cannot."""
-
-    version: str | None
-    blocker: str | None
-
-
-class Client(NamedTuple):
-    model: str
-    preflight: Callable[[], Ready]
-    run: Callable[[Path, Path, argparse.Namespace, str, bool], Agent]
-    isolation: str
-
-
-def events(path: Path) -> list[dict[str, object]]:
-    parsed = [
-        json.loads(line)
-        for line in path.read_text().splitlines()
-        if line.startswith("{")
-    ]
-    return [event for event in parsed if isinstance(event, dict)]
-
-
-def stream(
-    command: list[str],
-    root: Path,
-    evidence: Path,
-    timeout: int,
-    overrides: dict[str, str] | None = None,
-) -> list[dict[str, object]] | None:
-    """The client's JSON event stream, or None when it exceeded the timeout."""
-    try:
-        with (
-            (evidence / "events.jsonl").open("w") as out,
-            (evidence / "stderr.log").open("w") as err,
-        ):
-            run_in_group(
-                command,
-                cwd=root,
-                env={**without_host_markers(), **(overrides or {})},
-                stdin=subprocess.DEVNULL,
-                stdout=out,
-                stderr=err,
-                timeout=timeout,
-            )
-    except subprocess.TimeoutExpired:
-        return None
-    return events(evidence / "events.jsonl")
-
-
-def mcp_calls(found: list[dict[str, object]]) -> list[str]:
-    """MCP tools the agent actually called, as recorded in its event stream."""
-    calls: list[str] = []
-    for event in found:
-        item = event.get("item")
-        if (
-            event.get("type") == "item.completed"
-            and isinstance(item, dict)
-            and item.get("type") == "mcp_tool_call"
-        ):
-            calls.append(
-                f"{item.get('server')}.{item.get('tool')}: {item.get('status')}"
-            )
-    return calls
-
-
-def codex_settings(home: Path, thread: object, evidence: Path) -> dict[str, object]:
-    """The model and policies Codex recorded for the turn, with the session copied as evidence."""
-    sessions: list[Path] = (
-        sorted((home / "sessions").rglob(f"rollout-*{thread}.jsonl"))
-        if isinstance(thread, str)
-        else []
-    )
-    if not sessions:
-        return {"unavailable": "Codex session record not found"}
-    shutil.copyfile(sessions[-1], evidence / "session.jsonl")
-    for event in events(sessions[-1]):
-        payload = event.get("payload")
-        if event.get("type") == "turn_context" and isinstance(payload, dict):
-            keys = ("model", "effort", "sandbox_policy", "approval_policy")
-            return {key: payload.get(key) for key in keys}
-    return {"unavailable": "Codex session record has no turn context"}
-
-
-def codex_run(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, tools: bool
-) -> Agent:
-    # A fresh home shares only the login; user memories, MCP, hooks, plugins and instructions stay out.
-    home = root.parent / "codex-home"
-    home.mkdir()
-    user = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-    (home / "auth.json").symlink_to(user / "auth.json")
-    (home / "config.toml").write_text(f'[projects."{root}"]\ntrust_level = "trusted"\n')
-    # Agents get a writable .git and unreviewed project hooks; graders read nothing.
-    access = (
-        ["--sandbox", "workspace-write", "--add-dir", str(root / ".git")]
-        + ["--dangerously-bypass-hook-trust"]
-        if tools
-        else ["--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"]
-    )
-    command = [
-        "codex",
-        "exec",
-        "--json",
-        "--cd",
-        str(root),
-        "--model",
-        options.model,
-        "--config",
-        f'model_reasoning_effort="{options.effort}"',
-        *access,
-        "--output-last-message",
-        str(evidence / "last-message.md"),
-        prompt,
-    ]
-    found = stream(command, root, evidence, options.timeout, {"CODEX_HOME": str(home)})
-    if found is None:
-        return Agent(False, "", {}, [f"codex exec exceeded {options.timeout}s"], [])
-    thread = next((e.get("thread_id") for e in found if "thread_id" in e), None)
-    settings = codex_settings(home, thread, evidence)
-    settings["mcp_calls"] = mcp_calls(found)
-    return Agent(
-        any(event.get("type") == "turn.completed" for event in found),
-        "\n\n".join(
-            str(item.get("text"))
-            for event in found
-            if event.get("type") == "item.completed"
-            and isinstance(item := event.get("item"), dict)
-            and item.get("type") == "agent_message"
-        ),
-        settings,
-        [
-            json.dumps(e)[:500]
-            for e in found
-            if e.get("type") in {"turn.failed", "error"}
-        ],
-        codex_actions(found),
-    )
-
-
-def claude_isolation() -> str:
-    """Turn off the user's plugins and keep Bash in a sandbox without network."""
-    user = Path.home() / ".claude/settings.json"
-    plugins = (
-        json.loads(user.read_text()).get("enabledPlugins") if user.exists() else None
-    )
-    return json.dumps(
-        {
-            "enabledPlugins": dict.fromkeys(plugins, False)
-            if isinstance(plugins, dict)
-            else {},
-            "sandbox": {
-                "enabled": True,
-                "autoAllowBashIfSandboxed": True,
-                "allowUnsandboxedCommands": False,
-            },
-        }
-    )
-
-
-def claude_run(
-    root: Path, evidence: Path, options: argparse.Namespace, prompt: str, tools: bool
-) -> Agent:
-    command = [
-        "claude",
-        "--print",
-        prompt,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--model",
-        options.model,
-        "--effort",
-        options.effort,
-        # Project settings load the installed hooks; user settings, memory and MCP stay out.
-        "--setting-sources",
-        "project,local",
-        "--strict-mcp-config",
-        "--settings",
-        claude_isolation(),
-        "--permission-mode",
-        "acceptEdits",
-        "--no-session-persistence",
-        *([] if tools else ["--tools", ""]),
-    ]
-    found = stream(command, root, evidence, options.timeout)
-    if found is None:
-        return Agent(False, "", {}, [f"claude --print exceeded {options.timeout}s"], [])
-    nothing: dict[str, object] = {}
-    start = next((e for e in found if e.get("subtype") == "init"), nothing)
-    keys = ("model", "permissionMode", "claude_code_version", "mcp_servers", "plugins")
-    settings: dict[str, object] = {key: start.get(key) for key in keys}
-    result = next((e for e in found if e.get("type") == "result"), nothing)
-    text = result.get("result")
-    message = text if isinstance(text, str) else ""
-    (evidence / "last-message.md").write_text(message)
-    usage = result.get("modelUsage")
-    used: list[str] = sorted(usage) if isinstance(usage, dict) else []
-    settings["models_used"] = used
-    completed = result.get("is_error") is False
-    problems = [] if completed else [message or "claude --print returned no result"]
-    return Agent(completed, message, settings, problems, claude_actions(found))
-
-
-def output(command: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, capture_output=True, text=True, check=False)
-
-
-def codex_preflight() -> Ready:
-    if shutil.which("codex") is None:
-        return Ready(None, "codex is not on PATH")
-    version = output(["codex", "--version"]).stdout.strip()
-    login = output(["codex", "login", "status"])
-    return Ready(
-        version,
-        None
-        if login.returncode == 0
-        else "codex is not logged in: " + (login.stdout + login.stderr).strip(),
-    )
-
-
-def claude_preflight() -> Ready:
-    if shutil.which("claude") is None:
-        return Ready(None, "claude is not on PATH")
-    version = output(["claude", "--version"]).stdout.strip()
-    try:
-        status = json.loads(output(["claude", "auth", "status"]).stdout)
-        logged_in = status.get("loggedIn") is True
-    except (json.JSONDecodeError, AttributeError):
-        logged_in = False
-    return Ready(version, None if logged_in else "claude is not logged in")
-
-
-CLIENTS = {
-    "codex": Client(
-        "gpt-6-astra",
-        codex_preflight,
-        codex_run,
-        "codex exec; workspace-write sandbox plus writable .git; fresh CODEX_HOME sharing only the login; fixture trusted; project hooks run without review",
-    ),
-    "claude": Client(
-        "claude-opus-5-5",
-        claude_preflight,
-        claude_run,
-        "claude --print; project and local settings only; user plugins off; no MCP; acceptEdits with sandboxed, network-less Bash",
-    ),
-}
 
 
 def judge_grade(
@@ -867,7 +603,7 @@ def judge_grade(
     with tempfile.TemporaryDirectory(prefix="hard-eng-judge-") as temporary:
         empty = Path(temporary).resolve() / "empty"
         empty.mkdir()
-        agent = client.run(empty, folder, options, prompt, False)
+        agent = client.run(empty, folder, options, prompt, "grader")
     found = re.search(r"\{.*\}", agent.message, re.DOTALL)
     usable = agent.completed and found and not agent.actions
     try:
@@ -883,8 +619,16 @@ def execute(
     evidence.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix="hard-eng-agent-") as temporary:
         root = Path(temporary).resolve() / "project"
-        base = fixture(root, case, options.installed, bare=options.bare)
-        agent = client.run(root, evidence, options, case.prompt, True)
+        base = fixture(
+            root,
+            case,
+            options.installed,
+            bare=options.bare,
+            feature_map=options.feature_map,
+        )
+        agent = client.run(root, evidence, options, case.prompt, case.access)
+        agent.settings["usage"] = event_usage(evidence / "events.jsonl")
+        agent.settings["access"] = case.access
         (evidence / "actions.json").write_text(
             json.dumps([action._asdict() for action in agent.actions], indent=2) + "\n"
         )
@@ -895,10 +639,18 @@ def execute(
         if isinstance(used, str) and options.model not in used:
             reason = f"ran model {used}, not the requested {options.model}"
             return Outcome("blocked", [reason], agent.settings)
-        grade = None
-        if options.judge:
-            grade = partial(judge_grade, client, options, evidence)
-        result = Run(root, base, agent.message, [], agent.actions, grade)
+        grade = (
+            partial(judge_grade, client, options, evidence) if options.judge else None
+        )
+        result = Run(
+            root,
+            base,
+            agent.message,
+            [],
+            agent.actions,
+            grade,
+            evidence / "events.jsonl",
+        )
         try:
             failures = case.judge(result)
             status = "fail" if failures else "pass"
@@ -930,6 +682,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--judge", action="store_true", help="grade diagnoses with the same client"
+    )
+    parser.add_argument(
+        "--feature-map",
+        action="store_true",
+        help="commit the case's feature map file, for cases that have one",
     )
     options = parser.parse_args()
     if options.repeat < 1:
@@ -971,6 +728,7 @@ def main() -> int:
         "uncommitted_changes": dirty,
         "source": options.source or "checkout",
         "bare": options.bare,
+        "feature_map": options.feature_map,
         "started": started.isoformat(),
         "client": {
             "name": options.client,

@@ -505,21 +505,30 @@ def archive(session: Session, args: argparse.Namespace) -> Obj:
     }
 
 
+def toggle_on_card(
+    session: Session, card: Obj, field: str, ident: str, action: str
+) -> bool:
+    """Add or remove one id in a card list field; False when the card already is so."""
+    on_card = card.get(field)
+    has = isinstance(on_card, list) and ident in on_card
+    adding = action == "add"
+    if has == adding:
+        return False
+    card_id = text(card.get("id"))
+    if adding:
+        session.client.request("POST", f"/cards/{card_id}/{field}", {"value": ident})
+    else:
+        session.client.request("DELETE", f"/cards/{card_id}/{field}/{ident}")
+    return True
+
+
 def member(session: Session, args: argparse.Namespace) -> Obj:
     ident = member_ids(session).get(args.username.lower().removeprefix("@"), "")
     if not ident:
         raise TrelloError(f"{args.username} is not a member of the board")
     card = resolve_card(session, args.card)
-    on_card = card.get("idMembers")
-    has = isinstance(on_card, list) and ident in on_card
-    adding = args.action == "add"
-    if has == adding:
+    if not toggle_on_card(session, card, "idMembers", ident, args.action):
         return {"unchanged": True}
-    card_id = text(card.get("id"))
-    if adding:
-        session.client.request("POST", f"/cards/{card_id}/idMembers", {"value": ident})
-    else:
-        session.client.request("DELETE", f"/cards/{card_id}/idMembers/{ident}")
     return {"member": args.username, "action": args.action}
 
 
@@ -550,16 +559,8 @@ def label(session: Session, args: argparse.Namespace) -> Obj:
         ident = text(obj(made).get("id")) or "new-label"
     if not ident:
         raise TrelloError(f"The board has no label named {args.label}")
-    on_card = card.get("idLabels")
-    has = isinstance(on_card, list) and ident in on_card
-    adding = args.action == "add"
-    if has == adding:
+    if not toggle_on_card(session, card, "idLabels", ident, args.action):
         return {"unchanged": True}
-    card_id = text(card.get("id"))
-    if adding:
-        session.client.request("POST", f"/cards/{card_id}/idLabels", {"value": ident})
-    else:
-        session.client.request("DELETE", f"/cards/{card_id}/idLabels/{ident}")
     return {"label": args.label, "action": args.action}
 
 

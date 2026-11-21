@@ -27,7 +27,8 @@ def test_file_size_boundary_and_narrow_exceptions(
     runner: ModuleType, tmp_path: Path
 ) -> None:
     """HE-FILE-LENGTH: a 1001-line file fails unless a narrow exception covers it."""
-    path = tmp_path / "large.py"
+    path = tmp_path / "src/large.py"
+    path.parent.mkdir()
     path.write_text("value = 1\n" * 1000)
     validate_file_sizes(tmp_path, {})
     path.write_text("value = 1\n" * 1001)
@@ -38,9 +39,9 @@ def test_file_size_boundary_and_narrow_exceptions(
             tmp_path, {"*.py": {"reason": "broad", "evidence": "invalid"}}
         )
     validate_file_sizes(
-        tmp_path, {"large.py": {"reason": "fixture", "evidence": "exact-file test"}}
+        tmp_path, {"src/large.py": {"reason": "fixture", "evidence": "exact-file test"}}
     )
-    (tmp_path / ".gitattributes").write_text("large.py linguist-generated=true\n")
+    (tmp_path / ".gitattributes").write_text("src/large.py linguist-generated=true\n")
     validate_file_sizes(tmp_path, {})
 
 
@@ -119,9 +120,29 @@ def test_removing_shared_security_fails(
     (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
     with pytest.raises(ValueError, match=role):
         load_groups(tmp_path)
-    if role == "secrets-history":
-        config["scan_git_history"] = False
-        (tmp_path / "hard-eng.gates.json").write_text(json.dumps(config))
+
+
+@pytest.mark.parametrize("value", [False, "false", 0, None])
+def test_turning_off_the_history_scan_is_refused(
+    runner: ModuleType, installer: ModuleType, tmp_path: Path, value: object
+) -> None:
+    """HE-NO-SWITCH-OFF: `scan_git_history` is refused in any value but true, and the refusal names the entry route."""
+    config = native_gate_fixture(tmp_path, installer, "python")
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({**config, "scan_git_history": value})
+    )
+    with pytest.raises(
+        ValueError, match=r"HE-NO-SWITCH-OFF.*scan_git_history"
+    ) as error:
+        load_groups(tmp_path)
+    assert ".gitleaksignore" in str(error.value)
+    config["shared"] = [
+        g for g in config["shared"] if g.get("role") != "secrets-history"
+    ]
+    (tmp_path / "hard-eng.gates.json").write_text(
+        json.dumps({**config, "scan_git_history": value})
+    )
+    with pytest.raises(ValueError, match="scan_git_history"):
         load_groups(tmp_path)
 
 
@@ -242,20 +263,6 @@ def test_workspace_cannot_cover_unrelated_packages_or_child_security(
     (child / "bun.lock").touch()
     with pytest.raises(ValueError, match="lockfiles"):
         load_groups(tmp_path)
-
-
-def test_history_exception_keeps_current_file_scanning(
-    runner: ModuleType, tmp_path: Path
-) -> None:
-    checks = [
-        gate("history", "raise SystemExit(1)", role="secrets-history"),
-        gate("current", "from pathlib import Path;Path('scanned').touch()"),
-    ]
-    (tmp_path / "hard-eng.gates.json").write_text(
-        json.dumps({"packages": [], "shared": checks, "scan_git_history": False})
-    )
-    assert runner.check() == 0
-    assert (tmp_path / "scanned").is_file()
 
 
 @pytest.mark.parametrize(("ci", "budget"), [("true", 2700.0), ("", 900.0)])
@@ -663,9 +670,10 @@ def test_coverage_excludes_native_generated_and_vendor_attributes(
 ) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / ".gitattributes").write_text(
-        "generated.py linguist-generated=true\nexternal.py linguist-vendored=true\n"
+        "src/generated.py linguist-generated=true\nsrc/external.py linguist-vendored=true\n"
     )
-    for name in ("app.py", "generated.py", "external.py"):
+    (tmp_path / "src").mkdir()
+    for name in ("app.py", "src/generated.py", "src/external.py"):
         (tmp_path / name).write_text("value = 1\n")
     group = {"language": "python", "sources": ["."]}
     assert {p.name for p in runner.production_files(tmp_path, group)} == {"app.py"}

@@ -1,12 +1,14 @@
 """Strict loading of the shipping policy in hard-eng.gates.json."""
 
 import json
+import sys
 from pathlib import Path
 from typing import cast
 
 import ci_jobs
 import pytest
 import shipping
+import workflow_blocking
 import yaml
 from gate_config import GateConfig
 
@@ -92,6 +94,13 @@ def test_load_policy_defaults_the_push_checks_to_local_and_accepts_ci(
 
 HISTORY_GATE = {"name": "history", "role": "secrets-history", "command": ["gitleaks"]}
 CI_CONFIG = cast(GateConfig, {"packages": [], "shared": [HISTORY_GATE]})
+SHARDED_CONFIG = cast(
+    GateConfig,
+    {
+        "packages": [{"path": ".", "checks": [{"name": "tests", "shards": 2}]}],
+        "shared": [HISTORY_GATE],
+    },
+)
 
 
 def _ci_project(tmp_path: Path) -> tuple[Path, Path]:
@@ -212,6 +221,27 @@ def test_a_check_workflow_with_a_filtered_pull_request_trigger_is_refused(
 STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
 
 
+def _job(name: str, shard: str, extra: str = "") -> str:
+    return (
+        f"  {name}:\n    runs-on: x\n{extra}    steps:\n"
+        f"      - run: python3 .hooks/hard-eng.py check --shard {shard}\n"
+    )
+
+
+SHARD_HEAD = "on: [pull_request]\njobs:\n"
+MATRIX = "    strategy:\n      matrix:\n        shard: [1, 2]\n"
+SHARDED_WORKFLOWS = {
+    "rest-only": SHARD_HEAD + _job("c", "rest"),
+    "numbered-only": SHARD_HEAD + _job("t", '"$SHARD"', MATRIX),
+    "rest-and-numbered": SHARD_HEAD + _job("c", "rest") + _job("t", '"$SHARD"', MATRIX),
+    "merge-only": SHARD_HEAD + _job("m", "merge"),
+    "shards-with-a-condition-and-a-plain-merge": SHARD_HEAD
+    + _job("c", "rest")
+    + _job("t", '"$SHARD"', "    if: github.actor != 'x'\n" + MATRIX)
+    + _job("m", "merge", "    needs: t\n"),
+}
+
+
 @pytest.mark.parametrize(
     "workflow",
     [
@@ -242,12 +272,99 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
             "      - if: x == 'true' && y\n        run: python3 .hooks/hard-eng.py check\n"
             "      - if: x != 'true' && y\n        run: python3 .hooks/hard-eng.py check\n",
         ),
+        CHECK_WORKFLOW.replace("check\n", "check || true\n"),
+        CHECK_WORKFLOW.replace("check\n", "check | tee check.log\n"),
+        CHECK_WORKFLOW.replace("check\n", "check; echo done\n"),
+        CHECK_WORKFLOW.replace("check\n", "check && echo passed || true\n"),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          python3 .hooks/hard-eng.py check && echo passed\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3", "- continue-on-error: true\n        run: python3"
+        ),
+        CHECK_WORKFLOW.replace(
+            "    runs-on", "    continue-on-error: true\n    runs-on"
+        ),
         CHECK_WORKFLOW.replace(
             STEP,
             "    steps:\n"
             "      - if: y&&x == 'true'\n        run: python3 .hooks/hard-eng.py check\n"
             "      - if: y&&x != 'true'\n        run: python3 .hooks/hard-eng.py check\n",
         ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: if [ -f flag ]; then python3 .hooks/hard-eng.py check; fi\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: echo python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          if [ -f flag ]; then\n            python3 .hooks/hard-eng.py check\n          fi\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: test -f flag || python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          set +e\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          test -f flag && python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          set +u +e\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- shell: bash {0}\n        run: |\n          python3 .hooks/hard-eng.py check\n          echo done\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          if [ -f flag ]; then\n            exit 0\n          fi\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          if [ -f flag ]; then\n            echo "nothing"; exit 0\n          fi\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          [ "$DOCS_ONLY" = true ] && exit 0\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          [ -n "$X" ] || exit 0\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          exit 0\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          exit\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          return 0\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          f() { exit 0; }\n          f\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          trap "exit 0" EXIT\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          exit "$CODE"\n          python3 .hooks/hard-eng.py check\n',
+        ),
+        *SHARDED_WORKFLOWS.values(),
     ],
     ids=[
         "push-only",
@@ -262,7 +379,33 @@ STEP = "    steps:\n      - run: python3 .hooks/hard-eng.py check\n"
         "needs-a-conditional-job",
         "inline-comment",
         "paired-conditions-with-and",
+        "or-true",
+        "piped",
+        "semicolon",
+        "and-then-or",
+        "and-then-a-line",
+        "step-continue-on-error",
+        "job-continue-on-error",
         "paired-conditions-with-unspaced-and",
+        "conditional-shell",
+        "echo",
+        "conditional-shell-lines",
+        "or-before-the-check",
+        "errexit-off-then-a-line",
+        "and-before-the-check-then-a-line",
+        "errexit-off-by-a-longer-set-then-a-line",
+        "unchecked-shell-then-a-line",
+        "a-closed-block-that-exits-zero-before-the-check",
+        "a-closed-block-that-prints-then-exits-zero-before-the-check",
+        "a-one-line-and-exit-zero-before-the-check",
+        "a-one-line-or-exit-zero-before-the-check",
+        "a-bare-exit-zero-before-the-check",
+        "a-bare-exit-before-the-check",
+        "a-return-before-the-check",
+        "an-exit-zero-in-a-function-before-the-check",
+        "an-exit-trap-that-exits-zero-before-the-check",
+        "an-exit-with-a-variable-before-the-check",
+        *SHARDED_WORKFLOWS,
     ],
 )
 def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_refused(
@@ -270,8 +413,9 @@ def test_a_workflow_that_does_not_run_the_whole_check_on_every_pull_request_is_r
 ) -> None:
     root, workflows = _ci_project(tmp_path)
     (workflows / "ci.yml").write_text(workflow)
+    config = SHARDED_CONFIG if "--shard" in workflow else CI_CONFIG
     with pytest.raises(shipping.ShippingError, match="every pull request"):
-        ci_jobs.load_checked_policy(root, CI_CONFIG)
+        ci_jobs.load_checked_policy(root, config)
 
 
 @pytest.mark.parametrize(
@@ -281,7 +425,57 @@ def test_the_hard_eng_workflows_with_a_docs_only_step_pair_run_the_whole_check(
     name: str,
 ) -> None:
     source = Path(__file__).resolve().parents[1] / name
-    assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()))
+    assert ci_jobs.runs_whole_check(yaml.safe_load(source.read_text()), sharded=True)
+
+
+def test_a_run_inside_the_workflow_loads_the_ci_policy_without_pyyaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = _ci_project(tmp_path)
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    with pytest.raises(ImportError):
+        ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG, workflow_checked=True)
+    with pytest.raises(shipping.ShippingError, match="secrets-history"):
+        ci_jobs.load_checked_policy(
+            root,
+            cast(GateConfig, {"packages": [], "shared": []}),
+            workflow_checked=True,
+        )
+
+
+def test_a_local_policy_loads_without_pyyaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    _write(root)
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG, workflow_checked=True)
+
+
+def test_the_rest_job_alone_is_the_whole_check_when_no_gate_is_sharded(
+    tmp_path: Path,
+) -> None:
+    root, workflows = _ci_project(tmp_path)
+    (workflows / "ci.yml").write_text(SHARD_HEAD + _job("c", "rest"))
+    ci_jobs.load_checked_policy(root, CI_CONFIG)
+    with pytest.raises(shipping.ShippingError, match="every pull request"):
+        (workflows / "ci.yml").write_text(SHARD_HEAD + _job("t", '"$SHARD"', MATRIX))
+        ci_jobs.load_checked_policy(root, CI_CONFIG)
+
+
+def test_with_a_sharded_gate_the_rest_and_merge_jobs_are_the_whole_check(
+    tmp_path: Path,
+) -> None:
+    root, workflows = _ci_project(tmp_path)
+    (workflows / "ci.yml").write_text(
+        SHARD_HEAD
+        + _job("c", "rest")
+        + _job("t", '"$SHARD"', MATRIX)
+        + _job("m", "merge", "    needs: t\n    if: ${{ !cancelled() }}\n")
+    )
+    ci_jobs.load_checked_policy(root, SHARDED_CONFIG)
 
 
 def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditional_job(
@@ -303,12 +497,39 @@ def test_a_called_check_workflow_is_refused_when_the_calling_job_needs_a_conditi
         CHECK_WORKFLOW.replace(
             "    runs-on", "    if: ${{ !cancelled() }}\n    runs-on"
         ),
-        CHECK_WORKFLOW.replace("    runs-on", "    if: always()\n    runs-on"),
         CHECK_WORKFLOW.replace(
             "on: [pull_request]", "on:\n  pull_request:\n    branches: [main, '**']"
         ),
+        CHECK_WORKFLOW.replace("check\n", "check && echo passed\n"),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n"
+            '          mise_command=(bun x --package="$P" mise)\n'
+            '          if [[ -n "$X_BIN" ]]; then mise_command=("$X_BIN"); fi\n'
+            '          "${mise_command[@]}" exec -- python3 .hooks/hard-eng.py check\n',
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          # Do not use set +e here\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            "- run: |\n          if [ -f flag ]; then\n            echo no\n            exit 1\n          fi\n          python3 .hooks/hard-eng.py check\n",
+        ),
+        CHECK_WORKFLOW.replace(
+            "- run: python3 .hooks/hard-eng.py check\n",
+            '- run: |\n          [ -z "$X" ] && exit 1\n          gitleaks detect --exit-code 1 || exit 2\n          python3 .hooks/hard-eng.py check\n',
+        ),
     ],
-    ids=["not-cancelled", "always", "branches-with-double-star"],
+    ids=[
+        "not-cancelled",
+        "branches-with-double-star",
+        "and-then-a-command",
+        "the-generated-launcher-line",
+        "a-comment-that-names-errexit",
+        "a-closed-block-that-only-fails-before-the-check",
+        "one-line-lists-that-exit-non-zero-before-the-check",
+    ],
 )
 def test_a_condition_or_filter_that_skips_no_pull_request_does_not_refuse_the_workflow(
     tmp_path: Path, workflow: str
@@ -328,3 +549,19 @@ def test_a_branches_filter_with_double_star_and_an_exclusion_is_refused(
     (workflows / "ci.yml").write_text(filtered)
     with pytest.raises(shipping.ShippingError, match="`branches`"):
         ci_jobs.load_checked_policy(root, CI_CONFIG)
+
+
+@pytest.mark.parametrize(
+    ("patterns", "covers"),
+    [
+        ("**", True),
+        (["**"], True),
+        (["main", "**"], True),
+        (["**", "!main"], False),
+        (["main"], False),
+    ],
+)
+def test_the_one_branch_filter_rule_of_the_workflow_check_covers_every_branch_only_with_double_star_and_no_exclusion(
+    patterns: object, covers: bool
+) -> None:
+    assert workflow_blocking.covers_every_branch(patterns) is covers

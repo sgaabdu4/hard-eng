@@ -1,0 +1,4 @@
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_012rkCioFwxYQFdLRLn2qXSt", "name": "Read", "input": {"file_path": "{path}"}}]}}
+{"type": "user", "message": {"role": "user", "content": [{"tool_use_id": "toolu_012rkCioFwxYQFdLRLn2qXSt", "type": "tool_result", "content": [{"type": "image", "source": {"type": "base64", "data": "iVBORw0KGgo=", "media_type": "image/jpeg"}}]}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "{answer}"}]}}
+{"type": "result", "subtype": "success", "is_error": false, "session_id": "{thread}", "result": "{answer}"}

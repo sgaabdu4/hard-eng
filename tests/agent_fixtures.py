@@ -1,3 +1,4 @@
+import ast
 import shutil
 import subprocess
 import sys
@@ -271,6 +272,12 @@ CONTROLS = {
 }
 
 
+def changed_names(root: Path, base: str) -> set[str]:
+    tracked = git(root, "diff", "--name-only", base)
+    untracked = git(root, "ls-files", "--others", "--exclude-standard")
+    return {name for name in (tracked + "\n" + untracked).splitlines() if name}
+
+
 def commit_change(root: Path, name: str, old: str, new: str, message: str) -> None:
     path = root / name
     path.write_text(path.read_text().replace(old, new))
@@ -370,6 +377,28 @@ class ReportTest(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """
+
+
+PARSERS = {"split", "partition", "findall", "finditer", "splitlines", "int"}
+
+
+def called(node: ast.AST) -> str:
+    function = node.func if isinstance(node, ast.Call) else None
+    if isinstance(function, ast.Attribute):
+        return function.attr
+    return function.id if isinstance(function, ast.Name) else ""
+
+
+def parse_sites(root: Path) -> int:
+    """Functions that take the input text apart or convert it, in the project's source files that are not tests."""
+    listed = git(root, "ls-files", "--cached", "--others", "--exclude-standard", "*.py")
+    return sum(
+        any(called(node) in PARSERS for node in ast.walk(function))
+        for name in listed.splitlines()
+        if not name.startswith(".") and not Path(name).name.startswith("test_")
+        for function in ast.walk(ast.parse((root / name).read_text()))
+        if isinstance(function, ast.FunctionDef)
+    )
 
 
 def prepare_repeated_block(root: Path) -> None:

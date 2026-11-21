@@ -1,9 +1,12 @@
 """Read the commands, edits and skills each client recorded in its event stream."""
 
+import json
 import re
+from pathlib import Path
 from typing import NamedTuple
 
 SKILL_FILE = re.compile(r"skills/([\w-]+)/SKILL\.md")
+CODEX_STEPS = {"command_execution", "file_change", "mcp_tool_call", "web_search"}
 
 
 class Action(NamedTuple):
@@ -90,3 +93,32 @@ def loaded_skills(actions: list[Action]) -> set[str]:
         if action.ok and action.kind == "command":
             found.update(SKILL_FILE.findall(action.detail))
     return found
+
+
+def event_usage(path: Path) -> dict[str, object]:
+    """Tokens and tool calls the client's event stream records; Codex counts its command, edit and MCP items."""
+    tokens: dict[str, int] = {}
+    steps = 0
+    lines = path.read_text().splitlines() if path.is_file() else []
+    for line in lines:
+        event = json.loads(line) if line.startswith("{") else {}
+        usage = event.get("usage")
+        if event.get("type") in {"result", "turn.completed"} and isinstance(
+            usage, dict
+        ):
+            for name, count in usage.items():
+                if name.endswith("tokens") and isinstance(count, int):
+                    tokens[name] = tokens.get(name, 0) + count
+        message = event.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        steps += sum(
+            isinstance(part, dict) and part.get("type") == "tool_use"
+            for part in content or []
+        )
+        item = event.get("item")
+        steps += (
+            event.get("type") == "item.completed"
+            and isinstance(item, dict)
+            and item.get("type") in CODEX_STEPS
+        )
+    return {"tokens": tokens, "steps": steps}

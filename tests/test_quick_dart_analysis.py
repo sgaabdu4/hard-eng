@@ -219,7 +219,7 @@ def test_the_time_of_the_package_run_leaves_out_the_first_run(
     assert runner.check(base=base, verify_plan=False, quick=True) == 0
     assert len(trace(tmp_path)) == 2
     times = json.loads((tmp_path / ".git/hard-eng-gate-times.json").read_text())
-    assert times["./types-lint"] < 2
+    assert max(times["./types-lint"]["passes"]) < 2
 
 
 def test_the_first_run_reads_the_changed_files_as_git_lists_them(

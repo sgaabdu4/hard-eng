@@ -4,19 +4,45 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
+from typing import cast
 from unittest.mock import patch
 
 import pytest
 import yaml
+from conftest import pytest_collection_modifyitems
 from gate_config import TEST_FOLDERS, Gate, Group
 from hot_paths import RULES, findings, require_parsed, scan_all, unowned_paths
 from reports import validate_semgrep
 
 SOURCE = Path(__file__).resolve().parents[1]
 FIXTURES = SOURCE / "tests/fixtures/performance"
+REVIEWER_INPUTS = SOURCE / "tests/fixtures/reviewer-inputs"
 ANNOTATION = re.compile(r"ruleid: (\S+)")
+PERFORMANCE_CHUNKS = 4
+REVIEWER_CHUNKS = 8
+SCAN_JOBS = ["--jobs", "2"]
+REVIEWER_PARSE_GAPS = [
+    ("f3_q4_py_generic.py", 52, "PartialParsing"),
+    ("f3_q4fmt_py_generic.py", 70, "PartialParsing"),
+    ("r22_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
+    ("r22_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
+    ("r22_twin_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
+    ("r22_twin_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
+    ("r23_opus_p22_py_py.py", 19, "PartialParsing"),
+    ("r23_twin_opus_p22_py_py.py", 23, "PartialParsing"),
+]
+
+
+def strict_gate() -> Gate:
+    return {
+        "name": "security",
+        "role": "security",
+        "command": ["semgrep", "scan", "--error", "--strict", "--metrics=off"]
+        + ["--time", "--json", "--output", "semgrep.json", "."],
+    }
 
 
 def git(root: Path, *args: str) -> None:
@@ -40,25 +66,142 @@ def coordinates(results: list[dict[str, object]]) -> list[tuple[str, str, int]]:
     ]
 
 
-def test_each_rule_finds_exactly_the_annotated_lines(tmp_path: Path) -> None:
-    """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
+def fixture_chunk(files: list[Path], chunks: int, index: int) -> list[Path]:
+    return sorted(files)[index::chunks]
+
+
+def performance_fixtures() -> list[Path]:
+    return list(FIXTURES.iterdir())
+
+
+def reviewer_fixtures() -> list[Path]:
+    return list(REVIEWER_INPUTS.glob("*.txt"))
+
+
+def blank_annotations(fixture: Path) -> tuple[list[tuple[str, str, int]], str]:
+    name = fixture.name.removesuffix(".txt")
+    lines = fixture.read_text().splitlines()
     expected = []
-    for fixture in sorted(FIXTURES.iterdir()):
-        name = fixture.name.removesuffix(".txt")
-        lines = fixture.read_text().splitlines()
-        for number, line in enumerate(lines, 1):
-            if match := ANNOTATION.search(line):
-                expected.append((name, match[1], number + 1))
-                lines[number - 1] = ""
-        (tmp_path / "src").mkdir(exist_ok=True)
-        (tmp_path / "src" / name).write_text("\n".join(lines) + "\n")
+    for number, line in enumerate(lines, 1):
+        if match := ANNOTATION.search(line):
+            expected.append((name, match[1], number + 1))
+            lines[number - 1] = ""
+    return expected, "\n".join(lines) + "\n"
+
+
+@pytest.mark.scan
+@pytest.mark.parametrize("index", range(PERFORMANCE_CHUNKS))
+def test_each_rule_finds_exactly_the_annotated_lines(
+    tmp_path: Path, index: int
+) -> None:
+    """HE-HOT-PATH: every rule fires on its annotated line and nowhere else."""
+    expected: list[tuple[str, str, int]] = []
+    (tmp_path / "src").mkdir()
+    for fixture in fixture_chunk(performance_fixtures(), PERFORMANCE_CHUNKS, index):
+        annotated, source = blank_annotations(fixture)
+        expected += annotated
+        (tmp_path / "src" / fixture.name.removesuffix(".txt")).write_text(source)
     with patch("hot_paths.require_parsed") as parsed:
-        results = findings(tmp_path, ["src"], 900)
-    parsed.assert_called_once_with([])
-    actual = coordinates(results)
-    assert sorted(actual) == sorted(expected)
+        results = findings(tmp_path, [*SCAN_JOBS, "src"], 900)
+    parsed.assert_called_once_with([], tmp_path)
+    assert sorted(coordinates(results)) == sorted(expected)
+
+
+def test_the_annotated_chunks_cover_every_fixture_and_every_rule() -> None:
+    """HE-HOT-PATH: the chunked scans together read each fixture once and annotate each rule."""
+    files = performance_fixtures()
+    chunks = [
+        fixture_chunk(files, PERFORMANCE_CHUNKS, index)
+        for index in range(PERFORMANCE_CHUNKS)
+    ]
+    assert sorted(path for chunk in chunks for path in chunk) == sorted(files)
+    annotated = {rule for path in files for _, rule, _ in blank_annotations(path)[0]}
     rules = yaml.safe_load(RULES.read_text())["rules"]
-    assert {rule for _, rule, _ in actual} == {rule["id"] for rule in rules}
+    assert annotated == {rule["id"] for rule in rules}
+
+
+class Case:
+    def __init__(self, scan: bool) -> None:
+        self.scan = scan
+
+    def get_closest_marker(self, name: str) -> str | None:
+        return name if self.scan else None
+
+
+def first_batches(count: int, workers: int) -> list[range]:
+    if count < 2 * workers:
+        return [range(worker, count, workers) for worker in range(workers)]
+    batch = max(count // workers // 4, 2)
+    return [range(worker * batch, (worker + 1) * batch) for worker in range(workers)]
+
+
+@pytest.mark.parametrize(
+    ("workers", "tests", "count"),
+    [(4, 330, 12), (14, 2000, 12), (4, 5, 4), (4, 12, 12)],
+)
+def test_each_worker_starts_with_its_share_of_the_scan_cases(
+    monkeypatch: pytest.MonkeyPatch, workers: int, tests: int, count: int
+) -> None:
+    """HE-HOT-PATH: xdist gives each worker a run of neighbouring tests, or one test each in a small run, so neighbouring scans go to different workers."""
+    monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", str(workers))
+    plain = [Case(False) for _ in range(tests - count)]
+    scans = [Case(True) for _ in range(count)]
+    items = [*plain, *scans]
+    pytest_collection_modifyitems(cast("list[pytest.Item]", items))
+    assert sorted(map(id, items)) == sorted(map(id, [*plain, *scans]))
+    batches = first_batches(tests, workers)
+    held = [
+        [scans.index(items[place]) for place in batch if items[place] in scans]
+        for batch in batches
+    ]
+    first = sorted(number for numbers in held for number in numbers)
+    assert first == list(range(min(count, sum(map(len, batches)))))
+    assert max(map(len, held)) - min(map(len, held)) <= 1
+    assert all(
+        len([number for number in numbers if number < 4]) <= 1 for numbers in held
+    )
+    assert [case for case in items if case not in scans] == plain
+
+
+def test_a_filtered_run_spreads_the_scans_that_remain() -> None:
+    """HE-HOT-PATH: the scan order is set after `-k` drops tests, so a focused run keeps its scans on different workers."""
+    listed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-k",
+            "annotated",
+            "tests/test_hot_paths.py",
+        ],
+        cwd=SOURCE,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={
+            **{
+                key: value
+                for key, value in os.environ.items()
+                if key != "PYTEST_ADDOPTS"
+            },
+            "PYTEST_XDIST_WORKER_COUNT": "4",
+        },
+    ).stdout.splitlines()
+    names = [line for line in listed if "::" in line]
+    held = [
+        [
+            names[place]
+            for place in batch
+            if "exactly_the_annotated_lines" in names[place]
+        ]
+        for batch in first_batches(len(names), 4)
+    ]
+    assert len(names) == 5
+    assert [len(scans) for scans in held] == [1, 1, 1, 1]
 
 
 @pytest.mark.parametrize(
@@ -112,37 +255,46 @@ def test_a_loop_in_a_flutter_test_folder_gets_no_finding(tmp_path: Path) -> None
     ]
 
 
-def test_exact_reported_inputs_keep_all_expected_findings(tmp_path: Path) -> None:
-    fixtures = SOURCE / "tests/fixtures/reviewer-inputs"
-    expected = json.loads((fixtures / "expected.json").read_text())
-    for fixture in fixtures.glob("*.txt"):
+@pytest.mark.scan
+@pytest.mark.parametrize("index", range(REVIEWER_CHUNKS))
+def test_exact_reported_inputs_keep_all_expected_findings(
+    tmp_path: Path, index: int
+) -> None:
+    expected = json.loads((REVIEWER_INPUTS / "expected.json").read_text())
+    names = set()
+    for fixture in fixture_chunk(reviewer_fixtures(), REVIEWER_CHUNKS, index):
+        names.add(fixture.name.removesuffix(".txt"))
         (tmp_path / fixture.name.removesuffix(".txt")).write_bytes(fixture.read_bytes())
     with patch("hot_paths.require_parsed") as parsed:
-        results = findings(tmp_path, ["."], 900)
+        results = findings(tmp_path, [*SCAN_JOBS, "."], 900)
     parsed.assert_called_once()
     errors = parsed.call_args.args[0]
-    require_parsed(errors)
+    require_parsed(errors, tmp_path)
     assert sorted(
         (Path(span["file"]).name, span["start"]["line"], error["type"][0])
         for error in errors
         for span in error["spans"]
-    ) == [
-        ("f3_q4_py_generic.py", 52, "PartialParsing"),
-        ("f3_q4fmt_py_generic.py", 70, "PartialParsing"),
-        ("r22_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
-        ("r22_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
-        ("r22_twin_opus_p21e_nested_iter.swift", 5, "PartialParsing"),
-        ("r22_twin_opus_p21e_nested_iter.swift", 14, "PartialParsing"),
-        ("r23_opus_p22_py_py.py", 19, "PartialParsing"),
-        ("r23_twin_opus_p22_py_py.py", 23, "PartialParsing"),
-    ]
+    ) == [row for row in REVIEWER_PARSE_GAPS if row[0] in names]
     actual = coordinates(results)
     assert sorted(actual) == sorted(
         (name, rule, line)
         for name, rules in expected.items()
+        if name in names
         for rule, lines in rules.items()
         for line in lines
     )
+
+
+def test_the_reported_input_chunks_cover_every_input_and_every_expectation() -> None:
+    files = reviewer_fixtures()
+    chunks = [
+        fixture_chunk(files, REVIEWER_CHUNKS, index) for index in range(REVIEWER_CHUNKS)
+    ]
+    assert sorted(path for chunk in chunks for path in chunk) == sorted(files)
+    names = {path.name.removesuffix(".txt") for path in files}
+    expected = json.loads((REVIEWER_INPUTS / "expected.json").read_text())
+    assert set(expected) <= names
+    assert {row[0] for row in REVIEWER_PARSE_GAPS} <= names
 
 
 def test_every_security_gate_fails_old_slow_code(runner: ModuleType) -> None:
@@ -297,13 +449,7 @@ def test_a_partly_parsed_page_passes_the_gate_but_its_findings_fail_it(
         '<a href="https://vercel.com/templates?framework=next.js&utm_source=app">Go</a>'
     )
     slow = "export function seen(text: string) {\n  return /a+b/.test(text);\n}\n"
-    gate: Gate = {
-        "name": "security",
-        "role": "security",
-        "command": ["semgrep", "scan", "--error", "--strict", "--metrics=off"]
-        + ["--time", "--json", "--output", "semgrep.json", "."],
-    }
-    command = runner.prepare_command({"path": ".", "checks": []}, gate, 5)
+    command = runner.prepare_command({"path": ".", "checks": []}, strict_gate(), 5)
     report = runner.ROOT / "semgrep.json"
     for code, failed in ((slow, 1), ("", 0)):
         page.write_text(
@@ -462,3 +608,211 @@ def test_a_scan_with_no_semgrep_report_names_the_step_outside_the_sandbox(
         findings(tmp_path, ["app.py"], 120)
     assert text in str(error.value)
     assert "python3 .hooks/hard-eng.py hot-paths" in str(error.value)
+
+
+TIMER_FORMS = {
+    ".ts": [
+        "setTimeout(work)",
+        "setTimeout(work, 0)",
+        "setTimeout(work, 16)",
+        "window.setTimeout(work, 0)",
+        "setTimeout(\n  work,\n  0,\n)",
+        "setImmediate(work)",
+        "requestAnimationFrame(work)",
+        "requestIdleCallback(work)",
+        "queueMicrotask /* later */ (work)",
+        "process . nextTick(work)",
+        "Promise.resolve().then(work)",
+        "Promise\n  .resolve()\n  .then(work)",
+        "await Promise.resolve()",
+        "await null",
+        "await /* tick */ null",
+        "await // tick\n  null",
+        "setTimeout(work, /* now */ 0)",
+        "setTimeout(work, // now\n  0)",
+        "setTimeout(work, /* wait, now */ 0)",
+        "setTimeout(() => /[//]/.test(path), /* a */ 0)",
+        "setTimeout(() => /[//],/.test(path), 0)",
+        "setTimeout(() => log(`a ${`b),c`} d`), 0)",
+        "setTimeout(() => log(`a ${x, y} d`), 0)",
+        "setTimeout(() => log('a,b'), 0)",
+        "new Promise((resolve) => setTimeout(resolve))",
+    ],
+    ".dart": [
+        "scheduleMicrotask(work)",
+        "Future.microtask(work)",
+        "Future<void>.microtask(work)",
+        "Future.delayed(Duration.zero, work)",
+        "Future<void>.delayed(const Duration(milliseconds: 16), work)",
+        "Future.delayed(\n  Duration.zero,\n  work,\n)",
+        "Timer.run(work)",
+        "Timer(Duration.zero, work)",
+        "Timer(const Duration(milliseconds: 5), work)",
+        "Future(work)",
+        "Future<void>(work)",
+        "await null",
+        "await // tick\n  null",
+        "Timer(/* now */ Duration.zero, work)",
+        "Timer(/* wait, now */ Duration.zero, work)",
+        "Timer(/* outer /* inner */ wait, now */ Duration.zero, work)",
+        "Timer(Duration.zero, () => log('a,b'))",
+        "Future.delayed(Duration(/* now */ milliseconds: 0), work)",
+    ],
+}
+UNREFUSED = {
+    ".ts": [
+        "setTimeout(work, 17)",
+        "setTimeout(work, delay)",
+        "setTimeout(() => log('a,b'), 500)",
+        "setTimeout(() => /[//]/.test(path), 1000)",
+        "setTimeout(() => log(`a ${`b),c`} d`), 1000)",
+        "setTimeout(() => log(`x ${f(a, b)}`), 500)",
+        "const url = 'http://host'; setTimeout(work, 1000)",
+        "test.setTimeout(1000)",
+        "Promise.resolve(value)",
+        "await fetch(url)",
+        "mySetTimeout(work)",
+        "const text = <div>&nbsp;Go</div>",
+    ],
+    ".dart": [
+        "Future.delayed(const Duration(seconds: 1), work)",
+        "Future.delayed(const Duration(milliseconds: 17), work)",
+        "Future.value(1)",
+        "Timer.periodic(const Duration(seconds: 1), work)",
+        "Timer(const Duration(milliseconds: 250), work)",
+        "myFuture(work)",
+        "Future<void> run(void Function() work) async",
+    ],
+}
+
+
+def gap_errors(name: str, text: str) -> list[dict[str, object]]:
+    rows = text.splitlines()
+    span = {
+        "path": name,
+        "start": {"line": 1, "col": 1, "offset": 0},
+        "end": {"line": len(rows), "col": len(rows[-1]) + 1, "offset": len(text)},
+    }
+    return [{"code": 3, "level": "warn", "type": ["PartialParsing", [span]]}]
+
+
+def with_gap(root: Path, name: str, text: str) -> list[dict[str, object]]:
+    path = root / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text + "\n")
+    return gap_errors(name, text)
+
+
+@pytest.mark.parametrize(
+    ("suffix", "form"),
+    [(suffix, form) for suffix, forms in TIMER_FORMS.items() for form in forms],
+)
+def test_a_timer_call_in_a_partly_read_region_fails(
+    tmp_path: Path, suffix: str, form: str
+) -> None:
+    """HE-HOT-PATH: no zero-delay or next-frame call hides in a part Semgrep could not read."""
+    errors = with_gap(tmp_path, f"src/view{suffix}", f"{form};")
+    with pytest.raises(
+        ValueError, match=r"zero-delay or next-frame call: src/view\S+:1 \("
+    ) as caught:
+        require_parsed(errors, tmp_path)
+    assert "Change that code until Semgrep reads it" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("suffix", "text"),
+    [(suffix, text) for suffix, texts in UNREFUSED.items() for text in texts],
+)
+def test_a_partly_read_region_with_no_timer_call_passes(
+    tmp_path: Path, suffix: str, text: str
+) -> None:
+    require_parsed(with_gap(tmp_path, f"src/view{suffix}", f"{text};"), tmp_path)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "tests/view.ts",
+        "src/view.test.ts",
+        "src/view.spec.js",
+        "test/view_test.dart",
+        "integration_test/view.dart",
+        "src/model.py",
+        "Sources/App/View.swift",
+        "node_modules/lib/index.js",
+        ".agents/skills/walkthrough/scripts/pointer.mjs",
+        "src/view.d.ts",
+    ],
+)
+def test_a_partly_read_region_in_code_the_rule_skips_passes(
+    tmp_path: Path, name: str
+) -> None:
+    require_parsed(
+        with_gap(tmp_path, name, "setTimeout(work, 0); await null"), tmp_path
+    )
+
+
+def test_a_generated_file_with_a_partly_read_timer_call_passes(
+    runner: ModuleType,
+) -> None:
+    errors = with_gap(runner.ROOT, "api/client.ts", "setTimeout(work, 0);")
+    (runner.ROOT / ".gitattributes").write_text("api/client.ts linguist-generated\n")
+    git(runner.ROOT, "add", ".")
+    git(runner.ROOT, "commit", "-qm", "base")
+    require_parsed(errors, runner.ROOT)
+
+
+def test_a_timer_call_in_a_region_semgrep_cannot_read_fails_the_scan(
+    tmp_path: Path,
+) -> None:
+    """HE-HOT-PATH: Semgrep gives up on the whole file for a JSX tag in a type cast; the rule still judges the text."""
+    forms = [
+        "setTimeout(work, 0)",
+        "requestAnimationFrame(work)",
+        "queueMicrotask(work)",
+        "Promise.resolve().then(work)",
+        "await null",
+        "await Promise.resolve()",
+    ]
+    for index, form in enumerate(forms):
+        (tmp_path / f"view{index}.tsx").write_text(
+            "export async function view(work: () => void) {\n"
+            f"  return (<a />)<b>{{{form}}}</b>;\n}}\n"
+        )
+    with patch("hot_paths.require_parsed"):
+        read = {
+            Path(str(found["path"])).name for found in findings(tmp_path, ["."], 900)
+        }
+    unread = {f"view{index}.tsx" for index in range(len(forms))} - read
+    assert unread
+    with pytest.raises(ValueError, match="zero-delay or next-frame call") as caught:
+        findings(tmp_path, ["."], 900)
+    for name in unread:
+        assert f"{name}:" in str(caught.value)
+
+
+def test_the_security_gate_fails_a_timer_call_in_a_region_semgrep_cannot_read(
+    runner: ModuleType,
+) -> None:
+    """HE-HOT-PATH: the gate's report check reads the unread text too, so Semgrep's silence on a gap is no pass."""
+    (runner.ROOT / "view.tsx").write_text(
+        "export function view(work: () => void) {\n"
+        "  return (<a />)<b>{setTimeout(work, 0)}</b>;\n}\n"
+    )
+    command = runner.prepare_command({"path": ".", "checks": []}, strict_gate(), 5)
+    subprocess.run(command, cwd=runner.ROOT, check=False)
+    with pytest.raises(ValueError, match="zero-delay or next-frame call"):
+        validate_semgrep(runner.ROOT / "semgrep.json", runner.ROOT)
+
+
+@pytest.mark.parametrize("language", ["javascript", "dart"])
+def test_the_timer_messages_name_the_fix_at_the_cause(language: str) -> None:
+    """The talk's lint messages tell the agent to fix the root cause, so the refusal never reads as a place to hide."""
+    rules = yaml.safe_load(RULES.read_text())["rules"]
+    (message,) = [
+        r["message"] for r in rules if r["id"] == f"next-frame-call-{language}"
+    ]
+    text = " ".join(message.split())
+    assert "Fix the order of events at its cause: run the work from the" in text
+    assert "owns it." in text
+    assert "suppress" not in text.lower()

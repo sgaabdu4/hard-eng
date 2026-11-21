@@ -8,6 +8,7 @@
     "rules": [
       { "from": "app", "allow": [] },
       { "from": "tests", "allow": ["app"] }
-    ]
+    ],
+    "coverage": { "requireAllFiles": true }
   }
 }

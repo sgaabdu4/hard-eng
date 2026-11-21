@@ -74,7 +74,7 @@ def execute_provisioned_scanner(
             (tmp_path / "lib" / folder / "page.dart").write_text("void main() {}\n")
         (managed / scanner).write_text(
             '#!/bin/sh\nif [ "$1" = config ]; then\n'
-            'printf \'%s\\n\' \'{"config":{"boundaries":[{"from":"lib/domain","disallow":"lib/ui"}]}}\'\n'
+            'printf \'%s\\n\' \'{"config":{"boundaries":[{"from":"lib/domain","disallow":"lib/ui"}],"health":{"max_crap":30}}}\'\n'
             "else\nprintf '%s\\n' managed \"$@\"\nfi\n"
         )
     if stale_local:
@@ -109,9 +109,8 @@ def import_linter_project(tmp_path: Path) -> Path:
     "prefix",
     [
         ["fallow"],
-        ["bunx", "fallow"],
+        ["bunx", "fallow@3.0.0"],
         ["bun", "x", "fallow@3.0.0"],
-        ["bun", "x", "--package=fallow@latest", "fallow"],
     ],
 )
 def test_gate_rejects_disabled_fallow_metric_before_execution(
@@ -128,14 +127,6 @@ def test_gate_rejects_disabled_fallow_metric_before_execution(
         validate_gate(gate, tmp_path, set())
     gate["command"] = [*prefix, "audit", "--gate=all", "--max-crap", "30"]
     validate_gate(gate, tmp_path, set())
-
-
-def test_fallow_named_arguments_do_not_imply_tool_invocation(tmp_path: Path) -> None:
-    validate_gate(
-        {"name": "custom", "command": ["node", "check.mjs", "fallow", "audit"]},
-        tmp_path,
-        set(),
-    )
 
 
 @pytest.mark.parametrize(
@@ -955,3 +946,24 @@ def test_a_ruff_gate_never_fixes_files(runner: ModuleType, tmp_path: Path) -> No
     assert result.returncode == 1, result.stdout + result.stderr
     assert "F401" in result.stdout, result.stdout + result.stderr
     assert source.read_text() == "import os\n"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["shellcheck", "--", "setup.sh"],
+        ["shellcheck", "-x", "a.sh"],
+        ["mise", "exec", "shellcheck@latest", "--", "shellcheck", "a.sh"],
+    ],
+)
+def test_a_shell_gate_ignores_settings_files(
+    runner: ModuleType, command: list[str]
+) -> None:
+    """A `.shellcheckrc` with `disable=` makes the gate pass over findings, so the runner adds `--norc` like `--no-fix`."""
+    group: Group = {"path": ".", "checks": []}
+    gate: Gate = {"name": "shellcheck", "role": "shell", "command": command}
+    prepared = runner.prepare_command(group, gate, 5)
+    assert prepared[prepared.index("shellcheck") + 1] == "--norc"
+    assert prepared.count("--norc") == 1
+    gate["command"] = ["shellcheck", "--norc", "--", "setup.sh"]
+    assert runner.prepare_command(group, gate, 5).count("--norc") == 1

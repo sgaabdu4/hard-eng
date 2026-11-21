@@ -28,7 +28,9 @@ def test_generated_package_ownership(tmp_path: Path, attribute: str) -> None:
         path.parent.mkdir()
         path.touch()
     attributes = tmp_path / ".gitattributes"
-    attributes.write_text(f"copy/** {attribute}\nreal/** {attribute}=false\n")
+    attributes.write_text(
+        f"copy/package.json {attribute}\nreal/package.json {attribute}=false\n"
+    )
     manifests = package_manifests(tmp_path, files)
     assert {owner for owner, _ in manifests} == {"canonical", "real"}
     with pytest.raises(ValueError, match="missing from gate configuration"):
@@ -235,6 +237,6 @@ def test_a_scanner_refusal_names_the_gate_and_its_command(tmp_path: Path) -> Non
     with pytest.raises(
         ValueError,
         match=r"gate lint:boundaries \(`bun run lint:boundaries`\): "
-        "Fallow scans must fail on every finding",
+        "Fallow scans must cover the whole project; remove architecture from the gate command",
     ):
         validate_gate(gate, tmp_path, set())

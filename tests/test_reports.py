@@ -16,6 +16,7 @@ from gate_config import (
     Gate,
     Group,
     JsonObject,
+    JsonValue,
     validate_gate,
     validate_package_services,
 )
@@ -228,20 +229,20 @@ def test_fallow_unknown_or_malformed_diagnostics_still_fail(
         reports.validate_fallow(path)
 
 
+AUDIT_SUMMARY: JsonObject = {"files_analyzed": 1, "functions_analyzed": 1}
+AUDIT_SUMMARY |= {"max_cyclomatic_threshold": 20, "max_cognitive_threshold": 15}
+AUDIT_SUMMARY |= {"max_crap_threshold": 30.0, "max_unit_size_threshold": 60}
+AUDIT_SUMMARY |= {"functions_above_threshold": 0}
+AUDIT_SUMMARY |= {"severity_critical_count": 0, "severity_high_count": 0}
+AUDIT_SUMMARY |= {"severity_moderate_count": 0}
+
+
 @pytest.mark.parametrize("threshold", [15, 30.0])
 def test_fallow_audit_requires_active_crap_enforcement(
     tmp_path: Path, threshold: float
 ) -> None:
     combined = json.loads(REPORTS["fallow"])
-    summary: JsonObject = {
-        "max_crap_threshold": threshold,
-        "files_analyzed": 1,
-        "functions_analyzed": 1,
-        "functions_above_threshold": 0,
-        "severity_critical_count": 0,
-        "severity_high_count": 0,
-        "severity_moderate_count": 0,
-    }
+    summary: JsonObject = {**AUDIT_SUMMARY, "max_crap_threshold": threshold}
     audit: JsonObject = {
         "kind": "audit",
         "command": "audit",
@@ -266,6 +267,31 @@ def test_fallow_audit_requires_active_crap_enforcement(
     summary["functions_above_threshold"] = 1
     path.write_text(json.dumps(audit))
     with pytest.raises(ValueError, match="complexity findings"):
+        reports.validate_fallow(path)
+
+
+def test_a_clean_fallow_audit_report_passes(tmp_path: Path) -> None:
+    """The `fallow audit --gate all` form holds the no rule packs note inside its dead-code section."""
+    combined = json.loads(REPORTS["fallow"])
+    note: list[JsonValue] = [{"path": ".", "kind": "rule-packs-not-configured"}]
+    audit: JsonObject = {"kind": "audit", "command": "audit", "verdict": "pass"}
+    audit |= {"duplication": combined["dupes"]}
+    audit |= {"complexity": {"findings": [], "summary": {**AUDIT_SUMMARY}}}
+    dead_code: JsonObject = {**combined["check"], "unused_files": []}
+    audit |= {"dead_code": dead_code}
+    dead_code["workspace_diagnostics"] = note
+    unknown: list[JsonValue] = [{"kind": "parse-error"}]
+    path = tmp_path / "audit.json"
+    path.write_text(json.dumps(audit))
+    reports.validate_fallow(path)
+    dead_code["workspace_diagnostics"] = unknown
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError, match="parse-error"):
+        reports.validate_fallow(path)
+    dead_code["workspace_diagnostics"] = note
+    dead_code["unused_files"] = [{"path": "a.ts"}]
+    path.write_text(json.dumps(audit))
+    with pytest.raises(ValueError):
         reports.validate_fallow(path)
 
 
@@ -724,7 +750,7 @@ def test_gate_rejects_tolerated_or_suppressed_findings(
         "dart-decimate check . --boundary-violations --strict",
         "dart-decimate check . --threshold 0 --strict --format json",
         "react-doctor --blocking=warning --no-respect-inline-disables --json",
-        "fallow --only dead-code,dupes --fail-on-issues",
+        "fallow --only dead-code,dupes,health --fail-on-issues",
     ],
 )
 def test_gate_accepts_strict_scanner_commands(tmp_path: Path, command: str) -> None:
@@ -775,6 +801,13 @@ def test_related_test_flags_follow_the_native_runner(
     }
     other: Group = {"path": "web", "checks": [scan]}
     assert reports.related_test_flags(tests, [group, other], tmp_path, "b") == []
+    for only in ("--only=dead-code,dupes,health", "audit", "--fail-on-issues", ""):
+        scan = {**scan, "command": ["fallow", only] if only else ["fallow"]}
+        both: Group = {"path": ".", "checks": [tests, scan]}
+        assert reports.related_test_flags(tests, [both], tmp_path, "b") == []
+    scan = {**scan, "command": ["fallow", "--only=dead-code,dupes"]}
+    both = {"path": ".", "checks": [tests, scan]}
+    assert reports.related_test_flags(tests, [both], tmp_path, "b") == expected
 
 
 @pytest.mark.parametrize(

@@ -9,16 +9,15 @@ from collections.abc import Callable
 from pathlib import Path
 
 import agent_checks
+import agent_clients
 import pytest
 from agent_actions import Action, claude_actions, codex_actions, loaded_skills
 from agent_checks import (
     CASES,
-    Agent,
+    Access,
     Client,
-    Ready,
     Run,
     Ungraded,
-    codex_run,
     fixture,
     judge_continue,
     judge_escaped_bug,
@@ -33,6 +32,7 @@ from agent_checks import (
     loads_skill,
     main,
 )
+from agent_clients import Agent, Ready, codex_run
 from agent_fixtures import CONTROLS, READY_PLAN, REPORT
 from conftest import SOURCE, commit, gone, init, spawner
 
@@ -480,9 +480,9 @@ def test_a_grader_that_used_tools_gives_no_verdict(tmp_path: Path) -> None:
 
     def client(actions: list[Action]) -> Client:
         def run(
-            root: Path, evidence: Path, options: Namespace, prompt: str, tools: bool
+            root: Path, evidence: Path, options: Namespace, prompt: str, access: Access
         ) -> Agent:
-            del root, evidence, options, prompt, tools
+            del root, evidence, options, prompt, access
             return Agent(True, verdict, {}, [], actions)
 
         return Client("model", lambda: Ready("1", None), run, "none")
@@ -566,9 +566,34 @@ def test_a_codex_review_keeps_the_answer_before_its_closing_line(
     (tmp_path / "evidence").mkdir()
     options = Namespace(model="m", effort="high", timeout=60)
     agent = codex_run(
-        tmp_path / "project", tmp_path / "evidence", options, "review", True
+        tmp_path / "project", tmp_path / "evidence", options, "review", "sandboxed"
     )
     assert CORRECT in agent.message
+
+
+def test_only_the_browser_case_may_leave_the_sandbox(tmp_path: Path) -> None:
+    assert {case.name for case in CASES if case.access == "approved"} == {
+        "browser-proof"
+    }
+    sandboxed = agent_clients.codex_access(tmp_path, "sandboxed")
+    assert sandboxed[:2] == ["--sandbox", "workspace-write"]
+    assert "--approve-for-me" not in sandboxed
+    assert agent_clients.codex_access(tmp_path, "approved") == [
+        *sandboxed[2:],
+        "--approve-for-me",
+    ]
+    sandbox = {
+        "enabled": True,
+        "autoAllowBashIfSandboxed": True,
+        "allowUnsandboxedCommands": False,
+    }
+    for access, kept, mode in (
+        ("sandboxed", sandbox, "acceptEdits"),
+        ("approved", {"enabled": False}, "auto"),
+    ):
+        settings, permission = agent_clients.claude_access(access)
+        assert json.loads(settings)["sandbox"] == kept
+        assert permission == mode
 
 
 @pytest.mark.parametrize("count", ["0", "-1"])
@@ -620,7 +645,7 @@ def test_results_record_a_bare_run(
 
 def test_a_timed_out_agent_leaves_no_process_behind(tmp_path: Path) -> None:
     pid_file = tmp_path / "child.pid"
-    assert agent_checks.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
+    assert agent_clients.stream(spawner(pid_file), tmp_path, tmp_path, 2) is None
     assert gone(pid_file)
 
 
@@ -634,7 +659,7 @@ def test_an_eval_agent_does_not_inherit_host_markers(
         "-c",
         "import json, os; print(json.dumps(dict(os.environ)))",
     ]
-    found = agent_checks.stream(dump, tmp_path, tmp_path, 60, {"CODEX_HOME": "fresh"})
+    found = agent_clients.stream(dump, tmp_path, tmp_path, 60, {"CODEX_HOME": "fresh"})
     assert found is not None
     [seen] = found
     assert ("CLAUDECODE" in seen, "CODEX_THREAD_ID" in seen) == (False, False)
@@ -654,7 +679,9 @@ def test_a_run_on_another_model_than_requested_is_not_graded(
         judge=lambda _: []
     )
     client = Client("opus", lambda: Ready("1", None), run, "none")
-    options = Namespace(model="opus", installed=SOURCE, bare=False, judge=False)
+    options = Namespace(
+        model="opus", installed=SOURCE, bare=False, judge=False, feature_map=False
+    )
     outcome = agent_checks.execute(case, client, options, tmp_path / "evidence")
     assert outcome.status == status
 

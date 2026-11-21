@@ -22,7 +22,7 @@ from coverage_sources import (
 from dart_coverage import erased_dart
 from dart_test_report import dart_events, failure_summary
 from fallow_report import finding_lines as fallow_findings
-from fallow_report import sdk_binaries, validate_fallow, write_istanbul
+from fallow_report import reads_coverage, sdk_binaries, validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
 from gate_schedule import QUICK_ROLES
 from project_setup import package_script_invocation
@@ -104,10 +104,10 @@ def related_test_flags(
     """Native related-test flags for a pre-push JavaScript test gate, else none."""
     if gate.get("report", {}).get("type") != "lcov-tests":
         return []
-    # A Fallow gate run through a package script may read this run's coverage.
+    # A Fallow gate that may read this run's coverage needs the whole test run.
     if any(
         other.get("report", {}).get("type") == "fallow"
-        and other["command"][:2] == ["bun", "run"]
+        and reads_coverage(other["command"])
         for selected in groups
         for other in selected["checks"]
     ):
@@ -269,7 +269,7 @@ def expected_coverage(
         raise ValueError(
             f"Coverage report omits production files: {', '.join(map(str, relative))}. "
             "Cover them, or mark generator output with "
-            "`<pattern> linguist-generated=true` in .gitattributes"
+            "`<exact path> linguist-generated=true` in .gitattributes"
             + (omit_step(directory, relative) if kind == "python-tests" else "")
             + (
                 ". For Dart code outside lib/: move it under lib/ and test it there"
@@ -383,7 +383,7 @@ def osv_unfixed_only(path: Path) -> bool:
     return unfixed_only(path)
 
 
-def validate_semgrep(path: Path) -> None:
+def validate_semgrep(path: Path, directory: Path | None = None) -> None:
     try:
         report = json.loads(path.read_text())
         if results := report["results"]:
@@ -396,7 +396,7 @@ def validate_semgrep(path: Path) -> None:
             )
         from hot_paths import require_parsed
 
-        require_parsed(report["errors"])
+        require_parsed(report["errors"], directory)
         if report["skipped_rules"] != [] or report["paths"].get("skipped", []) != []:
             raise ValueError("Semgrep reports skipped analysis")
         scanned, timing = report["paths"]["scanned"], report["time"]
@@ -740,6 +740,8 @@ def validate_scanner_report(
         validate_freshness(path, gate, waiting=waiting, directory=directory)
     elif scanner == "fallow":
         validate_fallow(path, sdk_binaries(directory), directory)
+    elif scanner == "semgrep":
+        validate_semgrep(path, directory)
     else:
         SCANNERS[scanner](path)
 

@@ -243,7 +243,7 @@ def test_ready_names_a_required_check_that_no_runner_took(
 @pytest.mark.parametrize(
     "job",
     [
-        _WAITING | {"created_at": _ago(1)},
+        lambda: _WAITING | {"created_at": _ago(1)},
         _WAITING | {"created_at": _ago(120), "runner_name": "runner-1"},
         _WAITING | {"created_at": _ago(120), "labels": []},
         _WAITING | {"created_at": _ago(120), "status": "waiting"},
@@ -257,7 +257,7 @@ def test_ready_names_a_required_check_that_no_runner_took(
 def test_a_fresh_or_unreadable_queued_job_keeps_the_plain_pending_text(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: object
 ) -> None:
-    fixture, _ = _queued(tmp_path, monkeypatch, job)
+    fixture, _ = _queued(tmp_path, monkeypatch, job() if callable(job) else job)
     with pytest.raises(shipping.PendingCheck) as pending:
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "ready")
     assert str(pending.value) == "required check has not completed: build"

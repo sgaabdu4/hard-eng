@@ -1,6 +1,7 @@
 """Each plan acceptance line names a test that exists and was not skipped."""
 
 import json
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -10,9 +11,9 @@ import pytest
 from change_size import plan_tests
 from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from gate_config import repository_files
+from plan_tests import missing_tests
 from plans import (
     is_plan_path,
-    missing_tests,
     plan_files,
     validate_plan,
     validate_plans,
@@ -556,6 +557,46 @@ def test_a_missing_retro_test_is_reported_for_the_retro_line(
 
 
 @pytest.mark.parametrize(
+    "named",
+    [
+        "`src/gate_schedule.rs::run_checks`",
+        "`src/parse.rs::Parser::header`",
+        "`src/parse.rs::Config`",
+        "`src/parse.rs::MAX`",
+        "`parse.rs::header`",
+    ],
+)
+def test_a_same_cause_line_may_name_rust_source_code(
+    repository: Path, completed_plan: str, named: str
+) -> None:
+    """Same cause names the code that shares a cause, so a Rust source name is never read as a test."""
+    (repository / "src").mkdir()
+    (repository / "src/gate_schedule.rs").write_text("pub fn run_checks() {}\n")
+    (repository / "src/parse.rs").write_text(
+        "pub struct Config;\npub const MAX: u8 = 1;\nimpl Parser {\n    pub fn header(&self) {}\n}\n"
+    )
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(
+            "Same cause: N/A — fixture command, not a fix.",
+            f"Same cause: {named} grew past its limit.",
+        )
+    )
+    assert validate_plans(repository, "0" * 40, "Complete") == "Complete"
+
+
+def test_a_missing_rust_unit_test_in_a_retro_line_is_reported(
+    repository: Path, completed_plan: str
+) -> None:
+    (repository / "PLAN.md").write_text(
+        completed_plan.replace(RETRO_LINE, "Retro: Fixed in `src/lib.rs::test_gone`.")
+    )
+    with pytest.raises(
+        ValueError, match="Retro names tests that do not exist: src/lib.rs::test_gone"
+    ):
+        validate_plans(repository, "0" * 40, "Complete")
+
+
+@pytest.mark.parametrize(
     ("report_case", "skipped"), [("<skipped/>", True), ("", False)], ids=["skip", "run"]
 )
 def test_the_skip_rule_fails_a_plan_test_that_the_report_shows_skipped(
@@ -612,7 +653,146 @@ COMMENTED_TESTS = [
     ("tests/OpsTests.swift", "// func test_divide() {}", "func test_divide() {}"),
     ("tests/OpsTests.swift", '// @Test("test_divide")', '@Test("test_divide")'),
     ("tests/ops_spec.rb", '# it "test_divide" do', 'it "test_divide" do'),
+    (
+        "tests/ops.rs",
+        "// #[test]\n// fn test_divide() {}",
+        "#[test]\nfn test_divide()\n-> Result<(), String> {\n    Ok(())\n}",
+    ),
+    (
+        "src/ops.rs",
+        "#[cfg(test)]\nmod tests {\n    // #[test]\n    // fn test_divide() {}\n}",
+        "#[cfg(test)]\nmod tests {\n    #[test]\n    fn test_divide() {}\n}",
+    ),
+    (
+        "tests/ops.rs",
+        "/*\n#[test]\nfn test_divide() {}\n*/",
+        "#[test]\nfn test_divide() {}",
+    ),
+    (
+        "src/ops.rs",
+        "fn a() { x(); // old; #[test] fn test_divide() {}\n}",
+        "fn a() {}\n#[test]\nfn test_divide() {}",
+    ),
 ]
+
+
+RUST_TESTS = [
+    '#[tokio::test(flavor = "multi_thread")]\nasync fn test_divide() {}',
+    '#[sqlx::test(migrations = "db/migrations")]\nasync fn test_divide() {}',
+    "#[test] // slow\nfn test_divide() {}",
+    "#[test]\n#[ignore] // needs network\nfn test_divide() {}",
+    '#[test]\n#[should_panic(expected = "a]b")]\nfn test_divide() {}',
+    "#[rstest]\nfn test_divide() {}",
+    "#[test_case(1, 2)]\nfn test_divide(a: u8, b: u8) {}",
+    "#[test]\npub(crate) fn test_divide() {}",
+    '#[test_case(vec![1, 2] ; "two")]\nfn test_divide(v: Vec<u8>) {}',
+    "#[test_case(&[1, 2])]\nfn test_divide(v: &[u8]) {}",
+    "#[rstest]\n#[case(vec![1])]\nfn test_divide(#[case] v: Vec<u8>) {}",
+    "#[rstest]\n#[case(&[1][..])]\nfn test_divide(#[case] v: &[u8]) {}",
+    "#[test_case('\"')]\nfn test_divide(c: char) {}",
+    "#[test_case(']')]\nfn test_divide(c: char) {}",
+    "#[test_case(&'static str)]\nfn test_divide(s: &str) {}",
+    "#[wasm_bindgen_test]\nfn test_divide() {}",
+    "#[test_matrix([1, 2], [3])]\nfn test_divide(a: u8, b: u8) {}",
+    "#[quickcheck]\nfn test_divide(a: u8) -> bool { true }",
+    "#[gtest]\nfn test_divide() {}",
+    "#[ test ]\nfn test_divide() {}",
+    "#[ignore]\n#[test]\nfn test_divide() {}",
+    "#![cfg(test)]\n#[test]\nfn test_divide() {}",
+    "use super::*;\n#[test]\nfn test_divide() {}",
+    "mod tests {\n    #[test]\n    fn test_divide() {}\n}",
+    "#[test]\nunsafe fn test_divide() {}",
+    "fn helper() {}\n/* Integration cases */\n#[test]\nfn test_divide() {}",
+    "use super::*;\n/* Old cases */\n#[test]\nfn test_divide() {}",
+    "#[test] /* slow */\nfn test_divide() {}",
+    "#[test]\n/** Divides. */\nfn test_divide() {}",
+    "#[test]\n/// Divides.\nfn test_divide() {}",
+]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "#[test] " + "// " * 40 + "\nfn other() {}",
+        "#[test] // https://a.example/b // https://c.example/d\n" * 20
+        + "fn other() {}",
+    ],
+    ids=["slashes", "links"],
+)
+def test_a_comment_after_a_test_attribute_is_read_at_once(
+    tmp_path: Path, source: str
+) -> None:
+    """A line comment runs to its line end, so its slashes are read one way."""
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(source + "\n")
+    started = time.process_time()
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_gone")]) == [
+        "tests/ops.rs::test_gone"
+    ]
+    assert time.process_time() - started < 1
+
+
+def test_a_test_named_in_a_comment_after_an_attribute_does_not_count(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(
+        "#[test] // was fn test_divide() before\nfn other() {}\n"
+    )
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_divide")]) == [
+        "tests/ops.rs::test_divide"
+    ]
+
+
+@pytest.mark.parametrize("found", [True, False], ids=["real", "gone"])
+@pytest.mark.parametrize(
+    "note", ["", " // => Point { x: 1 };"], ids=["plain", "braced"]
+)
+def test_a_long_table_of_test_cases_is_read_at_once(
+    tmp_path: Path, found: bool, note: str
+) -> None:
+    """A search starts only where an item can start in code, so a table of 3000 cases is read once."""
+    table = "".join(
+        f'#[test_case({n}, "x{n}" ; "case {n}")]{note}\n' for n in range(3000)
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(
+        table + "fn t(a: u8, b: &str) {}\n\n#[test]\nfn test_divide() {}\n"
+    )
+    name = "test_divide" if found else "test_gone"
+    started = time.process_time()
+    assert missing_tests(tmp_path, [("tests/ops.rs", name)]) == (
+        [] if found else [f"tests/ops.rs::{name}"]
+    )
+    assert time.process_time() - started < 1
+
+
+def test_stacked_char_cases_are_read_at_once(tmp_path: Path) -> None:
+    """Each attribute argument reads one way, so a long stack of char cases cannot slow the check."""
+    cases = "".join(f"#[test_case('{chr(97 + n % 26)}')]\n" for n in range(40))
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(cases + "fn test_divide(c: char) {}\n")
+    started = time.process_time()
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_gone")]) == [
+        "tests/ops.rs::test_gone"
+    ]
+    assert time.process_time() - started < 1
+
+
+@pytest.mark.parametrize("source", RUST_TESTS, ids=range(len(RUST_TESTS)))
+def test_each_rust_test_form_counts(tmp_path: Path, source: str) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/ops.rs").write_text(source + "\n")
+    assert missing_tests(tmp_path, [("tests/ops.rs", "test_divide")]) == []
+
+
+def test_a_rust_function_without_a_test_attribute_is_not_a_test(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/ops.rs").write_text("pub fn test_divide() {}\n")
+    reference = [("src/ops.rs", "test_divide")]
+    assert missing_tests(tmp_path, reference) == ["src/ops.rs::test_divide"]
 
 
 @pytest.mark.parametrize(
@@ -631,3 +811,59 @@ def test_a_test_named_only_on_a_comment_line_does_not_count(
     assert missing_tests(tmp_path, reference) == []
     (tmp_path / path).write_text(comment + "\n" + real + "\n")
     assert missing_tests(tmp_path, reference) == []
+
+
+@pytest.mark.parametrize(
+    ("path", "source", "name"),
+    [
+        (
+            "test/http_test.dart",
+            "test('sends', () {\n  expect(log, 'A: ${h['accept'] ?? '*/*'}');\n});\n"
+            + "test('parses the body', () {});\n",
+            "parses the body",
+        ),
+        (
+            "Tests/HttpTests.swift",
+            '@Test func sends() {\n    #expect(log == "A: \\(h("A") ?? "*/*")")\n}\n'
+            + "@Test func parsesBody() {}\n",
+            "parsesBody",
+        ),
+    ],
+    ids=["dart", "swift"],
+)
+def test_a_comment_mark_inside_a_nested_string_hides_no_later_test(
+    tmp_path: Path, path: str, source: str, name: str
+) -> None:
+    """A `/*` inside a string nested in an interpolation opens no comment, so a later test still counts."""
+    (tmp_path / path).parent.mkdir()
+    (tmp_path / path).write_text(source)
+    assert missing_tests(tmp_path, [(path, name)]) == []
+
+
+@pytest.mark.parametrize(
+    ("removed", "refused"), [("test_named", True), ("test_unnamed", False)]
+)
+def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_with_no_plan_edit(
+    repository: Path, completed_plan: str, removed: str, refused: bool
+) -> None:
+    (repository / "tests").mkdir()
+    source = repository / "tests/test_one.py"
+    both = "def test_named():\n    pass\n\n\ndef test_unnamed():\n    pass\n"
+    source.write_text(both)
+    old = repository / "features/old/PLAN.md"
+    old.parent.mkdir(parents=True)
+    named = "- [x] Observe it → `tests/test_one.py::test_named`."
+    old.write_text(completed_plan.replace(UNPROVED, named))
+    base = commit(repository, "plans and tests")
+    source.write_text(both.replace(f"def {removed}():\n    pass\n", ""))
+    if not refused:
+        mine = repository / "features/mine/PLAN.md"
+        mine.parent.mkdir()
+        mine.write_text(completed_plan)
+        assert validate_plans(repository, base, "Complete") == "Complete"
+        return
+    with pytest.raises(
+        ValueError,
+        match="features/old/PLAN.md: acceptance names tests that do not exist: tests/test_one.py::test_named",
+    ):
+        validate_plans(repository, base, "Complete")

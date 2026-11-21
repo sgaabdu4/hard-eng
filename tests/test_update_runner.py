@@ -229,40 +229,28 @@ def test_update_sweeps_day_old_hard_eng_temporary_directories(
 
 
 def test_update_cleanup_stops_file_watchers_of_worktrees_idle_for_a_day(
-    installed: Path, tmp_path: Path
+    installed: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    git(installed, "config", "core.fsmonitor", "true")
     idle, active = tmp_path / "idle", tmp_path / "active"
     for worktree in (idle, active):
         git(installed, "worktree", "add", "-q", "--detach", str(worktree))
-    watched = (installed, idle, active)
-
-    def running() -> dict[Path, bool]:
-        return {
-            worktree: not subprocess.run(
-                ["git", "fsmonitor--daemon", "status"], cwd=worktree, check=False
-            ).returncode
-            for worktree in watched
-        }
-
-    try:
-        for worktree in watched:
-            git(worktree, "status")
-        if not all(running().values()):
-            pytest.skip("this Git build has no file watcher")
-        day_ago = time.time() - 25 * 3600
-        for worktree in (installed, idle):
-            index = git(
-                worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"
-            )
-            os.utime(index, (day_ago, day_ago))
-        stale_updates.remove_stale_candidates(installed)
-        assert running() == {installed: True, idle: False, active: True}
-    finally:
-        for worktree in watched:
-            subprocess.run(
-                ["git", "fsmonitor--daemon", "stop"], cwd=worktree, check=False
-            )
+    day_ago = time.time() - 25 * 3600
+    for worktree in (installed, idle):
+        index = git(
+            worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"
+        )
+        os.utime(index, (day_ago, day_ago))
+    stops, stand_in = tmp_path / "stops", tmp_path / "bin/git"
+    stand_in.parent.mkdir()
+    stand_in.write_text(
+        "#!/bin/sh\n"
+        f'[ "$1 $2" = "fsmonitor--daemon stop" ] && {{ pwd -P >> {stops}; exit 0; }}\n'
+        f'exec {shutil.which("git")} "$@"\n'
+    )
+    stand_in.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stand_in.parent}{os.pathsep}{os.environ['PATH']}")
+    stale_updates.remove_stale_candidates(installed)
+    assert stops.read_text().split() == [str(idle.resolve())]
 
 
 @pytest.mark.parametrize(

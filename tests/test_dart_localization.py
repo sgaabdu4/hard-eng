@@ -5,8 +5,8 @@ from types import ModuleType
 
 import pytest
 import yaml
+from dart_boundaries import validate_dart_exclusions
 from gate_config import Group
-from project_setup import validate_dart_exclusions
 
 CUSTOM_L10N = "output-dir: lib/gen\noutput-localization-file: texts.dart\n"
 
@@ -86,3 +86,31 @@ def test_dart_setup_excludes_the_main_localization_file_and_its_own_check_accept
     repeated: dict[str, str] = {}
     installer.configure_dart(tmp_path, directory, package, repeated)
     assert not {"analysis_options.yaml", ".gitattributes"} & repeated.keys()
+
+
+def test_dart_setup_accepts_preexisting_localization_exclude_before_marking_gitattributes(
+    installer: ModuleType,
+    runner: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """Fresh Flutter setup copies analysis_options.yaml and runs pub get before setup writes .gitattributes."""
+    generated = tmp_path / "lib/l10n/app_localizations.dart"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("class AppLocalizations {}\n")
+    (tmp_path / "pubspec.yaml").write_text("name: app\n")
+    (tmp_path / "l10n.yaml").write_text("")
+    (tmp_path / "analysis_options.yaml").write_text(
+        yaml.safe_dump(
+            {"analyzer": {"exclude": ["lib/l10n/app_localizations.dart"]}},
+            sort_keys=False,
+        )
+    )
+    changes: dict[str, str] = {}
+    installer.configure_dart(tmp_path, tmp_path, {"path": ".", "checks": []}, changes)
+    for name, content in changes.items():
+        (tmp_path / name).write_text(content)
+    assert (
+        "lib/l10n/app_localizations.dart linguist-generated=true"
+        in (tmp_path / ".gitattributes").read_text()
+    )
+    runner.validate_typing(tmp_path, "dart", ["lib"])

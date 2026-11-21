@@ -1,0 +1,49 @@
+const ZERO = 0;
+const DEBOUNCE_MS = 300;
+
+export async function defer(work: () => void, delay: number) {
+  // ruleid: next-frame-call-javascript
+  setTimeout(work);
+  // ruleid: next-frame-call-javascript
+  setTimeout(work, 0);
+  // ruleid: next-frame-call-javascript
+  window.setTimeout(work, ZERO);
+  // ruleid: next-frame-call-javascript
+  globalThis.setTimeout(
+    () => {
+      work();
+    },
+    0,
+  );
+  // ruleid: next-frame-call-javascript
+  setTimeout(work, 16);
+  // ruleid: next-frame-call-javascript
+  setImmediate(work);
+  // ruleid: next-frame-call-javascript
+  requestAnimationFrame(work);
+  // ruleid: next-frame-call-javascript
+  window.requestAnimationFrame(() => work());
+  // ruleid: next-frame-call-javascript
+  requestIdleCallback(work, { timeout: 1 });
+  // ruleid: next-frame-call-javascript
+  queueMicrotask(work);
+  // ruleid: next-frame-call-javascript
+  process.nextTick(work);
+  // ruleid: next-frame-call-javascript
+  Promise.resolve().then(work);
+  // ruleid: next-frame-call-javascript
+  await Promise.resolve();
+  // ruleid: next-frame-call-javascript
+  await null;
+  // ruleid: next-frame-call-javascript
+  await new Promise((resolve) => setTimeout(resolve));
+  setTimeout(work, 17);
+  setTimeout(work, DEBOUNCE_MS);
+  setTimeout(work, 500);
+  setTimeout(work, delay);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const settled = Promise.resolve(delay);
+  await Promise.all([settled]);
+  const stopwatch = { setTimeout: (limit: number) => limit };
+  stopwatch.setTimeout(1000);
+}

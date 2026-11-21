@@ -29,6 +29,11 @@ SCAFFOLDS = {
 MERGED = {".gitignore", ".gitattributes"}
 ASIDE = "hard-eng-new-kept"
 REMOVED = {"opennext": ["eslint.config.mjs"], "vite": [".oxlintrc.json"]}
+RUNNER_TESTS = (
+    "ios/RunnerTests/RunnerTests.swift",
+    "macos/RunnerTests/RunnerTests.swift",
+)
+TEMPLATE_COMMENT = re.compile(r"^[ \t]*//.*\n", re.MULTILINE)
 ANY_CONSTRAINT = re.compile(r"^(  ([a-z0-9_]+)): any$", re.MULTILINE)
 SDK_CONSTRAINT = re.compile(r"^  sdk: (\S+)$", re.MULTILINE)
 GENERATED = {"opennext": [["bun", "run", "cf-typegen"]]}
@@ -104,7 +109,16 @@ def finish_web(root: Path) -> None:
         run(root, ["bun", "x", "biome", "format", "--write", "."])
 
 
+def drop_template_comments(root: Path) -> None:
+    """`flutter create` writes a 3-line comment into each runner test; HE-COMMENT-LINES refuses it."""
+    for name in RUNNER_TESTS:
+        path = root / name
+        if path.is_file():
+            path.write_text(TEMPLATE_COMMENT.sub("", path.read_text()))
+
+
 def finish_flutter(root: Path) -> None:
+    drop_template_comments(root)
     skill = SOURCE / ".agents/skills/building-flutter-apps/references"
     shutil.copyfile(skill / "analysis_options.yaml", root / "analysis_options.yaml")
     run(root, ["flutter", "pub", "get"])

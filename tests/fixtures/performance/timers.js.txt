@@ -1,0 +1,9 @@
+export function defer(work) {
+  // ruleid: next-frame-call-javascript
+  setTimeout(work, 0);
+  // ruleid: next-frame-call-javascript
+  requestAnimationFrame(work);
+  // ruleid: next-frame-call-javascript
+  queueMicrotask(work);
+  setTimeout(work, 1000);
+}
