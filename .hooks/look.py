@@ -49,6 +49,10 @@ SCOPE_SECTION = (
     "this screen is required to show, and never overrides visual quality rules):\n{scope}"
 )
 LIST_PREFIX = re.compile(r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+")
+BLOCK_START = re.compile(
+    r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+|"
+    r"^(?:>|`{3,}|~{3,}|<|(?:-[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:_[ \t]*){3,}$)"
+)
 VERDICT_LINE = re.compile(r"(?i)^verdict\s*:\s*(?:clean|findings)\b")
 VERDICT_WORDS = frozenset(("pass", "fail", "n/a"))
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
@@ -288,7 +292,7 @@ def _logical_lines(scope: str, wanted: set[str]) -> list[str]:
         can_join = (
             bool(joined)
             and bool(joined[-1])
-            and not LIST_PREFIX.match(stripped)
+            and not BLOCK_START.match(stripped)
             and not _starts_rule_or_verdict(stripped, wanted)
         )
         prev_is_rule = (
