@@ -716,7 +716,7 @@ def check(
 
         if verify_plan:
             plan_stage = change_size.judged_stage(ROOT, base, plan_stage)
-        validate_rules(ROOT, base, shard != "merge", full=not quick)
+        validate_rules(ROOT, base, shard != "merge", full=not quick, stage=plan_stage)
         plans.validate_records(ROOT, base)
         before_gates(groups, quick, base)
         stop_keeping("listings")
