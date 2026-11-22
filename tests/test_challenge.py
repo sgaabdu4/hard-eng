@@ -46,6 +46,7 @@ def branch(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     git(repository, "branch", "-M", "main")
     (repository / "app.py").write_text("value = 1\n")
     commit(repository, "base")
@@ -76,6 +77,7 @@ def small(root: Path) -> None:
     ],
 )
 def test_reviewer_is_the_other_agent_of_the_running_host(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     claude: str | None,
     codex: str | None,
@@ -86,6 +88,7 @@ def test_reviewer_is_the_other_agent_of_the_running_host(
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     if claude:
         monkeypatch.setenv("CLAUDECODE", claude)
     if codex:
@@ -229,8 +232,14 @@ def run_claude_host_contract(
     result = challenge.challenge(branch, None, None)
     ran = json.loads(log.read_text())
     assert ran["stdin_is_null"]
-    assert ran["argv"][:7] == [
+    assert ran["argv"][:13] == [
         "exec",
+        "-m",
+        "gpt-6.2-sol",
+        "-c",
+        "model_reasoning_effort=high",
+        "-c",
+        "service_tier=default",
         "--sandbox",
         "read-only",
         "-c",
@@ -267,6 +276,8 @@ def test_codex_host_runs_claude_with_read_only_tools_and_no_git_write_flags(
     argv = ran["argv"]
     assert ran["stdin_is_null"]
     assert "--safe-mode" in argv
+    assert argv[argv.index("--model") + 1] == "opus"
+    assert argv[argv.index("--effort") + 1] == "high"
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob,Bash"
     assert argv[argv.index("--allowedTools") + 1] == "Read Grep Glob"
     record = json.loads(
@@ -348,14 +359,23 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     argv = ran["argv"]
     assert ran["stdin_is_null"]
     assert Path(ran["cwd"]).resolve() != branch.resolve()
-    assert argv[:4] == ["-p", "--sandbox", "--disable-slash-commands", "--settings"]
-    settings = json.loads(argv[4])
+    assert argv[:8] == [
+        "-p",
+        "--model",
+        "gemini-4-neon",
+        "--effort",
+        "xhigh",
+        "--sandbox",
+        "--disable-slash-commands",
+        "--settings",
+    ]
+    settings = json.loads(argv[8])
     assert settings["toolPermission"] == "proceed-in-sandbox"
     assert settings["enableTerminalSandbox"] is True
     assert "write_file(*)" in settings["permissions"]["deny"]
     assert "mcp(*)" in settings["permissions"]["deny"]
     assert settings["permissions"]["allow"] == [f"read_file({branch.resolve()}/)"]
-    assert str(branch.resolve()) in argv[5]
+    assert str(branch.resolve()) in argv[9]
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
 
@@ -366,6 +386,61 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
         f"read_file({worktree.resolve()}/)",
         f"read_file({(branch / '.git').resolve()}/)",
     ]
+
+
+def test_challenge_honors_local_models_overlay_for_order_and_flags(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    overlay = tmp_path / "xdg/hard-eng/models.json"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_text(
+        json.dumps(
+            {
+                "hosts": {
+                    "agy": {
+                        "reasoning": {"model": "gemini-4.2-custom", "effort": "max"}
+                    }
+                },
+                "challenge_order": {"claude": ["agy", "codex"]},
+            }
+        )
+    )
+    codex_log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    agy_log = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert not codex_log.exists()
+    argv = json.loads(agy_log.read_text())["argv"]
+    assert argv[:5] == ["-p", "--model", "gemini-4.2-custom", "--effort", "max"]
+    assert record_of(branch)["reviewer"] == "agy"
+
+
+def test_branch_models_json_edit_cannot_override_trusted_base_for_challenge(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from conftest import SOURCE
+
+    git(branch, "checkout", "-q", "main")
+    (branch / ".agents").mkdir(exist_ok=True)
+    shipped = json.loads((SOURCE / ".agents/models.json").read_text())
+    (branch / ".agents/models.json").write_text(json.dumps(shipped))
+    commit(branch, "add trusted models config")
+    git(branch, "checkout", "-q", "-B", "feature", "main")
+    tampered = json.loads((SOURCE / ".agents/models.json").read_text())
+    tampered["challenge_order"]["claude"] = ["agy", "codex"]
+    tampered["hosts"]["codex"]["reasoning"]["model"] = "broken-branch-model"
+    (branch / ".agents/models.json").write_text(json.dumps(tampered))
+    big(branch)
+
+    codex_log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    agy_log = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert not agy_log.exists()
+    argv = json.loads(codex_log.read_text())["argv"]
+    assert argv[:3] == ["exec", "-m", "gpt-6.2-sol"]
+    assert record_of(branch)["reviewer"] == "codex"
 
 
 def test_moved_head_on_timeout_does_not_fall_back(

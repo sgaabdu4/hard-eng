@@ -100,8 +100,10 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "bin").mkdir()
     (tmp_path / "codex-home").mkdir()
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     return root
 
 
@@ -264,6 +266,38 @@ def test_look_reads_the_rule_lines_and_image_lines_a_reviewer_actually_writes(
     assert record["outcome"] == "clean", record["outcome"]
     assert len(listed(record, "images")) == 1
     assert "image-1.png" in cast(dict[str, str], record["details"])
+
+
+def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    codex_log = install_agent(tmp_path, "codex", 1, good_answer(1))
+    record = run_look(project, "agy", images)
+    assert record["reviewer"] == "codex"
+    assert record["fresh_same_agent"] is False
+    assert json.loads(codex_log.read_text())["argv"][:7] == [
+        "exec",
+        "-m",
+        "gpt-6.2-sol",
+        "-c",
+        "model_reasoning_effort=high",
+        "-c",
+        "service_tier=default",
+    ]
+    (tmp_path / "bin/codex").unlink()
+    claude_log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "agy", images)
+    assert record["reviewer"] == "claude"
+    assert record["fresh_same_agent"] is False
+    claude_argv = json.loads(claude_log.read_text())["argv"]
+    assert claude_argv[claude_argv.index("--model") + 1] == "opus"
+    assert claude_argv[claude_argv.index("--effort") + 1] == "high"
+    (tmp_path / "bin/claude").unlink()
+    import look
+
+    assert look.choose_reviewer("agy", project) == ("codex", False)
+    assert look.choose_reviewer("codex", project) == ("codex", True)
 
 
 def test_look_reads_a_real_claude_answer() -> None:
