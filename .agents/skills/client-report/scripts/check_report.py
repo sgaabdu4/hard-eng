@@ -128,18 +128,24 @@ def _valid_head(head: Path) -> bool:
     return bool(HEAD_REF.match(text) or HEX.fullmatch(text))
 
 
+def _requires_dir(text: str) -> bool:
+    return text.endswith(("/", "\\", "/.", "\\.")) or text in (".", "..")
+
+
 def _has_existing_parent(path: Path, raw: str) -> bool:
-    if raw.endswith(("/", "\\")):
-        return path.is_dir()
+    must_be_dir = _requires_dir(raw)
     cur = path
     seen: set[Path] = set()
     while cur.is_symlink():
-        if cur in seen:
+        if cur in seen or len(seen) >= 40:
             return False
         seen.add(cur)
-        link = Path(os.readlink(cur))
+        target_text = os.readlink(cur)
+        if _requires_dir(target_text):
+            must_be_dir = True
+        link = Path(target_text)
         cur = link if link.is_absolute() else (cur.parent / link)
-    return cur.parent.is_dir()
+    return cur.is_dir() if must_be_dir else cur.parent.is_dir()
 
 
 def _check_gitdir(gitdir: Path) -> str:
