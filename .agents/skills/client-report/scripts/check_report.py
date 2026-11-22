@@ -117,13 +117,14 @@ def problems(report: Path, template: Path) -> list[str]:
 
 
 HEX = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
+HEAD_REF = re.compile(r"^ref:[ \t]*refs/\S+$")
 
 
 def _valid_head(head: Path) -> bool:
     if not head.is_file():
         return False
     text = head.read_text(errors="replace").strip()
-    return text.startswith("ref: ") or bool(HEX.fullmatch(text))
+    return bool(HEAD_REF.fullmatch(text) or HEX.fullmatch(text))
 
 
 def _check_gitdir(gitdir: Path) -> str:
@@ -139,7 +140,7 @@ def _check_gitdir(gitdir: Path) -> str:
     else:
         common = gitdir
     ok = (common / "objects").is_dir() and (common / "refs").is_dir()
-    return "valid" if ok else "stop"
+    return "valid" if ok else "invalid"
 
 
 def saved_template() -> Path | None:
@@ -149,10 +150,6 @@ def saved_template() -> Path | None:
     for folder in (cwd, *cwd.parents):
         marker = folder / ".git"
         if marker.is_dir():
-            if (marker / "commondir").is_file() and not (
-                marker / "commondir"
-            ).read_text(errors="replace").strip():
-                return None
             status = _check_gitdir(marker)
             if status == "valid":
                 return folder / TEMPLATE

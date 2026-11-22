@@ -365,6 +365,8 @@ def test_the_command_validates_symlinked_worktree_head_and_commondir(
 
     (wt_meta / "HEAD").write_text("")
     assert _run_script(write(symlink_wt, "report.html")) == outside
+    (wt_meta / "HEAD").write_text("ref: refs\n")
+    assert _run_script(write(symlink_wt, "report.html")) == outside
     (wt_meta / "HEAD").write_text("ref: refs/heads/main\n")
 
     nested_empty_common = tmp_path / "nested-empty-common"
@@ -375,6 +377,14 @@ def test_the_command_validates_symlinked_worktree_head_and_commondir(
     nested_empty_common.mkdir()
     (nested_empty_common / ".git").symlink_to(nested_meta)
     assert _run_script(write(nested_empty_common, "report.html")) == outside
+
+    (nested_meta / "HEAD").unlink()
+    assert _run_script(write(nested_empty_common, "report.html")) == (0, "")
+
+    abandoned = tmp_path / "abandoned-git"
+    (abandoned / ".git").mkdir(parents=True)
+    (abandoned / ".git/HEAD").write_text("ref: refs/heads/main\n")
+    assert _run_script(write(abandoned, "report.html")) == (0, "")
 
 
 def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
