@@ -479,6 +479,18 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         "  <code>\n```markdown\n  </code>\n\n## ux_reference\n\n- No clutter: Pass — leaked\n"
     )
     assert "leaked" not in look.extract_outcome_scope(standalone_html, "d.md")
+    wrapped_list_tag = (
+        '# T\n\n## Outcome + scope\n\n- Keep shortcut\n<kbd title="Next >">\n'
+        "Ctrl+K</kbd>\n## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    assert "leaked" not in look.extract_outcome_scope(wrapped_list_tag, "e.md")
+    wrapped_quote_tag = (
+        '# T\n\n## Outcome + scope\n\n> Keep shortcut\n<kbd title="Next >">\n'
+        "Ctrl+K</kbd>\n```markdown\n\n## Example report\n```\nKeep WTD.\n\n"
+        "## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    quote_scope = look.extract_outcome_scope(wrapped_quote_tag, "f.md")
+    assert "Keep WTD." in quote_scope and "leaked" not in quote_scope
 
 
 def test_ship_and_autocrlf_verify_committed_pr_plan_scope(
