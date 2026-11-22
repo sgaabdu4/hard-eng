@@ -53,5 +53,7 @@ E2E: N/A — submodule pointer update for documentation references only; no inte
 Real service: N/A — no external runtime service or API call changed.
 Retro: What worked: keeping `building-flutter-apps` documentation fixes in upstream PRs first and bumping the submodule cleanly afterwards avoided downstream drift. Prevention: none needed; existing submodule and Dart config suites enforce pin and profile consistency.
 
+Review declined: `freezed-sealed.md:139` showing retained value on refresh error without an error notice, and `core-stack.md:44`/`core-stack.md:55` fresh-checkout `flutter pub get` before `--dry-run` and preserving `--target-sdk` with `--step=all` :: both files live in the upstream `sgaabdu4/building-flutter-apps` repository, already passed upstream CI and independent review in PR #43 and PR #47, and cannot be edited directly in `hard-eng`; any further prose refinement belongs in a separate `building-flutter-apps` PR.
+
 Delivery target: Merge
 Delivery: Pending — required remote proof.
