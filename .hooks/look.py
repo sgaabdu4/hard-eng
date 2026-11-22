@@ -262,13 +262,33 @@ def bound_utf8(text: str, limit: int) -> str:
     )
 
 
+def _logical_lines(scope: str) -> list[str]:
+    joined: list[str] = []
+    for raw in scope.splitlines():
+        line = raw.replace("\t", " ")
+        stripped = line.strip()
+        if not stripped:
+            joined.append("")
+            continue
+        if (
+            joined
+            and joined[-1]
+            and not LIST_PREFIX.match(stripped)
+            and (line[:1] == " " or joined[-1].rstrip().endswith(":"))
+        ):
+            joined[-1] = f"{joined[-1]} {stripped}"
+        else:
+            joined.append(stripped)
+    return joined
+
+
 def _scope_verdict_problem(scope: str) -> str | None:
     wanted = {name.lower() for name, _ in usability_rules()}
-    for raw in scope.splitlines():
-        stripped = raw.replace("\t", " ").lstrip(" >")
+    for raw in _logical_lines(scope):
+        stripped = raw.lstrip(" >")
         while LIST_PREFIX.match(stripped):
             stripped = LIST_PREFIX.sub("", stripped)
-        cleaned = clean_line(stripped)
+        cleaned = clean_line(stripped).replace("*", "").replace("_", "")
         if VERDICT_LINE.match(cleaned):
             return cleaned
         rule, verdict, _, problem = split_rule_line(cleaned)
@@ -277,10 +297,7 @@ def _scope_verdict_problem(scope: str) -> str | None:
         bare = verdict.rstrip(".,;:—–-").lower()
         tail = cleaned.partition(": ")[2].removeprefix(verdict).strip()
         if bare in VERDICT_WORDS and (
-            not problem
-            or not tail
-            or verdict.lower() != bare
-            or tail[:1] in "—–-([:;.,"
+            not problem or not tail or verdict.lower() != bare or tail[:1] in "—–-(:;.,"
         ):
             return f"{rule}: {verdict}"
     return None
