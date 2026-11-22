@@ -395,7 +395,11 @@ def words_without_acceptance_refs(text: str) -> list[str] | None:
 
 
 def _repo_paths(root: Path, text: str) -> set[str]:
-    paths = {PurePosixPath(text).as_posix()}
+    rel = PurePosixPath(text)
+    paths = {
+        rel.as_posix(),
+        *(parent.as_posix() for parent in rel.parents if parent != PurePosixPath(".")),
+    }
     try:
         paths.add((root / text).resolve().relative_to(root.resolve()).as_posix())
     except ValueError:

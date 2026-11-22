@@ -139,3 +139,30 @@ def test_old_plan_test_ref_repair_still_refuses_missing_tests_na_or_word_edits(
 
     with pytest.raises(ValueError, match=expected):
         change_size.judged_stage(root, base, None)
+
+
+def test_retargeting_a_directory_symlink_still_checks_referenced_tests(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    root, old, _ = old_plan_with_test_ref(
+        tmp_path,
+        completed_plan,
+        "def test_old():\n    pass\n\ndef test_kept():\n    pass\n",
+        extra_row="- [x] Second outcome → `./tests/current/test_two.py::test_removed`.",
+    )
+    (root / "tests/v1").mkdir()
+    (root / "tests/v1/test_two.py").write_text("def test_removed():\n    pass\n")
+    (root / "tests/v2").mkdir()
+    (root / "tests/v2/test_two.py").write_text("def test_other():\n    pass\n")
+    (root / "tests/current").symlink_to("v1")
+    dated(root, 3, "add symlinked test dir")
+    base = git(root, "rev-parse", "HEAD")
+
+    (root / "tests/current").unlink()
+    (root / "tests/current").symlink_to("v2")
+    (root / OLD_NAME).write_text(
+        old.replace("`tests/test_one.py::test_old`", "`tests/test_one.py::test_kept`")
+    )
+
+    with pytest.raises(ValueError, match="acceptance names tests that do not exist"):
+        change_size.judged_stage(root, base, None)
