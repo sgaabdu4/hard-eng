@@ -124,21 +124,53 @@ def _symbolic_origin_head(root: Path) -> str | None:
     return _exact_ref_sha(root, target)
 
 
-def _anchor_point(root: Path, sha: str) -> tuple[str, str]:
-    point = _git_stdout(root, "merge-base", "HEAD", sha)
-    return sha, (point.strip() if point else sha)
+def _is_shallow(root: Path) -> bool:
+    return (
+        _git_stdout(root, "rev-parse", "--is-shallow-repository") or ""
+    ).strip() == "true"
+
+
+def _anchor_point(
+    root: Path, sha: str, *, allow_shallow_tip: bool
+) -> tuple[str, str] | None:
+    if point := _git_stdout(root, "merge-base", "HEAD", sha):
+        return sha, point.strip()
+    if allow_shallow_tip and _is_shallow(root):
+        return sha, sha
+    return None
+
+
+def _remote_anchor_shas(root: Path) -> list[str]:
+    shas: list[str] = []
+    if sym := _symbolic_origin_head(root):
+        shas.append(sym)
+    conventional = [
+        sha
+        for name in ("main", "master", "develop")
+        if (sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"))
+    ]
+    direct = _exact_ref_sha(root, "refs/remotes/origin/HEAD")
+    if direct and direct in conventional:
+        shas.append(direct)
+    shas.extend(conventional)
+    if direct and direct not in conventional:
+        shas.append(direct)
+    return list(dict.fromkeys(shas))
 
 
 def _primary_anchor(root: Path, local: str) -> tuple[str, str, bool] | None:
-    """Single highest-priority existing base ref; symbolic origin/HEAD first, direct origin/HEAD after conventional remotes."""
-    if sha := _symbolic_origin_head(root):
-        return *_anchor_point(root, sha), True
-    for name in ("main", "master", "develop", "HEAD"):
-        if sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"):
-            return *_anchor_point(root, sha), True
+    """Single highest-priority existing base ref with shared ancestry (or remote tip in shallow clones)."""
+    remote_shas = _remote_anchor_shas(root)
+    if remote_shas:
+        for sha in remote_shas:
+            if found := _anchor_point(root, sha, allow_shallow_tip=True):
+                return found[0], found[1], True
+        return None
     for name in dict.fromkeys(("main", "master", local, "develop")):
-        if sha := _exact_ref_sha(root, f"refs/heads/{name}"):
-            return *_anchor_point(root, sha), False
+        if (sha := _exact_ref_sha(root, f"refs/heads/{name}")) and (
+            found := _anchor_point(root, sha, allow_shallow_tip=False)
+        ):
+            return found[0], found[1], False
     return None
 
 
@@ -152,8 +184,10 @@ def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | 
         else (f"refs/remotes/origin/{base}", f"refs/heads/{base}")
     )
     for full_ref in refs:
-        if sha := _exact_ref_sha(root, full_ref):
-            return _anchor_point(root, sha)[1]
+        if (sha := _exact_ref_sha(root, full_ref)) and (
+            found := _anchor_point(root, sha, allow_shallow_tip=remote_only)
+        ):
+            return found[1]
     return None
 
 

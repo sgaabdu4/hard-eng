@@ -471,6 +471,8 @@ def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
     commit(custom, "feature work")
     assert models.trusted_base_ref(custom) == integration_commit
 
+
+def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> None:
     trunk = tmp_path / "trunk-repo"
     init(trunk)
     git(trunk, "config", "init.defaultBranch", "trunk")
@@ -484,9 +486,28 @@ def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
     git(trunk, "update-ref", "refs/remotes/origin/trunk", trunk_topic)
     git(trunk, "update-ref", "refs/remotes/origin/HEAD", trunk_topic)
     assert models.trusted_base_ref(trunk) == dev_base
+    git(trunk, "update-ref", "refs/remotes/origin/HEAD", dev_base)
+    git(trunk, "update-ref", "refs/remotes/origin/main", trunk_topic)
+    assert models.trusted_base_ref(trunk) == dev_base
+    git(trunk, "update-ref", "-d", "refs/remotes/origin/main")
     git(trunk, "update-ref", "-d", "refs/remotes/origin/develop")
+    git(trunk, "update-ref", "refs/remotes/origin/HEAD", trunk_topic)
     git(trunk, "checkout", "-q", "--detach", "HEAD")
     assert models.trusted_base_ref(trunk) == trunk_topic
+
+    orphan = tmp_path / "orphan-main"
+    init(orphan)
+    git(orphan, "branch", "-M", "develop")
+    write_policy(orphan, "develop")
+    dev_commit = commit(orphan, "develop base")
+    git(orphan, "checkout", "-q", "--orphan", "main")
+    git(orphan, "rm", "-qrf", ".")
+    (orphan / "unrelated.txt").write_text("other\n")
+    commit(orphan, "unrelated orphan main")
+    git(orphan, "checkout", "-qb", "feature", "develop")
+    (orphan / "work.txt").write_text("change\n")
+    commit(orphan, "feature on develop")
+    assert models.trusted_base_ref(orphan) == dev_commit
 
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
