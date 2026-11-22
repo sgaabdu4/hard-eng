@@ -809,9 +809,10 @@ def _agy_server_from_codex(settings: JsonValue) -> JsonObject | None:
 
 
 def _git_tracked(root: Path, relative: str) -> bool:
+    spec = ":(literal)" + relative
     return (
         subprocess.run(
-            ["git", "ls-files", "--error-unmatch", "--", f":(literal){relative}"],
+            ["git", "ls-files", "--error-unmatch", "--", spec],
             cwd=root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
