@@ -304,24 +304,31 @@ def test_the_command_finds_the_template_from_the_git_top_level(
     assert _run_script(report)[1].startswith("no saved template at ")
 
 
+OUTSIDE_GIT = (1, "run inside the project's git checkout\n")
+
+
+def _init_repo_with_template(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    folder = root / "docs/client-report"
+    folder.mkdir(parents=True)
+    write(folder, "template.html")
+
+
 def test_the_command_validates_gitdir_and_worktree_metadata(
     tmp_path: Path,
 ) -> None:
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    (tmp_path / "docs/client-report").mkdir(parents=True)
-    write(tmp_path / "docs/client-report", "template.html")
-    outside = (1, "run inside the project's git checkout\n")
+    _init_repo_with_template(tmp_path)
 
     broken_wt = tmp_path.parent / (tmp_path.name + "-broken-wt")
     (broken_wt / "docs/client-report").mkdir(parents=True)
     write(broken_wt / "docs/client-report", "template.html")
     (broken_wt / ".git").write_text("gitdir: /nonexistent/worktree/gitdir\n")
-    assert _run_script(write(broken_wt, "report.html")) == outside
+    assert _run_script(write(broken_wt, "report.html")) == OUTSIDE_GIT
 
     nested_stale = tmp_path / "nested-stale"
     nested_stale.mkdir()
     (nested_stale / ".git").write_text("gitdir: /nonexistent/nested/gitdir\n")
-    assert _run_script(write(nested_stale, "report.html")) == outside
+    assert _run_script(write(nested_stale, "report.html")) == OUTSIDE_GIT
 
     missing_common = tmp_path.parent / (tmp_path.name + "-missing-common")
     (missing_common / "docs/client-report").mkdir(parents=True)
@@ -331,7 +338,7 @@ def test_the_command_validates_gitdir_and_worktree_metadata(
     (fake_gitdir / "HEAD").write_text("ref: refs/heads/main\n")
     (fake_gitdir / "commondir").write_text("../missing-common-dir\n")
     (missing_common / ".git").write_text(f"gitdir: {fake_gitdir}\n")
-    assert _run_script(write(missing_common, "report.html")) == outside
+    assert _run_script(write(missing_common, "report.html")) == OUTSIDE_GIT
 
     missing_refs = tmp_path.parent / (tmp_path.name + "-missing-refs")
     (missing_refs / "docs/client-report").mkdir(parents=True)
@@ -342,16 +349,13 @@ def test_the_command_validates_gitdir_and_worktree_metadata(
     (wt_no_refs / "HEAD").write_text("ref: refs/heads/main\n")
     (wt_no_refs / "commondir").write_text("../common\n")
     (missing_refs / ".git").write_text(f"gitdir: {wt_no_refs}\n")
-    assert _run_script(write(missing_refs, "report.html")) == outside
+    assert _run_script(write(missing_refs, "report.html")) == OUTSIDE_GIT
 
 
 def test_the_command_validates_symlinked_worktree_head_and_commondir(
     tmp_path: Path,
 ) -> None:
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    (tmp_path / "docs/client-report").mkdir(parents=True)
-    write(tmp_path / "docs/client-report", "template.html")
-    outside = (1, "run inside the project's git checkout\n")
+    _init_repo_with_template(tmp_path)
 
     symlink_wt = tmp_path.parent / (tmp_path.name + "-symlink-wt")
     (symlink_wt / "docs/client-report").mkdir(parents=True)
@@ -364,9 +368,9 @@ def test_the_command_validates_symlinked_worktree_head_and_commondir(
     assert _run_script(write(symlink_wt, "report.html")) == (0, "")
 
     (wt_meta / "HEAD").write_text("")
-    assert _run_script(write(symlink_wt, "report.html")) == outside
+    assert _run_script(write(symlink_wt, "report.html")) == OUTSIDE_GIT
     (wt_meta / "HEAD").write_text("ref: refs\n")
-    assert _run_script(write(symlink_wt, "report.html")) == outside
+    assert _run_script(write(symlink_wt, "report.html")) == OUTSIDE_GIT
     (wt_meta / "HEAD").write_text("ref: refs/heads/main\n")
 
     nested_empty_common = tmp_path / "nested-empty-common"
@@ -376,7 +380,7 @@ def test_the_command_validates_symlinked_worktree_head_and_commondir(
     (nested_meta / "commondir").write_text("")
     nested_empty_common.mkdir()
     (nested_empty_common / ".git").symlink_to(nested_meta)
-    assert _run_script(write(nested_empty_common, "report.html")) == outside
+    assert _run_script(write(nested_empty_common, "report.html")) == OUTSIDE_GIT
 
     (nested_meta / "HEAD").unlink()
     assert _run_script(write(nested_empty_common, "report.html")) == (0, "")
@@ -390,10 +394,7 @@ def test_the_command_validates_symlinked_worktree_head_and_commondir(
 def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
     tmp_path: Path,
 ) -> None:
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    (tmp_path / "docs/client-report").mkdir(parents=True)
-    write(tmp_path / "docs/client-report", "template.html")
-    outside = (1, "run inside the project's git checkout\n")
+    _init_repo_with_template(tmp_path)
 
     nested = tmp_path / "nested-missing-common"
     meta = tmp_path.parent / (tmp_path.name + "-missing-common-meta")
@@ -402,23 +403,30 @@ def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
     (meta / "commondir").write_text("gone/deeper/common\n")
     nested.mkdir()
     (nested / ".git").symlink_to(meta)
-    assert _run_script(write(nested, "report.html")) == outside
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
 
     (meta / "commondir").write_text(str(tmp_path / "missing-final") + "\n")
     assert _run_script(write(nested, "report.html")) == (0, "")
 
     (meta / "commondir").write_text(str(tmp_path / "missing-final") + "/\n")
-    assert _run_script(write(nested, "report.html")) == outside
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
 
     dangling_link = tmp_path / "dangling-common-link"
     dangling_link.symlink_to(tmp_path / "no-such-parent/common")
     (meta / "commondir").write_text(str(dangling_link) + "\n")
-    assert _run_script(write(nested, "report.html")) == outside
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
 
     trailing_slash_link = tmp_path / "trailing-slash-common-link"
     trailing_slash_link.symlink_to(str(tmp_path / "missing-final") + "/")
     (meta / "commondir").write_text(str(trailing_slash_link) + "\n")
-    assert _run_script(write(nested, "report.html")) == outside
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
+    regular_file = tmp_path / "regular-common-file"
+    regular_file.write_text("not a gitdir")
+    file_slash_link = tmp_path / "file-slash-common-link"
+    file_slash_link.symlink_to(str(regular_file) + "/")
+    (meta / "commondir").write_text(str(file_slash_link) + "\n")
+    assert _run_script(write(nested, "report.html")) == (0, "")
 
     (meta / "HEAD").write_text("ref:\u00a0refs/heads/main\n")
     (meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
