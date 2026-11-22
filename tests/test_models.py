@@ -486,12 +486,7 @@ def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> 
     git(trunk, "update-ref", "refs/remotes/origin/trunk", trunk_topic)
     git(trunk, "update-ref", "refs/remotes/origin/HEAD", trunk_topic)
     assert models.trusted_base_ref(trunk) == dev_base
-    git(trunk, "update-ref", "refs/remotes/origin/HEAD", dev_base)
-    git(trunk, "update-ref", "refs/remotes/origin/main", trunk_topic)
-    assert models.trusted_base_ref(trunk) == dev_base
-    git(trunk, "update-ref", "-d", "refs/remotes/origin/main")
     git(trunk, "update-ref", "-d", "refs/remotes/origin/develop")
-    git(trunk, "update-ref", "refs/remotes/origin/HEAD", trunk_topic)
     git(trunk, "checkout", "-q", "--detach", "HEAD")
     assert models.trusted_base_ref(trunk) == trunk_topic
 
@@ -507,6 +502,14 @@ def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> 
     git(orphan, "checkout", "-qb", "feature", "develop")
     (orphan / "work.txt").write_text("change\n")
     commit(orphan, "feature on develop")
+    assert models.trusted_base_ref(orphan) == dev_commit
+
+    git(orphan, "checkout", "-q", "main")
+    write_policy(orphan, "develop")
+    orphan_main = commit(orphan, "orphan main declaring develop")
+    git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main)
+    git(orphan, "update-ref", "refs/remotes/origin/develop", dev_commit)
+    git(orphan, "checkout", "-q", "feature")
     assert models.trusted_base_ref(orphan) == dev_commit
 
 

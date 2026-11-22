@@ -144,34 +144,10 @@ def _remote_anchor_shas(root: Path) -> list[str]:
     shas: list[str] = []
     if sym := _symbolic_origin_head(root):
         shas.append(sym)
-    conventional = [
-        sha
-        for name in ("main", "master", "develop")
-        if (sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"))
-    ]
-    direct = _exact_ref_sha(root, "refs/remotes/origin/HEAD")
-    if direct and direct in conventional:
-        shas.append(direct)
-    shas.extend(conventional)
-    if direct and direct not in conventional:
-        shas.append(direct)
+    for name in ("main", "master", "develop", "HEAD"):
+        if sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"):
+            shas.append(sha)
     return list(dict.fromkeys(shas))
-
-
-def _primary_anchor(root: Path, local: str) -> tuple[str, str, bool] | None:
-    """Single highest-priority existing base ref with shared ancestry (or remote tip in shallow clones)."""
-    remote_shas = _remote_anchor_shas(root)
-    if remote_shas:
-        for sha in remote_shas:
-            if found := _anchor_point(root, sha, allow_shallow_tip=True):
-                return found[0], found[1], True
-        return None
-    for name in dict.fromkeys(("main", "master", local, "develop")):
-        if (sha := _exact_ref_sha(root, f"refs/heads/{name}")) and (
-            found := _anchor_point(root, sha, allow_shallow_tip=False)
-        ):
-            return found[0], found[1], False
-    return None
 
 
 def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | None:
@@ -192,17 +168,30 @@ def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | 
 
 
 def trusted_base_ref(root: Path | None) -> str | None:
-    """Resolve the merge-base commit from the single primary base ref, never trusting unmerged branch policies."""
+    """Resolve the merge-base commit from the highest-priority base ref, never trusting unmerged branch policies."""
     if root is None or not _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}"):
         return None
-    local = (
-        _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
-    ).strip() or "master"
-    anchor = _primary_anchor(root, local)
-    if anchor is None:
-        return None
-    ref, point, remote_only = anchor
-    return _policy_merge_base(root, ref, remote_only=remote_only) or point
+    remote_shas = _remote_anchor_shas(root)
+    if remote_shas:
+        candidates, remote_only = remote_shas, True
+    else:
+        local = (
+            _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
+        ).strip() or "master"
+        candidates = list(
+            dict.fromkeys(
+                sha
+                for name in dict.fromkeys(("main", "master", local, "develop"))
+                if (sha := _exact_ref_sha(root, f"refs/heads/{name}"))
+            )
+        )
+        remote_only = False
+    for sha in candidates:
+        if resolved := _policy_merge_base(root, sha, remote_only=remote_only):
+            return resolved
+        if found := _anchor_point(root, sha, allow_shallow_tip=remote_only):
+            return found[1]
+    return None
 
 
 def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, object]:
