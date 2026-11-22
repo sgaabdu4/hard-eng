@@ -12,7 +12,7 @@ Sources: N/A — escaped-bug fix for repairing acceptance test references in old
 
 ## Repository context
 
-Owners: `.hooks/change_size.py` (`normalize_acceptance_line`, `words_without_acceptance_refs`, `held_text`, `verified_test_ref_repair`, `reformatted_plans`) and `tests/test_planning_handoffs.py`.
+Owners: `.hooks/change_size.py` (`normalize_acceptance_line`, `words_without_acceptance_refs`, `_repo_paths`, `_acceptance_row_refs`, `held_text`, `verified_test_ref_repair`, `reformatted_plans`) and `tests/test_old_plan_test_ref_repair.py`.
 Same cause: `reformatted_plans` compared full raw word lists (`held_words == plan_words`), so any change to a renamed test reference in an old `Complete` plan broke word equality and triggered full modern-plan validation on a historical file.
 Single source: `.hooks/change_size.py` owns the old-plan reformat and test-ref-repair exemption; `.hooks/plan_tests.py` (`missing_tests`) owns test reference verification.
 
@@ -24,8 +24,8 @@ Authority: Autonomous maintenance — authorized post-release bug fix.
 
 ## Acceptance + steps
 
-- [x] Repairing only acceptance test references in an old `Complete` plan that fails newer plan fields counts as unchanged (both on a plan-only edit and alongside a current branch `PLAN.md`), while an unbacked code/test change still requires its own plan → `tests/test_planning_handoffs.py::test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_unchanged`.
-- [x] Repairing an old `Complete` plan with a missing test reference, weakening a test reference to not-applicable, or editing acceptance outcome wording is still refused → `tests/test_planning_handoffs.py::test_old_plan_test_ref_repair_still_refuses_missing_tests_na_or_word_edits`.
+- [x] Repairing only acceptance test references in an old `Complete` plan that fails newer plan fields counts as unchanged (both on a plan-only edit and alongside a current branch `PLAN.md`), while an unbacked code/test change still requires its own plan → `tests/test_old_plan_test_ref_repair.py::test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_unchanged`.
+- [x] Repairing an old `Complete` plan with a missing test reference, weakening a test reference to not-applicable, or editing acceptance outcome wording is still refused → `tests/test_old_plan_test_ref_repair.py::test_old_plan_test_ref_repair_still_refuses_missing_tests_na_or_word_edits`.
 
 ## Baseline + execution
 
