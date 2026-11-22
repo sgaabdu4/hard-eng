@@ -312,21 +312,16 @@ def measured_problem(
 
 
 def _committed_plan_digest(root: Path, head: str, plan: Path | None) -> tuple[str, str]:
+    from look import committed_plan_blob
+
     if plan is None or not plan.is_file():
         return "", ""
     try:
         rel = plan.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         return "", ""
-    done = subprocess.run(
-        ["git", "show", f"{head}:{rel}"],
-        cwd=root,
-        capture_output=True,
-        check=False,
-    )
-    if done.returncode != 0 or plan.read_bytes() != done.stdout:
-        return rel, ""
-    return rel, sha256(done.stdout)
+    committed = committed_plan_blob(root, head, rel)
+    return (rel, sha256(committed)) if committed is not None else (rel, "")
 
 
 def _plan_mismatch(
@@ -479,6 +474,8 @@ def ship_problem(
     after = [download(root, url) for url in after_urls]
     if not after:
         return None
+    pr_files = {str(item["filename"]) for item in files}
+    verified_digest = plan_digest if plan_rel and plan_rel in pr_files else ""
     return evidence_problem(
         root,
         head,
@@ -487,7 +484,7 @@ def ship_problem(
         visible,
         surface_route(plan_text),
         plan_rel,
-        plan_digest,
+        verified_digest,
     )
 
 
