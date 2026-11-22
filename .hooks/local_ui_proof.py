@@ -15,7 +15,10 @@ PLAN_PATH_TOKEN = re.compile(
     r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?|[A-Za-z0-9_.-]+/"
 )
 PLAN_ROUTE_TOKEN = re.compile(
-    r"(?:^|[\s`(/])(/(?:[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*)?)(?=$|[\s`),.;:])"
+    r"(?:^|[\s`(])(/(?:[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*/?))(?=$|[\s`),.;:?#])"
+    r"|`(/)(?=`)"
+    r"|\b(?:route|page|path|url)\s+(/)(?=$|[\s`),.;:?#])",
+    re.IGNORECASE,
 )
 from ui_proof import (
     UNCHANGED_LINE,
@@ -162,13 +165,13 @@ def _git_index_mtime_ns(root: Path) -> int:
     return path.stat().st_mtime_ns if path.is_file() else 0
 
 
-def _dirty_ui_paths(root: Path, patterns: list[str]) -> list[str]:
+def _dirty_ui_paths(root: Path, patterns: list[str], visible: list[str]) -> list[str]:
     raw = _git_stdout(
         root, "-c", "core.quotepath=off", "status", "--porcelain", "-uall", "-z"
     )
     if not raw:
         return []
-    found: list[str] = []
+    candidates: list[str] = []
     entries = iter(raw.split("\0"))
     for entry in entries:
         if len(entry) < 4:
@@ -183,17 +186,23 @@ def _dirty_ui_paths(root: Path, patterns: list[str]) -> list[str]:
                 and matches(item, patterns)
                 and not is_test_path(PurePosixPath(item))
             ):
-                found.append(item)
-    return found
+                candidates.append(item)
+    visible_set = set(visible)
+    extra = [item for item in candidates if item not in visible_set]
+    extra_visible = (
+        set(visible_files(_local_changes(root, "HEAD", extra))) if extra else set()
+    )
+    return [item for item in candidates if item in visible_set or item in extra_visible]
 
 
 def _dirty_ui_mtime_ns(
     root: Path, patterns: list[str], visible: list[str]
 ) -> tuple[bool, int]:
-    dirty_ui = _dirty_ui_paths(root, patterns)
+    dirty_ui = _dirty_ui_paths(root, patterns, visible)
     if not dirty_ui:
         return False, 0
-    mtimes = [_path_mtime_ns(root, name) for name in {*dirty_ui, *visible}]
+    existing_visible = [name for name in visible if (root / name).exists()]
+    mtimes = [_path_mtime_ns(root, name) for name in {*dirty_ui, *existing_visible}]
     if any(not (root / name).exists() for name in dirty_ui):
         mtimes.append(_git_index_mtime_ns(root))
     return True, max(mtimes, default=0)
@@ -356,7 +365,7 @@ def _unchanged_route(plan_text: str, reference: str) -> str:
         return route
     tail = reference.rpartition(" — ")[2]
     if match := PLAN_ROUTE_TOKEN.search(tail):
-        return match[1]
+        return match[1] or match[2] or match[3] or ""
     return ""
 
 

@@ -261,7 +261,7 @@ SCRIPT_CALL_OPEN = re.compile(
 )
 CLASS_ATTR_EXPR = re.compile(r"\b(?:className|class)\s*=\s*\{")
 CLASS_PROP_EXPR = re.compile(r"\bclassName\s*:\s*")
-CLASS_TEMPLATE_ASSIGN = re.compile(r"\bclassName\s*=\s*`")
+CLASS_TEMPLATE_ASSIGN = re.compile(r"\bclassName\s*[:=]\s*`")
 COMPARE_BEFORE = re.compile(
     r"(?:===?|!==?|\bcase)\s*$|\.(?:includes|startsWith|endsWith|indexOf|match)\(\s*$"
 )
@@ -396,36 +396,44 @@ def _css_import_targets(
     return found
 
 
-def _ordered_css_files(files: list[Path], texts: dict[Path, str]) -> list[Path]:
-    """Order CSS files with entrypoints resolved in exact @import order before unreferenced files."""
+def _css_entrypoint_orders(
+    files: list[Path], texts: dict[Path, str]
+) -> list[list[Path]]:
+    """Expand each CSS entrypoint independently in exact @import order so separate builds do not reset one another."""
     by_resolved = {path.resolve(): path for path in files}
     edges = {
         path: _css_import_targets(path, texts[path], by_resolved) for path in files
     }
     imported = {target.resolve() for targets in edges.values() for target in targets}
-    ordered: list[Path] = []
-    visited: set[Path] = set()
-    visiting: set[Path] = set()
+    reached: set[Path] = set()
+    groups: list[list[Path]] = []
     limit = max(64, len(files) * 8)
 
-    def visit(path: Path) -> None:
-        resolved = path.resolve()
-        if resolved in visiting or len(ordered) >= limit:
-            return
-        visiting.add(resolved)
-        for target in edges[path]:
-            visit(target)
-        visiting.remove(resolved)
-        visited.add(resolved)
-        ordered.append(path)
+    def collect(root_path: Path) -> list[Path]:
+        ordered: list[Path] = []
+        visiting: set[Path] = set()
+
+        def visit(path: Path) -> None:
+            resolved = path.resolve()
+            if resolved in visiting or len(ordered) >= limit:
+                return
+            visiting.add(resolved)
+            for target in edges[path]:
+                visit(target)
+            visiting.remove(resolved)
+            reached.add(resolved)
+            ordered.append(path)
+
+        visit(root_path)
+        return ordered
 
     for path in files:
         if path.resolve() not in imported:
-            visit(path)
+            groups.append(collect(path))
     for path in files:
-        if path.resolve() not in visited:
-            visit(path)
-    return ordered
+        if path.resolve() not in reached:
+            groups.append(collect(path))
+    return groups
 
 
 def _collect_theme_vars(
@@ -467,21 +475,7 @@ def _collect_theme_vars(
     return default_colors
 
 
-def _load_theme(
-    root: Path, package: Path, entries: list[str] | None = None
-) -> ThemeTokens | None:
-    files = _css_files(root, package, entries)
-    if not files:
-        return None
-    raw = {
-        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
-    }
-    ordered = _ordered_css_files(files, raw)
-    texts = [raw[path] for path in ordered]
-    if not any(THEME_BLOCK.search(text) for text in texts) or _has_external_theme(
-        package, texts
-    ):
-        return None
+def _theme_for_group(texts: list[str]) -> tuple[ThemeTokens, bool]:
     colors: set[str] = set()
     text_sizes: set[str] = set()
     bg_images: set[str] = set()
@@ -490,12 +484,14 @@ def _load_theme(
     cleared_families: set[str] = set()
     cleared_colors: set[str] = set()
     default_colors = True
+    has_theme = False
     for text in texts:
         utilities = UTILITY_DECL.findall(text)
         custom_prefixes.update(u[:-1] for u in utilities if u.endswith("*"))
         custom_classes.update(u for u in utilities if not u.endswith("*"))
         custom_classes.update(CLASS_SELECTOR.findall(text))
         for body in _theme_bodies(text):
+            has_theme = True
             default_colors = _collect_theme_vars(
                 body,
                 colors,
@@ -505,15 +501,55 @@ def _load_theme(
                 cleared_colors,
                 default_colors,
             )
+    return (
+        ThemeTokens(
+            frozenset(colors),
+            frozenset(text_sizes),
+            frozenset(bg_images),
+            frozenset(custom_classes),
+            frozenset(custom_prefixes),
+            default_colors,
+            frozenset(cleared_families),
+            frozenset(cleared_colors),
+        ),
+        has_theme,
+    )
+
+
+def _load_theme(
+    root: Path, package: Path, entries: list[str] | None = None
+) -> ThemeTokens | None:
+    files = _css_files(root, package, entries)
+    if not files:
+        return None
+    raw = {
+        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
+    }
+    all_texts = list(raw.values())
+    if not any(THEME_BLOCK.search(text) for text in all_texts) or _has_external_theme(
+        package, all_texts
+    ):
+        return None
+    evaluated = [
+        _theme_for_group([raw[path] for path in group])
+        for group in _css_entrypoint_orders(files, raw)
+    ]
+    all_tokens = [tokens for tokens, _ in evaluated]
+    themed = [tokens for tokens, has_theme in evaluated if has_theme]
+    with_defaults = [tokens for tokens in themed if tokens.default_colors]
     return ThemeTokens(
-        frozenset(colors),
-        frozenset(text_sizes),
-        frozenset(bg_images),
-        frozenset(custom_classes),
-        frozenset(custom_prefixes),
-        default_colors,
-        frozenset(cleared_families),
-        frozenset(cleared_colors),
+        frozenset().union(*(t.colors for t in all_tokens)),
+        frozenset().union(*(t.text_sizes for t in all_tokens)),
+        frozenset().union(*(t.bg_images for t in all_tokens)),
+        frozenset().union(*(t.custom_classes for t in all_tokens)),
+        frozenset().union(*(t.custom_prefixes for t in all_tokens)),
+        bool(with_defaults),
+        frozenset.intersection(*(t.cleared_families for t in with_defaults))
+        if with_defaults
+        else frozenset(),
+        frozenset.intersection(*(t.cleared_colors for t in with_defaults))
+        if with_defaults
+        else frozenset(),
     )
 
 
@@ -661,6 +697,13 @@ def _prop_expr_end(text: str, start: int) -> int:
             depth -= 1
         elif depth == 0 and char in ",;":
             return index
+        elif depth == 0 and char == "\n":
+            before = text[start:index].rstrip()
+            after = text[index + 1 :].lstrip()
+            if (not before or before[-1] not in "?:+&|=") and (
+                not after or after[0] not in "?:+&|"
+            ):
+                return index
         index += 1
     return index
 

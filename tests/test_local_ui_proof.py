@@ -163,6 +163,26 @@ def test_local_complete_check_supports_dirty_build_and_rejects_stale_and_deleted
     problem = local_ui_proof.local_ui_proof_problem(deleted_root, "origin/main")
     assert problem is not None and "predates the latest UI edit" in problem
 
+    legacy_root = web_change_repo(tmp_path / "legacy", commit_work=True)
+    (legacy_root / "src/legacy").mkdir()
+    (legacy_root / "src/legacy/Hero.tsx").write_text(
+        "export const H = () => <p>H</p>;\n"
+    )
+    commit(legacy_root, "add legacy hero")
+    (legacy_root / "src/legacy/Hero.tsx").unlink()
+    commit(legacy_root, "delete legacy hero")
+    leg_head = git(legacy_root, "rev-parse", "HEAD").strip()
+    (legacy_root / "src/App.tsx").write_text("export const App = () => <p>Edit</p>;\n")
+    leg_after = write_clean_browser(legacy_root, route="/account")
+    write_look(legacy_root, leg_head, leg_after)
+    readme = legacy_root / "src/legacy/README.md"
+    readme.write_text("# Notes\n")
+    future_ns = (
+        legacy_root / ".hard-eng/browser/after-390.json"
+    ).stat().st_mtime_ns + 5_000_000_000
+    os.utime(legacy_root / "src/legacy", ns=(future_ns, future_ns))
+    assert local_ui_proof.local_ui_proof_problem(legacy_root, "origin/main") is None
+
     reverted_root = web_change_repo(tmp_path / "rev", commit_work=False)
     (reverted_root / "src/Other.tsx").write_text("export const O = () => <p>v1</p>;\n")
     commit(reverted_root, "both components")
@@ -360,6 +380,21 @@ def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
     )
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "names /" in problem
+
+    for desc, expected in (
+        ("/settings/ screen", "/settings/"),
+        ("/settings?tab=security screen", "/settings"),
+        ("Settings at desktop / mobile sizes", ""),
+    ):
+        plan_body = base_plan.replace(
+            REAL_UX, UNCHANGED_UX.replace("the card at rest", desc)
+        )
+        assert (
+            local_ui_proof._unchanged_route(
+                plan_body, local_ui_proof.reference_section(plan_body)
+            )
+            == expected
+        )
 
     (root / "src/settings").mkdir()
     (root / "src/settings/Card.tsx").write_text(
