@@ -1,6 +1,7 @@
 """Service selection and preservation across native harness configuration."""
 
 import json
+import subprocess
 import tomllib
 from pathlib import Path
 from types import ModuleType
@@ -41,6 +42,9 @@ def assert_preserved_pending_stdio_server(
     assert service not in tomllib.loads(changes.get(".codex/config.toml", "")).get(
         "mcp_servers", {}
     )
+    assert service not in json.loads(
+        changes.get(".agents/mcp_config.json", '{"mcpServers": {}}')
+    ).get("mcpServers", {})
 
 
 def test_appwrite_unresolved_setup_installs_framework_and_reports_pending(
@@ -720,3 +724,271 @@ def test_agy_server_url_matches_claude_url_for_sentry_and_appwrite(
     )
     assert sentry_server(tmp_path) == {"url": sentry_url}
     assert appwrite_server(tmp_path) == {"url": APPWRITE_CLOUD_MCP_URL}
+
+
+def write_codex(root: Path, text: str) -> None:
+    codex = root / ".codex/config.toml"
+    codex.parent.mkdir(parents=True, exist_ok=True)
+    codex.write_text(text)
+
+
+def test_agy_mcp_mirrors_compatible_claude_servers_and_skips_unsupported(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    stdio_expected = {
+        "command": "./scripts/custom-mcp",
+        "args": ["--flag"],
+        "env": {"API_MODE": "strict"},
+        "cwd": ".",
+        "disabled": False,
+        "disabledTools": ["drop_all"],
+        "enabledTools": ["read_one"],
+        "timeoutSeconds": 45,
+        "tools": {"read_one": {"disabled": False}},
+    }
+    http_expected = {
+        "url": "https://api.example.test/mcp",
+        "headers": {"X-Scope": "read"},
+        "disabled": False,
+        "disabledTools": ["write_item"],
+        "enabledTools": ["list_items"],
+        "timeoutSeconds": 30,
+        "tools": {"list_items": {"disabled": False}},
+        "authProviderType": "google_credentials",
+        "oauth": {"clientId": "demo-client"},
+    }
+    empty_list: list[str] = []
+    empty_dict: dict[str, str] = {}
+    servers = {
+        "custom-stdio": {"type": "stdio", **stdio_expected},
+        "empty-optionals": {
+            "command": "node",
+            "args": empty_list,
+            "env": empty_dict,
+            "cwd": "",
+            "disabledTools": empty_list,
+            "tools": empty_dict,
+        },
+        "zero-tools-claude": {"command": "node", "enabledTools": empty_list},
+        "custom-http": {"type": "http", **http_expected},
+        "helper-http": {
+            "type": "http",
+            "url": "https://helper.example.test/mcp",
+            "headersHelper": "./scripts/headers.sh",
+        },
+        "legacy-http": {
+            "serverUrl": "https://legacy.example.test/mcp",
+            "headers": {"X-Mode": "v1"},
+        },
+        "sse-only": {"type": "sse", "url": "https://sse.example.test/sse"},
+        "ws-only": {"type": "websocket", "url": "wss://ws.example.test"},
+        "ambiguous": {"command": "node", "url": "https://both.example.test/mcp"},
+        "context-mode": {"command": "npx", "args": ["context-mode"]},
+    }
+    (tmp_path / ".mcp.json").write_text(json.dumps({"mcpServers": servers}))
+    changes: dict[str, str] = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {
+            "custom-http": http_expected,
+            "custom-stdio": stdio_expected,
+            "empty-optionals": {"command": "node"},
+            "legacy-http": {
+                "url": "https://legacy.example.test/mcp",
+                "headers": {"X-Mode": "v1"},
+            },
+        }
+    }
+    assert rerun_configure_mcp(installer, tmp_path, changes) == {}
+
+
+def test_agy_mcp_carries_codex_tool_filters_and_mirrors_codex_only_servers(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    claude = {
+        "shared-plain": {"type": "stdio", "command": "./scripts/shared-mcp"},
+        "shared-override": {"command": "tool-a", "disabledTools": ["claude_only"]},
+        "shared-empty-allowlist": {"command": "tool-b"},
+        "sse-both": {"type": "sse", "url": "https://sse.example.test/sse"},
+    }
+    (tmp_path / ".mcp.json").write_text(json.dumps({"mcpServers": claude}))
+    write_codex(
+        tmp_path,
+        """[mcp_servers.shared-plain]
+command = "./scripts/shared-mcp"
+disabled_tools = ["delete_all"]
+enabled_tools = ["get_status"]
+[mcp_servers.shared-override]
+command = "tool-a"
+disabled_tools = ["codex_only"]
+enabled_tools = ["codex_keep"]
+[mcp_servers.shared-empty-allowlist]
+command = "tool-b"
+enabled_tools = []
+[mcp_servers.sse-both]
+url = "https://sse.example.test/mcp"
+[mcp_servers.codex-stdio]
+command = "node"
+args = ["server.js"]
+cwd = "."
+env = { MODE = "test" }
+enabled = false
+disabled_tools = ["bad"]
+enabled_tools = ["good"]
+tool_timeout_sec = 30.5
+[mcp_servers.codex-slow-startup]
+command = "node"
+startup_timeout_sec = 120
+tool_timeout_sec = 5
+[mcp_servers.codex-startup-only]
+command = "node"
+environment_id = "local"
+startup_timeout_sec = 600
+[mcp_servers.codex-short-tool]
+command = "node"
+environment_id = "local"
+tool_timeout_sec = 5
+[mcp_servers.codex-remote]
+command = "node"
+environment_id = "remote-env-1"
+[mcp_servers.codex-remote-http]
+url = "https://remote.example.test/mcp"
+environment_id = "remote-env-2"
+[mcp_servers.codex-zero-tools]
+command = "node"
+enabled_tools = []
+[mcp_servers.codex-http]
+url = "https://extra.example.test/mcp"
+http_headers = { X-Client = "demo" }
+enabled = true
+tool_timeout_sec = 60
+[mcp_servers.codex-bearer]
+url = "https://auth.example.test/mcp"
+bearer_token_env_var = "DEMO_TOKEN"
+[mcp_servers.codex-env-headers]
+url = "https://auth2.example.test/mcp"
+env_http_headers = { Authorization = "DEMO_HEADER" }
+[mcp_servers.codex-headers-helper]
+url = "https://auth3.example.test/mcp"
+http_headers_helper = "./scripts/codex-headers.sh"
+[mcp_servers.context-mode]
+command = "context-mode"
+""",
+    )
+    changes: dict[str, str] = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {
+            "shared-empty-allowlist": {"command": "tool-b", "disabled": True},
+            "shared-override": {
+                "command": "tool-a",
+                "disabledTools": ["claude_only"],
+                "enabledTools": ["codex_keep"],
+            },
+            "shared-plain": {
+                "command": "./scripts/shared-mcp",
+                "disabledTools": ["delete_all"],
+                "enabledTools": ["get_status"],
+            },
+            "codex-http": {
+                "url": "https://extra.example.test/mcp",
+                "headers": {"X-Client": "demo"},
+                "timeoutSeconds": 60,
+            },
+            "codex-short-tool": {"command": "node", "timeoutSeconds": 10},
+            "codex-slow-startup": {"command": "node", "timeoutSeconds": 120},
+            "codex-startup-only": {"command": "node", "timeoutSeconds": 600},
+            "codex-stdio": {
+                "command": "node",
+                "args": ["server.js"],
+                "env": {"MODE": "test"},
+                "cwd": ".",
+                "disabled": True,
+                "disabledTools": ["bad"],
+                "enabledTools": ["good"],
+                "timeoutSeconds": 31,
+            },
+        }
+    }
+    assert rerun_configure_mcp(installer, tmp_path, changes) == {}
+
+
+def test_agy_mcp_skips_gitignored_mcp_sources(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    mcp = tmp_path / ".mcp.json"
+    (tmp_path / ".gitignore").write_text(".mcp.json\n.codex/config.toml\n")
+    secret = {"type": "http", "url": "https://p.test/mcp", "headers": {"A": "local"}}
+    mcp.write_text(json.dumps({"mcpServers": {"secret-claude": secret}}))
+    write_codex(
+        tmp_path,
+        '[mcp_servers.secret-codex]\nurl = "https://p.test/mcp"\nhttp_headers = { A = "local" }\n',
+    )
+    changes: dict[str, str] = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert ".agents/mcp_config.json" not in changes
+    (tmp_path / ".gitignore").write_text(".mcp.local.json\n")
+    mcp.unlink()
+    (tmp_path / ".codex/config.toml").unlink()
+    (tmp_path / ".mcp.local.json").write_text(json.dumps({"mcpServers": {"s": secret}}))
+    mcp.symlink_to(".mcp.local.json")
+    changes = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert ".agents/mcp_config.json" not in changes
+    mcp.unlink()
+    (tmp_path / "shared.mcp.json").write_text(
+        json.dumps({"mcpServers": {"tracked-link": {"command": "tool-c"}}})
+    )
+    mcp.symlink_to("shared.mcp.json")
+    subprocess.run(
+        ["git", "add", "shared.mcp.json", ".mcp.json"], cwd=tmp_path, check=True
+    )
+    changes = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {"tracked-link": {"command": "tool-c"}}
+    }
+    (tmp_path / "[s]hared.mcp.json").write_text(
+        json.dumps({"mcpServers": {"g": secret}})
+    )
+    mcp.unlink()
+    mcp.symlink_to("[s]hared.mcp.json")
+    write_codex(tmp_path, '[mcp_servers.g]\ncommand = "safe-codex"\n')
+    changes = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {"g": {"command": "safe-codex"}}
+    }
+
+
+def test_agy_mcp_preserves_existing_entries_and_detected_precedence(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    repository(tmp_path)
+    (tmp_path / "app.dart").write_text("import 'dart:io';\n")
+    agy = tmp_path / ".agents/mcp_config.json"
+    agy.parent.mkdir(parents=True)
+    agy.write_text(json.dumps({"mcpServers": {"own": {"command": "agy-own"}}}))
+    claude = {
+        "own": {"command": "claude-own"},
+        "dart": {"command": "custom-dart", "disabledTools": ["x"]},
+        "extra-api": {"type": "http", "url": "https://extra.example.test/mcp"},
+    }
+    (tmp_path / ".mcp.json").write_text(json.dumps({"mcpServers": claude}))
+    write_codex(
+        tmp_path,
+        '[mcp_servers.own]\ncommand = "codex-own"\ndisabled_tools = ["x"]\n[mcp_servers.dart]\ncommand = "custom-dart"\ndisabled_tools = ["y"]\n',
+    )
+    changes: dict[str, str] = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {
+            "own": {"command": "agy-own"},
+            "dart": {"command": "dart", "args": ["mcp-server"]},
+            "extra-api": {"url": "https://extra.example.test/mcp"},
+        }
+    }
+    assert rerun_configure_mcp(installer, tmp_path, changes) == {}
