@@ -308,6 +308,18 @@ def test_codex_and_agy_session_start_surface_models_config_and_rules(
     assert mentioned == (present and agent in {"codex", "agy"})
 
 
+def write_policy(root: Path, base: str) -> None:
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "shipping": {**default_policy(), "base": base},
+                "packages": [],
+            }
+        )
+    )
+
+
 @pytest.mark.parametrize("target_file", [".agents/models.json", "hard-eng.gates.json"])
 def test_failed_git_read_on_trusted_base_fails_closed(
     repository: Path, monkeypatch: pytest.MonkeyPatch, target_file: str
@@ -319,15 +331,7 @@ def test_failed_git_read_on_trusted_base_fails_closed(
     (repository / ".agents/models.json").write_text(
         (SOURCE / ".agents/models.json").read_text()
     )
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "shipping": {**default_policy(), "base": "main"},
-                "packages": [],
-            }
-        )
-    )
+    write_policy(repository, "main")
     commit(repository, "commit base files")
     real_run = subprocess.run
 
@@ -363,23 +367,55 @@ def test_hotfix_branch_cannot_redirect_trusted_base_to_itself(
     repository: Path,
 ) -> None:
     git(repository, "branch", "-M", "main")
-    policy = {**default_policy(), "base": "main"}
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps({"version": 1, "shipping": policy, "packages": []})
-    )
+    write_policy(repository, "main")
     base_commit = commit(repository, "base policy")
     git(repository, "checkout", "-qb", "hotfix/self-base")
-    (repository / "hard-eng.gates.json").write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "shipping": {**policy, "base": "hotfix/self-base"},
-                "packages": [],
-            }
-        )
-    )
+    write_policy(repository, "hotfix/self-base")
     commit(repository, "self-pointing base")
     assert models.trusted_base_ref(repository) == base_commit
+
+
+def test_migrated_develop_base_beats_stale_main_policy(repository: Path) -> None:
+    git(repository, "branch", "-M", "main")
+    write_policy(repository, "main")
+    commit(repository, "stale main policy")
+    git(repository, "checkout", "-qb", "develop")
+    write_policy(repository, "develop")
+    (repository / ".agents").mkdir(exist_ok=True)
+    develop_models = json.loads((SOURCE / ".agents/models.json").read_text())
+    develop_models["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-trusted"
+    (repository / ".agents/models.json").write_text(json.dumps(develop_models))
+    develop_commit = commit(repository, "migrate base to develop")
+    git(repository, "checkout", "-qb", "feature")
+    tampered = json.loads((SOURCE / ".agents/models.json").read_text())
+    tampered["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-tampered"
+    (repository / ".agents/models.json").write_text(json.dumps(tampered))
+    commit(repository, "tamper models on feature")
+
+    trusted = models.trusted_base_ref(repository)
+    assert trusted == develop_commit
+    assert (
+        models.role_config("codex", "reasoning", repository, trusted_ref=trusted)[
+            "model"
+        ]
+        == "gpt-6.2-trusted"
+    )
+
+
+def test_detached_head_cannot_redirect_trusted_base_to_itself(
+    repository: Path,
+) -> None:
+    git(repository, "branch", "-M", "main")
+    (repository / ".agents").mkdir(exist_ok=True)
+    (repository / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    main_commit = commit(repository, "main with models")
+    git(repository, "checkout", "-qb", "feature")
+    write_policy(repository, "feature")
+    commit(repository, "first policy pointing to feature")
+    git(repository, "checkout", "-q", "--detach", "HEAD")
+    assert models.trusted_base_ref(repository) == main_commit
 
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
