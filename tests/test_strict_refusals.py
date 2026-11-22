@@ -213,6 +213,10 @@ QUOTED_SWITCHES = [
         + "override-threshold-next-line maxCognitive=40 -- reason';\n",
     ),
     (
+        "src/a.ts",
+        "/**\n * fallow-" + "override-threshold-next-line requires a reason.\n */\n",
+    ),
+    (
         "README.md",
         "Do not write fallow-" + "override-threshold-next-line in source files.\n",
     ),
@@ -239,6 +243,22 @@ def test_switch_off_text_inside_a_literal_passes(
     validate_suppressions(root, "HEAD")
     commit(root, "old")
     validate_whole_project(root)
+
+
+def test_multiline_fallow_threshold_override_block_comment_fails(
+    tmp_path: Path,
+) -> None:
+    root = project(
+        tmp_path,
+        {
+            "src/a.ts": "/*\nfallow-"
+            + "override-threshold-next-line maxCrap=45 -- reason\n*/\n"
+        },
+    )
+    assert (
+        "src/a.ts:2 holds 'fallow-" + "override-threshold-next-line maxCrap='"
+        in refusal(root)
+    )
 
 
 QUOTED_NEAR_MISSES = [
