@@ -41,6 +41,7 @@ Blockers: None
 Handoff: None
 Authority: User directly instructed fixing `sgaabdu4/hard-eng#693` and releasing `main` in chat on 2026-11-22.
 Review declined: Live Claude CLI run for `look` :: Local Claude CLI authentication on this machine is expired (`Failed to authenticate: this login reached its time limit`), so live verification used Codex CLI (`--host agy`); Claude CLI invocation and stream parsing are untouched and covered by `tests/test_look.py`.
+Review declined: CommonMark code fences or HTML comments containing literal `##` headings inside `## Outcome + scope` :: `.hooks/` has no third-party CommonMark parser dependency, and Hard Eng's own plan validator (`.hooks/plans.py:plan_sections`) already defines section boundaries with `^## +` without CommonMark block parsing; reusing `plans.plan_sections` as the single source and refusing nested `#` or `##` heading lines inside `Outcome + scope` eliminates all verdict-leak paths in 10 lines instead of maintaining a bespoke CommonMark parser, and plans passed to `look --plan` use `###` subheadings or inline backticks inside `Outcome + scope`.
 
 ## Acceptance + steps
 
@@ -57,7 +58,7 @@ Execution: Updated `.hooks/look.py`, `ux.md`, `checks.md`, `e2e/SKILL.md`, `revi
 
 ## Risks + recovery
 
-Prompt text could weaken genuine visual checks if overly broad; mitigated by scoping the ring exception strictly to `3px solid red` rectangular review outlines around changed regions and fencing `Screen scope` explicitly as data-only that never overrides visual quality rules. Recovery: revert the commit on `develop`.
+Prompt text could weaken genuine visual checks if overly broad; mitigated by scoping the ring exception strictly to exact confirmed `ring_boxes` pixel rectangles from `.hard-eng/browser` and fencing `Screen scope` explicitly as data-only that never overrides visual quality rules. Known limit: `look --plan` reuses Hard Eng's `plans.plan_sections` parser and rejects nested `#` or `##` heading lines inside `Outcome + scope` rather than implementing a bespoke CommonMark block parser (use `###` subheadings or inline backticks inside `Outcome + scope`). Recovery: revert the commits on `develop`.
 
 ## ux_reference
 
