@@ -375,10 +375,13 @@ def test_hotfix_branch_cannot_redirect_trusted_base_to_itself(
     assert models.trusted_base_ref(repository) == base_commit
 
 
-def test_migrated_develop_base_beats_stale_main_policy(repository: Path) -> None:
+def test_migrated_origin_develop_base_beats_stale_origin_main_policy(
+    repository: Path,
+) -> None:
     git(repository, "branch", "-M", "main")
     write_policy(repository, "main")
-    commit(repository, "stale main policy")
+    main_commit = commit(repository, "stale main policy")
+    git(repository, "update-ref", "refs/remotes/origin/main", main_commit)
     git(repository, "checkout", "-qb", "develop")
     write_policy(repository, "develop")
     (repository / ".agents").mkdir(exist_ok=True)
@@ -386,6 +389,7 @@ def test_migrated_develop_base_beats_stale_main_policy(repository: Path) -> None
     develop_models["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-trusted"
     (repository / ".agents/models.json").write_text(json.dumps(develop_models))
     develop_commit = commit(repository, "migrate base to develop")
+    git(repository, "update-ref", "refs/remotes/origin/develop", develop_commit)
     git(repository, "checkout", "-qb", "feature")
     tampered = json.loads((SOURCE / ".agents/models.json").read_text())
     tampered["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-tampered"
@@ -402,7 +406,7 @@ def test_migrated_develop_base_beats_stale_main_policy(repository: Path) -> None
     )
 
 
-def test_detached_head_cannot_redirect_trusted_base_to_itself(
+def test_local_develop_and_topic_policies_cannot_override_base_refs(
     repository: Path,
 ) -> None:
     git(repository, "branch", "-M", "main")
@@ -411,9 +415,14 @@ def test_detached_head_cannot_redirect_trusted_base_to_itself(
         (SOURCE / ".agents/models.json").read_text()
     )
     main_commit = commit(repository, "main with models")
-    git(repository, "checkout", "-qb", "feature")
-    write_policy(repository, "feature")
-    commit(repository, "first policy pointing to feature")
+    git(repository, "update-ref", "refs/remotes/origin/main", main_commit)
+    git(repository, "checkout", "-qb", "topic-ancestor")
+    (repository / "topic.txt").write_text("unmerged\n")
+    commit(repository, "earlier unmerged topic commit")
+    git(repository, "checkout", "-qb", "develop")
+    write_policy(repository, "topic-ancestor")
+    commit(repository, "first policy pointing to unmerged topic ancestor")
+    assert models.trusted_base_ref(repository) == main_commit
     git(repository, "checkout", "-q", "--detach", "HEAD")
     assert models.trusted_base_ref(repository) == main_commit
 

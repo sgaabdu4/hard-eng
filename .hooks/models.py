@@ -123,24 +123,21 @@ def _is_ancestor(root: Path, older: str, newer: str) -> bool:
     )
 
 
+REMOTE_ANCHORS = ("origin/HEAD", "origin/develop", "origin/main", "origin/master")
+
+
 def _anchor_bases(root: Path, local: str) -> list[tuple[str, str]]:
-    """Existing base refs paired with their merge-base to HEAD, closest ancestor first."""
-    candidates = dict.fromkeys(
-        (
-            "origin/HEAD",
-            "origin/develop",
-            "develop",
-            "origin/main",
-            "main",
-            "origin/master",
-            "master",
-            local,
-        )
-    )
-    found: list[tuple[str, str]] = []
-    for ref in candidates:
-        if point := _git_stdout(root, "merge-base", "HEAD", ref):
-            found.append((ref, point.strip()))
+    """Remote tracking base refs when present, else local default refs; closest ancestor first."""
+    remote = [
+        (ref, point.strip())
+        for ref in REMOTE_ANCHORS
+        if (point := _git_stdout(root, "merge-base", "HEAD", ref))
+    ]
+    found = remote or [
+        (ref, point.strip())
+        for ref in dict.fromkeys(("main", "master", local))
+        if (point := _git_stdout(root, "merge-base", "HEAD", ref))
+    ]
     closest = [
         pair
         for pair in found
@@ -156,34 +153,29 @@ def _first_merge_base(root: Path, refs: tuple[str, ...]) -> str | None:
     return None
 
 
-def _policy_merge_base(root: Path, ref: str) -> str | None:
+def _policy_merge_base(root: Path, ref: str, *, remote_only: bool) -> str | None:
     raw = _git_blob_if_present(root, ref, "hard-eng.gates.json")
     if raw is None or (base := _policy_base(raw)) is None:
         return None
-    return _first_merge_base(root, (f"origin/{base}", base))
+    refs = (f"origin/{base}",) if remote_only else (f"origin/{base}", base)
+    return _first_merge_base(root, refs)
 
 
 def trusted_base_ref(root: Path | None) -> str | None:
-    """Resolve the merge-base commit from committed base policy, ignoring dirty or self-pointing branch edits."""
-    if root is None:
-        return None
-    head_sha = (
-        _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}") or ""
-    ).strip()
-    if not head_sha:
+    """Resolve the merge-base commit from remote/default base refs, never trusting unmerged branch policies."""
+    if root is None or not _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}"):
         return None
     local = (
         _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
     ).strip() or "master"
     anchors = _anchor_bases(root, local)
-    older_anchor = next((point for _, point in anchors if point != head_sha), None)
+    if not anchors:
+        return None
+    remote_only = anchors[0][0].startswith("origin/")
     for ref, _ in anchors:
-        if resolved := _policy_merge_base(root, ref):
+        if resolved := _policy_merge_base(root, ref, remote_only=remote_only):
             return resolved
-    resolved = _policy_merge_base(root, "HEAD")
-    if resolved and (resolved != head_sha or older_anchor is None):
-        return resolved
-    return anchors[0][1] if anchors else None
+    return anchors[0][1]
 
 
 def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, object]:
