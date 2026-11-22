@@ -109,15 +109,15 @@ def _policy_base(raw: str) -> str | None:
     return None
 
 
-REMOTE_ANCHORS = ("origin/HEAD", "origin/main", "origin/master", "origin/develop")
-
-
 def _primary_anchor(root: Path, local: str) -> tuple[str, str, bool] | None:
-    """The single highest-priority existing base ref, preferring remote tracking refs."""
-    for ref in REMOTE_ANCHORS:
+    """The single highest-priority existing base ref using full ref names so tags cannot shadow branches."""
+    remote_names = dict.fromkeys(("HEAD", "main", "master", local, "develop"))
+    for name in remote_names:
+        ref = f"refs/remotes/origin/{name}"
         if point := _git_stdout(root, "merge-base", "HEAD", ref):
             return ref, point.strip(), True
-    for ref in dict.fromkeys(("main", "master", local, "develop")):
+    for name in dict.fromkeys(("main", "master", local, "develop")):
+        ref = f"refs/heads/{name}"
         if point := _git_stdout(root, "merge-base", "HEAD", ref):
             return ref, point.strip(), False
     return None
@@ -134,7 +134,11 @@ def _policy_merge_base(root: Path, ref: str, *, remote_only: bool) -> str | None
     raw = _git_blob_if_present(root, ref, "hard-eng.gates.json")
     if raw is None or (base := _policy_base(raw)) is None:
         return None
-    refs = (f"origin/{base}",) if remote_only else (f"origin/{base}", base)
+    refs = (
+        (f"refs/remotes/origin/{base}",)
+        if remote_only
+        else (f"refs/remotes/origin/{base}", f"refs/heads/{base}")
+    )
     return _first_merge_base(root, refs)
 
 
