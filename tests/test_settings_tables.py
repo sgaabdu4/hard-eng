@@ -178,11 +178,12 @@ def test_fallow_3_46_inline_threshold_overrides_has_a_class_and_report_rejects_i
         "functions_analyzed": 1,
     }
     validate_complexity({"findings": [], "summary": summary})
-    with pytest.raises(ValueError, match="inline threshold override"):
-        validate_complexity(
-            {
-                "findings": [],
-                "summary": summary,
-                "inline_threshold_overrides": [{"file": "a.ts", "line": 3}],
-            }
-        )
+    for field in ("inline_threshold_overrides", "inline_threshold_override_problems"):
+        with pytest.raises(ValueError, match="inline threshold override"):
+            validate_complexity(
+                {
+                    "findings": [],
+                    "summary": summary,
+                    field: [{"file": "a.ts", "line": 3}],
+                }
+            )
