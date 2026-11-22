@@ -841,9 +841,16 @@ tool_timeout_sec = 30.5
 command = "node"
 startup_timeout_sec = 120
 tool_timeout_sec = 5
+[mcp_servers.codex-short-tool]
+command = "node"
+environment_id = "local"
+tool_timeout_sec = 5
 [mcp_servers.codex-remote]
 command = "node"
 environment_id = "remote-env-1"
+[mcp_servers.codex-remote-http]
+url = "https://remote.example.test/mcp"
+environment_id = "remote-env-2"
 [mcp_servers.codex-zero-tools]
 command = "node"
 enabled_tools = []
@@ -885,6 +892,7 @@ command = "context-mode"
                 "headers": {"X-Client": "demo"},
                 "timeoutSeconds": 60,
             },
+            "codex-short-tool": {"command": "node", "timeoutSeconds": 10},
             "codex-slow-startup": {"command": "node", "timeoutSeconds": 120},
             "codex-stdio": {
                 "command": "node",
@@ -919,6 +927,16 @@ def test_agy_mcp_skips_gitignored_mcp_sources(
         '[mcp_servers.secret-codex]\nurl = "https://private.example.test/mcp"\nhttp_headers = { Authorization = "Bearer local-only" }\n',
     )
     changes: dict[str, str] = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert ".agents/mcp_config.json" not in changes
+    (tmp_path / ".gitignore").write_text(".mcp.local.json\n")
+    (tmp_path / ".mcp.json").unlink()
+    (tmp_path / ".codex/config.toml").unlink()
+    (tmp_path / ".mcp.local.json").write_text(
+        json.dumps({"mcpServers": {"secret-link": secret}})
+    )
+    (tmp_path / ".mcp.json").symlink_to(".mcp.local.json")
+    changes = {}
     assert installer.configure_mcp(tmp_path, changes) == []
     assert ".agents/mcp_config.json" not in changes
 

@@ -21,7 +21,7 @@ Single source: `.hooks/mcp_setup.py::configure_agy_mcp` and `_mirror_agy_servers
 
 Blockers: None
 Handoff: Approval
-Review declined: Mapping Codex tool_timeout_sec to Antigravity timeoutSeconds cannot preserve separate startup_timeout_sec and tool_timeout_sec deadlines :: Antigravity's mcp_config.json schema exposes only a single timeoutSeconds field for both startup and tool calls; when both are set, mirroring uses max(tool_timeout_sec, startup_timeout_sec) so startup is never cut short below startup_timeout_sec. Stated schema limit.
+Review declined: Mapping Codex tool_timeout_sec to Antigravity timeoutSeconds cannot preserve separate startup_timeout_sec and tool_timeout_sec deadlines :: Antigravity's mcp_config.json schema exposes only a single timeoutSeconds field for both startup and tool calls; mirroring uses max(tool_timeout_sec, startup_timeout_sec or Codex's 10-second default) so startup is never cut short below the Codex startup deadline. Stated schema limit.
 Authority: Autonomous — the user explicitly authorized implementing, verifying, committing, pushing, opening and merging the PR to `develop`, and releasing to `main` on 2026-11-22.
 Decisions:
 
