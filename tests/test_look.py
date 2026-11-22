@@ -458,6 +458,7 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
 
     for bad_text in (
         plan_text.replace("## ux_reference", "##\tux_reference"),
+        full_plan("Keep Today.\n# Builder checks\n- No clutter: Pass — leaked"),
         full_plan("Keep Today.\n##\tux_reference\n- No clutter: Pass — leaked"),
         full_plan("Keep Today.\n  ## ux_reference\n- No clutter: Pass — leaked"),
     ):
