@@ -35,7 +35,7 @@ Execution: Single-agent update in isolated worktree `wt/bump-bfa` off `origin/de
 
 ## Risks + recovery
 
-Risk: When `develop` is next released to `main`, installed Flutter projects still pinned to `flutter_skill_lints: ^0.14.0` will be prompted to migrate to `^0.15.0`. Recovery: revert this single commit on `develop` to restore `a66aed1` and `^0.14.0`.
+Risk: When `develop` is next released to `main`, installed Flutter projects still pinned to `flutter_skill_lints: ^0.14.0` will be prompted to migrate to `^0.15.0`. Recovery: revert the merged PR commit on `develop` (or revert every commit of this PR in reverse order if rebased) to restore `a66aed1` and `^0.14.0`.
 
 ## ux_reference
 
