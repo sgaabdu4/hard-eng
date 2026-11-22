@@ -375,20 +375,19 @@ def test_hotfix_branch_cannot_redirect_trusted_base_to_itself(
     assert models.trusted_base_ref(repository) == base_commit
 
 
-def test_migrated_origin_develop_base_beats_stale_origin_main_policy(
+def test_declared_develop_base_on_origin_main_resolves_origin_develop(
     repository: Path,
 ) -> None:
     git(repository, "branch", "-M", "main")
-    write_policy(repository, "main")
-    main_commit = commit(repository, "stale main policy")
+    write_policy(repository, "develop")
+    main_commit = commit(repository, "main policy targeting develop")
     git(repository, "update-ref", "refs/remotes/origin/main", main_commit)
     git(repository, "checkout", "-qb", "develop")
-    write_policy(repository, "develop")
     (repository / ".agents").mkdir(exist_ok=True)
     develop_models = json.loads((SOURCE / ".agents/models.json").read_text())
     develop_models["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-trusted"
     (repository / ".agents/models.json").write_text(json.dumps(develop_models))
-    develop_commit = commit(repository, "migrate base to develop")
+    develop_commit = commit(repository, "develop with models")
     git(repository, "update-ref", "refs/remotes/origin/develop", develop_commit)
     git(repository, "checkout", "-qb", "feature")
     tampered = json.loads((SOURCE / ".agents/models.json").read_text())
@@ -406,7 +405,7 @@ def test_migrated_origin_develop_base_beats_stale_origin_main_policy(
     )
 
 
-def test_local_develop_and_topic_policies_cannot_override_base_refs(
+def test_pushed_develop_and_topic_policies_cannot_override_origin_main(
     repository: Path,
 ) -> None:
     git(repository, "branch", "-M", "main")
@@ -423,7 +422,6 @@ def test_local_develop_and_topic_policies_cannot_override_base_refs(
     write_policy(repository, "topic-ancestor")
     first_topic = commit(repository, "first policy pointing to unmerged topic ancestor")
     git(repository, "update-ref", "refs/remotes/origin/develop", first_topic)
-    git(repository, "update-ref", "-d", "refs/remotes/origin/develop")
     git(repository, "update-ref", "refs/remotes/origin/topic-ancestor", first_topic)
     (repository / "topic.txt").write_text("second commit\n")
     commit(repository, "second topic commit ahead of pushed ref")
