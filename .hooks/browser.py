@@ -373,7 +373,7 @@ def shoot_page(
         route = json.loads(
             require(run_tool(tool, folder, session, "eval", "location.pathname"))
         )
-        write_record(root, image, width, findings, str(route))
+        write_record(root, image, width, findings, str(route), rings=rings)
     except BaseException:
         image.unlink(missing_ok=True)
         image.with_suffix(".json").unlink(missing_ok=True)
