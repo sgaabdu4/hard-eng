@@ -753,7 +753,7 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
     def tool(
         name: str, folder: Path, session: str, *arguments: str, text: str | None = None
     ) -> subprocess.CompletedProcess[str]:
-        del name, session, text
+        del name, session
         if arguments[:1] == ("screenshot",):
             (folder / arguments[-1]).write_bytes(b"image")
         if arguments[:2] == ("eval", browser.FRAME_CHECK):
@@ -763,7 +763,10 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
             if len(checks) == 2:
                 return subprocess.CompletedProcess(arguments, 1, "", "session closed")
             return subprocess.CompletedProcess(arguments, 0, "0", "")
-        reply = json.dumps("[]") if arguments[:1] == ("eval",) else ""
+        if arguments[:1] == ("eval",) and text and "data-he-ring" in text:
+            reply = json.dumps('{"missing": [], "boxes": []}')
+        else:
+            reply = json.dumps("[]") if arguments[:1] == ("eval",) else ""
         if arguments[:1] == ("a11y",):
             reply = '{"data": {"violations": []}}'
         return subprocess.CompletedProcess(arguments, 0, reply, "")
