@@ -514,6 +514,20 @@ def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> 
     git(orphan, "checkout", "-q", "feature")
     assert models.trusted_base_ref(orphan) == dev_commit
 
+    git(orphan, "checkout", "-q", "main")
+    write_policy(orphan, "develop")
+    orphan_main_dev = commit(orphan, "orphan main declaring develop")
+    git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main_dev)
+    git(orphan, "update-ref", "refs/remotes/origin/master", feature_commit)
+    git(
+        orphan,
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    )
+    git(orphan, "checkout", "-q", "feature")
+    assert models.trusted_base_ref(orphan) == dev_commit
+
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
     text = (SOURCE / ".claude/rules/model-roles.md").read_text()
