@@ -171,12 +171,7 @@ def _policy_merge_base(root: Path, ref: str, *, remote_only: bool) -> str | None
 
 def trusted_base_ref(root: Path | None) -> str | None:
     """Resolve the merge-base commit from remote/default base refs, never trusting unmerged branch policies."""
-    if root is None:
-        return None
-    head_sha = (
-        _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}") or ""
-    ).strip()
-    if not head_sha:
+    if root is None or not _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}"):
         return None
     local = (
         _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
@@ -187,10 +182,6 @@ def trusted_base_ref(root: Path | None) -> str | None:
     remote_only = anchors[0][0].startswith("origin/")
     for ref, _ in anchors:
         if resolved := _policy_merge_base(root, ref, remote_only=remote_only):
-            return resolved
-    if remote_only:
-        resolved = _policy_merge_base(root, "HEAD", remote_only=True)
-        if resolved and resolved != head_sha:
             return resolved
     return anchors[0][1]
 
