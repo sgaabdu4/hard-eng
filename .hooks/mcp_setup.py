@@ -752,14 +752,18 @@ def _merge_codex_tool_filters(target: JsonObject, codex: JsonValue) -> None:
 
 
 CODEX_DEFAULT_STARTUP_TIMEOUT = 10
+CODEX_DEFAULT_TOOL_TIMEOUT = 60
 
 
 def _codex_timeout(settings: JsonObject) -> int | None:
     tool = _timeout_seconds(settings.get("tool_timeout_sec"))
-    if tool is None:
-        return None
     startup = _timeout_seconds(settings.get("startup_timeout_sec"))
-    return max(tool, startup if startup is not None else CODEX_DEFAULT_STARTUP_TIMEOUT)
+    if tool is None and startup is None:
+        return None
+    return max(
+        tool if tool is not None else CODEX_DEFAULT_TOOL_TIMEOUT,
+        startup if startup is not None else CODEX_DEFAULT_STARTUP_TIMEOUT,
+    )
 
 
 def _agy_http_from_codex(settings: JsonObject, url: str) -> JsonObject | None:
@@ -804,38 +808,31 @@ def _agy_server_from_codex(settings: JsonValue) -> JsonObject | None:
     return mirrored
 
 
-def _path_git_ignored(root: Path, relative: str) -> bool:
+def _is_git_ignored(root: Path, name: str) -> bool:
+    path = root / name
+    if not path.exists() and not path.is_symlink():
+        return False
+    if path.resolve() != (root.resolve() / name):
+        return True
     ignored = subprocess.run(
-        ["git", "check-ignore", "-q", "--", relative],
+        ["git", "check-ignore", "-q", "--", name],
         cwd=root,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
-    if ignored.returncode != 0:
+    if ignored.returncode == 1:
         return False
+    if ignored.returncode != 0:
+        return (root / ".git").exists()
     tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", "--", relative],
+        ["git", "ls-files", "--error-unmatch", "--", name],
         cwd=root,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
     return tracked.returncode != 0
-
-
-def _is_git_ignored(root: Path, name: str) -> bool:
-    if _path_git_ignored(root, name):
-        return True
-    path = root / name
-    if not path.exists() and not path.is_symlink():
-        return False
-    resolved = path.resolve()
-    root_resolved = root.resolve()
-    if not resolved.is_relative_to(root_resolved):
-        return True
-    target = resolved.relative_to(root_resolved).as_posix()
-    return target != name and _path_git_ignored(root, target)
 
 
 def _mirror_agy_servers(

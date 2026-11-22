@@ -841,6 +841,10 @@ tool_timeout_sec = 30.5
 command = "node"
 startup_timeout_sec = 120
 tool_timeout_sec = 5
+[mcp_servers.codex-startup-only]
+command = "node"
+environment_id = "local"
+startup_timeout_sec = 600
 [mcp_servers.codex-short-tool]
 command = "node"
 environment_id = "local"
@@ -894,6 +898,7 @@ command = "context-mode"
             },
             "codex-short-tool": {"command": "node", "timeoutSeconds": 10},
             "codex-slow-startup": {"command": "node", "timeoutSeconds": 120},
+            "codex-startup-only": {"command": "node", "timeoutSeconds": 600},
             "codex-stdio": {
                 "command": "node",
                 "args": ["server.js"],

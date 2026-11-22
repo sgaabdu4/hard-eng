@@ -21,7 +21,8 @@ Single source: `.hooks/mcp_setup.py::configure_agy_mcp` and `_mirror_agy_servers
 
 Blockers: None
 Handoff: Approval
-Review declined: Mapping Codex tool_timeout_sec to Antigravity timeoutSeconds cannot preserve separate startup_timeout_sec and tool_timeout_sec deadlines :: Antigravity's mcp_config.json schema exposes only a single timeoutSeconds field for both startup and tool calls; mirroring uses max(tool_timeout_sec, startup_timeout_sec or Codex's 10-second default) so startup is never cut short below the Codex startup deadline. Stated schema limit.
+Review declined: Mapping Codex tool_timeout_sec to Antigravity timeoutSeconds cannot preserve separate startup_timeout_sec and tool_timeout_sec deadlines :: Antigravity's mcp_config.json schema exposes only a single timeoutSeconds field for both startup and tool calls; when either Codex timeout is set, mirroring uses max(tool_timeout_sec or Codex's 60-second default, startup_timeout_sec or Codex's 10-second default) so neither startup nor tool execution is cut short below its Codex deadline. Stated schema limit.
+Review declined: Skipping a Git-ignored or symlinked .codex/config.toml drops its local enabled_tools = [] restriction for a server already declared in tracked .mcp.json :: A Git-ignored or symlinked .codex/config.toml holds machine-local overrides that must never be copied into tracked .agents/mcp_config.json; tracked .mcp.json already defines the repository's shared server and tool scope, and setup preserves any local override the developer puts directly in .agents/mcp_config.json. Stated boundary.
 Authority: Autonomous — the user explicitly authorized implementing, verifying, committing, pushing, opening and merging the PR to `develop`, and releasing to `main` on 2026-11-22.
 Decisions:
 
