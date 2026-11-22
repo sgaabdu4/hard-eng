@@ -1,7 +1,9 @@
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
 import yaml
+from generated_marks import proven_copies
 from test_setup import repository
 
 
@@ -139,11 +141,41 @@ def test_dart_setup_skips_submodules_malformed_fixtures_and_proven_copies(
     bad_fixture = consumer / "test/fixtures/bad"
     bad_fixture.mkdir(parents=True)
     (bad_fixture / "analysis_options.yaml").write_text("plugins: [unclosed\n")
+    nul_fixture = consumer / "test/fixtures/nul_include"
+    nul_fixture.mkdir(parents=True)
+    (nul_fixture / "analysis_options.yaml").write_text(
+        yaml.safe_dump({"include": "invalid\0path.yaml"}, sort_keys=False)
+    )
     standalone_fixture = consumer / "test/fixtures/standalone"
     standalone_fixture.mkdir(parents=True)
     (standalone_fixture / "analysis_options.yaml").write_text(
         yaml.safe_dump({"plugins": {"flutter_skill_lints": "^0.14.0"}}, sort_keys=False)
     )
+    (consumer / "test/analysis_options.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "include": [
+                    "../analysis_options.yaml",
+                    "../vendored/shared/integration_test/analysis_options.yaml",
+                ],
+                "plugins": {"flutter_skill_lints": "^0.14.0"},
+            },
+            sort_keys=False,
+        )
+    )
+    subprocess.run(
+        ["git", "add", ".gitattributes", "packages", "functions"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-qm", "seed proven copy"],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert proven_copies(tmp_path, consumer) == {
+        "functions/app/vendored/shared": "packages/shared"
+    }
 
     changes: dict[str, str] = {}
     installer.configure_dart(
@@ -153,8 +185,12 @@ def test_dart_setup_skips_submodules_malformed_fixtures_and_proven_copies(
         changes,
     )
     assert "functions/app/analysis_options.yaml" in changes
+    assert "functions/app/test/analysis_options.yaml" in changes
     assert "functions/app/test/submod/analysis_options.yaml" not in changes
     assert "functions/app/test/fixtures/bad/analysis_options.yaml" not in changes
+    assert (
+        "functions/app/test/fixtures/nul_include/analysis_options.yaml" not in changes
+    )
     assert "functions/app/test/fixtures/standalone/analysis_options.yaml" not in changes
     assert (
         "functions/app/vendored/shared/integration_test/analysis_options.yaml"

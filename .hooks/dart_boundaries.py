@@ -148,7 +148,10 @@ def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[P
     for entry in entries:
         if not isinstance(entry, str) or entry.startswith("package:"):
             continue
-        candidate = (path.parent / entry).resolve()
+        try:
+            candidate = (path.parent / entry).resolve()
+        except (OSError, ValueError):
+            continue
         if candidate.is_file() and candidate.is_relative_to(base):
             found.append(candidate)
     return found
@@ -186,6 +189,11 @@ def _inside_nested_repo(path: Path, base: Path) -> bool:
     return False
 
 
+def _proven_copy_roots(root: Path) -> tuple[Path, ...]:
+    top = repository_top(root)
+    return tuple((top / held).resolve() for held in proven_copies(root, top))
+
+
 def _includes_target(
     root: Path,
     path: Path,
@@ -212,7 +220,10 @@ def _includes_target(
     for entry in entries:
         if not isinstance(entry, str) or entry.startswith("package:"):
             continue
-        candidate = (resolved.parent / entry).resolve()
+        try:
+            candidate = (resolved.parent / entry).resolve()
+        except (OSError, ValueError):
+            continue
         if candidate == target:
             return True
         if candidate.is_relative_to(base) and _includes_target(
@@ -228,6 +239,7 @@ def _migrate_dart_plugin_file(
     source: Path,
     changes: dict[str, str],
     visited: set[Path],
+    copy_roots: tuple[Path, ...],
 ) -> None:
     from copy import deepcopy
 
@@ -242,6 +254,7 @@ def _migrate_dart_plugin_file(
         or not resolved.is_file()
         or not resolved.is_relative_to(base)
         or _inside_nested_repo(resolved, base)
+        or any(resolved.is_relative_to(copy_root) for copy_root in copy_roots)
     ):
         return
     visited.add(resolved)
@@ -255,7 +268,9 @@ def _migrate_dart_plugin_file(
     migrate_dart_plugins(child, source)
     if child != original:
         changes[relative] = yaml.safe_dump(child, sort_keys=False)
-    migrate_included_dart_plugins(root, resolved, child, source, changes, visited)
+    migrate_included_dart_plugins(
+        root, resolved, child, source, changes, visited, copy_roots
+    )
 
 
 def migrate_included_dart_plugins(
@@ -265,10 +280,12 @@ def migrate_included_dart_plugins(
     source: Path,
     changes: dict[str, str],
     seen: set[Path] | None = None,
+    copy_roots: tuple[Path, ...] | None = None,
 ) -> None:
     visited = seen if seen is not None else {path.resolve()}
+    copies = _proven_copy_roots(root) if copy_roots is None else copy_roots
     for included in local_dart_includes(root, path, options):
-        _migrate_dart_plugin_file(root, included, source, changes, visited)
+        _migrate_dart_plugin_file(root, included, source, changes, visited, copies)
 
 
 def migrate_nested_dart_plugins(
@@ -283,17 +300,16 @@ def migrate_nested_dart_plugins(
     target = (directory / "analysis_options.yaml").resolve()
     visited = seen if seen is not None else {target}
     excluded = {child.removesuffix("/**") for child in children}
-    top = repository_top(root)
-    if directory.resolve().is_relative_to(top):
-        prefix = folder_prefix(directory.resolve().relative_to(top).as_posix())
-        excluded.update(
-            held[len(prefix) :]
-            for held in proven_copies(root, directory)
-            if held.startswith(prefix)
-        )
+    copy_roots = _proven_copy_roots(root)
+    base_dir = directory.resolve()
+    for copy_root in copy_roots:
+        if copy_root.is_relative_to(base_dir):
+            excluded.add(copy_root.relative_to(base_dir).as_posix())
     for nested in nested_dart_options(directory, sources, frozenset(excluded)):
         if _includes_target(root, nested, target):
-            _migrate_dart_plugin_file(root, nested, source, changes, visited)
+            _migrate_dart_plugin_file(
+                root, nested, source, changes, visited, copy_roots
+            )
 
 
 def dart_options(path: Path) -> DartOptions:
