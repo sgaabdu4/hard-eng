@@ -9,7 +9,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from change_size import size_verdict
-from models import HOSTS, challenge_order_for, cli_flags
+from models import HOSTS, challenge_order_for, cli_flags, trusted_base_ref
 from plans import default_branch_point
 from process_group import run_in_group
 
@@ -102,8 +102,7 @@ def host_for(host: str | None) -> str:
 
 def reviewers_for(host: str | None, root: Path | None = None) -> tuple[str, ...]:
     """Ordered fallback reviewers: the other agents, never the running host."""
-    trusted_ref = default_branch_point(root) if root is not None else None
-    return challenge_order_for(host_for(host), root, trusted_ref=trusted_ref)
+    return challenge_order_for(host_for(host), root, trusted_ref=trusted_base_ref(root))
 
 
 def reviewer_for(host: str | None, root: Path | None = None) -> str:
@@ -112,9 +111,7 @@ def reviewer_for(host: str | None, root: Path | None = None) -> str:
 
 
 def command(reviewer: str, prompt: str, root: Path) -> list[str]:
-    flags = cli_flags(
-        reviewer, "reasoning", root, trusted_ref=default_branch_point(root)
-    )
+    flags = cli_flags(reviewer, "reasoning", root, trusted_ref=trusted_base_ref(root))
     if reviewer == "codex":
         # User plugins bring skills, MCP tools and hooks; `-c` stays valid on Codex releases without this key.
         return [

@@ -308,6 +308,43 @@ def test_codex_and_agy_session_start_surface_models_config_and_rules(
     assert mentioned == (present and agent in {"codex", "agy"})
 
 
+def test_failed_git_read_on_trusted_base_fails_closed(
+    repository: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    (repository / ".agents").mkdir(exist_ok=True)
+    (repository / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    commit(repository, "commit models")
+    real_run = subprocess.run
+
+    def fail_show(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        capture_output: bool = False,
+        text: bool = False,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["git", "show"] and args[2].endswith(":.agents/models.json"):
+            return subprocess.CompletedProcess(
+                args, 128, stdout="", stderr="fatal: missing promisor object"
+            )
+        return real_run(
+            args,
+            cwd=cwd,
+            capture_output=capture_output,
+            text=text,
+            check=check,
+        )
+
+    monkeypatch.setattr(models.subprocess, "run", fail_show)
+    with pytest.raises(ValueError, match="unreadable trusted base"):
+        models.load_models(repository, trusted_ref="HEAD")
+
+
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
     text = (SOURCE / ".claude/rules/model-roles.md").read_text()
     assert ".agents/models.json" in text
