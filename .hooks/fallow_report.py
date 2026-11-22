@@ -375,7 +375,9 @@ def validate_health(report: JsonObject) -> None:
 def validate_complexity(complexity: object) -> None:
     if not isinstance(complexity, dict) or complexity["findings"] != []:
         raise ValueError("Fallow audit reports missing complexity analysis or findings")
-    if complexity.get("inline_threshold_overrides"):
+    if complexity.get("inline_threshold_overrides") or complexity.get(
+        "inline_threshold_override_problems"
+    ):
         raise ValueError(
             "Fallow reports inline threshold override comments; remove them and simplify the functions"
         )
