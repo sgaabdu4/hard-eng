@@ -274,7 +274,7 @@ TEST_OFF = {
     **dict.fromkeys(JAVASCRIPT, r"\bskip:\s*(true\b|['\"`])|\bonly:\s*true\b"),
 }
 SECURITY_OFF = re.compile(
-    r"\bno(semgrep|sem)\b|gitleaks:allow|jscpd:ignore|fallow-ignore"
+    r"\bno(semgrep|sem)\b|gitleaks:allow|jscpd:ignore|fallow-(?:ignore|override-threshold)"
     r"|shellcheck\s+(?:[\w-]+=\S+\s+)*(?:(?:disable|shell)=|source=\S*)|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )
