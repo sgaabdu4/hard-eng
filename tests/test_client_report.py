@@ -1,5 +1,6 @@
 """The client report check refuses a report that left the saved template or shows cross-reference codes."""
 
+import ast
 import importlib
 import subprocess
 import sys
@@ -261,6 +262,17 @@ def test_leftover_placeholder_text_is_refused_and_plain_brackets_pass(
     assert problems(fine, template) == []
 
 
+def _run_script(path: Path) -> tuple[int, str]:
+    done = subprocess.run(
+        [sys.executable, "-B", str(SCRIPT), path.name],
+        cwd=path.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.returncode, done.stdout
+
+
 def test_the_command_finds_the_template_from_the_git_top_level(
     tmp_path: Path,
 ) -> None:
@@ -275,57 +287,72 @@ def test_the_command_finds_the_template_from_the_git_top_level(
     bare.mkdir()
     loose = write(bare, "report.html")
 
-    def run(path: Path) -> tuple[int, str]:
-        done = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), path.name],
-            cwd=path.parent,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return done.returncode, done.stdout
-
-    assert run(report) == (0, "")
-    code, out = run(loose)
+    assert _run_script(report) == (0, "")
+    code, out = _run_script(loose)
     assert code == 1
     assert out == "run inside the project's git checkout\n"
-    broken_wt = tmp_path.parent / (tmp_path.name + "-broken-wt")
-    broken_wt.mkdir()
-    (broken_wt / ".git").write_text("gitdir: /nonexistent/worktree/gitdir\n")
-    (broken_wt / "docs/client-report").mkdir(parents=True)
-    write(broken_wt / "docs/client-report", "template.html")
-    assert run(write(broken_wt, "report.html")) == (
+    empty_nested = tmp_path / "empty-nested"
+    (empty_nested / ".git").mkdir(parents=True)
+    assert _run_script(write(empty_nested, "report.html")) == (0, "")
+    git_inner = tmp_path / ".git/hooks"
+    git_inner.mkdir(parents=True, exist_ok=True)
+    assert _run_script(write(git_inner, "report.html")) == (
         1,
         "run inside the project's git checkout\n",
     )
+    (tmp_path / "docs/client-report/template.html").unlink()
+    assert _run_script(report)[1].startswith("no saved template at ")
+
+
+def test_the_command_validates_gitdir_and_worktree_metadata(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "docs/client-report").mkdir(parents=True)
+    write(tmp_path / "docs/client-report", "template.html")
+    outside = (1, "run inside the project's git checkout\n")
+
+    broken_wt = tmp_path.parent / (tmp_path.name + "-broken-wt")
+    (broken_wt / "docs/client-report").mkdir(parents=True)
+    write(broken_wt / "docs/client-report", "template.html")
+    (broken_wt / ".git").write_text("gitdir: /nonexistent/worktree/gitdir\n")
+    assert _run_script(write(broken_wt, "report.html")) == outside
+
     nested_stale = tmp_path / "nested-stale"
     nested_stale.mkdir()
     (nested_stale / ".git").write_text("gitdir: /nonexistent/nested/gitdir\n")
-    assert run(write(nested_stale, "report.html")) == (
-        1,
-        "run inside the project's git checkout\n",
-    )
+    assert _run_script(write(nested_stale, "report.html")) == outside
+
     missing_common = tmp_path.parent / (tmp_path.name + "-missing-common")
-    missing_common.mkdir()
+    (missing_common / "docs/client-report").mkdir(parents=True)
+    write(missing_common / "docs/client-report", "template.html")
     fake_gitdir = missing_common / "wt-meta"
     fake_gitdir.mkdir()
     (fake_gitdir / "HEAD").write_text("ref: refs/heads/main\n")
     (fake_gitdir / "commondir").write_text("../missing-common-dir\n")
     (missing_common / ".git").write_text(f"gitdir: {fake_gitdir}\n")
-    (missing_common / "docs/client-report").mkdir(parents=True)
-    write(missing_common / "docs/client-report", "template.html")
-    assert run(write(missing_common, "report.html")) == (
-        1,
-        "run inside the project's git checkout\n",
-    )
-    git_inner = tmp_path / ".git/hooks"
-    git_inner.mkdir(parents=True, exist_ok=True)
-    assert run(write(git_inner, "report.html")) == (
-        1,
-        "run inside the project's git checkout\n",
-    )
-    (tmp_path / "docs/client-report/template.html").unlink()
-    assert run(report)[1].startswith("no saved template at ")
+    assert _run_script(write(missing_common, "report.html")) == outside
+
+    missing_refs = tmp_path.parent / (tmp_path.name + "-missing-refs")
+    (missing_refs / "docs/client-report").mkdir(parents=True)
+    write(missing_refs / "docs/client-report", "template.html")
+    (missing_refs / "common/objects").mkdir(parents=True)
+    wt_no_refs = missing_refs / "wt-meta"
+    wt_no_refs.mkdir()
+    (wt_no_refs / "HEAD").write_text("ref: refs/heads/main\n")
+    (wt_no_refs / "commondir").write_text("../common\n")
+    (missing_refs / ".git").write_text(f"gitdir: {wt_no_refs}\n")
+    assert _run_script(write(missing_refs, "report.html")) == outside
+
+    symlink_wt = tmp_path.parent / (tmp_path.name + "-symlink-wt")
+    (symlink_wt / "docs/client-report").mkdir(parents=True)
+    write(symlink_wt / "docs/client-report", "template.html")
+    wt_meta = symlink_wt / "wt-meta"
+    wt_meta.mkdir()
+    (wt_meta / "HEAD").write_text("ref: refs/heads/main\n")
+    (wt_meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
+    (symlink_wt / ".git").symlink_to(wt_meta)
+    assert _run_script(write(symlink_wt, "report.html")) == (0, "")
 
 
 def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
@@ -357,6 +384,18 @@ def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
 
 
 def test_check_report_script_passes_strict_ruff_subprocess_rules() -> None:
+    tree = ast.parse(SCRIPT.read_text())
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "subprocess" not in imported
     done = subprocess.run(
         ["uvx", "ruff@latest", "check", "--select", "S603,S607", str(SCRIPT)],
         capture_output=True,

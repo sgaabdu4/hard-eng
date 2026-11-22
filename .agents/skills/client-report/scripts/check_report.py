@@ -116,17 +116,7 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
-def _is_valid_git_root(folder: Path) -> bool:
-    marker = folder / ".git"
-    if marker.is_dir():
-        return (marker / "HEAD").is_file() and (marker / "objects").is_dir()
-    if not marker.is_file():
-        return False
-    lines = marker.read_text(errors="replace").splitlines()
-    if not lines or not lines[0].startswith("gitdir:"):
-        return False
-    target = Path(lines[0].removeprefix("gitdir:").strip())
-    gitdir = target if target.is_absolute() else (folder / target)
+def _is_valid_gitdir(gitdir: Path) -> bool:
     if not (gitdir / "HEAD").is_file():
         return False
     commondir = gitdir / "commondir"
@@ -135,8 +125,9 @@ def _is_valid_git_root(folder: Path) -> bool:
         common = (
             common_target if common_target.is_absolute() else (gitdir / common_target)
         )
-        return (common / "objects").is_dir()
-    return (gitdir / "objects").is_dir()
+    else:
+        common = gitdir
+    return (common / "objects").is_dir() and (common / "refs").is_dir()
 
 
 def saved_template() -> Path | None:
@@ -144,8 +135,18 @@ def saved_template() -> Path | None:
     if ".git" in cwd.parts:
         return None
     for folder in (cwd, *cwd.parents):
-        if (folder / ".git").exists():
-            return folder / TEMPLATE if _is_valid_git_root(folder) else None
+        marker = folder / ".git"
+        if marker.is_dir():
+            if _is_valid_gitdir(marker):
+                return folder / TEMPLATE
+            continue
+        if marker.is_file():
+            lines = marker.read_text(errors="replace").splitlines()
+            if not lines or not lines[0].startswith("gitdir:"):
+                return None
+            target = Path(lines[0].removeprefix("gitdir:").strip())
+            gitdir = target if target.is_absolute() else (folder / target)
+            return folder / TEMPLATE if _is_valid_gitdir(gitdir) else None
     return None
 
 
