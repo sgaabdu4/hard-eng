@@ -394,11 +394,23 @@ def words_without_acceptance_refs(text: str) -> list[str] | None:
     return plan_words(f"{text[: heading.end()]}\n{body}\n{text[end:]}")
 
 
-def _repo_rel(root: Path, text: str) -> str:
+def _repo_paths(root: Path, text: str) -> set[str]:
+    paths = {PurePosixPath(text).as_posix()}
     try:
-        return (root / text).resolve().relative_to(root.resolve()).as_posix()
+        paths.add((root / text).resolve().relative_to(root.resolve()).as_posix())
     except ValueError:
-        return PurePosixPath(text).as_posix()
+        pass
+    return paths
+
+
+def _acceptance_row_refs(text: str) -> list[list[tuple[str, str]]]:
+    from plans import CHECKBOX_REST, TEST_REFERENCE
+
+    sections = plan_sections(text, allow_placeholders=True)
+    return [
+        [(path, name.split("[", 1)[0]) for path, name in TEST_REFERENCE.findall(line)]
+        for line in CHECKBOX_REST.findall(sections["Acceptance + steps"])
+    ]
 
 
 def held_text(root: Path, reference: str, name: str) -> str | None:
@@ -440,24 +452,29 @@ def verified_test_ref_repair(
     ):
         return False
     try:
-        new_refs, _ = acceptance_tests(plan_sections(current, allow_placeholders=True))
+        acceptance_tests(plan_sections(current, allow_placeholders=True))
+        new_rows = _acceptance_row_refs(current)
     except ValueError:
         return False
-    base_ref_sets: list[set[tuple[str, str]]] = []
+    base_rows: list[list[list[tuple[str, str]]]] = []
     for text in base_texts:
         assert text is not None
         try:
-            base_ref_sets.append(
-                set(acceptance_tests(plan_sections(text, allow_placeholders=True))[0])
-            )
+            base_rows.append(_acceptance_row_refs(text))
         except ValueError:
-            base_ref_sets.append(set())
-    common_old_refs = set.intersection(*base_ref_sets) if base_ref_sets else set()
-    checked = [
-        ref
-        for ref in new_refs
-        if ref not in common_old_refs or _repo_rel(root, ref[0]) in changed
-    ]
+            base_rows.append([])
+    checked: list[tuple[str, str]] = []
+    for index, row in enumerate(new_rows):
+        common = (
+            set.intersection(*(set(rows[index]) for rows in base_rows))
+            if base_rows and all(index < len(rows) for rows in base_rows)
+            else set()
+        )
+        checked.extend(
+            ref
+            for ref in row
+            if ref not in common or (_repo_paths(root, ref[0]) & changed)
+        )
     if missing := missing_tests(root, checked):
         raise ValueError(
             f"{name}: acceptance names tests that do not exist: "
