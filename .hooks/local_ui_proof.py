@@ -11,8 +11,12 @@ from typing import cast
 from gate_config import ALL_ZERO_OBJECT_ID
 from plans import _is_test as is_test_path
 
-PLAN_PATH_TOKEN = re.compile(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?")
-PLAN_ROUTE_TOKEN = re.compile(r"(?:^|[\s`(/])(/[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*)")
+PLAN_PATH_TOKEN = re.compile(
+    r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?|[A-Za-z0-9_.-]+/"
+)
+PLAN_ROUTE_TOKEN = re.compile(
+    r"(?:^|[\s`(/])(/(?:[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*)?)(?=$|[\s`),.;:])"
+)
 from ui_proof import (
     UNCHANGED_LINE,
     Change,
@@ -159,7 +163,9 @@ def _git_index_mtime_ns(root: Path) -> int:
 
 
 def _dirty_ui_paths(root: Path, patterns: list[str]) -> list[str]:
-    raw = _git_stdout(root, "-c", "core.quotepath=off", "status", "--porcelain", "-z")
+    raw = _git_stdout(
+        root, "-c", "core.quotepath=off", "status", "--porcelain", "-uall", "-z"
+    )
     if not raw:
         return []
     found: list[str] = []
@@ -181,11 +187,13 @@ def _dirty_ui_paths(root: Path, patterns: list[str]) -> list[str]:
     return found
 
 
-def _dirty_ui_mtime_ns(root: Path, patterns: list[str]) -> tuple[bool, int]:
+def _dirty_ui_mtime_ns(
+    root: Path, patterns: list[str], visible: list[str]
+) -> tuple[bool, int]:
     dirty_ui = _dirty_ui_paths(root, patterns)
     if not dirty_ui:
         return False, 0
-    mtimes = [_path_mtime_ns(root, name) for name in dirty_ui]
+    mtimes = [_path_mtime_ns(root, name) for name in {*dirty_ui, *visible}]
     if any(not (root / name).exists() for name in dirty_ui):
         mtimes.append(_git_index_mtime_ns(root))
     return True, max(mtimes, default=0)
@@ -448,7 +456,7 @@ def local_ui_proof_problem(
     ):
         return problem
     evidence = evidence_root(root)
-    dirty_ui, min_mtime_ns = _dirty_ui_mtime_ns(root, patterns)
+    dirty_ui, min_mtime_ns = _dirty_ui_mtime_ns(root, patterns, visible)
     unchanged = [
         (ref, _unchanged_route(text, ref))
         for text in plans

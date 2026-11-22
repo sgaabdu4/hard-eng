@@ -239,11 +239,12 @@ def _unchanged_width_problem(
         return f"the unchanged pair has no measured record at {width} px; capture it at every width"
     _, before = before_entry
     after_path, after = after_entry
-    if route and not on_route(str(after.get("route", "")), route):
-        return (
-            f"the unchanged After capture {after['image']} is of the page "
-            f"{after.get('route') or 'unknown'}, but the plan names {route}; capture the changed screen"
-        )
+    for side, record in (("Before", before), ("After", after)):
+        if route and not on_route(str(record.get("route", "")), route):
+            return (
+                f"the unchanged {side} capture {record['image']} is of the page "
+                f"{record.get('route') or 'unknown'}, but the plan names {route}; capture the changed screen"
+            )
     if before["sha256"] != after["sha256"]:
         return f"the unchanged pair differs at {width} px; the screen changed, so write a real ux_reference"
     if before["commit"] != base or after["commit"] != head:
