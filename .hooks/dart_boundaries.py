@@ -148,12 +148,7 @@ def _safe_resolve(path: Path) -> Path | None:
 
 
 def _is_repo_file(path: Path | None, base: Path) -> bool:
-    if path is None or not path.is_relative_to(base):
-        return False
-    try:
-        return path.is_file()
-    except OSError:
-        return False
+    return path is not None and path.is_relative_to(base) and path.is_file()
 
 
 def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[Path]:
