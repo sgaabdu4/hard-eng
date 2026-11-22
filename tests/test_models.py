@@ -427,6 +427,37 @@ def test_local_develop_and_topic_policies_cannot_override_base_refs(
     assert models.trusted_base_ref(repository) == main_commit
 
 
+def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
+    repository: Path, tmp_path: Path
+) -> None:
+    git(repository, "branch", "-M", "develop")
+    write_policy(repository, "develop")
+    develop_commit = commit(repository, "develop base")
+    git(repository, "checkout", "-qb", "feature")
+    (repository / "work.txt").write_text("change\n")
+    commit(repository, "feature work")
+    assert models.trusted_base_ref(repository) == develop_commit
+
+    custom = tmp_path / "custom"
+    init(custom)
+    (custom / "README.md").write_text("base\n")
+    main_commit = commit(custom, "main without policy")
+    git(custom, "branch", "-M", "main")
+    git(custom, "update-ref", "refs/remotes/origin/main", main_commit)
+    git(custom, "checkout", "-qb", "integration")
+    write_policy(custom, "integration")
+    (custom / ".agents").mkdir(exist_ok=True)
+    (custom / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    integration_commit = commit(custom, "integration base")
+    git(custom, "update-ref", "refs/remotes/origin/integration", integration_commit)
+    git(custom, "checkout", "-qb", "feature")
+    (custom / "work.txt").write_text("change\n")
+    commit(custom, "feature work")
+    assert models.trusted_base_ref(custom) == integration_commit
+
+
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
     text = (SOURCE / ".claude/rules/model-roles.md").read_text()
     assert ".agents/models.json" in text
