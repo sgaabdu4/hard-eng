@@ -430,9 +430,9 @@ def confirmed_ring_boxes(root: Path | None, digest: str) -> list[dict[str, int]]
     """Confirmed `--ring` pixel boxes from a `.hard-eng/browser` record matching `digest`."""
     if root is None:
         return []
-    from ui_proof import browser_records
+    from ui_proof import browser_record_files
 
-    for item in browser_records(root):
+    for _, item in browser_record_files(root):
         if item.get("sha256") != digest or not isinstance(
             raw := item.get("ring_boxes"), list
         ):
