@@ -446,3 +446,267 @@ def test_the_first_push_of_a_new_branch_with_a_merge_base_is_judged(
     commit(root, "task work")
     with pytest.raises(ValueError, match=RULE):
         validate_suppressions(root, "0" * 40)
+
+
+THEME_CSS = """@import "tailwindcss";
+@theme {
+  --color-brand: #1b2a4a;
+  --color-late: #c83e2b;
+  --text-display: 2.5rem;
+  --background-image-hero: linear-gradient(90deg, #000, #fff);
+}
+@utility text-custom {
+  letter-spacing: 0.02em;
+}
+.bg-mesh {
+  background: none;
+}
+"""
+
+
+def theme_repo(
+    tmp_path: Path,
+    css: str,
+    name: str,
+    before: str,
+    after: str,
+    extra: dict[str, str] | None = None,
+) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    root = tmp_path / "repo"
+    init(root)
+    (root / "src/app").mkdir(parents=True)
+    (root / "src/app/globals.css").write_text(css)
+    for rel, content in (extra or {}).items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    target = root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(before)
+    commit(root, "base")
+    target.write_text(after)
+    return root
+
+
+@pytest.mark.parametrize(
+    ("name", "line", "expected"),
+    [
+        (
+            "src/Card.tsx",
+            '<p className="text-danger font-medium">Late</p>',
+            "text-danger",
+        ),
+        (
+            "src/Card.tsx",
+            '<div className="hover:bg-surface-elevated/80" />',
+            "hover:bg-surface-elevated/80",
+        ),
+        (
+            "src/Card.tsx",
+            '<div className="border-t-danger ring-offset-missing" />',
+            "border-t-danger",
+        ),
+        (
+            "src/Card.tsx",
+            '<svg className="fill-unknown stroke-missing" />',
+            "fill-unknown",
+        ),
+        ("src/app/page.css", ".alert { @apply text-danger bg-brand; }", "text-danger"),
+        ("src/ui.ts", 'export const cls = cn("text-danger bg-brand");', "text-danger"),
+    ],
+)
+def test_undefined_tailwind_theme_token_is_refused(
+    tmp_path: Path, name: str, line: str, expected: str
+) -> None:
+    """HE-UI-SOURCE: an added Tailwind colour utility missing from @theme fails."""
+    root = theme_repo(tmp_path, THEME_CSS, name, "// base\n", f"// base\n{line}\n")
+    message = refused(root)
+    assert f"{name}:2:" in message
+    assert expected in message
+
+
+def test_multiline_apply_and_script_class_helper_refuse_undefined_tokens(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: multiline @apply blocks and multiline cn() calls are checked on added lines."""
+    css_root = theme_repo(
+        tmp_path / "css",
+        THEME_CSS,
+        "src/app/page.css",
+        ".alert {\n  @apply\n    bg-brand;\n}\n",
+        ".alert {\n  @apply\n    bg-brand\n    text-danger;\n}\n",
+    )
+    assert "src/app/page.css:4:" in refused(css_root)
+
+    ts_root = theme_repo(
+        tmp_path / "ts",
+        THEME_CSS,
+        "src/ui.ts",
+        'export const cls = cn(\n  "bg-brand",\n);\n',
+        'export const cls = cn(\n  "bg-brand",\n  "text-danger",\n);\n',
+    )
+    assert "src/ui.ts:3:" in refused(ts_root)
+
+    tpl_root = theme_repo(
+        tmp_path / "tpl",
+        THEME_CSS,
+        "src/ui.ts",
+        "export const cls = cn(`\n  bg-brand\n`);\n",
+        "export const cls = cn(`\n  bg-brand\n  bg-missing\n`);\n",
+    )
+    assert "src/ui.ts:3:" in refused(tpl_root)
+
+    cmp_root = theme_repo(
+        tmp_path / "cmp",
+        THEME_CSS,
+        "src/ui.ts",
+        'export const cls = (v: string) => cn(\n  "bg-brand",\n);\n',
+        'export const cls = (v: string) => cn(\n  v === "text-only" && "bg-brand",\n  "bg-late" !== v && "text-brand",\n);\n',
+    )
+    validate_suppressions(cmp_root, "HEAD")
+
+
+def test_css_import_order_governs_color_reset_and_restore(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: imported CSS @theme blocks run before their importer, matching Tailwind's cascade."""
+    restored = theme_repo(
+        tmp_path / "restore",
+        '@import "./z_reset.css";\n@theme {\n  --color-red-500: #dc2626;\n}\n',
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-red-500" />\n',
+        extra={"src/app/z_reset.css": "@theme {\n  --color-red-500: initial;\n}\n"},
+    )
+    validate_suppressions(restored, "HEAD")
+
+    cleared = theme_repo(
+        tmp_path / "clear",
+        '@import "./z_define.css";\n@theme {\n  --color-red-500: initial;\n}\n',
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-red-500" />\n',
+        extra={"src/app/z_define.css": "@theme {\n  --color-red-500: #dc2626;\n}\n"},
+    )
+    assert "text-red-500" in refused(cleared)
+
+
+def test_theme_with_color_reset_refuses_default_palette_colours(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: --color-*: initial and --color-<name>: initial clear default Tailwind palette colours."""
+    reset_css = "@theme {\n  --color-*: initial;\n  --color-ink: #111;\n}\n"
+    root = theme_repo(
+        tmp_path,
+        reset_css,
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-red-500 text-white" />\n',
+    )
+    message = refused(root)
+    assert "text-red-500" in message
+    assert "text-white" in message
+    allowed = theme_repo(
+        tmp_path / "ok",
+        reset_css,
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-ink text-transparent text-current text-inherit" />\n',
+    )
+    validate_suppressions(allowed, "HEAD")
+
+    single_clear_css = (
+        "@theme {\n  --color-red-500: initial;\n  --color-brand: #111;\n}\n"
+    )
+    single = theme_repo(
+        tmp_path / "single",
+        single_clear_css,
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-red-500 text-red-600" />\n',
+    )
+    single_msg = refused(single)
+    assert "text-red-500" in single_msg
+    assert "text-red-600" not in single_msg
+
+
+@pytest.mark.parametrize(
+    ("name", "line"),
+    [
+        (
+            "src/Card.tsx",
+            '<div className="text-brand bg-late text-display bg-hero text-custom bg-mesh" />',
+        ),
+        (
+            "src/Card.tsx",
+            '<div className="text-sm/6 text-left text-slate-600 bg-white bg-linear-to-r border-2 border-t-slate-200 ring-2 ring-offset-2 fill-none stroke-2" />',
+        ),
+        (
+            "src/Card.tsx",
+            '<input id="text-danger" name="bg-missing" data-testid={"text-input"} aria-label={ok ? "bg-a" : "text-b"} href="/api/text-missing" src="/img/bg-hero.png" />',
+        ),
+        ("src/Card.tsx", "const cls = `text-${tone} bg-[var(--x)] text-(--brand)`;"),
+        (
+            "src/app/page.css",
+            ".box { box-sizing: border-box; text-align: left; border-radius: 8px; }",
+        ),
+        (
+            "src/api.ts",
+            'export const mime = "text-plain"; export const kind = "bg-worker";',
+        ),
+    ],
+)
+def test_defined_builtin_and_non_class_tailwind_tokens_pass(
+    tmp_path: Path, name: str, line: str
+) -> None:
+    """HE-UI-SOURCE: defined @theme tokens, built-in utilities and non-class text pass."""
+    root = theme_repo(tmp_path, THEME_CSS, name, "// base\n", f"// base\n{line}\n")
+    validate_suppressions(root, "HEAD")
+
+
+def test_packages_with_tailwind_config_or_unknown_plugin_are_skipped(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: external JS configs and third-party colour plugins produce no false positives."""
+    with_config = theme_repo(
+        tmp_path / "cfg",
+        THEME_CSS,
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-danger" />\n',
+        extra={"tailwind.config.ts": "export default {};\n"},
+    )
+    validate_suppressions(with_config, "HEAD")
+    with_plugin = theme_repo(
+        tmp_path / "plg",
+        '@plugin "daisyui";\n' + THEME_CSS,
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-danger" />\n',
+    )
+    validate_suppressions(with_plugin, "HEAD")
+
+
+def test_monorepo_theme_is_scoped_to_its_own_package(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: a Tailwind v4 @theme block governs only its own workspace package, including root-level CSS."""
+    root = tmp_path / "mono"
+    init(root)
+    (root / "package.json").write_text('{"name":"root"}\n')
+    (root / "src").mkdir(parents=True)
+    (root / "src/Root.tsx").write_text("// base\n")
+    (root / "apps/web/src").mkdir(parents=True)
+    (root / "apps/web/package.json").write_text('{"name":"web"}\n')
+    (root / "apps/web/globals.css").write_text(THEME_CSS)
+    (root / "apps/web/src/App.tsx").write_text("// base\n")
+    (root / "apps/legacy/src").mkdir(parents=True)
+    (root / "apps/legacy/package.json").write_text('{"name":"legacy"}\n')
+    (root / "apps/legacy/src/App.tsx").write_text("// base\n")
+    commit(root, "base")
+    (root / "apps/legacy/src/App.tsx").write_text(
+        '// base\n<p className="text-danger" />\n'
+    )
+    (root / "src/Root.tsx").write_text('// base\n<p className="text-danger" />\n')
+    validate_suppressions(root, "HEAD")
+    (root / "apps/web/src/App.tsx").write_text(
+        '// base\n<p className="text-danger" />\n'
+    )
+    assert "apps/web/src/App.tsx:2:" in refused(root)

@@ -648,3 +648,98 @@ def test_look_plan_option_refuses_invalid_missing_symlink_and_empty_plans(
             look.look_command(
                 project, ["--host", "claude", "--plan", target, str(images[0])]
             )
+
+
+def test_look_includes_design_docs_in_prompt_record_and_block(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+    import ui_proof
+
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy #1b2a4a.\n")
+    (project / "UI-LIBRARY.md").write_text("# UI Library\n\nUse Button atom.\n")
+    commit(project, "design docs")
+    images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "codex", images)
+    assert record["outcome"] == "clean"
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "Brand navy #1b2a4a." in prompt
+    assert "Use Button atom." in prompt
+    expected = look.design_hash(project)
+    assert expected and record["design_doc"] == expected
+    block = look.block_text(record)
+    assert f"- design: {expected}" in block
+    assert look.block_problem(block, 1) is None
+    head = git(project, "rev-parse", "HEAD").strip()
+    after = [images[0].read_bytes()]
+    assert ui_proof.look_problem(project, head, block, after) is None
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand crimson.\n")
+    problem = ui_proof.look_problem(project, head, block, after)
+    assert problem is not None and "current DESIGN.md" in problem
+
+
+def test_look_refuses_design_system_na_when_design_doc_exists(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+    import ui_proof
+
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy #1b2a4a.\n")
+    commit(project, "design doc")
+    images = make_images(project, 1)
+    rules = [
+        f"- {name}: {'N/A — skipped' if name == 'Design system' else 'Pass — looked at it'}"
+        for name, _ in usability_rules()
+    ]
+    answer = "\n".join(
+        [*rules, "Image image-1.png: a card with a title", "VERDICT: clean"]
+    )
+    install_agent(tmp_path, "claude", 1, answer)
+    record = run_look(project, "codex", images)
+    assert str(record["outcome"]).startswith("not done: Design system cannot be N/A")
+
+    forged: dict[str, object] = {
+        "reviewer": "claude",
+        "session": "0" * 64,
+        "design_doc": look.design_hash(project),
+        "images": [
+            {
+                "name": "image-1.png",
+                "sha256": look.sha256(images[0].read_bytes()),
+                "read": True,
+                "read_at": "2026-11-17T10:00:00Z",
+            }
+        ],
+        "rules": [line.removeprefix("- ") for line in rules],
+        "outcome": "clean",
+    }
+    problem = ui_proof.look_record_problem(
+        forged,
+        git(project, "rev-parse", "HEAD").strip(),
+        look.block_text(forged),
+        [images[0].read_bytes()],
+        project,
+    )
+    assert problem is not None and "Design system cannot be N/A" in problem
+
+
+def test_look_truncates_large_design_docs_in_utf8_bytes_and_preserves_ui_library(
+    project: Path,
+) -> None:
+    import look
+
+    (project / "DESIGN.md").write_text(
+        "# Design\n" + ("é" * look.DESIGN_BYTE_LIMIT) + "\nTAIL_A\n"
+    )
+    (project / "UI-LIBRARY.md").write_text("# UI Library\n\nUse Button atom.\n")
+    first_hash = look.design_hash(project)
+    text = look.design_text(project)
+    assert len(text.encode()) <= look.DESIGN_BYTE_LIMIT
+    assert "Use Button atom." in text
+    assert "...[truncated]" in text
+
+    (project / "DESIGN.md").write_text(
+        "# Design\n" + ("é" * look.DESIGN_BYTE_LIMIT) + "\nTAIL_B\n"
+    )
+    assert look.design_hash(project) != first_hash
