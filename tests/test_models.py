@@ -400,6 +400,7 @@ def test_declared_develop_base_on_origin_main_resolves_origin_develop(
     git(repository, "update-ref", "refs/remotes/origin/master", master_commit)
     git(repository, "update-ref", "refs/remotes/origin/feature", feature_commit)
     git(repository, "tag", "origin/HEAD", master_commit)
+    git(repository, "tag", "refs/remotes/origin/HEAD", master_commit)
     git(repository, "checkout", "-q", "feature")
 
     trusted = models.trusted_base_ref(repository)
@@ -473,15 +474,15 @@ def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
     trunk = tmp_path / "trunk-repo"
     init(trunk)
     git(trunk, "config", "init.defaultBranch", "trunk")
-    git(trunk, "branch", "-M", "trunk")
-    write_policy(trunk, "trunk")
-    trunk_commit = commit(trunk, "trunk base")
-    git(trunk, "update-ref", "refs/remotes/origin/trunk", trunk_commit)
-    git(trunk, "checkout", "-qb", "develop")
+    git(trunk, "branch", "-M", "develop")
     write_policy(trunk, "develop")
-    dev_commit = commit(trunk, "pushed develop topic")
-    git(trunk, "update-ref", "refs/remotes/origin/develop", dev_commit)
-    assert models.trusted_base_ref(trunk) == trunk_commit
+    dev_base = commit(trunk, "develop remote base")
+    git(trunk, "update-ref", "refs/remotes/origin/develop", dev_base)
+    git(trunk, "checkout", "-qb", "trunk")
+    write_policy(trunk, "trunk")
+    trunk_topic = commit(trunk, "pushed trunk topic")
+    git(trunk, "update-ref", "refs/remotes/origin/trunk", trunk_topic)
+    assert models.trusted_base_ref(trunk) == dev_base
 
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:

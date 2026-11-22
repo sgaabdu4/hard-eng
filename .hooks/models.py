@@ -109,29 +109,38 @@ def _policy_base(raw: str) -> str | None:
     return None
 
 
+def _exact_ref_sha(root: Path, full_ref: str) -> str | None:
+    """Resolve an exact branch or remote-tracking ref without ever matching tags."""
+    if full_ref == "refs/remotes/origin/HEAD":
+        target = (_git_stdout(root, "symbolic-ref", "-q", full_ref) or "").strip()
+        if not target.startswith("refs/remotes/origin/"):
+            return None
+        full_ref = target
+    sha = (_git_stdout(root, "show-ref", "--verify", "--hash", full_ref) or "").strip()
+    return sha or None
+
+
+def _exact_merge_base(root: Path, full_ref: str) -> tuple[str, str] | None:
+    sha = _exact_ref_sha(root, full_ref)
+    if sha is None:
+        return None
+    point = _git_stdout(root, "merge-base", "HEAD", sha)
+    return (sha, point.strip()) if point else None
+
+
 def _primary_anchor(root: Path, local: str) -> tuple[str, str, bool] | None:
-    """The single highest-priority existing base ref using full ref names so tags cannot shadow branches."""
-    remote_names = dict.fromkeys(("HEAD", "main", "master", local, "develop"))
-    for name in remote_names:
-        ref = f"refs/remotes/origin/{name}"
-        if point := _git_stdout(root, "merge-base", "HEAD", ref):
-            return ref, point.strip(), True
+    """The single highest-priority existing base ref via exact ref lookup (no tag fallback)."""
+    for name in ("HEAD", "main", "master", "develop"):
+        if found := _exact_merge_base(root, f"refs/remotes/origin/{name}"):
+            return found[0], found[1], True
     for name in dict.fromkeys(("main", "master", local, "develop")):
-        ref = f"refs/heads/{name}"
-        if point := _git_stdout(root, "merge-base", "HEAD", ref):
-            return ref, point.strip(), False
+        if found := _exact_merge_base(root, f"refs/heads/{name}"):
+            return found[0], found[1], False
     return None
 
 
-def _first_merge_base(root: Path, refs: tuple[str, ...]) -> str | None:
-    for ref in refs:
-        if point := _git_stdout(root, "merge-base", "HEAD", ref):
-            return point.strip()
-    return None
-
-
-def _policy_merge_base(root: Path, ref: str, *, remote_only: bool) -> str | None:
-    raw = _git_blob_if_present(root, ref, "hard-eng.gates.json")
+def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | None:
+    raw = _git_blob_if_present(root, ref_sha, "hard-eng.gates.json")
     if raw is None or (base := _policy_base(raw)) is None:
         return None
     refs = (
@@ -139,7 +148,10 @@ def _policy_merge_base(root: Path, ref: str, *, remote_only: bool) -> str | None
         if remote_only
         else (f"refs/remotes/origin/{base}", f"refs/heads/{base}")
     )
-    return _first_merge_base(root, refs)
+    for full_ref in refs:
+        if found := _exact_merge_base(root, full_ref):
+            return found[1]
+    return None
 
 
 def trusted_base_ref(root: Path | None) -> str | None:
