@@ -10,7 +10,7 @@ from unittest.mock import Mock
 import models
 import pytest
 import update
-from conftest import SOURCE, commit, git, init
+from conftest import SOURCE, commit, default_policy, git, init
 from test_agent_hooks import session_start_context
 
 if TYPE_CHECKING:
@@ -308,16 +308,27 @@ def test_codex_and_agy_session_start_surface_models_config_and_rules(
     assert mentioned == (present and agent in {"codex", "agy"})
 
 
+@pytest.mark.parametrize("target_file", [".agents/models.json", "hard-eng.gates.json"])
 def test_failed_git_read_on_trusted_base_fails_closed(
-    repository: Path, monkeypatch: pytest.MonkeyPatch
+    repository: Path, monkeypatch: pytest.MonkeyPatch, target_file: str
 ) -> None:
     import subprocess
 
+    git(repository, "branch", "-M", "main")
     (repository / ".agents").mkdir(exist_ok=True)
     (repository / ".agents/models.json").write_text(
         (SOURCE / ".agents/models.json").read_text()
     )
-    commit(repository, "commit models")
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "shipping": {**default_policy(), "base": "main"},
+                "packages": [],
+            }
+        )
+    )
+    commit(repository, "commit base files")
     real_run = subprocess.run
 
     def fail_show(
@@ -328,7 +339,7 @@ def test_failed_git_read_on_trusted_base_fails_closed(
         text: bool = False,
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
-        if args[:2] == ["git", "show"] and args[2].endswith(":.agents/models.json"):
+        if args[:2] == ["git", "show"] and args[2].endswith(f":{target_file}"):
             return subprocess.CompletedProcess(
                 args, 128, stdout="", stderr="fatal: missing promisor object"
             )
@@ -342,7 +353,33 @@ def test_failed_git_read_on_trusted_base_fails_closed(
 
     monkeypatch.setattr(models.subprocess, "run", fail_show)
     with pytest.raises(ValueError, match="unreadable trusted base"):
-        models.load_models(repository, trusted_ref="HEAD")
+        if target_file == ".agents/models.json":
+            models.load_models(repository, trusted_ref="HEAD")
+        else:
+            models.trusted_base_ref(repository)
+
+
+def test_hotfix_branch_cannot_redirect_trusted_base_to_itself(
+    repository: Path,
+) -> None:
+    git(repository, "branch", "-M", "main")
+    policy = {**default_policy(), "base": "main"}
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps({"version": 1, "shipping": policy, "packages": []})
+    )
+    base_commit = commit(repository, "base policy")
+    git(repository, "checkout", "-qb", "hotfix/self-base")
+    (repository / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "shipping": {**policy, "base": "hotfix/self-base"},
+                "packages": [],
+            }
+        )
+    )
+    commit(repository, "self-pointing base")
+    assert models.trusted_base_ref(repository) == base_commit
 
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
