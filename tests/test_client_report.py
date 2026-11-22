@@ -415,6 +415,11 @@ def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
     (meta / "commondir").write_text(str(dangling_link) + "\n")
     assert _run_script(write(nested, "report.html")) == outside
 
+    trailing_slash_link = tmp_path / "trailing-slash-common-link"
+    trailing_slash_link.symlink_to(str(tmp_path / "missing-final") + "/")
+    (meta / "commondir").write_text(str(trailing_slash_link) + "\n")
+    assert _run_script(write(nested, "report.html")) == outside
+
     (meta / "HEAD").write_text("ref:\u00a0refs/heads/main\n")
     (meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
     assert _run_script(write(nested, "report.html")) == (0, "")
