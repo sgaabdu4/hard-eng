@@ -280,13 +280,24 @@ def configure_dart(
         dart_options,
         localization_exclusions,
         migrate_included_dart_plugins,
+        migrate_nested_dart_plugins,
     )
 
     options = cast("JsonObject", dart_options(target)) if target.exists() else {}
     original = deepcopy(options)
     existing = target.read_bytes().decode("utf-8") if target.exists() else ""
     migrate_dart_plugins(options, SOURCE)
-    migrate_included_dart_plugins(root, target, options, SOURCE, changes)
+    seen = {target.resolve()}
+    migrate_included_dart_plugins(root, target, options, SOURCE, changes, seen)
+    migrate_nested_dart_plugins(
+        root,
+        directory,
+        package.get("sources") or ("lib",),
+        SOURCE,
+        changes,
+        children,
+        seen,
+    )
     localized = localization_exclusions(directory)
     apply_dart_typing(
         options,
