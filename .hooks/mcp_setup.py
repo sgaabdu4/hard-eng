@@ -811,7 +811,7 @@ def _agy_server_from_codex(settings: JsonValue) -> JsonObject | None:
 def _git_tracked(root: Path, relative: str) -> bool:
     return (
         subprocess.run(
-            ["git", "ls-files", "--error-unmatch", "--", relative],
+            ["git", "ls-files", "--error-unmatch", "--", f":(literal){relative}"],
             cwd=root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -899,17 +899,20 @@ def configure_agy_mcp(
         tomllib.loads(codex_config).get("mcp_servers", {}) if codex_config else {}
     )
     codex_servers: JsonObject = parsed_codex if isinstance(parsed_codex, dict) else {}
-    claude_ignored = bool(claude_servers) and _is_git_ignored(root, ".mcp.json")
-    mirrored_claude = {} if claude_ignored else claude_servers
+    mirrored_claude = (
+        {} if claude_servers and _is_git_ignored(root, ".mcp.json") else claude_servers
+    )
     mirrored_codex = (
         {}
         if codex_servers and _is_git_ignored(root, ".codex/config.toml")
         else codex_servers
     )
-    covered = detected.keys() | (pending or set())
-    if claude_ignored:
-        covered |= claude_servers.keys()
-    _mirror_agy_servers(existing, covered, mirrored_claude, mirrored_codex)
+    _mirror_agy_servers(
+        existing,
+        detected.keys() | (pending or set()),
+        mirrored_claude,
+        mirrored_codex,
+    )
     if json.dumps(current) == before:
         return []
     if current == {"mcpServers": {}}:

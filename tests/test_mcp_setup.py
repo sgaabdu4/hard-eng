@@ -919,37 +919,30 @@ def test_agy_mcp_skips_gitignored_mcp_sources(
     installer: ModuleType, tmp_path: Path
 ) -> None:
     repository(tmp_path)
+    mcp = tmp_path / ".mcp.json"
     (tmp_path / ".gitignore").write_text(".mcp.json\n.codex/config.toml\n")
-    secret = {
-        "type": "http",
-        "url": "https://private.example.test/mcp",
-        "headers": {"Authorization": "Bearer local-only"},
-    }
-    (tmp_path / ".mcp.json").write_text(
-        json.dumps({"mcpServers": {"secret-claude": secret}})
-    )
+    secret = {"type": "http", "url": "https://p.test/mcp", "headers": {"A": "local"}}
+    mcp.write_text(json.dumps({"mcpServers": {"secret-claude": secret}}))
     write_codex(
         tmp_path,
-        '[mcp_servers.secret-codex]\nurl = "https://private.example.test/mcp"\nhttp_headers = { Authorization = "Bearer local-only" }\n',
+        '[mcp_servers.secret-codex]\nurl = "https://p.test/mcp"\nhttp_headers = { A = "local" }\n',
     )
     changes: dict[str, str] = {}
     assert installer.configure_mcp(tmp_path, changes) == []
     assert ".agents/mcp_config.json" not in changes
     (tmp_path / ".gitignore").write_text(".mcp.local.json\n")
-    (tmp_path / ".mcp.json").unlink()
+    mcp.unlink()
     (tmp_path / ".codex/config.toml").unlink()
-    (tmp_path / ".mcp.local.json").write_text(
-        json.dumps({"mcpServers": {"secret-link": secret}})
-    )
-    (tmp_path / ".mcp.json").symlink_to(".mcp.local.json")
+    (tmp_path / ".mcp.local.json").write_text(json.dumps({"mcpServers": {"s": secret}}))
+    mcp.symlink_to(".mcp.local.json")
     changes = {}
     assert installer.configure_mcp(tmp_path, changes) == []
     assert ".agents/mcp_config.json" not in changes
-    (tmp_path / ".mcp.json").unlink()
+    mcp.unlink()
     (tmp_path / "shared.mcp.json").write_text(
         json.dumps({"mcpServers": {"tracked-link": {"command": "tool-c"}}})
     )
-    (tmp_path / ".mcp.json").symlink_to("shared.mcp.json")
+    mcp.symlink_to("shared.mcp.json")
     subprocess.run(
         ["git", "add", "shared.mcp.json", ".mcp.json"], cwd=tmp_path, check=True
     )
@@ -957,6 +950,17 @@ def test_agy_mcp_skips_gitignored_mcp_sources(
     assert installer.configure_mcp(tmp_path, changes) == []
     assert json.loads(changes[".agents/mcp_config.json"]) == {
         "mcpServers": {"tracked-link": {"command": "tool-c"}}
+    }
+    (tmp_path / "[s]hared.mcp.json").write_text(
+        json.dumps({"mcpServers": {"g": secret}})
+    )
+    mcp.unlink()
+    mcp.symlink_to("[s]hared.mcp.json")
+    write_codex(tmp_path, '[mcp_servers.g]\ncommand = "safe-codex"\n')
+    changes = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {"g": {"command": "safe-codex"}}
     }
 
 
