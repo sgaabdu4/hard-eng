@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from generated_marks import generated_sources
 from plans import _is_test as is_test_path
 
 KEY_STEP = (
@@ -17,7 +18,8 @@ FONT_WEIGHT_DECL = re.compile(
     r"font-weight\s*:\s*(\d{3})(?:\s+(\d{3}))?", re.IGNORECASE
 )
 TEXT_WEIGHT_VAR = re.compile(r"--text-([a-zA-Z0-9_-]+)--font-weight\s*:\s*(\d{3})\b")
-FONT_SANS_VAR = re.compile(r"--font-sans\s*:\s*([^;}\n]+)")
+TEXT_FAMILY_VAR = re.compile(r"--text-([a-zA-Z0-9_-]+)--font-family\s*:\s*([^;}\n]+)")
+FONT_THEME_VAR = re.compile(r"--font-([a-zA-Z0-9_-]+)\s*:\s*([^;}\n]+)")
 TAG_NAME_RE = re.compile(r"([A-Za-z][A-Za-z0-9_$.-]*)")
 JSX_KEYWORD_BEFORE = re.compile(r"\b(?:return|case|yield|await)$")
 YAML_TEXT_WEIGHT = re.compile(
@@ -27,15 +29,20 @@ YAML_ROLE_KEY = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*$")
 YAML_WEIGHT_KEY = re.compile(
     r"""^(?:fontWeight|font_weight|weight)\s*:\s*["']?(\d{3})["']?"""
 )
+YAML_FAMILY_KEY = re.compile(r"""^(?:fontFamily|font_family|family)\s*:\s*(.+)$""")
 
 
 @dataclass
 class _JsxFrame:
     kind: str
     tag: str
-    active: dict[str, tuple[int, str]]
-    merged: dict[str, tuple[int, str]]
+    active: dict[str, tuple[int, int]]
+    merged: dict[str, tuple[int, int]]
     depth: int = 0
+
+
+def _first_family(raw: str) -> str:
+    return raw.split(",", 1)[0].strip().strip("\"'").lower()
 
 
 def _jsx_key_value(tag_body: str, pos: int) -> str | None:
@@ -60,7 +67,7 @@ def _jsx_key_value(tag_body: str, pos: int) -> str | None:
     return None
 
 
-def _jsx_key_attr(tag_body: str) -> str | None:
+def _jsx_key_attr(tag_body: str) -> tuple[str, int] | None:
     from source_scan import string_end
     from ui_rules import _balanced_end
 
@@ -81,7 +88,7 @@ def _jsx_key_attr(tag_body: str) -> str | None:
             )
             and (value := _jsx_key_value(tag_body, index + 3))
         ):
-            return value
+            return value, index
         index += 1
     return None
 
@@ -125,21 +132,19 @@ class _JsxKeyScanner:
         self.findings: list[str] = []
         self.reported: set[tuple[int, str]] = set()
 
-    def _record_key(self, key: str, line_no: int) -> None:
+    def _record_key(self, key: str, tag_line: int, key_line: int) -> None:
         if not self.stack or self.stack[-1].kind == "fn":
             return
         target = self.stack[-1].active
         if key not in target:
-            target[key] = (line_no, key)
+            target[key] = (tag_line, key_line)
             return
-        first_line, _ = target[key]
-        if (line_no in self.added_lines or first_line in self.added_lines) and (
-            line_no,
-            key,
-        ) not in self.reported:
-            self.reported.add((line_no, key))
+        first_tag, first_key = target[key]
+        touched = {tag_line, key_line, first_tag, first_key} & self.added_lines
+        if touched and (key_line, key) not in self.reported:
+            self.reported.add((key_line, key))
             self.findings.append(
-                f"{self.name}:{line_no}: duplicate sibling React key ({key}) matching line {first_line}. {KEY_STEP}"
+                f"{self.name}:{key_line}: duplicate sibling React key ({key}) matching line {first_key}. {KEY_STEP}"
             )
 
     def _handle_open_brace(self) -> None:
@@ -156,8 +161,8 @@ class _JsxKeyScanner:
             return
         frame = self.stack.pop()
         if frame.kind == "slot":
-            for key, (line_no, _) in {**frame.merged, **frame.active}.items():
-                self._record_key(key, line_no)
+            for key, (tag_line, key_line) in {**frame.merged, **frame.active}.items():
+                self._record_key(key, tag_line, key_line)
 
     def _handle_open_tag(self, index: int) -> int:
         code = self.code
@@ -181,8 +186,11 @@ class _JsxKeyScanner:
         if end is None:
             return index + 1
         body = code[after:end]
-        if key := _jsx_key_attr(body):
-            self._record_key(key, code.count("\n", 0, index) + 1)
+        if found := _jsx_key_attr(body):
+            key, offset = found
+            tag_line = code.count("\n", 0, index) + 1
+            key_line = code.count("\n", 0, after + offset) + 1
+            self._record_key(key, tag_line, key_line)
         if not body.rstrip().endswith("/"):
             self.stack.append(_JsxFrame("jsx", tag_name, {}, {}))
         return end + 1
@@ -203,10 +211,8 @@ class _JsxKeyScanner:
             self._handle_open_brace()
         elif char == "}":
             self._handle_close_brace()
-        elif (
-            char == "["
-            and self.stack
-            and self.stack[-1].kind in ("slot", "fn", "array")
+        elif char == "[" and (
+            not self.stack or self.stack[-1].kind in ("slot", "fn", "array")
         ):
             self.stack.append(_JsxFrame("array", "", {}, {}))
         elif char == "]" and self.stack and self.stack[-1].kind == "array":
@@ -248,7 +254,7 @@ class _JsxKeyScanner:
 def duplicate_sibling_keys(
     name: str, file_text: str, added_lines: set[int]
 ) -> list[str]:
-    """Flag direct sibling JSX elements sharing a key inside the same parent or fragment."""
+    """Flag direct sibling JSX elements sharing a key inside the same parent, fragment or array."""
     from ui_rules import UNOWNED
 
     if (
@@ -266,14 +272,17 @@ def duplicate_sibling_keys(
     return _JsxKeyScanner(name, code, added_lines).scan()
 
 
-def _design_yaml_weights(design_path: Path) -> dict[str, int]:
-    """Extract explicit role -> fontWeight pairs from DESIGN.md YAML front matter."""
+def _design_yaml_typography(
+    design_path: Path,
+) -> tuple[dict[str, int], dict[str, str]]:
+    """Extract explicit role -> fontWeight and optional fontFamily from DESIGN.md YAML front matter."""
     if not design_path.is_file():
-        return {}
+        return {}, {}
     match = YAML_FRONT_MATTER.match(design_path.read_text(errors="replace"))
     if not match:
-        return {}
+        return {}, {}
     weights: dict[str, int] = {}
+    families: dict[str, str] = {}
     current_key, current_indent = "", -1
     for raw in match.group(1).splitlines():
         stripped = raw.strip()
@@ -290,44 +299,93 @@ def _design_yaml_weights(design_path: Path) -> dict[str, int]:
             current_key, current_indent = "", -1
         if current_key and (m_wt := YAML_WEIGHT_KEY.match(stripped)):
             weights[current_key] = int(m_wt.group(1))
-    return weights
+        elif (
+            current_key
+            and (m_fam := YAML_FAMILY_KEY.match(stripped))
+            and (fam := _first_family(m_fam.group(1)))
+        ):
+            families[current_key] = fam
+    return weights, families
 
 
-def _primary_font_ranges(css_texts: list[str]) -> list[tuple[int, int]]:
-    sans_families = {
-        first
-        for text in css_texts
-        for match in FONT_SANS_VAR.finditer(text)
-        if (first := match.group(1).split(",", 1)[0].strip().strip("\"'").lower())
-    }
-    ranges: list[tuple[int, int]] = []
+def _font_face_ranges(
+    css_texts: list[str],
+) -> tuple[dict[str, list[tuple[int, int]]], set[str]]:
+    mono_only: set[str] = set()
+    non_mono: set[str] = set()
+    for text in css_texts:
+        for name, raw in FONT_THEME_VAR.findall(text):
+            if first := _first_family(raw):
+                (mono_only if name == "mono" else non_mono).add(first)
+    by_family: dict[str, list[tuple[int, int]]] = {}
     for text in css_texts:
         for block in FONT_FACE_BLOCK.findall(text):
             fam_match = FONT_FAMILY_DECL.search(block)
             wt_match = FONT_WEIGHT_DECL.search(block)
             if not fam_match or not wt_match:
                 continue
-            fam = fam_match.group(1).strip().strip("\"'").lower()
-            if sans_families and fam not in sans_families:
-                continue
+            fam = _first_family(fam_match.group(1))
             lo = int(wt_match.group(1))
             hi = int(wt_match.group(2)) if wt_match.group(2) else lo
-            ranges.append((min(lo, hi), max(lo, hi)))
-    return ranges
+            by_family.setdefault(fam, []).append((min(lo, hi), max(lo, hi)))
+    return by_family, mono_only - non_mono
 
 
-def _theme_text_weights(theme_bodies: list[str]) -> tuple[set[str], dict[str, int]]:
+def _theme_text_tokens(
+    theme_bodies: list[str],
+) -> tuple[set[str], dict[str, int], dict[str, str]]:
     from ui_rules import THEME_VAR
 
     roles: set[str] = set()
     weights: dict[str, int] = {}
+    families: dict[str, str] = {}
     for body in theme_bodies:
         for kind, token, _ in THEME_VAR.findall(body):
             if kind == "text" and "--" not in token:
                 roles.add(token)
         for role, wt in TEXT_WEIGHT_VAR.findall(body):
             weights[role] = int(wt)
-    return roles, weights
+        for role, raw in TEXT_FAMILY_VAR.findall(body):
+            if fam := _first_family(raw):
+                families[role] = fam
+    return roles, weights, families
+
+
+def _weight_covered(
+    weight: int,
+    role_family: str | None,
+    by_family: dict[str, list[tuple[int, int]]],
+    mono_only: set[str],
+) -> bool:
+    if not by_family:
+        return True
+    if role_family:
+        ranges = by_family.get(role_family)
+        return True if not ranges else any(lo <= weight <= hi for lo, hi in ranges)
+    active = {fam: rngs for fam, rngs in by_family.items() if fam not in mono_only}
+    pool = [rng for ranges in (active or by_family).values() for rng in ranges]
+    return not pool or any(lo <= weight <= hi for lo, hi in pool)
+
+
+def _design_weight_mismatches(
+    design_rel: str,
+    design_weights: dict[str, int],
+    defined_roles: set[str],
+    defined_weights: dict[str, int],
+) -> list[str]:
+    findings: list[str] = []
+    for role, weight in sorted(design_weights.items()):
+        if role in defined_weights and defined_weights[role] != weight:
+            findings.append(
+                f"{design_rel}: DESIGN.md declares fontWeight {weight} for {role}, "
+                f"but @theme defines --text-{role}--font-weight: {defined_weights[role]}"
+            )
+        elif weight != 400 and role in defined_roles and role not in defined_weights:
+            findings.append(
+                f"{design_rel}: DESIGN.md declares fontWeight {weight} for {role}, "
+                f"but @theme defines --text-{role} without --text-{role}--font-weight"
+            )
+    return findings
 
 
 def design_weight_findings(
@@ -347,28 +405,30 @@ def design_weight_findings(
     if not files:
         return []
     design_rel = design_path.relative_to(root).as_posix()
-    css_rels = {path.relative_to(root).as_posix() for path in files}
-    if design_rel not in changed and not (css_rels & changed):
+    css_map = {path.relative_to(root).as_posix(): path for path in files}
+    skipped_css = generated_sources(root, sorted(css_map))
+    live_css = {rel: path for rel, path in css_map.items() if rel not in skipped_css}
+    if not live_css or (design_rel not in changed and not (live_css.keys() & changed)):
         return []
     css_texts = [
-        CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
+        CSS_COMMENT.sub("", path.read_text(errors="replace"))
+        for path in live_css.values()
     ]
     theme_bodies = [body for text in css_texts for body in _theme_bodies(text)]
     if not theme_bodies:
         return []
-    defined_roles, defined_weights = _theme_text_weights(theme_bodies)
-    findings = [
-        f"{design_rel}: DESIGN.md declares fontWeight {weight} for {role}, "
-        f"but @theme defines --text-{role} without --text-{role}--font-weight"
-        for role, weight in sorted(_design_yaml_weights(design_path).items())
-        if weight != 400 and role in defined_roles and role not in defined_weights
-    ]
-    if ranges := _primary_font_ranges(css_texts):
-        findings.extend(
-            f"{design_rel}: --text-{role}--font-weight ({weight}) is outside loaded @font-face font-weight ranges"
-            for role, weight in sorted(defined_weights.items())
-            if not any(lo <= weight <= hi for lo, hi in ranges)
-        )
+    defined_roles, defined_weights, theme_role_fams = _theme_text_tokens(theme_bodies)
+    design_weights, design_role_fams = _design_yaml_typography(design_path)
+    findings = _design_weight_mismatches(
+        design_rel, design_weights, defined_roles, defined_weights
+    )
+    by_family, mono_only = _font_face_ranges(css_texts)
+    role_families = {**design_role_fams, **theme_role_fams}
+    for role, weight in sorted(defined_weights.items()):
+        if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
+            findings.append(
+                f"{design_rel}: --text-{role}--font-weight ({weight}) is outside loaded @font-face font-weight ranges"
+            )
     return findings
 
 
@@ -379,21 +439,33 @@ def audit_findings(
 ) -> list[str]:
     from ui_rules import STYLE_TOKEN_SUFFIXES, UNOWNED, _all_css_entries, _package_dir
 
-    changed = set(candidates)
-    checked: set[Path] = set()
-    hits: list[str] = []
-    for name in candidates:
-        if name.startswith(UNOWNED) or is_test_path(PurePosixPath(name)):
-            continue
-        if not (
+    relevant = [
+        name
+        for name in candidates
+        if not name.startswith(UNOWNED)
+        and not is_test_path(PurePosixPath(name))
+        and (
             name.endswith(STYLE_TOKEN_SUFFIXES)
             or PurePosixPath(name).name == "DESIGN.md"
-        ):
-            continue
-        if css_entries is None:
-            css_entries = _all_css_entries(root)
-        package = _package_dir(root, name)
-        if package not in checked:
-            checked.add(package)
-            hits.extend(design_weight_findings(root, package, css_entries, changed))
-    return hits
+        )
+    ]
+    if not relevant:
+        return []
+    skipped = generated_sources(root, relevant)
+    live = [name for name in relevant if name not in skipped]
+    if not live:
+        return []
+    changed = set(live)
+    if css_entries is None:
+        css_entries = _all_css_entries(root)
+    packages: set[Path] = set()
+    for name in live:
+        pkg = _package_dir(root, name)
+        packages.add(pkg)
+        if name == "DESIGN.md":
+            packages.update(_package_dir(root, entry) for entry in css_entries)
+    return [
+        hit
+        for package in sorted(packages)
+        for hit in design_weight_findings(root, package, css_entries, changed)
+    ]

@@ -54,6 +54,15 @@ AUDIT_FAULTS = {
         "clipped-chrome",
         1,
     ),
+    "clipped-sticky-chrome": (
+        (
+            "<aside style='position:sticky;top:0;width:200px;height:620px;overflow:hidden'>"
+            "<div style='height:610px'>Nav</div>"
+            "<button style='min-height:44px;min-width:120px;font-size:16px'>Sign out</button></aside>"
+        ),
+        "clipped-chrome",
+        1,
+    ),
 }
 
 
@@ -83,7 +92,6 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
         "<script>(async () => {"
         "for (let i = 0; i < 4; i++) {"
         "await fetch('/step.json?w=' + i);"
-        "await new Promise((r) => setTimeout(r, 25));"
         "}"
         "document.getElementById('out').textContent = 'Ready';"
         "})();</script></body>"
@@ -114,3 +122,27 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
             width,
             found_cls[width],
         )
+
+
+def test_display_heading_custom_select_sticky_sidebar_and_parallel_fetches_pass(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/step.json").write_text('{"ok":true}')
+    (tmp_path / "pages/clean.html").write_text(
+        "<!doctype html><html lang=en><title>Clean</title>"
+        "<style>body{margin:0;font:500 16px sans-serif}</style>"
+        "<body><div style='display:flex;align-items:flex-start'>"
+        "<aside style='position:sticky;top:0;width:120px;height:960px;overflow:visible'>"
+        "<div style='height:880px'>Nav</div>"
+        "<button style='min-height:44px;min-width:100px;font-size:16px'>Sign out</button></aside>"
+        "<main style='height:1800px;padding:16px'>"
+        "<h1 style='font-size:48px;font-weight:400;margin:0'>Overview</h1>"
+        "<p>Body copy at medium weight.</p>"
+        "<label>Role <select aria-label='Role' style='appearance:none;-webkit-appearance:none;width:84px;height:44px;padding:0 4px;font-size:16px'>"
+        "<option selected>Manager</option></select></label>"
+        "</main></div>"
+        "<script>Promise.all([0,1,2,3].map((i) => fetch('/step.json?p=' + i)));</script></body>"
+    )
+    found = capture(browser, tmp_path, site, "clean")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])

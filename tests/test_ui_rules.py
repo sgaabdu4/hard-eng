@@ -806,6 +806,22 @@ def test_duplicate_sibling_react_keys_are_refused_without_flagging_ternaries_or_
     )
     assert 'duplicate sibling React key ("tab")' in refused(direct_dup)
 
+    multiline_key = change(
+        tmp_path / "multiline",
+        "src/Actions.tsx",
+        'export const Actions = () => (\n  <div>\n    <button\n      key="save"\n    >Save</button>\n    <button\n      key="cancel"\n    >Cancel</button>\n  </div>\n);\n',
+        'export const Actions = () => (\n  <div>\n    <button\n      key="save"\n    >Save</button>\n    <button\n      key="save"\n    >Cancel</button>\n  </div>\n);\n',
+    )
+    assert 'duplicate sibling React key ("save")' in refused(multiline_key)
+
+    standalone_array = change(
+        tmp_path / "array",
+        "src/Items.tsx",
+        "export const items = [];\n",
+        'export const items = [<span key="row" />, <span key="row" />];\n',
+    )
+    assert 'duplicate sibling React key ("row")' in refused(standalone_array)
+
     valid = change(
         tmp_path / "valid",
         "src/Valid.tsx",
@@ -863,3 +879,57 @@ def test_design_md_font_weight_parity_catches_missing_theme_weight_and_unloaded_
         design_doc,
     )
     validate_suppressions(matched, "HEAD")
+
+    mismatch = theme_repo(
+        tmp_path / "mismatch",
+        "@theme {\n  --text-heading: 1.25rem;\n  --text-heading--font-weight: 500;\n}\n",
+        "DESIGN.md",
+        "# App Design\n",
+        design_doc.replace("500", "700"),
+    )
+    assert "--text-heading--font-weight: 500" in refused(mismatch)
+
+    multi_font = theme_repo(
+        tmp_path / "multi_font",
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+        '@font-face {\n  font-family: "Merriweather";\n  font-weight: 700;\n}\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n',
+        "DESIGN.md",
+        "# App Design\n",
+        design_doc.replace("500", "700"),
+    )
+    validate_suppressions(multi_font, "HEAD")
+
+
+def test_design_md_weight_parity_handles_monorepo_root_and_generated_css(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: editing root DESIGN.md checks workspace CSS, and linguist-generated CSS is skipped."""
+    mono = tmp_path / "mono"
+    init(mono)
+    (mono / "package.json").write_text('{"name":"root"}\n')
+    (mono / "apps/web/src").mkdir(parents=True)
+    (mono / "apps/web/package.json").write_text('{"name":"web"}\n')
+    (mono / "apps/web/src/app.css").write_text(
+        "@theme {\n  --text-heading: 1.25rem;\n}\n"
+    )
+    (mono / "DESIGN.md").write_text("# Root Design\n")
+    commit(mono, "base")
+    (mono / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 600\n---\n# Root Design\n"
+    )
+    assert "--text-heading--font-weight" in refused(mono)
+
+    gen = tmp_path / "gen"
+    init(gen)
+    (gen / ".gitattributes").write_text("src/theme.css linguist-generated=true\n")
+    (gen / "src").mkdir()
+    (gen / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 600\n---\n# App\n"
+    )
+    (gen / "src/theme.css").write_text(
+        "@theme {\n  --text-heading: 1.25rem;\n  --text-heading--font-weight: 600;\n}\n"
+    )
+    commit(gen, "base")
+    (gen / "src/theme.css").write_text("@theme {\n  --text-heading: 1.25rem;\n}\n")
+    validate_suppressions(gen, "HEAD")
