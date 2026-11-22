@@ -45,6 +45,7 @@ N/A — Python hook tables, comment regex, and report validation only; no visibl
 
 Result: Passed
 Evidence: `uv run pytest tests/test_settings_tables.py tests/test_strict_refusals.py -q` and `python3 .hooks/hard-eng.py check --quick --base origin/develop --plan-stage Complete` passed.
+Review declined: string literals mentioning inline threshold overrides in `.js`, `.jsx`, and `.tsx` files :: `.hooks/source_scan.py` intentionally lists `.js`, `.jsx`, `.tsx`, and `.swift` in `UNMASKED` for every `SCRIPT_OFF` directive (`eslint-disable`, `@ts-ignore`, `biome-ignore`) because the lightweight scanner does not parse JSX text; adding a JSX parser is out of scope for classifying Fallow 3.46's setting.
 E2E: N/A — hook unit tests cover the config table, diff scan, and JSON report check.
 Real service: N/A — runs local `bunx fallow@latest config` and unit fixtures only.
 Retro: When a scanner adds an inline threshold-raising comment alongside a config toggle, classify the config key and refuse both the inline comment syntax and its report array together.
