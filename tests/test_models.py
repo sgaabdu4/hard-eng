@@ -483,6 +483,10 @@ def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
     trunk_topic = commit(trunk, "pushed trunk topic")
     git(trunk, "update-ref", "refs/remotes/origin/trunk", trunk_topic)
     assert models.trusted_base_ref(trunk) == dev_base
+    git(trunk, "update-ref", "-d", "refs/remotes/origin/develop")
+    git(trunk, "update-ref", "refs/remotes/origin/HEAD", trunk_topic)
+    git(trunk, "checkout", "-q", "--detach", "HEAD")
+    assert models.trusted_base_ref(trunk) == trunk_topic
 
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
