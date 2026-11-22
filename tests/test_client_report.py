@@ -1,5 +1,6 @@
 """The client report check refuses a report that left the saved template or shows cross-reference codes."""
 
+import ast
 import importlib
 import subprocess
 import sys
@@ -261,6 +262,17 @@ def test_leftover_placeholder_text_is_refused_and_plain_brackets_pass(
     assert problems(fine, template) == []
 
 
+def _run_script(path: Path) -> tuple[int, str]:
+    done = subprocess.run(
+        [sys.executable, "-B", str(SCRIPT), path.name],
+        cwd=path.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.returncode, done.stdout
+
+
 def test_the_command_finds_the_template_from_the_git_top_level(
     tmp_path: Path,
 ) -> None:
@@ -275,22 +287,163 @@ def test_the_command_finds_the_template_from_the_git_top_level(
     bare.mkdir()
     loose = write(bare, "report.html")
 
-    def run(path: Path) -> tuple[int, str]:
-        done = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), path.name],
-            cwd=path.parent,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return done.returncode, done.stdout
-
-    assert run(report) == (0, "")
-    code, out = run(loose)
+    assert _run_script(report) == (0, "")
+    code, out = _run_script(loose)
     assert code == 1
     assert out == "run inside the project's git checkout\n"
+    empty_nested = tmp_path / "empty-nested"
+    (empty_nested / ".git").mkdir(parents=True)
+    assert _run_script(write(empty_nested, "report.html")) == (0, "")
+    git_inner = tmp_path / ".git/hooks"
+    git_inner.mkdir(parents=True, exist_ok=True)
+    assert _run_script(write(git_inner, "report.html")) == (
+        1,
+        "run inside the project's git checkout\n",
+    )
     (tmp_path / "docs/client-report/template.html").unlink()
-    assert run(report)[1].startswith("no saved template at ")
+    assert _run_script(report)[1].startswith("no saved template at ")
+
+
+OUTSIDE_GIT = (1, "run inside the project's git checkout\n")
+
+
+def _init_repo_with_template(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    folder = root / "docs/client-report"
+    folder.mkdir(parents=True)
+    write(folder, "template.html")
+
+
+def test_the_command_validates_gitdir_and_worktree_metadata(
+    tmp_path: Path,
+) -> None:
+    _init_repo_with_template(tmp_path)
+
+    broken_wt = tmp_path.parent / (tmp_path.name + "-broken-wt")
+    (broken_wt / "docs/client-report").mkdir(parents=True)
+    write(broken_wt / "docs/client-report", "template.html")
+    (broken_wt / ".git").write_text("gitdir: /nonexistent/worktree/gitdir\n")
+    assert _run_script(write(broken_wt, "report.html")) == OUTSIDE_GIT
+
+    nested_stale = tmp_path / "nested-stale"
+    nested_stale.mkdir()
+    (nested_stale / ".git").write_text("gitdir: /nonexistent/nested/gitdir\n")
+    assert _run_script(write(nested_stale, "report.html")) == OUTSIDE_GIT
+
+    missing_common = tmp_path.parent / (tmp_path.name + "-missing-common")
+    (missing_common / "docs/client-report").mkdir(parents=True)
+    write(missing_common / "docs/client-report", "template.html")
+    fake_gitdir = missing_common / "wt-meta"
+    fake_gitdir.mkdir()
+    (fake_gitdir / "HEAD").write_text("ref: refs/heads/main\n")
+    (fake_gitdir / "commondir").write_text("../missing-common-dir\n")
+    (missing_common / ".git").write_text(f"gitdir: {fake_gitdir}\n")
+    assert _run_script(write(missing_common, "report.html")) == OUTSIDE_GIT
+
+    missing_refs = tmp_path.parent / (tmp_path.name + "-missing-refs")
+    (missing_refs / "docs/client-report").mkdir(parents=True)
+    write(missing_refs / "docs/client-report", "template.html")
+    (missing_refs / "common/objects").mkdir(parents=True)
+    wt_no_refs = missing_refs / "wt-meta"
+    wt_no_refs.mkdir()
+    (wt_no_refs / "HEAD").write_text("ref: refs/heads/main\n")
+    (wt_no_refs / "commondir").write_text("../common\n")
+    (missing_refs / ".git").write_text(f"gitdir: {wt_no_refs}\n")
+    assert _run_script(write(missing_refs, "report.html")) == OUTSIDE_GIT
+
+
+def test_the_command_validates_symlinked_worktree_head_and_commondir(
+    tmp_path: Path,
+) -> None:
+    _init_repo_with_template(tmp_path)
+
+    symlink_wt = tmp_path.parent / (tmp_path.name + "-symlink-wt")
+    (symlink_wt / "docs/client-report").mkdir(parents=True)
+    write(symlink_wt / "docs/client-report", "template.html")
+    wt_meta = symlink_wt / "wt-meta"
+    wt_meta.mkdir()
+    (wt_meta / "HEAD").write_text("ref: refs/heads/main\n")
+    (wt_meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
+    (symlink_wt / ".git").symlink_to(wt_meta)
+    assert _run_script(write(symlink_wt, "report.html")) == (0, "")
+
+    (wt_meta / "HEAD").write_text("")
+    assert _run_script(write(symlink_wt, "report.html")) == OUTSIDE_GIT
+    (wt_meta / "HEAD").write_text("ref: refs\n")
+    assert _run_script(write(symlink_wt, "report.html")) == OUTSIDE_GIT
+    (wt_meta / "HEAD").write_text("ref: refs/heads/main\n")
+
+    nested_empty_common = tmp_path / "nested-empty-common"
+    nested_meta = tmp_path.parent / (tmp_path.name + "-empty-common-meta")
+    nested_meta.mkdir()
+    (nested_meta / "HEAD").write_text("ref: refs/heads/main\n")
+    (nested_meta / "commondir").write_text("")
+    nested_empty_common.mkdir()
+    (nested_empty_common / ".git").symlink_to(nested_meta)
+    assert _run_script(write(nested_empty_common, "report.html")) == OUTSIDE_GIT
+
+    (nested_meta / "HEAD").unlink()
+    assert _run_script(write(nested_empty_common, "report.html")) == (0, "")
+
+    abandoned = tmp_path / "abandoned-git"
+    (abandoned / ".git").mkdir(parents=True)
+    (abandoned / ".git/HEAD").write_text("ref: refs/heads/main\n")
+    assert _run_script(write(abandoned, "report.html")) == (0, "")
+
+
+def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
+    tmp_path: Path,
+) -> None:
+    _init_repo_with_template(tmp_path)
+
+    nested = tmp_path / "nested-missing-common"
+    meta = tmp_path.parent / (tmp_path.name + "-missing-common-meta")
+    meta.mkdir()
+    (meta / "HEAD").write_text("ref: refs/heads/main\n")
+    (meta / "commondir").write_text("gone/deeper/common\n")
+    nested.mkdir()
+    (nested / ".git").symlink_to(meta)
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
+    (meta / "commondir").write_text(str(tmp_path / "missing-final") + "\n")
+    assert _run_script(write(nested, "report.html")) == (0, "")
+
+    (meta / "commondir").write_text(str(tmp_path / "missing-final") + "/\n")
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
+    dangling_link = tmp_path / "dangling-common-link"
+    dangling_link.symlink_to(tmp_path / "no-such-parent/common")
+    (meta / "commondir").write_text(str(dangling_link) + "\n")
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
+    trailing_slash_link = tmp_path / "trailing-slash-common-link"
+    trailing_slash_link.symlink_to(str(tmp_path / "missing-final") + "/")
+    (meta / "commondir").write_text(str(trailing_slash_link) + "\n")
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
+    regular_file = tmp_path / "regular-common-file"
+    regular_file.write_text("not a gitdir")
+    file_slash_link = tmp_path / "file-slash-common-link"
+    file_slash_link.symlink_to(str(regular_file) + "/")
+    (meta / "commondir").write_text(str(file_slash_link) + "\n")
+    assert _run_script(write(nested, "report.html")) == (0, "")
+
+    (meta / "commondir").write_text(str(regular_file) + "/ \n")
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
+    (meta / "HEAD").write_text("ref:\u00a0refs/heads/main\n")
+    (meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
+    assert _run_script(write(nested, "report.html")) == (0, "")
+
+    spaced = tmp_path.parent / (tmp_path.name + "-spaced-ref")
+    (spaced / "docs/client-report").mkdir(parents=True)
+    write(spaced / "docs/client-report", "template.html")
+    spaced_meta = spaced / "wt-meta"
+    spaced_meta.mkdir()
+    (spaced_meta / "HEAD").write_text("ref: refs/heads/a\u00a0branch\n")
+    (spaced_meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
+    (spaced / ".git").write_text(f"gitdir: {spaced_meta}\n")
+    assert _run_script(write(spaced, "report.html")) == (0, "")
 
 
 def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
@@ -319,3 +472,25 @@ def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
     ]
     assert problems(broken, template) == []
     assert problems(rows, template) == []
+
+
+def test_check_report_script_passes_strict_ruff_subprocess_rules() -> None:
+    tree = ast.parse(SCRIPT.read_text())
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "subprocess" not in imported
+    done = subprocess.run(
+        ["uvx", "ruff@latest", "check", "--select", "S603,S607", str(SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr

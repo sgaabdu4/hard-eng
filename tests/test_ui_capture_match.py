@@ -88,3 +88,68 @@ def test_an_older_capture_with_the_same_bytes_does_not_hide_the_fresh_one(
         json.dumps({**stale, "image": "aaa-390.png", "commit": "0" * 40})
     )
     ready(fixture.root, fixture)
+
+
+def test_unchanged_pair_uses_pr_base_sha_after_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    import shipping
+    from test_shipping import _PR_URL, _UNDO, _check, _native, _patch_gh, _pull
+    from test_ui_quality import UNCHANGED_NOTE, UNCHANGED_UX, ship_setup, write_pair
+
+    fixture, fake = ship_setup(tmp_path, monkeypatch, ux=UNCHANGED_UX)
+    base = _native(fixture.root, "rev-parse", "origin/main")
+    (fixture.root / "PLAN.md").write_text(
+        (fixture.root / "PLAN.md")
+        .read_text()
+        .replace("Delivery target: PR", "Delivery target: Merge")
+    )
+    _native(fixture.root, "add", "PLAN.md")
+    _native(fixture.root, "commit", "-q", "-m", "merge target")
+    head = _native(fixture.root, "rev-parse", "HEAD")
+    fixture = replace(fixture, head=head)
+    write_pair(fixture.root, base, head)
+    _native(fixture.root, "checkout", "-q", "main")
+    (fixture.root / "BASE_MOVE.txt").write_text("base moved before merge\n")
+    _native(fixture.root, "add", "BASE_MOVE.txt")
+    _native(fixture.root, "commit", "-q", "-m", "advance main before merge")
+    newer_base = _native(fixture.root, "rev-parse", "HEAD")
+    assert newer_base != base
+    _native(fixture.root, "merge", "-q", "--no-ff", head, "-m", "merge pr")
+    merged_main = _native(fixture.root, "rev-parse", "HEAD")
+    _native(fixture.root, "update-ref", "refs/remotes/origin/main", merged_main)
+    _native(fixture.root, "checkout", "-q", "feature/shipping")
+    pull = _pull(
+        fixture,
+        body=f"{UNCHANGED_NOTE}\n{_UNDO}",
+        state="closed",
+        merged=True,
+        merged_at="2026-11-22T12:00:00Z",
+        merge_commit_sha=merged_main,
+    )
+    base_obj = pull["base"]
+    assert isinstance(base_obj, dict)
+    pull["base"] = {**base_obj, "sha": newer_base}
+    fake.pulls = [pull]
+    fake.check_payload = [{"total_count": 1, "check_runs": [_check(merged_main)]}]
+    _patch_gh(monkeypatch, fake)
+    real_git = shipping.git
+
+    def controlled_git(root: Path, *args: str) -> str:
+        if args[:2] == ("ls-remote", "--heads"):
+            return f"{merged_main}\trefs/heads/main\n"
+        if args[:2] == ("fetch", "--no-tags"):
+            return ""
+        return real_git(root, *args)
+
+    monkeypatch.setattr(shipping, "git", controlled_git)
+    shipment = shipping.verify(fixture.root, fixture.plan, _PR_URL, "delivered")
+    assert shipment.merged_sha == merged_main
+
+    pull_without_base_sha = dict(pull)
+    pull_without_base_sha["base"] = {k: v for k, v in base_obj.items() if k != "sha"}
+    fake.pulls = [pull_without_base_sha]
+    with pytest.raises(shipping.ShippingError, match="Before taken at the base"):
+        shipping.verify(fixture.root, fixture.plan, _PR_URL, "delivered")

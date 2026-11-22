@@ -1,6 +1,6 @@
 import argparse
+import os
 import re
-import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import override
@@ -117,14 +117,76 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
+HEX = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
+HEAD_REF = re.compile(r"^ref:[ \t\n\r]*refs/")
+
+
+def _valid_head(head: Path) -> bool:
+    if not head.is_file():
+        return False
+    text = head.read_text(errors="replace").strip()
+    return bool(HEAD_REF.match(text) or HEX.fullmatch(text))
+
+
+def _requires_target(text: str) -> bool:
+    return text.endswith(("/", "\\", "/.", "\\.")) or text in (".", "..")
+
+
+def _has_existing_parent(path: Path, raw: str) -> bool:
+    must_exist = _requires_target(raw)
+    cur = path
+    seen: set[Path] = set()
+    while cur.is_symlink():
+        if cur in seen or len(seen) >= 40:
+            return False
+        seen.add(cur)
+        target_text = os.readlink(cur)
+        if _requires_target(target_text):
+            must_exist = True
+        link = Path(target_text)
+        cur = link if link.is_absolute() else (cur.parent / link)
+    return cur.exists() if must_exist else cur.parent.is_dir()
+
+
+def _check_gitdir(gitdir: Path) -> str:
+    if not _valid_head(gitdir / "HEAD"):
+        return "invalid"
+    commondir = gitdir / "commondir"
+    if commondir.is_file():
+        raw = commondir.read_text(errors="replace").rstrip("\r\n")
+        if not raw:
+            return "stop"
+        target = Path(raw)
+        common = target if target.is_absolute() else (gitdir / target)
+        if not _has_existing_parent(common, raw):
+            return "stop"
+    else:
+        common = gitdir
+    ok = (common / "objects").is_dir() and (common / "refs").is_dir()
+    return "valid" if ok else "invalid"
+
+
 def saved_template() -> Path | None:
-    done = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return Path(done.stdout.strip()) / TEMPLATE if done.returncode == 0 else None
+    cwd = Path.cwd().resolve()
+    if ".git" in cwd.parts:
+        return None
+    for folder in (cwd, *cwd.parents):
+        marker = folder / ".git"
+        if marker.is_dir():
+            status = _check_gitdir(marker)
+            if status == "valid":
+                return folder / TEMPLATE
+            if status == "stop":
+                return None
+            continue
+        if marker.is_file():
+            lines = marker.read_text(errors="replace").splitlines()
+            if not lines or not lines[0].startswith("gitdir:"):
+                return None
+            target = Path(lines[0].removeprefix("gitdir:").strip())
+            gitdir = target if target.is_absolute() else (folder / target)
+            return folder / TEMPLATE if _check_gitdir(gitdir) == "valid" else None
+    return None
 
 
 def main() -> int:

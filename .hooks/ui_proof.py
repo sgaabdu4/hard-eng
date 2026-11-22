@@ -193,16 +193,22 @@ def guideline_problem(root: Path, visible: list[str]) -> str | None:
     return None
 
 
-def merge_base(root: Path, base_ref: str) -> str:
+def merge_base(
+    root: Path, base_ref: str, head: str = "HEAD", base_sha: str | None = None
+) -> str:
+    target = head or "HEAD"
     remote_ref = f"origin/{base_ref}"
-    done = subprocess.run(
-        ["git", "merge-base", "HEAD", remote_ref],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return done.stdout.strip() if done.returncode == 0 else ""
+    for ref in (base_sha, remote_ref) if base_sha else (remote_ref,):
+        done = subprocess.run(
+            ["git", "merge-base", target, ref],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if done.returncode == 0:
+            return done.stdout.strip()
+    return ""
 
 
 def unchanged_problem(root: Path, reference: str, head: str, base: str) -> str | None:
@@ -305,15 +311,56 @@ def measured_problem(
     return None
 
 
-def look_record_problem(
-    record: dict[str, object], head: str, body: str, after: list[bytes]
+def _committed_plan_digest(root: Path, head: str, plan: Path | None) -> tuple[str, str]:
+    from look import committed_plan_blob
+
+    if plan is None or not plan.is_file():
+        return "", ""
+    try:
+        rel = plan.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return "", ""
+    committed = committed_plan_blob(root, head, rel)
+    return (rel, sha256(committed)) if committed is not None else (rel, "")
+
+
+def _plan_mismatch(
+    record: dict[str, object], plan_rel: str, plan_digest: str
 ) -> str | None:
-    """Why one look record does not back the PR: not clean, lacking an After image or a rule line, or not the block in the body."""
+    recorded_plan = record.get("plan")
+    if recorded_plan is None:
+        return None
+    valid = (
+        isinstance(recorded_plan, str)
+        and bool(recorded_plan)
+        and bool(plan_digest)
+        and recorded_plan == plan_rel
+        and record.get("plan_sha256") == plan_digest
+    )
+    if valid:
+        return None
+    return (
+        "Look review: the record used a different or uncommitted plan "
+        f"({recorded_plan}); run `look` with this PR's committed plan"
+    )
+
+
+def look_record_problem(
+    record: dict[str, object],
+    head: str,
+    body: str,
+    after: list[bytes],
+    plan_rel: str = "",
+    plan_digest: str = "",
+) -> str | None:
+    """Why one look record does not back the PR: not clean, lacking an After image or a rule line, mismatched plan, or not the block in the body."""
     import look
     from plans import split_rule_line, usability_rules
 
     if record.get("outcome") != "clean":
         return f"Look review: the record for {head[:12]} is {record.get('outcome')}; fix the screen and run `look` again"
+    if problem := _plan_mismatch(record, plan_rel, plan_digest):
+        return problem
     images = cast(list[dict[str, object]], record.get("images", []))
     hashes = {item["sha256"] for item in images}
     if missing := [d for d in map(sha256, after) if d not in hashes]:
@@ -331,14 +378,24 @@ def look_record_problem(
     return None
 
 
-def look_problem(root: Path, head: str, body: str, after: list[bytes]) -> str | None:
+def look_problem(
+    root: Path,
+    head: str,
+    body: str,
+    after: list[bytes],
+    plan_rel: str = "",
+    plan_digest: str = "",
+) -> str | None:
     """A clean look record for this head that covers each After image, and a PR block that matches it."""
     import look
 
     records = look.records_for(root, head)
     if not records:
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>` and paste its block into the PR body"
-    problems = [look_record_problem(r, head, body, after) for r in records]
+    problems = [
+        look_record_problem(r, head, body, after, plan_rel, plan_digest)
+        for r in records
+    ]
     return None if None in problems else problems[0]
 
 
@@ -359,12 +416,14 @@ def evidence_problem(
     after: list[bytes],
     visible: list[str],
     route: str = "",
+    plan_rel: str = "",
+    plan_digest: str = "",
 ) -> str | None:
     if not is_native(visible) and (
         problem := measured_problem(root, head, after, route)
     ):
         return problem
-    return look_problem(root, head, body, after)
+    return look_problem(root, head, body, after, plan_rel, plan_digest)
 
 
 def ship_problem(
@@ -377,6 +436,9 @@ def ship_problem(
     after_urls: list[str],
     base_ref: str,
     videos: int = 0,
+    base_sha: str | None = None,
+    plan_rel: str = "",
+    plan_digest: str = "",
 ) -> str | None:
     """What the PR lacks of screen evidence for its visible changes; None when the checks pass."""
     from gate_config import generated_sources
@@ -398,7 +460,10 @@ def ship_problem(
         return problem
     if visible and UNCHANGED_LINE.match(reference_section(plan_text)):
         return unchanged_problem(
-            root, reference_section(plan_text), head, merge_base(root, base_ref)
+            root,
+            reference_section(plan_text),
+            head,
+            merge_base(root, base_ref, head=head, base_sha=base_sha),
         )
     if problem := guideline_problem(
         root, [name for name in visible if (root / name).is_file()]
@@ -409,7 +474,18 @@ def ship_problem(
     after = [download(root, url) for url in after_urls]
     if not after:
         return None
-    return evidence_problem(root, head, body, after, visible, surface_route(plan_text))
+    pr_files = {str(item["filename"]) for item in files}
+    verified_digest = plan_digest if plan_rel and plan_rel in pr_files else ""
+    return evidence_problem(
+        root,
+        head,
+        body,
+        after,
+        visible,
+        surface_route(plan_text),
+        plan_rel,
+        verified_digest,
+    )
 
 
 def changed_files(
@@ -531,6 +607,7 @@ def ui_evidence(
     after = [url for url in final if kinds[url].startswith("image/")]
     videos = sum(kinds[url].startswith("video/") for url in final)
     plan_text = plan.read_text() if plan is not None and plan.is_file() else ""
+    plan_rel, plan_digest = _committed_plan_digest(root, pull.head_sha, plan)
     problem = ship_problem(
         root,
         pull.head_sha,
@@ -541,6 +618,9 @@ def ui_evidence(
         after,
         pull.base_ref,
         videos,
+        base_sha=getattr(pull, "base_sha", None),
+        plan_rel=plan_rel,
+        plan_digest=plan_digest,
     )
     if problem:
         raise ValueError(f"UI evidence: {problem}")

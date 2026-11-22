@@ -1,0 +1,546 @@
+"""Single source of truth for host model roles, local overlays, CLI flags and shipping."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import TYPE_CHECKING
+from unittest.mock import Mock
+
+import models
+import pytest
+import update
+from conftest import SOURCE, commit, default_policy, git, init
+from test_agent_hooks import session_start_context
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+
+@pytest.fixture(autouse=True)
+def isolated_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    xdg = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    return xdg
+
+
+def test_shipped_models_json_loads_with_expected_defaults_and_flags() -> None:
+    loaded = models.load_models(SOURCE)
+    assert loaded["hosts"]["claude"] == {
+        "reasoning": {"model": "opus", "effort": "high"},
+        "implementation": {"model": "sonnet", "effort": "high"},
+        "lookup": {"model": "haiku", "effort": "medium"},
+    }
+    assert loaded["hosts"]["codex"] == {
+        "reasoning": {
+            "model": "gpt-6.2-sol",
+            "effort": "high",
+            "service_tier": "default",
+        },
+        "implementation": {
+            "model": "gpt-6.2-sol",
+            "effort": "high",
+            "service_tier": "default",
+        },
+        "lookup": {
+            "model": "gpt-6-luna",
+            "effort": "low",
+            "service_tier": "default",
+        },
+    }
+    assert loaded["hosts"]["agy"] == {
+        "reasoning": {"model": "gemini-4-neon", "effort": "xhigh"},
+        "implementation": {"model": "gemini-4-neon", "effort": "high"},
+        "lookup": {"model": "gemini-3.8-flash", "effort": "low"},
+    }
+    assert loaded["challenge_order"] == {
+        "claude": ["codex", "agy"],
+        "codex": ["claude", "agy"],
+        "agy": ["codex", "claude"],
+    }
+    assert loaded["subagent_overflow"] == {
+        "reasoning": ["claude", "agy", "codex"],
+        "implementation": ["claude", "agy", "codex"],
+    }
+    assert models.cli_flags("codex", "reasoning", SOURCE) == [
+        "-m",
+        "gpt-6.2-sol",
+        "-c",
+        "model_reasoning_effort=high",
+        "-c",
+        "service_tier=default",
+    ]
+    assert models.cli_flags("claude", "reasoning", SOURCE) == [
+        "--model",
+        "opus",
+        "--effort",
+        "high",
+    ]
+    assert models.cli_flags("agy", "reasoning", SOURCE) == [
+        "--model",
+        "gemini-4-neon",
+        "--effort",
+        "xhigh",
+    ]
+
+
+def test_local_overlay_merges_partially_and_respects_xdg_config_home(
+    isolated_xdg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overlay = isolated_xdg / "hard-eng/models.json"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_text(
+        json.dumps(
+            {
+                "hosts": {
+                    "codex": {"reasoning": {"effort": "xhigh"}},
+                    "agy": {"reasoning": {"model": "gemini-4.1-pro"}},
+                },
+                "challenge_order": {"claude": ["agy", "codex"]},
+                "subagent_overflow": {"reasoning": ["agy", "claude", "codex"]},
+            }
+        )
+    )
+    assert models.cli_flags("codex", "reasoning", SOURCE) == [
+        "-m",
+        "gpt-6.2-sol",
+        "-c",
+        "model_reasoning_effort=xhigh",
+        "-c",
+        "service_tier=default",
+    ]
+    assert models.cli_flags("agy", "reasoning", SOURCE) == [
+        "--model",
+        "gemini-4.1-pro",
+        "--effort",
+        "xhigh",
+    ]
+    assert models.challenge_order_for("claude", SOURCE) == ("agy", "codex")
+    assert models.challenge_order_for("codex", SOURCE) == ("claude", "agy")
+    assert models.load_models(SOURCE)["subagent_overflow"] == {
+        "reasoning": ["agy", "claude", "codex"],
+        "implementation": ["claude", "agy", "codex"],
+    }
+    assert models.role_config("claude", "lookup", SOURCE) == {
+        "model": "haiku",
+        "effort": "medium",
+    }
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
+    assert models.local_override_path() == Path.home() / ".config/hard-eng/models.json"
+
+
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        ("not-json", "unreadable JSON"),
+        ("[]", "expected a JSON object"),
+        (json.dumps({"extra": {}}), "unknown sections"),
+        (json.dumps({"hosts": []}), "hosts: expected an object"),
+        (json.dumps({"hosts": {"unknown": {}}}), "unknown hosts"),
+        (json.dumps({"hosts": {"claude": []}}), r"hosts\.claude: expected an object"),
+        (json.dumps({"hosts": {"claude": {"bad": {}}}}), "unknown roles"),
+        (
+            json.dumps({"hosts": {"claude": {"reasoning": []}}}),
+            r"hosts\.claude\.reasoning: expected an object",
+        ),
+        (
+            json.dumps({"hosts": {"claude": {"reasoning": {"extra": "x"}}}}),
+            "unknown fields",
+        ),
+        (
+            json.dumps(
+                {"hosts": {"claude": {"reasoning": {"service_tier": "default"}}}}
+            ),
+            "only for codex",
+        ),
+        (
+            json.dumps({"hosts": {"codex": {"reasoning": {"model": "--inject"}}}}),
+            "invalid model identifier",
+        ),
+        (
+            json.dumps({"hosts": {"codex": {"reasoning": {"effort": "turbo"}}}}),
+            "effort: must be one of",
+        ),
+        (
+            json.dumps({"hosts": {"codex": {"reasoning": {"service_tier": "true"}}}}),
+            "invalid service tier",
+        ),
+        (
+            json.dumps({"hosts": {"codex": {"reasoning": {"model": ""}}}}),
+            "nonempty string",
+        ),
+        (json.dumps({"challenge_order": []}), "challenge_order: expected an object"),
+        (json.dumps({"challenge_order": {"other": ["codex"]}}), "unknown keys"),
+        (json.dumps({"challenge_order": {"claude": []}}), "nonempty list"),
+        (json.dumps({"challenge_order": {"claude": ["other"]}}), "unknown host"),
+        (json.dumps({"challenge_order": {"claude": ["claude"]}}), "cannot include"),
+        (
+            json.dumps({"challenge_order": {"claude": ["agy"]}}),
+            "must include all other hosts",
+        ),
+        (
+            json.dumps({"challenge_order": {"claude": ["codex", "codex"]}}),
+            "duplicate host",
+        ),
+    ],
+)
+def test_invalid_overlay_payloads_are_rejected(
+    isolated_xdg: Path, payload: str, match: str
+) -> None:
+    overlay = isolated_xdg / "hard-eng/models.json"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_text(payload)
+    with pytest.raises((ValueError, TypeError), match=match):
+        models.load_models(SOURCE)
+
+
+def test_invalid_base_models_json_and_unknown_accessors_raise(tmp_path: Path) -> None:
+    target = tmp_path / ".agents/models.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(json.dumps({"hosts": {}}))
+    with pytest.raises(ValueError, match="missing sections"):
+        models.load_models(tmp_path)
+
+    full = json.loads((SOURCE / ".agents/models.json").read_text())
+    del full["hosts"]["agy"]
+    target.write_text(json.dumps(full))
+    with pytest.raises(ValueError, match="missing hosts"):
+        models.load_models(tmp_path)
+
+    full = json.loads((SOURCE / ".agents/models.json").read_text())
+    del full["hosts"]["agy"]["lookup"]
+    target.write_text(json.dumps(full))
+    with pytest.raises(ValueError, match="missing roles"):
+        models.load_models(tmp_path)
+
+    full = json.loads((SOURCE / ".agents/models.json").read_text())
+    del full["hosts"]["agy"]["reasoning"]["effort"]
+    target.write_text(json.dumps(full))
+    with pytest.raises(ValueError, match="missing required fields"):
+        models.load_models(tmp_path)
+
+    full = json.loads((SOURCE / ".agents/models.json").read_text())
+    del full["challenge_order"]["agy"]
+    target.write_text(json.dumps(full))
+    with pytest.raises(ValueError, match="missing keys"):
+        models.load_models(tmp_path)
+
+    with pytest.raises(ValueError, match="Unknown host"):
+        models.challenge_order_for("other", SOURCE)
+    with pytest.raises(ValueError, match="Unknown host"):
+        models.role_config("other", "reasoning", SOURCE)
+    with pytest.raises(ValueError, match="Unknown role"):
+        models.role_config("claude", "other", SOURCE)
+
+
+def test_models_json_is_shipped_installed_and_updated_by_scaffold(
+    installer: ModuleType, tmp_path: Path
+) -> None:
+    assert ".agents/models.json" in update.scaffold_files(SOURCE)
+    assert update.maybe_installed(".agents/models.json")
+    assert update.install_paths([".agents/models.json"]) == ".agents/models.json"
+
+    repo = tmp_path / "repo"
+    init(repo)
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "app"\nversion = "0.1.0"\nrequires-python = ">=3.12"\n'
+    )
+    (repo / "uv.lock").write_text("version = 1\n")
+    (repo / "app.py").write_text("x = 1\n")
+    commit(repo, "init")
+
+    installer.install(repo)
+    shipped = repo / ".agents/models.json"
+    assert shipped.read_bytes() == (SOURCE / ".agents/models.json").read_bytes()
+
+    shipped.write_text('{"local": true}\n')
+    with pytest.raises(ValueError, match=r"\.agents/models\.json already differs"):
+        installer.install(repo)
+
+
+def test_update_refreshes_models_json_as_verified_scaffold_update(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from test_updates import select_release
+
+    source, target, _ = release
+    shipped = target / ".agents/models.json"
+    assert shipped.is_file()
+    base = git(target, "rev-parse", "HEAD")
+    updated = json.loads((source / ".agents/models.json").read_text())
+    updated["hosts"]["agy"]["reasoning"]["effort"] = "max"
+    (source / ".agents/models.json").write_text(json.dumps(updated, indent=2) + "\n")
+    select_release(source, monkeypatch)
+
+    update.update(target)
+    changed = git(
+        target, "diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"
+    ).splitlines()
+    assert "M\t.agents/models.json" in changed
+    assert (
+        json.loads(shipped.read_text())["hosts"]["agy"]["reasoning"]["effort"] == "max"
+    )
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert update.check_scaffold_update(target, base)
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex", "agy"])
+@pytest.mark.parametrize("present", [False, True])
+def test_codex_and_agy_session_start_surface_models_config_and_rules(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    agent: str,
+    present: bool,
+) -> None:
+    if present:
+        (repository / ".agents").mkdir(exist_ok=True)
+        (repository / ".agents/models.json").write_text(
+            (SOURCE / ".agents/models.json").read_text()
+        )
+    context = session_start_context(
+        repository, monkeypatch, capsys, agent, "models-note"
+    )
+    mentioned = (
+        ".agents/models.json" in context and ".claude/rules/model-roles.md" in context
+    )
+    assert mentioned == (present and agent in {"codex", "agy"})
+
+
+def write_policy(root: Path, base: str) -> None:
+    (root / "hard-eng.gates.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "shipping": {**default_policy(), "base": base},
+                "packages": [],
+            }
+        )
+    )
+
+
+@pytest.mark.parametrize("target_file", [".agents/models.json", "hard-eng.gates.json"])
+def test_failed_git_read_on_trusted_base_fails_closed(
+    repository: Path, monkeypatch: pytest.MonkeyPatch, target_file: str
+) -> None:
+    import subprocess
+
+    git(repository, "branch", "-M", "main")
+    (repository / ".agents").mkdir(exist_ok=True)
+    (repository / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    write_policy(repository, "main")
+    commit(repository, "commit base files")
+    real_run = subprocess.run
+
+    def fail_show(
+        args: list[str],
+        *,
+        cwd: Path | None = None,
+        capture_output: bool = False,
+        text: bool = False,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["git", "show"] and args[2].endswith(f":{target_file}"):
+            return subprocess.CompletedProcess(
+                args, 128, stdout="", stderr="fatal: missing promisor object"
+            )
+        return real_run(
+            args,
+            cwd=cwd,
+            capture_output=capture_output,
+            text=text,
+            check=check,
+        )
+
+    monkeypatch.setattr(models.subprocess, "run", fail_show)
+    with pytest.raises(ValueError, match="unreadable trusted base"):
+        if target_file == ".agents/models.json":
+            models.load_models(repository, trusted_ref="HEAD")
+        else:
+            models.trusted_base_ref(repository)
+
+
+def test_hotfix_branch_cannot_redirect_trusted_base_to_itself(
+    repository: Path,
+) -> None:
+    git(repository, "branch", "-M", "main")
+    write_policy(repository, "main")
+    base_commit = commit(repository, "base policy")
+    git(repository, "checkout", "-qb", "hotfix/self-base")
+    write_policy(repository, "hotfix/self-base")
+    commit(repository, "self-pointing base")
+    assert models.trusted_base_ref(repository) == base_commit
+
+
+def test_declared_develop_base_on_origin_main_resolves_origin_develop(
+    repository: Path,
+) -> None:
+    git(repository, "branch", "-M", "main")
+    write_policy(repository, "develop")
+    main_commit = commit(repository, "main policy targeting develop")
+    git(repository, "update-ref", "refs/remotes/origin/main", main_commit)
+    git(repository, "checkout", "-qb", "develop")
+    (repository / ".agents").mkdir(exist_ok=True)
+    develop_models = json.loads((SOURCE / ".agents/models.json").read_text())
+    develop_models["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-trusted"
+    (repository / ".agents/models.json").write_text(json.dumps(develop_models))
+    develop_commit = commit(repository, "develop with models")
+    git(repository, "update-ref", "refs/remotes/origin/develop", develop_commit)
+    git(repository, "checkout", "-qb", "feature")
+    tampered = json.loads((SOURCE / ".agents/models.json").read_text())
+    tampered["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-tampered"
+    (repository / ".agents/models.json").write_text(json.dumps(tampered))
+    feature_commit = commit(repository, "tamper models on feature")
+    git(repository, "checkout", "-qb", "master", develop_commit)
+    write_policy(repository, "feature")
+    master_commit = commit(repository, "competing pushed master")
+    git(repository, "update-ref", "refs/remotes/origin/master", master_commit)
+    git(repository, "update-ref", "refs/remotes/origin/feature", feature_commit)
+    git(repository, "tag", "origin/HEAD", master_commit)
+    git(repository, "tag", "refs/remotes/origin/HEAD", master_commit)
+    git(repository, "checkout", "-q", "feature")
+
+    trusted = models.trusted_base_ref(repository)
+    assert trusted == develop_commit
+    assert (
+        models.role_config("codex", "reasoning", repository, trusted_ref=trusted)[
+            "model"
+        ]
+        == "gpt-6.2-trusted"
+    )
+
+
+def test_pushed_develop_and_topic_policies_cannot_override_origin_main(
+    repository: Path,
+) -> None:
+    git(repository, "branch", "-M", "main")
+    (repository / ".agents").mkdir(exist_ok=True)
+    (repository / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    main_commit = commit(repository, "main with models")
+    git(repository, "update-ref", "refs/remotes/origin/main", main_commit)
+    git(repository, "checkout", "-qb", "topic-ancestor")
+    (repository / "topic.txt").write_text("unmerged\n")
+    commit(repository, "earlier unmerged topic commit")
+    git(repository, "checkout", "-qb", "develop")
+    write_policy(repository, "topic-ancestor")
+    first_topic = commit(repository, "first policy pointing to unmerged topic ancestor")
+    git(repository, "update-ref", "refs/remotes/origin/develop", first_topic)
+    git(repository, "update-ref", "refs/remotes/origin/topic-ancestor", first_topic)
+    (repository / "topic.txt").write_text("second commit\n")
+    commit(repository, "second topic commit ahead of pushed ref")
+    assert models.trusted_base_ref(repository) == main_commit
+    git(repository, "checkout", "-q", "--detach", "HEAD")
+    assert models.trusted_base_ref(repository) == main_commit
+
+
+def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
+    repository: Path, tmp_path: Path
+) -> None:
+    git(repository, "branch", "-M", "develop")
+    write_policy(repository, "develop")
+    develop_commit = commit(repository, "develop base")
+    git(repository, "checkout", "-qb", "feature")
+    (repository / "work.txt").write_text("change\n")
+    commit(repository, "feature work")
+    assert models.trusted_base_ref(repository) == develop_commit
+    git(repository, "update-ref", "refs/remotes/origin/develop", develop_commit)
+    git(repository, "checkout", "-q", "--detach", "HEAD")
+    git(repository, "branch", "-D", "develop")
+    assert models.trusted_base_ref(repository) == develop_commit
+
+    custom = tmp_path / "custom"
+    init(custom)
+    write_policy(custom, "integration")
+    main_commit = commit(custom, "main declaring integration base")
+    git(custom, "branch", "-M", "main")
+    git(custom, "update-ref", "refs/remotes/origin/main", main_commit)
+    git(custom, "checkout", "-qb", "integration")
+    (custom / ".agents").mkdir(exist_ok=True)
+    (custom / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    integration_commit = commit(custom, "integration base")
+    git(custom, "update-ref", "refs/remotes/origin/integration", integration_commit)
+    git(custom, "checkout", "-qb", "feature")
+    (custom / "work.txt").write_text("change\n")
+    commit(custom, "feature work")
+    assert models.trusted_base_ref(custom) == integration_commit
+
+
+def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> None:
+    trunk = tmp_path / "trunk-repo"
+    init(trunk)
+    git(trunk, "config", "init.defaultBranch", "trunk")
+    git(trunk, "branch", "-M", "develop")
+    write_policy(trunk, "develop")
+    dev_base = commit(trunk, "develop remote base")
+    git(trunk, "update-ref", "refs/remotes/origin/develop", dev_base)
+    git(trunk, "checkout", "-qb", "trunk")
+    write_policy(trunk, "trunk")
+    trunk_topic = commit(trunk, "pushed trunk topic")
+    git(trunk, "update-ref", "refs/remotes/origin/trunk", trunk_topic)
+    git(trunk, "update-ref", "refs/remotes/origin/HEAD", trunk_topic)
+    assert models.trusted_base_ref(trunk) == dev_base
+    git(trunk, "update-ref", "-d", "refs/remotes/origin/develop")
+    git(trunk, "checkout", "-q", "--detach", "HEAD")
+    assert models.trusted_base_ref(trunk) == trunk_topic
+
+
+def test_orphan_anchor_and_symbolic_origin_head_resolution(tmp_path: Path) -> None:
+    orphan = tmp_path / "orphan-main"
+    init(orphan)
+    git(orphan, "branch", "-M", "develop")
+    write_policy(orphan, "develop")
+    dev_commit = commit(orphan, "develop base")
+    git(orphan, "checkout", "-q", "--orphan", "main")
+    git(orphan, "rm", "-qrf", ".")
+    (orphan / "unrelated.txt").write_text("other\n")
+    commit(orphan, "unrelated orphan main")
+    git(orphan, "checkout", "-qb", "feature", "develop")
+    (orphan / "work.txt").write_text("change\n")
+    commit(orphan, "feature on develop")
+    assert models.trusted_base_ref(orphan) == dev_commit
+
+    git(orphan, "checkout", "-q", "main")
+    write_policy(orphan, "feature")
+    orphan_main = commit(orphan, "orphan main pointing to feature")
+    feature_commit = git(orphan, "rev-parse", "feature")
+    git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main)
+    git(orphan, "update-ref", "refs/remotes/origin/develop", dev_commit)
+    git(orphan, "update-ref", "refs/remotes/origin/feature", feature_commit)
+    git(orphan, "checkout", "-q", "feature")
+    assert models.trusted_base_ref(orphan) == dev_commit
+
+    git(orphan, "checkout", "-q", "main")
+    write_policy(orphan, "develop")
+    orphan_main_dev = commit(orphan, "orphan main declaring develop")
+    git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main_dev)
+    git(orphan, "update-ref", "refs/remotes/origin/master", feature_commit)
+    git(
+        orphan,
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    )
+    git(orphan, "checkout", "-q", "feature")
+    assert models.trusted_base_ref(orphan) == dev_commit
+
+    git(orphan, "checkout", "-q", "main")
+    (orphan / "hard-eng.gates.json").unlink()
+    orphan_main_no_policy = commit(orphan, "orphan main without policy")
+    git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main_no_policy)
+    git(orphan, "checkout", "-q", "feature")
+    assert models.trusted_base_ref(orphan) == orphan_main_no_policy
+
+
+def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
+    text = (SOURCE / ".claude/rules/model-roles.md").read_text()
+    assert ".agents/models.json" in text
+    assert "subagent_overflow" in text
+    for forbidden in ("opus", "sonnet", "haiku", "gpt-", "gemini-"):
+        assert forbidden not in text.lower(), forbidden

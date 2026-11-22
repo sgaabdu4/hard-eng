@@ -114,6 +114,7 @@ class _PullRequest:
     commits: int
     rebaseable: bool | None = field(compare=False)
     default_branch: str | None = field(default=None, compare=False)
+    base_sha: str | None = field(default=None, compare=False)
 
 
 def _run(
@@ -436,6 +437,9 @@ def _pull(root: Path, owner: str, name: str, number: int) -> _PullRequest:
             _object(base.get("repo"), "PR base repository"),
             "default_branch",
             "PR base repository",
+        ),
+        base_sha=(
+            None if base.get("sha") is None else _sha(base.get("sha"), "PR base")
         ),
     )
 

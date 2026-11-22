@@ -9,6 +9,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from change_size import size_verdict
+from models import HOSTS, challenge_order_for, cli_flags, trusted_base_ref
 from plans import default_branch_point
 from process_group import run_in_group
 
@@ -39,13 +40,6 @@ HISTORY = (
 )
 HISTORY_BYTES, REVIEW_BYTES, DECLINED_BYTES = 24_000, 8_000, 4_000
 RESETS = ("branch: Created from", "branch: Reset to")
-
-
-REVIEWER_ORDER: dict[str, tuple[str, ...]] = {
-    "claude": ("codex", "agy"),
-    "codex": ("claude", "agy"),
-    "agy": ("codex", "claude"),
-}
 
 
 def agy_read_only_paths(root: Path) -> list[Path]:
@@ -84,8 +78,8 @@ def agy_read_only_settings(root: Path) -> str:
     )
 
 
-def reviewers_for(host: str | None) -> tuple[str, ...]:
-    """Ordered fallback reviewers: the other agents, never the running host."""
+def host_for(host: str | None) -> str:
+    """The running host, from --host or exactly one active host environment marker."""
     if host is None:
         detected = [
             name
@@ -98,25 +92,32 @@ def reviewers_for(host: str | None) -> tuple[str, ...]:
         ]
         if len(detected) == 1:
             host = detected[0]
-    if host not in REVIEWER_ORDER:
+    if host not in HOSTS:
         raise ValueError(
             "Cannot tell whether Claude Code, Codex or Antigravity is running; "
             "pass --host claude, --host codex or --host agy"
         )
-    return REVIEWER_ORDER[host]
+    return host
 
 
-def reviewer_for(host: str | None) -> str:
+def reviewers_for(host: str | None, root: Path | None = None) -> tuple[str, ...]:
+    """Ordered fallback reviewers: the other agents, never the running host."""
+    return challenge_order_for(host_for(host), root, trusted_ref=trusted_base_ref(root))
+
+
+def reviewer_for(host: str | None, root: Path | None = None) -> str:
     """The primary reviewer for the running host."""
-    return reviewers_for(host)[0]
+    return reviewers_for(host, root)[0]
 
 
 def command(reviewer: str, prompt: str, root: Path) -> list[str]:
+    flags = cli_flags(reviewer, "reasoning", root, trusted_ref=trusted_base_ref(root))
     if reviewer == "codex":
         # User plugins bring skills, MCP tools and hooks; `-c` stays valid on Codex releases without this key.
         return [
             "codex",
             "exec",
+            *flags,
             "--sandbox",
             "read-only",
             "-c",
@@ -134,6 +135,7 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
         return [
             "agy",
             "-p",
+            *flags,
             "--sandbox",
             "--disable-slash-commands",
             "--settings",
@@ -145,6 +147,7 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
         "claude",
         "--print",
         prompt,
+        *flags,
         "--safe-mode",
         "--tools",
         "Read,Grep,Glob,Bash",
@@ -386,7 +389,7 @@ def unavailable(outcome: str, reviewer: str) -> bool:
 
 
 def challenge(root: Path, base: str | None, host: str | None) -> int:
-    candidates = reviewers_for(host)
+    candidates = reviewers_for(host, root)
     reviewer = candidates[0]
     revision = git_text(root, "rev-parse", "HEAD")
     start, covers = covered_point(root, base)

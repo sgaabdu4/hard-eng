@@ -274,20 +274,18 @@ def write_record(
     width: int,
     findings: list[dict[str, object]],
     route: str = "",
+    ring_boxes: list[dict[str, int]] | None = None,
 ) -> Path:
+    payload: dict[str, object] = {
+        "image": image.name,
+        "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
+        "width": width,
+        "findings": findings,
+        "route": route,
+        **checkout_state(root),
+    }
+    if ring_boxes:
+        payload["ring_boxes"] = list(ring_boxes)
     record = image.with_suffix(".json")
-    record.write_text(
-        json.dumps(
-            {
-                "image": image.name,
-                "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
-                "width": width,
-                "findings": findings,
-                "route": route,
-                **checkout_state(root),
-            },
-            indent=2,
-        )
-        + "\n"
-    )
+    record.write_text(json.dumps(payload, indent=2) + "\n")
     return record

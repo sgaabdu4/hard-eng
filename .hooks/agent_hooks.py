@@ -972,7 +972,9 @@ def handle_event(root: Path, event: str, agent: str) -> int:
         elif agent == "agy" and payload.get("parentConversationId"):
             output = {"injectSteps": []}
         else:
-            message = session_context(root, payload)
+            from models import session_note
+
+            message = session_context(root, payload) + session_note(root, agent)
             # Codex loads AGENTS.override.md natively; Claude and Antigravity load AGENTS.md.
             if agent in {"claude", "agy"} and (root / "AGENTS.override.md").is_file():
                 message += "\nProject rules also in AGENTS.override.md → read it now + follow it."

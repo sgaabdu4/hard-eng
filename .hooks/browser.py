@@ -140,6 +140,7 @@ for (const { element, style, box } of fixed) {
 }
 document.querySelectorAll("[data-he-ring]").forEach((ring) => ring.remove());
 const missing = [];
+const boxes = [];
 for (const selector of RINGS) {
   let found = [];
   try { found = [...document.querySelectorAll(selector)]; } catch (error) { found = []; }
@@ -150,6 +151,12 @@ for (const selector of RINGS) {
   if (!shown.length) missing.push(selector);
   for (const element of shown) {
     const box = element.getBoundingClientRect();
+    boxes.push({
+      x: Math.round(box.left + scrollX),
+      y: Math.round(box.top + scrollY),
+      w: Math.round(box.width),
+      h: Math.round(box.height),
+    });
     const ring = document.createElement("div");
     ring.dataset.heRing = "";
     Object.assign(ring.style, {
@@ -160,7 +167,7 @@ for (const selector of RINGS) {
     document.documentElement.appendChild(ring);
   }
 }
-return JSON.stringify(missing);
+return JSON.stringify({ missing, boxes });
 })()"""
 
 
@@ -361,10 +368,12 @@ def shoot_page(
     findings = measure_page(tool, folder, session)
     script = PAGE_SCRIPT.replace("RINGS", json.dumps(rings))
     reply = require(run_tool(tool, folder, session, "eval", "--stdin", text=script))
-    if missing := json.loads(json.loads(reply)):
+    page_result = json.loads(json.loads(reply))
+    if missing := page_result["missing"]:
         raise ValueError(
             f"--ring {', '.join(missing)} matched no visible element at width {width}"
         )
+    ring_boxes = cast(list[dict[str, int]], page_result["boxes"])
     unread_frames(tool, folder, session, width)
     image = folder / f"{name}-{width}.png"
     try:
@@ -373,7 +382,7 @@ def shoot_page(
         route = json.loads(
             require(run_tool(tool, folder, session, "eval", "location.pathname"))
         )
-        write_record(root, image, width, findings, str(route))
+        write_record(root, image, width, findings, str(route), ring_boxes=ring_boxes)
     except BaseException:
         image.unlink(missing_ok=True)
         image.with_suffix(".json").unlink(missing_ok=True)
