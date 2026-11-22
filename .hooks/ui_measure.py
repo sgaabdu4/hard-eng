@@ -241,14 +241,14 @@ const heavyBody = texts.some((el) => {
 for (const h of h1s) {
   const s = getComputedStyle(h);
   const px = parseFloat(s.fontSize), wt = parseFloat(s.fontWeight) || 400;
-  if (px < bodyPx - 0.5 || wt < bodyWeight || (heavyBody && px <= bodyPx * 1.5 && wt <= 400)) {
+  if (px < bodyPx - 0.5 || (px <= bodyPx * 1.5 && (wt < bodyWeight || (heavyBody && wt <= 400)))) {
     found.push({ rule: "heading-hierarchy", at: name(h), px, weight: wt });
   }
 }
 for (const h of h2s) {
   const s = getComputedStyle(h);
   const px = parseFloat(s.fontSize), wt = parseFloat(s.fontWeight) || 400;
-  if ((maxH1Px && px > maxH1Px + 0.5) || wt < bodyWeight || (heavyBody && px <= bodyPx * 1.35 && wt <= 400)) {
+  if ((maxH1Px && px > maxH1Px + 0.5) || (px <= bodyPx * 1.35 && (wt < bodyWeight || (heavyBody && wt <= 400)))) {
     found.push({ rule: "heading-hierarchy", at: name(h), px, weight: wt });
   }
 }
@@ -261,7 +261,8 @@ for (const el of controls) {
     if (label && measureCtx) {
       measureCtx.font = s.font || `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
       const pad = (parseFloat(s.paddingLeft) || 0) + (parseFloat(s.paddingRight) || 0);
-      const avail = el.clientWidth - pad - 18;
+      const arrow = (s.appearance === "none" || s.webkitAppearance === "none") ? 0 : 18;
+      const avail = el.clientWidth - pad - arrow;
       if (avail <= 8 || measureCtx.measureText(label).width > avail + 4) {
         found.push({ rule: "clipped-control", at: name(el), why: "select clips selected option" });
       }
@@ -290,9 +291,12 @@ for (const el of document.body.querySelectorAll("*")) {
   if (s.position !== "fixed" && s.position !== "sticky") continue;
   const b = el.getBoundingClientRect();
   if (b.height < innerHeight * 0.5 || s.overflowY === "auto" || s.overflowY === "scroll") continue;
+  const clipsY = s.overflowY === "hidden" || s.overflowY === "clip";
+  if (s.position === "sticky" && !clipsY) continue;
+  const limitY = s.position === "fixed" ? (clipsY ? Math.min(b.bottom, innerHeight) : innerHeight) : b.bottom;
   for (const ctrl of el.querySelectorAll("a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link]")) {
     if (!visible(ctrl) || reportedChrome.has(ctrl) || inScroller(ctrl, el)) continue;
-    if (ctrl.getBoundingClientRect().bottom > innerHeight + 2) {
+    if (ctrl.getBoundingClientRect().bottom > limitY + 2) {
       reportedChrome.add(ctrl);
       found.push({ rule: "clipped-chrome", at: name(ctrl), why: "control pushed past viewport bottom inside fixed or sticky chrome" });
     }
@@ -303,7 +307,7 @@ const fetches = performance.getEntriesByType("resource")
   .sort((a, b) => a.startTime - b.startTime);
 let waves = 0, waveEnd = -1;
 for (const entry of fetches) {
-  if (waves === 0 || entry.startTime > waveEnd + 5) {
+  if (waves === 0 || entry.startTime >= waveEnd - 1) {
     waves += 1;
     waveEnd = entry.responseEnd;
   } else if (entry.responseEnd > waveEnd) {
@@ -313,25 +317,34 @@ for (const entry of fetches) {
 if (waves > LIMITS.fetch_waves) {
   found.push({ rule: "fetch-waterfall", at: "page", waves });
 }
-let cls = 0;
+const shifts = [];
 if (typeof PerformanceObserver !== "undefined" && (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift")) {
   await new Promise((resolve) => {
     try {
       const obs = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          if (!entry.hadRecentInput) cls += entry.value;
+          if (!entry.hadRecentInput) shifts.push(entry);
         }
       });
       obs.observe({ type: "layout-shift", buffered: true });
       setTimeout(() => {
         for (const entry of obs.takeRecords()) {
-          if (!entry.hadRecentInput) cls += entry.value;
+          if (!entry.hadRecentInput) shifts.push(entry);
         }
         obs.disconnect();
         resolve();
       }, 0);
     } catch { resolve(); }
   });
+}
+shifts.sort((a, b) => a.startTime - b.startTime);
+let cls = 0, winVal = 0, winStart = 0, prevShift = 0;
+for (const entry of shifts) {
+  if (winVal && (entry.startTime - prevShift > 1000 || entry.startTime - winStart > 5000)) winVal = 0;
+  if (!winVal) winStart = entry.startTime;
+  winVal += entry.value;
+  prevShift = entry.startTime;
+  if (winVal > cls) cls = winVal;
 }
 if (cls > LIMITS.cls) {
   found.push({ rule: "layout-shift", at: "page", cls: +cls.toFixed(3) });
