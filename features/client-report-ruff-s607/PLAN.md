@@ -25,8 +25,8 @@ Authority: Maintainer autonomous rollout approval on 2026-11-22 to fix defects b
 
 ## Acceptance + steps
 
-- [x] `saved_template()` finds the repository root from inside a git checkout, rejects directories outside a checkout and inside `.git/`, and runs without `subprocess` → `tests/test_client_report.py::test_the_command_finds_the_template_from_the_git_top_level`
-- [x] `.agents/skills/client-report/scripts/check_report.py` passes `ruff check --select S603,S607` → `tests/test_client_report.py::test_check_report_script_passes_strict_ruff_subprocess_rules`
+- [x] `saved_template()` finds the repository root from inside a git checkout, validates `.git` metadata (rejecting directories outside a checkout, broken `.git` worktree pointers, and paths inside `.git/`), and runs without `subprocess` → `tests/test_client_report.py::test_the_command_finds_the_template_from_the_git_top_level`
+- [x] `.agents/skills/client-report/scripts/check_report.py` imports no `subprocess` module and passes `ruff check --select S603,S607` → `tests/test_client_report.py::test_check_report_script_passes_strict_ruff_subprocess_rules`
 
 ## Baseline + execution
 
