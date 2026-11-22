@@ -253,6 +253,7 @@ PYTHON_OFF = re.compile(
 )
 SCRIPT_OFF = re.compile(
     r"eslint-disable|@ts-(ignore|expect-error|nocheck)|biome-ignore"
+    r"|(?://|/\*)\s*fallow-override-threshold-next-line\b"
     r"|\b(it|test|describe|suite)(?:\.(?:concurrent|sequential|shuffle))*\.(skip|only|fixme|todo|fail|failing|fails|if|runIf)(If)?(?:[.(]|\b)"
     r"|\b(xit|xtest|xdescribe|fit|fdescribe)\("
 )
@@ -274,7 +275,7 @@ TEST_OFF = {
     **dict.fromkeys(JAVASCRIPT, r"\bskip:\s*(true\b|['\"`])|\bonly:\s*true\b"),
 }
 SECURITY_OFF = re.compile(
-    r"\bno(semgrep|sem)\b|gitleaks:allow|jscpd:ignore|fallow-(?:ignore|override-threshold)"
+    r"\bno(semgrep|sem)\b|gitleaks:allow|jscpd:ignore|fallow-ignore"
     r"|shellcheck\s+(?:[\w-]+=\S+\s+)*(?:(?:disable|shell)=|source=\S*)|zizmor:\s*ignore|coverage:ignore-",
     re.IGNORECASE,
 )

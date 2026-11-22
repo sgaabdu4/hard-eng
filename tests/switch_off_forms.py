@@ -117,7 +117,7 @@ SWITCHES = [
     (
         "src/a.ts",
         "// fallow-" + "override-threshold-next-line maxCognitive=40 -- reason\n",
-        "fallow-" + "override-threshold",
+        "// fallow-" + "override-threshold-next-line",
     ),
     ("build.sh", "# shellcheck " + "disable=SC2086\n", "shellcheck " + "disable="),
     (
