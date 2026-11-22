@@ -751,20 +751,15 @@ def _merge_codex_tool_filters(target: JsonObject, codex: JsonValue) -> None:
             target[agy_key] = items
 
 
+CODEX_DEFAULT_STARTUP_TIMEOUT = 10
+
+
 def _codex_timeout(settings: JsonObject) -> int | None:
     tool = _timeout_seconds(settings.get("tool_timeout_sec"))
     if tool is None:
         return None
     startup = _timeout_seconds(settings.get("startup_timeout_sec"))
-    return max(tool, startup) if startup is not None else tool
-
-
-def _agy_stdio_from_codex(settings: JsonObject, command: str) -> JsonObject | None:
-    if settings.get("environment_id"):
-        return None
-    mirrored: JsonObject = {"command": command}
-    _copy_stdio_fields(settings, mirrored)
-    return mirrored
+    return max(tool, startup if startup is not None else CODEX_DEFAULT_STARTUP_TIMEOUT)
 
 
 def _agy_http_from_codex(settings: JsonObject, url: str) -> JsonObject | None:
@@ -781,14 +776,20 @@ def _agy_http_from_codex(settings: JsonObject, url: str) -> JsonObject | None:
 
 
 def _agy_server_from_codex(settings: JsonValue) -> JsonObject | None:
-    if not isinstance(settings, dict) or settings.get("enabled_tools") == []:
+    if (
+        not isinstance(settings, dict)
+        or settings.get("enabled_tools") == []
+        or settings.get("environment_id") not in (None, "", "local")
+    ):
         return None
     command = _nonempty_str(settings.get("command"))
     url = _nonempty_str(settings.get("url"))
     if command and url:
         return None
     if command:
-        mirrored = _agy_stdio_from_codex(settings, command)
+        stdio: JsonObject = {"command": command}
+        _copy_stdio_fields(settings, stdio)
+        mirrored: JsonObject | None = stdio
     elif url:
         mirrored = _agy_http_from_codex(settings, url)
     else:
@@ -803,9 +804,9 @@ def _agy_server_from_codex(settings: JsonValue) -> JsonObject | None:
     return mirrored
 
 
-def _is_git_ignored(root: Path, name: str) -> bool:
+def _path_git_ignored(root: Path, relative: str) -> bool:
     ignored = subprocess.run(
-        ["git", "check-ignore", "-q", "--", name],
+        ["git", "check-ignore", "-q", "--", relative],
         cwd=root,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -814,13 +815,27 @@ def _is_git_ignored(root: Path, name: str) -> bool:
     if ignored.returncode != 0:
         return False
     tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", "--", name],
+        ["git", "ls-files", "--error-unmatch", "--", relative],
         cwd=root,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,
     )
     return tracked.returncode != 0
+
+
+def _is_git_ignored(root: Path, name: str) -> bool:
+    if _path_git_ignored(root, name):
+        return True
+    path = root / name
+    if not path.exists() and not path.is_symlink():
+        return False
+    resolved = path.resolve()
+    root_resolved = root.resolve()
+    if not resolved.is_relative_to(root_resolved):
+        return True
+    target = resolved.relative_to(root_resolved).as_posix()
+    return target != name and _path_git_ignored(root, target)
 
 
 def _mirror_agy_servers(
