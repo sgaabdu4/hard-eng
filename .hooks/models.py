@@ -113,9 +113,10 @@ def _exact_ref_sha(root: Path, full_ref: str) -> str | None:
     """Resolve an exact branch or remote-tracking ref without ever matching tags."""
     if full_ref == "refs/remotes/origin/HEAD":
         target = (_git_stdout(root, "symbolic-ref", "-q", full_ref) or "").strip()
-        if not target.startswith("refs/remotes/origin/"):
-            return None
-        full_ref = target
+        if target:
+            if not target.startswith("refs/remotes/origin/"):
+                return None
+            full_ref = target
     sha = (_git_stdout(root, "show-ref", "--verify", "--hash", full_ref) or "").strip()
     return sha or None
 
