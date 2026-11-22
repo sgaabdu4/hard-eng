@@ -284,8 +284,9 @@ def _logical_lines(scope: str) -> list[str]:
 
 def _scope_verdict_problem(scope: str) -> str | None:
     wanted = {name.lower() for name, _ in usability_rules()}
-    for raw in _logical_lines(scope):
-        stripped = raw.lstrip(" >")
+    candidates = [*scope.splitlines(), *_logical_lines(scope)]
+    for raw in candidates:
+        stripped = raw.replace("\t", " ").lstrip(" >")
         while LIST_PREFIX.match(stripped):
             stripped = LIST_PREFIX.sub("", stripped)
         cleaned = clean_line(stripped).replace("*", "").replace("_", "")
@@ -296,9 +297,7 @@ def _scope_verdict_problem(scope: str) -> str | None:
             continue
         bare = verdict.rstrip(".,;:—–-").lower()
         tail = cleaned.partition(": ")[2].removeprefix(verdict).strip()
-        if bare in VERDICT_WORDS and (
-            not problem or not tail or verdict.lower() != bare or tail[:1] in "—–-(:;.,"
-        ):
+        if bare in VERDICT_WORDS and (not problem or not tail or tail[:1] in "—–-"):
             return f"{rule}: {verdict}"
     return None
 
