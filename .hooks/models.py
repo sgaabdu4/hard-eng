@@ -109,41 +109,81 @@ def _policy_base(raw: str) -> str | None:
     return None
 
 
-def _committed_base_refs(root: Path) -> tuple[str, ...]:
-    local = (
-        _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
-    ).strip() or "master"
-    anchors = dict.fromkeys(
-        ("origin/HEAD", "origin/main", "main", "origin/master", "master", local)
+def _is_ancestor(root: Path, older: str, newer: str) -> bool:
+    if older == newer:
+        return False
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", older, newer],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
     )
-    existing = [
-        ref
-        for ref in anchors
-        if _git_stdout(root, "rev-parse", "--verify", f"{ref}^{{commit}}")
+
+
+def _anchor_bases(root: Path, local: str) -> list[tuple[str, str]]:
+    """Existing base refs paired with their merge-base to HEAD, closest ancestor first."""
+    candidates = dict.fromkeys(
+        (
+            "origin/HEAD",
+            "origin/develop",
+            "develop",
+            "origin/main",
+            "main",
+            "origin/master",
+            "master",
+            local,
+        )
+    )
+    found: list[tuple[str, str]] = []
+    for ref in candidates:
+        if point := _git_stdout(root, "merge-base", "HEAD", ref):
+            found.append((ref, point.strip()))
+    closest = [
+        pair
+        for pair in found
+        if not any(_is_ancestor(root, pair[1], other[1]) for other in found)
     ]
-    current = (_git_stdout(root, "symbolic-ref", "--short", "-q", "HEAD") or "").strip()
-    for ref in (*existing, "HEAD"):
-        if ref == "HEAD" and not _git_stdout(
-            root, "rev-parse", "--verify", "HEAD^{commit}"
-        ):
-            continue
-        raw = _git_blob_if_present(root, ref, "hard-eng.gates.json")
-        if raw is None:
-            continue
-        base = _policy_base(raw)
-        if base and not (ref == "HEAD" and existing and base == current):
-            return (f"origin/{base}", base)
-    return ("origin/main", "main", "origin/HEAD", local)
+    return closest + [pair for pair in found if pair not in closest]
+
+
+def _first_merge_base(root: Path, refs: tuple[str, ...]) -> str | None:
+    for ref in refs:
+        if point := _git_stdout(root, "merge-base", "HEAD", ref):
+            return point.strip()
+    return None
+
+
+def _policy_merge_base(root: Path, ref: str) -> str | None:
+    raw = _git_blob_if_present(root, ref, "hard-eng.gates.json")
+    if raw is None or (base := _policy_base(raw)) is None:
+        return None
+    return _first_merge_base(root, (f"origin/{base}", base))
 
 
 def trusted_base_ref(root: Path | None) -> str | None:
     """Resolve the merge-base commit from committed base policy, ignoring dirty or self-pointing branch edits."""
     if root is None:
         return None
-    for ref in _committed_base_refs(root):
-        if point := _git_stdout(root, "merge-base", "HEAD", ref):
-            return point.strip()
-    return None
+    head_sha = (
+        _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}") or ""
+    ).strip()
+    if not head_sha:
+        return None
+    local = (
+        _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
+    ).strip() or "master"
+    anchors = _anchor_bases(root, local)
+    older_anchor = next((point for _, point in anchors if point != head_sha), None)
+    for ref, _ in anchors:
+        if resolved := _policy_merge_base(root, ref):
+            return resolved
+    resolved = _policy_merge_base(root, "HEAD")
+    if resolved and (resolved != head_sha or older_anchor is None):
+        return resolved
+    return anchors[0][1] if anchors else None
 
 
 def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, object]:
