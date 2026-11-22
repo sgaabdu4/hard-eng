@@ -51,12 +51,11 @@ SCOPE_SECTION = (
 LIST_PREFIX = re.compile(r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+")
 HTML_BLOCK_START = (
     r"(?i:<!--|<\?|<!\[CDATA\[|<![A-Za-z]|"
-    r"<(?:pre|script|style|textarea)(?:[ \t>]|$)|"
     r"</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|"
     r"col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|"
     r"form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|"
-    r"menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|"
-    r"summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t>]|/>|$))"
+    r"menuitem|nav|noframes|ol|optgroup|option|p|param|pre|script|search|section|style|"
+    r"summary|table|tbody|td|textarea|tfoot|th|thead|title|tr|track|ul)(?:[ \t>]|/>|$))"
 )
 BLOCK_START = re.compile(
     r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+|"
