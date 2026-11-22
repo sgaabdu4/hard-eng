@@ -391,7 +391,14 @@ def words_without_acceptance_refs(text: str) -> list[str] | None:
         normalize_acceptance_line(line)
         for line in text[heading.end() : end].splitlines()
     )
-    return plan_words(text[: heading.end()] + body + text[end:])
+    return plan_words(f"{text[: heading.end()]}\n{body}\n{text[end:]}")
+
+
+def _repo_rel(root: Path, text: str) -> str:
+    try:
+        return (root / text).resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return PurePosixPath(text).as_posix()
 
 
 def held_text(root: Path, reference: str, name: str) -> str | None:
@@ -436,16 +443,21 @@ def verified_test_ref_repair(
         new_refs, _ = acceptance_tests(plan_sections(current, allow_placeholders=True))
     except ValueError:
         return False
-    old_refs: set[tuple[str, str]] = set()
+    base_ref_sets: list[set[tuple[str, str]]] = []
     for text in base_texts:
         assert text is not None
         try:
-            old_refs.update(
-                acceptance_tests(plan_sections(text, allow_placeholders=True))[0]
+            base_ref_sets.append(
+                set(acceptance_tests(plan_sections(text, allow_placeholders=True))[0])
             )
         except ValueError:
-            pass
-    checked = [ref for ref in new_refs if ref not in old_refs or ref[0] in changed]
+            base_ref_sets.append(set())
+    common_old_refs = set.intersection(*base_ref_sets) if base_ref_sets else set()
+    checked = [
+        ref
+        for ref in new_refs
+        if ref not in common_old_refs or _repo_rel(root, ref[0]) in changed
+    ]
     if missing := missing_tests(root, checked):
         raise ValueError(
             f"{name}: acceptance names tests that do not exist: "

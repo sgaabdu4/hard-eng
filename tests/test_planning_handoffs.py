@@ -877,9 +877,9 @@ def test_a_passing_changed_complete_plan_starts_no_word_comparison(
     assert calls.count("validate") == 1 and "show" not in calls
 
 
-def test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_unchanged(
-    tmp_path: Path, completed_plan: str
-) -> None:
+def old_plan_with_test_ref(
+    tmp_path: Path, completed_plan: str, test_body: str = "def test_old():\n    pass\n"
+) -> tuple[Path, str, str]:
     root = tmp_path / "project"
     old = plan_from_before_newer_fields(
         completed_plan.replace(
@@ -889,16 +889,24 @@ def test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_u
     )
     finished_before_the_update(root, old)
     (root / "tests").mkdir(parents=True)
-    (root / "tests/test_one.py").write_text(
-        "def test_old():\n    pass\n\ndef test_kept():\n    pass\n"
-    )
+    (root / "tests/test_one.py").write_text(test_body)
     dated(root, 2, "add test")
-    base = git(root, "rev-parse", "HEAD")
+    return root, old, git(root, "rev-parse", "HEAD")
+
+
+def test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_unchanged(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    root, old, base = old_plan_with_test_ref(
+        tmp_path,
+        completed_plan,
+        "def test_old():\n    pass\n\ndef test_kept():\n    pass\n",
+    )
 
     repaired_only = old.replace(
         "`tests/test_one.py::test_old`",
         "`tests/test_one.py::test_kept`",
-    )
+    ).replace("\n## Baseline + execution", "\n\n## Baseline + execution")
     (root / OLD_NAME).write_text(repaired_only)
 
     assert "Same cause" in str(
@@ -931,6 +939,16 @@ def test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_u
             "`tests/test_one.py::test_missing`",
             "acceptance names tests that do not exist",
         ),
+        (
+            "committed missing test",
+            "`tests/test_one.py::test_missing`",
+            "acceptance names tests that do not exist",
+        ),
+        (
+            "dot-slash deleted test",
+            "`./tests/test_one.py::test_old`",
+            "acceptance names tests that do not exist",
+        ),
         ("weakened to N/A", "N/A — skipped now", "Same cause"),
         ("outcome changed", None, "Same cause"),
     ],
@@ -942,18 +960,7 @@ def test_old_plan_test_ref_repair_still_refuses_missing_tests_na_or_word_edits(
     replacement: str | None,
     expected: str,
 ) -> None:
-    root = tmp_path / "project"
-    old = plan_from_before_newer_fields(
-        completed_plan.replace(
-            "- [x] Observe the configured command exit → N/A — fixture plan has no product test.",
-            "- [x] Observe the configured command exit → `tests/test_one.py::test_old`.",
-        )
-    )
-    finished_before_the_update(root, old)
-    (root / "tests").mkdir(parents=True)
-    (root / "tests/test_one.py").write_text("def test_old():\n    pass\n")
-    dated(root, 2, "add test")
-    base = git(root, "rev-parse", "HEAD")
+    root, old, base = old_plan_with_test_ref(tmp_path, completed_plan)
 
     if case == "outcome changed":
         edited = old.replace("Observe the configured", "Observe any configured")
@@ -961,6 +968,10 @@ def test_old_plan_test_ref_repair_still_refuses_missing_tests_na_or_word_edits(
         assert replacement is not None
         edited = old.replace("`tests/test_one.py::test_old`", replacement)
     (root / OLD_NAME).write_text(edited)
+    if case == "committed missing test":
+        dated(root, 3, "commit bad repair")
+    elif case == "dot-slash deleted test":
+        (root / "tests/test_one.py").write_text("def test_other():\n    pass\n")
 
     with pytest.raises(ValueError, match=expected):
         change_size.judged_stage(root, base, None)
