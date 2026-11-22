@@ -1,4 +1,5 @@
 import argparse
+import os
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -127,6 +128,20 @@ def _valid_head(head: Path) -> bool:
     return bool(HEAD_REF.match(text) or HEX.fullmatch(text))
 
 
+def _has_existing_parent(path: Path, raw: str) -> bool:
+    if raw.endswith(("/", "\\")):
+        return path.is_dir()
+    cur = path
+    seen: set[Path] = set()
+    while cur.is_symlink():
+        if cur in seen:
+            return False
+        seen.add(cur)
+        link = Path(os.readlink(cur))
+        cur = link if link.is_absolute() else (cur.parent / link)
+    return cur.parent.is_dir()
+
+
 def _check_gitdir(gitdir: Path) -> str:
     if not _valid_head(gitdir / "HEAD"):
         return "invalid"
@@ -137,7 +152,7 @@ def _check_gitdir(gitdir: Path) -> str:
             return "stop"
         target = Path(raw)
         common = target if target.is_absolute() else (gitdir / target)
-        if not common.parent.is_dir():
+        if not _has_existing_parent(common, raw):
             return "stop"
     else:
         common = gitdir
