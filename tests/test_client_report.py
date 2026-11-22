@@ -1,5 +1,6 @@
 """The client report check refuses a report that left the saved template or shows cross-reference codes."""
 
+import ast
 import importlib
 import subprocess
 import sys
@@ -289,6 +290,21 @@ def test_the_command_finds_the_template_from_the_git_top_level(
     code, out = run(loose)
     assert code == 1
     assert out == "run inside the project's git checkout\n"
+    broken_wt = tmp_path.parent / (tmp_path.name + "-broken-wt")
+    broken_wt.mkdir()
+    (broken_wt / ".git").write_text("gitdir: /nonexistent/worktree/gitdir\n")
+    (broken_wt / "docs/client-report").mkdir(parents=True)
+    write(broken_wt / "docs/client-report", "template.html")
+    assert run(write(broken_wt, "report.html")) == (
+        1,
+        "run inside the project's git checkout\n",
+    )
+    git_inner = tmp_path / ".git/hooks"
+    git_inner.mkdir(parents=True, exist_ok=True)
+    assert run(write(git_inner, "report.html")) == (
+        1,
+        "run inside the project's git checkout\n",
+    )
     (tmp_path / "docs/client-report/template.html").unlink()
     assert run(report)[1].startswith("no saved template at ")
 
@@ -322,10 +338,15 @@ def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
 
 
 def test_check_report_script_passes_strict_ruff_subprocess_rules() -> None:
-    done = subprocess.run(
-        ["ruff", "check", "--select", "S603,S607", str(SCRIPT)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert done.returncode == 0, done.stdout + done.stderr
+    tree = ast.parse(SCRIPT.read_text())
+    imported = {
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "subprocess" not in imported

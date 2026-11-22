@@ -116,13 +116,26 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
+def _is_git_root(folder: Path) -> bool:
+    marker = folder / ".git"
+    if marker.is_dir():
+        return (marker / "HEAD").is_file()
+    if not marker.is_file():
+        return False
+    lines = marker.read_text(errors="replace").splitlines()
+    if not lines or not lines[0].startswith("gitdir:"):
+        return False
+    target = Path(lines[0].removeprefix("gitdir:").strip())
+    gitdir = target if target.is_absolute() else (folder / target)
+    return (gitdir / "HEAD").is_file()
+
+
 def saved_template() -> Path | None:
     cwd = Path.cwd().resolve()
     if ".git" in cwd.parts:
         return None
     root = next(
-        (folder for folder in (cwd, *cwd.parents) if (folder / ".git").exists()),
-        None,
+        (folder for folder in (cwd, *cwd.parents) if _is_git_root(folder)), None
     )
     return root / TEMPLATE if root is not None else None
 
