@@ -51,6 +51,7 @@ Real service: N/A — no external runtime service or API call changed.
 Retro: Escaped-bug repro `tests/test_dart_nested_plugins.py::test_dart_setup_migrates_nested_plugin_overrides` failed before the fix and passed after; sharing `nested_dart_options` prevents discovery drift between `validate_dart_typing` and `configure_dart`.
 
 Review declined: when a source package and its proven derived copy both hold a stale nested `analysis_options.yaml`, `setup.py` migrates only the source package and leaves the derived copy unchanged :: intentional; `setup.py` never rewrites proven derived copies (the same rule already applies when `setup.py` migrates a source package's root `analysis_options.yaml`), because syncing derived copies belongs to the project's own copy script on the update PR.
+Review declined: a nested profile under `lib/` or `test/` whose only `include:` chain to the package root passes through an unreadable (chmod-000) directory inside the repository is skipped during exploratory discovery :: undecidable without aborting setup on unreadable standalone test fixtures (`_includes_target` cannot distinguish an unreadable fixture include from a genuine nested profile without reading the directory), and an unreadable in-repository directory is a broken checkout that Git and `dart analyze` cannot read either; explicit includes from the package root still surface `PermissionError` via `stat()`.
 
 Delivery target: Merge
 Delivery: Pending — required remote proof.
