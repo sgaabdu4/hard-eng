@@ -140,6 +140,13 @@ def validate_dart_plugins(options: "JsonObject") -> None:
         )
 
 
+def _safe_resolve(path: Path) -> Path | None:
+    try:
+        return path.resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
 def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[Path]:
     raw = options.get("include")
     entries = [raw] if isinstance(raw, str) else raw if isinstance(raw, list) else []
@@ -148,11 +155,12 @@ def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[P
     for entry in entries:
         if not isinstance(entry, str) or entry.startswith("package:"):
             continue
-        try:
-            candidate = (path.parent / entry).resolve()
-        except (OSError, ValueError):
-            continue
-        if candidate.is_file() and candidate.is_relative_to(base):
+        candidate = _safe_resolve(path.parent / entry)
+        if (
+            candidate is not None
+            and candidate.is_file()
+            and candidate.is_relative_to(base)
+        ):
             found.append(candidate)
     return found
 
@@ -200,11 +208,12 @@ def _includes_target(
     target: Path,
     seen: set[Path] | None = None,
 ) -> bool:
-    resolved = path.resolve()
+    resolved = _safe_resolve(path)
     base = root.resolve()
     visited = seen if seen is not None else set()
     if (
-        resolved in visited
+        resolved is None
+        or resolved in visited
         or not resolved.is_file()
         or not resolved.is_relative_to(base)
         or _inside_nested_repo(resolved, base)
@@ -220,9 +229,8 @@ def _includes_target(
     for entry in entries:
         if not isinstance(entry, str) or entry.startswith("package:"):
             continue
-        try:
-            candidate = (resolved.parent / entry).resolve()
-        except (OSError, ValueError):
+        candidate = _safe_resolve(resolved.parent / entry)
+        if candidate is None:
             continue
         if candidate == target:
             return True
@@ -247,27 +255,35 @@ def _migrate_dart_plugin_file(
 
     from project_setup import migrate_dart_plugins
 
-    resolved = path.resolve()
+    resolved = _safe_resolve(path)
     base = root.resolve()
     if (
-        resolved in visited
+        resolved is None
+        or resolved in visited
         or not resolved.is_file()
         or not resolved.is_relative_to(base)
-        or _inside_nested_repo(resolved, base)
-        or any(resolved.is_relative_to(copy_root) for copy_root in copy_roots)
     ):
         return
     visited.add(resolved)
+    read_only = _inside_nested_repo(resolved, base) or any(
+        resolved.is_relative_to(copy_root) for copy_root in copy_roots
+    )
     relative = resolved.relative_to(base).as_posix()
     raw = changes.get(relative)
-    child = cast(
-        "JsonObject",
-        yaml.safe_load(raw) if raw is not None else dart_options(resolved),
-    )
-    original = deepcopy(child)
-    migrate_dart_plugins(child, source)
-    if child != original:
-        changes[relative] = yaml.safe_dump(child, sort_keys=False)
+    try:
+        child = cast(
+            "JsonObject",
+            yaml.safe_load(raw) if raw is not None else dart_options(resolved),
+        )
+    except (OSError, TypeError, ValueError):
+        if read_only:
+            return
+        raise
+    if not read_only:
+        original = deepcopy(child)
+        migrate_dart_plugins(child, source)
+        if child != original:
+            changes[relative] = yaml.safe_dump(child, sort_keys=False)
     migrate_included_dart_plugins(
         root, resolved, child, source, changes, visited, copy_roots
     )
