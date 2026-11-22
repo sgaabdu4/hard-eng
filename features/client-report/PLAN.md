@@ -71,5 +71,5 @@ Full check: CI. All 25 checks of the draft PR passed at e95d1bc9; CI runs again 
 Real service: N/A — no outside service is called; the sample used a local static page by design.
 Retro: (1) The full test run found a bytecode file that the new test wrote into a copied skill folder -> `sys.dont_write_bytecode` in the test; no rule change, the existing setup test caught it. (2) The review found the check weaker than its claim (selector and media changes passed) -> tests added first; None for the rules.
 
-Delivery target: PR
-Delivery: Pending — draft PR into develop; no merge until develop is open.
+Delivery target: Merge
+Delivery: Pending — rebased on develop after release 658; awaiting CI and merge into develop.
