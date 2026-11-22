@@ -593,6 +593,15 @@ def test_multiline_apply_and_script_class_helper_refuse_undefined_tokens(
     )
     assert "src/Spread.tsx:5:" in refused(tsx_spread_root)
 
+    ts_type_root = theme_repo(
+        tmp_path / "ts_type",
+        THEME_CSS,
+        "src/types.ts",
+        "export type Empty = {};\n",
+        'export type Props = {\n  className: string\n  variant: "text-only" | "icon-only"\n};\n',
+    )
+    validate_suppressions(ts_type_root, "HEAD")
+
 
 def test_css_import_order_governs_color_reset_and_restore(tmp_path: Path) -> None:
     """HE-UI-SOURCE: imported CSS @theme blocks run in exact @import order before their importer."""
@@ -635,6 +644,19 @@ def test_css_import_order_governs_color_reset_and_restore(tmp_path: Path) -> Non
         },
     )
     validate_suppressions(reimported, "HEAD")
+
+    separate_builds = theme_repo(
+        tmp_path / "separate",
+        '@import "./reset.css";\n@theme {\n  --color-brand: #111;\n}\n',
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="bg-brand" />\n',
+        extra={
+            "src/app/reset.css": "@theme {\n  --color-*: initial;\n}\n",
+            "src/app/widget.css": '@import "./reset.css";\n',
+        },
+    )
+    validate_suppressions(separate_builds, "HEAD")
 
 
 def test_theme_with_color_reset_refuses_default_palette_colours(
