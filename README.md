@@ -80,7 +80,7 @@ After setup:
 | --- | --- |
 | **Claude Code** | Setup writes `.mcp.json` and approves detected servers in `.claude/settings.json`. Trust the main repository folder so worktrees inherit approvals. |
 | **Codex** | Start Codex, trust the project, and review hooks with `/hooks` (re-review when hooks change). `--yolo` does not set up hooks ([Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)). |
-| **Antigravity** | Setup writes `.agents/hooks.json` and `.agents/mcp_config.json` (omitting Claude's `"type"` field from server entries). It keeps existing non-retired entries in `.agents/mcp_config.json` untouched and copies compatible custom servers from `.mcp.json` and `.codex/config.toml`. Antigravity starts loading workspace MCP servers in the background when a session opens. A newly added server needs a new session to load, and a newly opened session may need a follow-up turn before those tools appear. |
+| **Antigravity** | Setup writes `.agents/hooks.json`, and writes `.agents/mcp_config.json` when servers apply (omitting Claude's `"type"` field from server entries). It keeps existing non-retired entries in `.agents/mcp_config.json` untouched and copies compatible custom servers from `.mcp.json` and `.codex/config.toml` unless Git ignores the source file. Antigravity starts loading workspace MCP servers in the background when a session opens. A newly added server needs a new session to load, and a newly opened session may need a follow-up turn before those tools appear. |
 
 ### Requirements
 
@@ -234,7 +234,7 @@ Before shipping a PR, Hard Eng checks:
 - **Adversarial review (big changes):** `python3 .hooks/hard-eng.py challenge` runs another agent CLI read-only against the diff. Claude Code falls back through Codex then Antigravity; Codex through Claude Code then Antigravity; Antigravity through Codex then Claude Code. When no reviewer can run or finish, the PR still ships and states that the review was not done.
 - **PR text quality:** Requires an `Undo:` line, a `Not checked:` line, two or more Mermaid diagrams showing the states before and after, and concise text (at most 6,000 visible characters and no visible line over 600; put long details in `<details>`).
 - **UI evidence and privacy:** Visual changes include inspected before and after captures only when appearance changed. The agent checks outgoing text for secrets, personal data, and private project details.
-- **Clean rebase merge:** `ship` refuses branches behind base, refuses squash merges, and merges via rebase on the exact verified head commit (release PRs use a merge commit). Before merging, `ship` also blocks when the installed Hard Eng is out of date or its version cannot be confirmed. Cleanup runs only after merge is confirmed.
+- **Clean guarded merge:** `ship` refuses branches behind base and merges the exact verified head commit. It uses rebase by default, a merge commit for release, hotfix, and join PRs, or the repository's allowed fallback (such as squash) when rebase merges are disabled. Before merging, `ship` also blocks when the installed Hard Eng is out of date or its version cannot be confirmed. Cleanup runs only after merge is confirmed.
 - **Commit cap:** A PR holds at most 100 commits ([HE-PR-COMMITS](.agents/skills/he/references/requirements.md#he-pr-commits)), and each `check` except `--quick` warns from 80. The cap skips the Hard Eng update PR and PRs into branches other than the shipping base.
 
 ## 5. Learn
@@ -272,7 +272,7 @@ Each repository configures its checks, reports, package graph, and time budgets 
 
 | Present in repo | Shared check |
 | --- | --- |
-| Any supported code | Gitleaks (working tree + Git history, unless history scan is disabled) and Semgrep security scan. |
+| Any supported code | Gitleaks (working tree and Git history; `HE-NO-SWITCH-OFF` refuses switching off history scan) and Semgrep security scan. |
 | GitHub workflows | Actionlint and Zizmor. |
 | Shell scripts | ShellCheck. |
 | Deploy configs | Deployment config scan (such as Trivy). |
@@ -304,7 +304,7 @@ Skills guide the agent; hooks and checks enforce what machines can verify. Plan 
 | **Session start** | Reports last update result and starts the next background update plus idle branch and Rust build cleanup. |
 | **Shell tool (Claude / Antigravity)** | Blocks main-session foreground sleep polling ([HE-NO-FOREGROUND-POLL](.agents/skills/he/references/requirements.md#he-no-foreground-poll)) and unguarded `gh pr merge`. |
 | **Agent stops** | Validates plan handoff and runs quick checks on this session's changes. |
-| **`git push`** | Checks pushed commits in a separate worktree for the changed packages (related tests only with Vitest or Jest), then gives a mutation report. When `pre_push_checks` is `"ci"`, direct pushes to base and secret scans still run locally while the full check moves to CI. |
+| **`git push`** | Checks pushed commits in a separate worktree for the changed packages (related tests only with Vitest or Jest), then gives a mutation report. When `pre_push_checks` is `"ci"`, the hook still blocks direct pushes to base and runs secret scans locally while the full check moves to CI. |
 | **`git worktree add`** | Links local ignored env and settings files, copies ignored hooks, and initializes submodules. |
 | **CI** | Runs checks for affected packages, dependents, and shared scans; fails on any violation. |
 
