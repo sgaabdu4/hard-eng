@@ -458,6 +458,17 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
     assert len(bounded.encode("utf-8")) <= look.MAX_SCOPE_BYTES
     assert big_digest == hashlib.sha256(plan_file.read_bytes()).hexdigest()
 
+    list_html = (
+        "# T\n\n## Outcome + scope\n\n- Keep Today.\n  <details>\n  note\n"
+        "## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    assert "leaked" not in look.extract_outcome_scope(list_html, "a.md")
+    thematic = (
+        "# T\n\n## Outcome + scope\n\nKeep Today.\n\n* * *\n"
+        "  ## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    assert "leaked" not in look.extract_outcome_scope(thematic, "b.md")
+
 
 def test_ship_and_autocrlf_verify_committed_pr_plan_scope(
     tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
