@@ -21,6 +21,10 @@ UI_MODULES = (
 
 LAYOUT_RULES = {
     "competing-buttons",
+    "duplicate-buttons",
+    "heading-hierarchy",
+    "clipped-control",
+    "clipped-chrome",
     "accent-colours",
     "overflow",
     "shared-edge",

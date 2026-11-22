@@ -62,7 +62,9 @@ UI_MARKS = (
     "Color(.displayP3",
     "colorLiteral",
 )
-UI_TOKEN_MARKS = ("text-", "bg-", "border-", "ring-", "fill-", "stroke-")
+UI_TOKEN_MARK = re.compile(
+    r"text-|bg-|border-|ring-|fill-|stroke-|@theme|@font-face|--text-|font-weight"
+)
 UI_TOKEN_SUFFIXES = UI_SUFFIXES[:-2]
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
 DIFF_HUNK_HEADER = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,(\d+))?")
@@ -808,12 +810,13 @@ def security_switch_offs(
 
 
 def ui_candidate(name: str, text: str) -> bool:
-    if ("transition" in text and "all" in text) or any(
-        mark in text for mark in UI_MARKS
-    ):
-        return True
-    return name.endswith(UI_TOKEN_SUFFIXES) and any(
-        mark in text for mark in UI_TOKEN_MARKS
+    if PurePosixPath(name).name == "DESIGN.md":
+        return any(m in text for m in ("Weight", "weight", "--text-"))
+    return (
+        ("transition" in text and "all" in text)
+        or any(mark in text for mark in UI_MARKS)
+        or (name.endswith((".tsx", ".jsx")) and "key" in text)
+        or (name.endswith(UI_TOKEN_SUFFIXES) and bool(UI_TOKEN_MARK.search(text)))
     )
 
 
@@ -821,7 +824,7 @@ def ui_source_check(root: Path, added: dict[str, list[tuple[int, str]]]) -> None
     marked = {
         name: [(n, t) for n, t in lines if ui_candidate(name, t)]
         for name, lines in added.items()
-        if name.endswith(UI_SUFFIXES)
+        if name.endswith(UI_SUFFIXES) or PurePosixPath(name).name == "DESIGN.md"
     }
     if candidates := {name: lines for name, lines in marked.items() if lines}:
         from ui_rules import ui_findings
