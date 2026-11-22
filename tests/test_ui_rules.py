@@ -822,6 +822,14 @@ def test_duplicate_sibling_react_keys_are_refused_without_flagging_ternaries_or_
     )
     assert 'duplicate sibling React key ("row")' in refused(standalone_array)
 
+    array_ternary_dup = change(
+        tmp_path / "array_ternary_dup",
+        "src/ArrayTernary.tsx",
+        "export const render = () => [];\n",
+        'export const render = (ro: boolean) => [ro ? <span key="st" /> : <em key="st" />, <b key="st" />];\n',
+    )
+    assert 'duplicate sibling React key ("st")' in refused(array_ternary_dup)
+
     valid = change(
         tmp_path / "valid",
         "src/Valid.tsx",
@@ -833,7 +841,8 @@ def test_duplicate_sibling_react_keys_are_refused_without_flagging_ternaries_or_
         "    {b.map((x) => <span key={x} />)}\n"
         "    <div key={`outer-${id}`}><span key={`outer-${id}`} /></div>\n"
         "  </div>\n"
-        ");\n",
+        ");\n"
+        'export const pick = (ro: boolean) => [ro ? <span key="status" /> : <em key="status" />];\n',
     )
     validate_suppressions(valid, "HEAD")
 
@@ -933,3 +942,32 @@ def test_design_md_weight_parity_handles_monorepo_root_and_generated_css(
     commit(gen, "base")
     (gen / "src/theme.css").write_text("@theme {\n  --text-heading: 1.25rem;\n}\n")
     validate_suppressions(gen, "HEAD")
+
+    imp = tmp_path / "imp"
+    init(imp)
+    (imp / ".gitattributes").write_text("src/fonts.css linguist-generated=true\n")
+    (imp / "src").mkdir()
+    (imp / "src/fonts.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+    )
+    (imp / "src/tokens.css").write_text(
+        "@theme {\n  --text-heading: 1.25rem;\n  --text-heading--font-weight: 500;\n}\n"
+    )
+    (imp / "src/app.css").write_text(
+        '@import "./fonts.css";\n@import "./tokens.css";\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading--font-weight: 600;\n}\n'
+    )
+    (imp / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 600\n---\n# App\n"
+    )
+    commit(imp, "base")
+    (imp / "src/app.css").write_text(
+        '@import "./fonts.css";\n@import "./tokens.css";\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading--font-weight: 600;\n}\n/* touch */\n'
+    )
+    validate_suppressions(imp, "HEAD")
+    (imp / "src/app.css").write_text(
+        '@import "./fonts.css";\n@import "./tokens.css";\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading--font-weight: 700;\n}\n'
+    )
+    assert "outside loaded @font-face font-weight ranges" in refused(imp)
