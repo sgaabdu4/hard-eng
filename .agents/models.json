@@ -1,0 +1,28 @@
+{
+  "hosts": {
+    "claude": {
+      "reasoning": { "model": "opus", "effort": "high" },
+      "implementation": { "model": "sonnet", "effort": "high" },
+      "lookup": { "model": "haiku", "effort": "medium" }
+    },
+    "codex": {
+      "reasoning": { "model": "gpt-6.2-sol", "effort": "high", "service_tier": "default" },
+      "implementation": { "model": "gpt-6.2-sol", "effort": "high", "service_tier": "default" },
+      "lookup": { "model": "gpt-6-luna", "effort": "low", "service_tier": "default" }
+    },
+    "agy": {
+      "reasoning": { "model": "gemini-4-neon", "effort": "xhigh" },
+      "implementation": { "model": "gemini-4-neon", "effort": "high" },
+      "lookup": { "model": "gemini-3.8-flash", "effort": "low" }
+    }
+  },
+  "challenge_order": {
+    "claude": ["codex", "agy"],
+    "codex": ["claude", "agy"],
+    "agy": ["codex", "claude"]
+  },
+  "subagent_overflow": {
+    "reasoning": ["claude", "agy", "codex"],
+    "implementation": ["claude", "agy", "codex"]
+  }
+}

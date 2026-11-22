@@ -528,6 +528,25 @@ def test_session_reports_update_status_without_running_update(
     assert (repository / ".hard-eng/sessions/startup.json").exists()
 
 
+def session_start_context(
+    repository: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    agent: str,
+    session_id: str,
+) -> str:
+    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
+    key = "conversationId" if agent == "agy" else "session_id"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({key: session_id})))
+    assert agent_hooks.handle_event(repository, "session", agent) == 0
+    raw = json.loads(capsys.readouterr().out)
+    return (
+        raw["injectSteps"][0]["systemMessage"]["systemMessage"]
+        if agent == "agy"
+        else raw["hookSpecificOutput"]["additionalContext"]
+    )
+
+
 @pytest.mark.parametrize("agent", ["claude", "codex", "agy"])
 @pytest.mark.parametrize("override", [False, True])
 def test_only_claude_and_agy_are_told_to_read_override(
@@ -539,16 +558,7 @@ def test_only_claude_and_agy_are_told_to_read_override(
 ) -> None:
     if override:
         (repository / "AGENTS.override.md").write_text("# Local\n")
-    monkeypatch.setattr(update_runner, "start_update", Mock(return_value="status"))
-    key = "conversationId" if agent == "agy" else "session_id"
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({key: "override"})))
-    assert agent_hooks.handle_event(repository, "session", agent) == 0
-    raw = json.loads(capsys.readouterr().out)
-    context = (
-        raw["injectSteps"][0]["systemMessage"]["systemMessage"]
-        if agent == "agy"
-        else raw["hookSpecificOutput"]["additionalContext"]
-    )
+    context = session_start_context(repository, monkeypatch, capsys, agent, "override")
     told = "AGENTS.override.md → read it now + follow it." in context
     assert told == (override and agent in {"claude", "agy"})
 

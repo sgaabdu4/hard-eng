@@ -1,0 +1,335 @@
+"""Load host model roles, challenge fallback order, and CLI flags from .agents/models.json."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+from pathlib import Path
+from typing import TypedDict
+
+MODELS_FILE = ".agents/models.json"
+SHIPPED_MODELS = Path(__file__).resolve().parents[1] / MODELS_FILE
+HOSTS = ("claude", "codex", "agy")
+ROLES = ("reasoning", "implementation", "lookup")
+OVERFLOW_ROLES = ("reasoning", "implementation")
+EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
+SAFE_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]*$")
+SAFE_TIER = re.compile(r"^[a-z][a-z0-9_-]*$")
+TOML_LITERALS = frozenset({"true", "false", "inf", "nan"})
+ROLE_FIELDS = frozenset({"model", "effort", "service_tier"})
+TOP_FIELDS = frozenset({"hosts", "challenge_order", "subagent_overflow"})
+
+
+RoleConfig = TypedDict(
+    "RoleConfig", {"model": str, "effort": str, "service_tier": str}, total=False
+)
+ModelsConfig = TypedDict(
+    "ModelsConfig",
+    {
+        "hosts": dict[str, dict[str, RoleConfig]],
+        "challenge_order": dict[str, list[str]],
+        "subagent_overflow": dict[str, list[str]],
+    },
+)
+
+
+def local_override_path() -> Path:
+    """Optional machine-local override outside the repository."""
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    base = Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".config"
+    return base / "hard-eng/models.json"
+
+
+def base_models_path(root: Path | None = None) -> Path:
+    if root is not None:
+        candidate = root / MODELS_FILE
+        if candidate.exists() or candidate.is_symlink():
+            return candidate
+    return SHIPPED_MODELS
+
+
+def _parse_object(text: str, label: str) -> dict[str, object]:
+    try:
+        raw = json.loads(text)
+    except ValueError as error:
+        raise ValueError(f"{label}: unreadable JSON ({error})") from error
+    if not isinstance(raw, dict):
+        raise TypeError(f"{label}: expected a JSON object")
+    return raw
+
+
+def _read_object(path: Path, label: str) -> dict[str, object]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"{label}: unreadable JSON ({error})") from error
+    return _parse_object(text, label)
+
+
+def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, object]:
+    if root is not None and trusted_ref is not None:
+        shown = subprocess.run(
+            ["git", "show", f"{trusted_ref}:{MODELS_FILE}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if shown.returncode == 0:
+            return _parse_object(shown.stdout, f"{trusted_ref}:{MODELS_FILE}")
+    return _read_object(base_models_path(root), MODELS_FILE)
+
+
+def _check_role_field(key: str, value: object, where: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{where}.{key}: must be a nonempty string")
+    if key == "model" and not SAFE_MODEL.fullmatch(value):
+        raise ValueError(f"{where}.model: invalid model identifier {value!r}")
+    if key == "effort" and value not in EFFORTS:
+        raise ValueError(f"{where}.effort: must be one of {sorted(EFFORTS)}")
+    if key == "service_tier" and (
+        not SAFE_TIER.fullmatch(value) or value in TOML_LITERALS
+    ):
+        raise ValueError(f"{where}.service_tier: invalid service tier {value!r}")
+    return value
+
+
+def _validate_role(
+    host: str, role: str, raw: object, label: str, *, partial: bool
+) -> RoleConfig:
+    where = f"{label} hosts.{host}.{role}"
+    if not isinstance(raw, dict):
+        raise TypeError(f"{where}: expected an object")
+    if unknown := sorted(set(raw) - ROLE_FIELDS):
+        raise ValueError(f"{where}: unknown fields {', '.join(unknown)}")
+    if "service_tier" in raw and host != "codex":
+        raise ValueError(f"{where}: service_tier is supported only for codex")
+    if not partial and (missing := [k for k in ("model", "effort") if k not in raw]):
+        raise ValueError(f"{where}: missing required fields {', '.join(missing)}")
+    result: RoleConfig = {}
+    if "model" in raw:
+        result["model"] = _check_role_field("model", raw["model"], where)
+    if "effort" in raw:
+        result["effort"] = _check_role_field("effort", raw["effort"], where)
+    if "service_tier" in raw:
+        result["service_tier"] = _check_role_field(
+            "service_tier", raw["service_tier"], where
+        )
+    return result
+
+
+def _validate_host_list(
+    where: str,
+    raw: object,
+    *,
+    excluded: str | None = None,
+    require_all_other: bool = False,
+) -> list[str]:
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(f"{where}: must be a nonempty list of hosts")
+    seen: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or item not in HOSTS:
+            raise ValueError(f"{where}: unknown host {item!r}")
+        if item == excluded:
+            raise ValueError(f"{where}: cannot include {excluded!r} itself")
+        if item in seen:
+            raise ValueError(f"{where}: duplicate host {item!r}")
+        seen.append(item)
+    if require_all_other and excluded is not None and len(seen) != len(HOSTS) - 1:
+        missing = sorted(set(HOSTS) - {excluded} - set(seen))
+        raise ValueError(
+            f"{where}: must include all other hosts (missing {', '.join(missing)})"
+        )
+    return seen
+
+
+def _validate_hosts(
+    raw: object, label: str, *, partial: bool
+) -> dict[str, dict[str, RoleConfig]]:
+    if not isinstance(raw, dict):
+        raise TypeError(f"{label} hosts: expected an object")
+    allowed = set(HOSTS)
+    if unknown := sorted(set(raw) - allowed):
+        raise ValueError(f"{label} hosts: unknown hosts {', '.join(unknown)}")
+    if not partial and (missing := sorted(allowed - set(raw))):
+        raise ValueError(f"{label} hosts: missing hosts {', '.join(missing)}")
+    parsed: dict[str, dict[str, RoleConfig]] = {}
+    for host, roles in raw.items():
+        if not isinstance(roles, dict):
+            raise TypeError(f"{label} hosts.{host}: expected an object")
+        role_set = set(ROLES)
+        if bad_roles := sorted(set(roles) - role_set):
+            raise ValueError(
+                f"{label} hosts.{host}: unknown roles {', '.join(bad_roles)}"
+            )
+        if not partial and (missing_roles := sorted(role_set - set(roles))):
+            raise ValueError(
+                f"{label} hosts.{host}: missing roles {', '.join(missing_roles)}"
+            )
+        parsed[host] = {
+            role: _validate_role(host, role, cfg, label, partial=partial)
+            for role, cfg in roles.items()
+        }
+    return parsed
+
+
+def _validate_order_map(
+    section: str,
+    keys: tuple[str, ...],
+    raw: object,
+    label: str,
+    *,
+    partial: bool,
+    exclude_self: bool,
+) -> dict[str, list[str]]:
+    if not isinstance(raw, dict):
+        raise TypeError(f"{label} {section}: expected an object")
+    allowed = set(keys)
+    if unknown := sorted(set(raw) - allowed):
+        raise ValueError(f"{label} {section}: unknown keys {', '.join(unknown)}")
+    if not partial and (missing := sorted(allowed - set(raw))):
+        raise ValueError(f"{label} {section}: missing keys {', '.join(missing)}")
+    return {
+        key: _validate_host_list(
+            f"{label} {section}.{key}",
+            value,
+            excluded=key if exclude_self else None,
+            require_all_other=exclude_self,
+        )
+        for key, value in raw.items()
+    }
+
+
+def _validate_base(raw: dict[str, object], label: str) -> ModelsConfig:
+    if unknown := sorted(set(raw) - TOP_FIELDS):
+        raise ValueError(f"{label}: unknown sections {', '.join(unknown)}")
+    if missing := sorted(TOP_FIELDS - set(raw)):
+        raise ValueError(f"{label}: missing sections {', '.join(missing)}")
+    return {
+        "hosts": _validate_hosts(raw["hosts"], label, partial=False),
+        "challenge_order": _validate_order_map(
+            "challenge_order",
+            HOSTS,
+            raw["challenge_order"],
+            label,
+            partial=False,
+            exclude_self=True,
+        ),
+        "subagent_overflow": _validate_order_map(
+            "subagent_overflow",
+            OVERFLOW_ROLES,
+            raw["subagent_overflow"],
+            label,
+            partial=False,
+            exclude_self=False,
+        ),
+    }
+
+
+def _merge_overlay(
+    base: ModelsConfig, raw: dict[str, object], label: str
+) -> ModelsConfig:
+    if unknown := sorted(set(raw) - TOP_FIELDS):
+        raise ValueError(f"{label}: unknown sections {', '.join(unknown)}")
+    merged: ModelsConfig = {
+        "hosts": {
+            host: {role: cfg.copy() for role, cfg in roles.items()}
+            for host, roles in base["hosts"].items()
+        },
+        "challenge_order": {
+            host: list(order) for host, order in base["challenge_order"].items()
+        },
+        "subagent_overflow": {
+            role: list(order) for role, order in base["subagent_overflow"].items()
+        },
+    }
+    if "hosts" in raw:
+        for host, roles in _validate_hosts(raw["hosts"], label, partial=True).items():
+            for role, patch in roles.items():
+                merged["hosts"][host][role].update(patch)
+    if "challenge_order" in raw:
+        merged["challenge_order"].update(
+            _validate_order_map(
+                "challenge_order",
+                HOSTS,
+                raw["challenge_order"],
+                label,
+                partial=True,
+                exclude_self=True,
+            )
+        )
+    if "subagent_overflow" in raw:
+        merged["subagent_overflow"].update(
+            _validate_order_map(
+                "subagent_overflow",
+                OVERFLOW_ROLES,
+                raw["subagent_overflow"],
+                label,
+                partial=True,
+                exclude_self=False,
+            )
+        )
+    return merged
+
+
+def load_models(
+    root: Path | None = None, *, trusted_ref: str | None = None
+) -> ModelsConfig:
+    """Load validated model settings from .agents/models.json plus optional local overlay."""
+    config = _validate_base(_read_trusted_base(root, trusted_ref), MODELS_FILE)
+    override = local_override_path()
+    if override.exists() or override.is_symlink():
+        config = _merge_overlay(
+            config, _read_object(override, str(override)), str(override)
+        )
+    return config
+
+
+def challenge_order_for(
+    host: str, root: Path | None = None, *, trusted_ref: str | None = None
+) -> tuple[str, ...]:
+    if host not in HOSTS:
+        raise ValueError(f"Unknown host {host!r}; expected one of {', '.join(HOSTS)}")
+    return tuple(load_models(root, trusted_ref=trusted_ref)["challenge_order"][host])
+
+
+def role_config(
+    host: str, role: str, root: Path | None = None, *, trusted_ref: str | None = None
+) -> RoleConfig:
+    if host not in HOSTS:
+        raise ValueError(f"Unknown host {host!r}; expected one of {', '.join(HOSTS)}")
+    if role not in ROLES:
+        raise ValueError(f"Unknown role {role!r}; expected one of {', '.join(ROLES)}")
+    return load_models(root, trusted_ref=trusted_ref)["hosts"][host][role]
+
+
+def cli_flags(
+    host: str,
+    role: str = "reasoning",
+    root: Path | None = None,
+    *,
+    trusted_ref: str | None = None,
+) -> list[str]:
+    """CLI model, effort, and service-tier flags verified for the given host binary."""
+    cfg = role_config(host, role, root, trusted_ref=trusted_ref)
+    model = cfg["model"]
+    effort = cfg["effort"]
+    if host == "codex":
+        flags = ["-m", model, "-c", f"model_reasoning_effort={effort}"]
+        if "service_tier" in cfg:
+            flags.extend(["-c", f"service_tier={cfg['service_tier']}"])
+        return flags
+    return ["--model", model, "--effort", effort]
+
+
+def session_note(root: Path, agent: str) -> str:
+    """Surface model-role config to hosts that do not auto-load .claude/rules/."""
+    if agent in {"codex", "agy"} and (root / MODELS_FILE).is_file():
+        return (
+            f"\nSubagent models/efforts: {MODELS_FILE} "
+            "(rules: .claude/rules/model-roles.md)."
+        )
+    return ""
