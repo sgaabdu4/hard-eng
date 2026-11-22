@@ -177,6 +177,51 @@ def nested_dart_options(
     return found
 
 
+def _inside_nested_repo(path: Path, base: Path) -> bool:
+    current = path.parent
+    while current != base and current.is_relative_to(base):
+        if (current / ".git").exists():
+            return True
+        current = current.parent
+    return False
+
+
+def _includes_target(
+    root: Path,
+    path: Path,
+    target: Path,
+    seen: set[Path] | None = None,
+) -> bool:
+    resolved = path.resolve()
+    base = root.resolve()
+    visited = seen if seen is not None else set()
+    if (
+        resolved in visited
+        or not resolved.is_file()
+        or not resolved.is_relative_to(base)
+        or _inside_nested_repo(resolved, base)
+    ):
+        return False
+    visited.add(resolved)
+    try:
+        options = cast("JsonObject", dart_options(resolved))
+    except (OSError, TypeError, ValueError):
+        return False
+    raw = options.get("include")
+    entries = [raw] if isinstance(raw, str) else raw if isinstance(raw, list) else []
+    for entry in entries:
+        if not isinstance(entry, str) or entry.startswith("package:"):
+            continue
+        candidate = (resolved.parent / entry).resolve()
+        if candidate == target:
+            return True
+        if candidate.is_relative_to(base) and _includes_target(
+            root, candidate, target, visited
+        ):
+            return True
+    return False
+
+
 def _migrate_dart_plugin_file(
     root: Path,
     path: Path,
@@ -196,6 +241,7 @@ def _migrate_dart_plugin_file(
         resolved in visited
         or not resolved.is_file()
         or not resolved.is_relative_to(base)
+        or _inside_nested_repo(resolved, base)
     ):
         return
     visited.add(resolved)
@@ -234,12 +280,20 @@ def migrate_nested_dart_plugins(
     children: frozenset[str] = frozenset(),
     seen: set[Path] | None = None,
 ) -> None:
-    visited = (
-        seen if seen is not None else {(directory / "analysis_options.yaml").resolve()}
-    )
-    excluded = frozenset(child.removesuffix("/**") for child in children)
-    for nested in nested_dart_options(directory, sources, excluded):
-        _migrate_dart_plugin_file(root, nested, source, changes, visited)
+    target = (directory / "analysis_options.yaml").resolve()
+    visited = seen if seen is not None else {target}
+    excluded = {child.removesuffix("/**") for child in children}
+    top = repository_top(root)
+    if directory.resolve().is_relative_to(top):
+        prefix = folder_prefix(directory.resolve().relative_to(top).as_posix())
+        excluded.update(
+            held[len(prefix) :]
+            for held in proven_copies(root, directory)
+            if held.startswith(prefix)
+        )
+    for nested in nested_dart_options(directory, sources, frozenset(excluded)):
+        if _includes_target(root, nested, target):
+            _migrate_dart_plugin_file(root, nested, source, changes, visited)
 
 
 def dart_options(path: Path) -> DartOptions:
