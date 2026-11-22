@@ -116,10 +116,10 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
-def _is_git_root(folder: Path) -> bool:
+def _is_valid_git_root(folder: Path) -> bool:
     marker = folder / ".git"
     if marker.is_dir():
-        return (marker / "HEAD").is_file()
+        return (marker / "HEAD").is_file() and (marker / "objects").is_dir()
     if not marker.is_file():
         return False
     lines = marker.read_text(errors="replace").splitlines()
@@ -127,17 +127,26 @@ def _is_git_root(folder: Path) -> bool:
         return False
     target = Path(lines[0].removeprefix("gitdir:").strip())
     gitdir = target if target.is_absolute() else (folder / target)
-    return (gitdir / "HEAD").is_file()
+    if not (gitdir / "HEAD").is_file():
+        return False
+    commondir = gitdir / "commondir"
+    if commondir.is_file():
+        common_target = Path(commondir.read_text(errors="replace").strip())
+        common = (
+            common_target if common_target.is_absolute() else (gitdir / common_target)
+        )
+        return (common / "objects").is_dir()
+    return (gitdir / "objects").is_dir()
 
 
 def saved_template() -> Path | None:
     cwd = Path.cwd().resolve()
     if ".git" in cwd.parts:
         return None
-    root = next(
-        (folder for folder in (cwd, *cwd.parents) if _is_git_root(folder)), None
-    )
-    return root / TEMPLATE if root is not None else None
+    for folder in (cwd, *cwd.parents):
+        if (folder / ".git").exists():
+            return folder / TEMPLATE if _is_valid_git_root(folder) else None
+    return None
 
 
 def main() -> int:
