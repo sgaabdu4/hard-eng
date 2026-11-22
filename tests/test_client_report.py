@@ -404,6 +404,13 @@ def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
     (nested / ".git").symlink_to(meta)
     assert _run_script(write(nested, "report.html")) == outside
 
+    (meta / "commondir").write_text(str(tmp_path / "missing-final") + "\n")
+    assert _run_script(write(nested, "report.html")) == (0, "")
+
+    (meta / "HEAD").write_text("ref:\u00a0refs/heads/main\n")
+    (meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
+    assert _run_script(write(nested, "report.html")) == (0, "")
+
     spaced = tmp_path.parent / (tmp_path.name + "-spaced-ref")
     (spaced / "docs/client-report").mkdir(parents=True)
     write(spaced / "docs/client-report", "template.html")

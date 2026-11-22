@@ -117,7 +117,7 @@ def problems(report: Path, template: Path) -> list[str]:
 
 
 HEX = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
-HEAD_REF = re.compile(r"^ref:\s*refs/")
+HEAD_REF = re.compile(r"^ref:[ \t\n\r]*refs/")
 
 
 def _valid_head(head: Path) -> bool:
@@ -137,7 +137,7 @@ def _check_gitdir(gitdir: Path) -> str:
             return "stop"
         target = Path(raw)
         common = target if target.is_absolute() else (gitdir / target)
-        if not common.is_dir():
+        if not common.parent.is_dir():
             return "stop"
     else:
         common = gitdir
