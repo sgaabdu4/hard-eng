@@ -259,6 +259,7 @@ SCRIPT_CLASS_CONTEXT = re.compile(
 SCRIPT_CALL_OPEN = re.compile(
     r"\b(?:cn|clsx|cva|twMerge|classNames|classList\.\w+)\s*\("
 )
+CLASS_ATTR_EXPR = re.compile(r"\b(?:className|class)\s*=\s*\{")
 COMPARE_BEFORE = re.compile(
     r"(?:===?|!==?|\bcase)\s*$|\.(?:includes|startsWith|endsWith|indexOf|match)\(\s*$"
 )
@@ -378,9 +379,28 @@ def _has_external_theme(package: Path, css_texts: list[str]) -> bool:
     return False
 
 
+def _css_import_targets(
+    path: Path, text: str, by_resolved: dict[Path, Path]
+) -> list[Path]:
+    found: list[Path] = []
+    for target in CSS_IMPORT.findall(text):
+        if target.startswith(("http://", "https://", "//")):
+            continue
+        for suffix in ("", ".css"):
+            candidate = (path.parent / (target + suffix)).resolve()
+            if candidate in by_resolved:
+                found.append(by_resolved[candidate])
+                break
+    return found
+
+
 def _ordered_css_files(files: list[Path], texts: dict[Path, str]) -> list[Path]:
-    """Order CSS files with imported stylesheets before their importers so @theme resets match Tailwind's cascade."""
+    """Order CSS files with entrypoints resolved in exact @import order before unreferenced files."""
     by_resolved = {path.resolve(): path for path in files}
+    edges = {
+        path: _css_import_targets(path, texts[path], by_resolved) for path in files
+    }
+    imported = {target.resolve() for targets in edges.values() for target in targets}
     ordered: list[Path] = []
     visited: set[Path] = set()
     visiting: set[Path] = set()
@@ -390,18 +410,15 @@ def _ordered_css_files(files: list[Path], texts: dict[Path, str]) -> list[Path]:
         if resolved in visited or resolved in visiting:
             return
         visiting.add(resolved)
-        for target in CSS_IMPORT.findall(texts[path]):
-            if target.startswith(("http://", "https://", "//")):
-                continue
-            for suffix in ("", ".css"):
-                candidate = (path.parent / (target + suffix)).resolve()
-                if candidate in by_resolved:
-                    visit(by_resolved[candidate])
-                    break
+        for target in edges[path]:
+            visit(target)
         visiting.remove(resolved)
         visited.add(resolved)
         ordered.append(path)
 
+    for path in files:
+        if path.resolve() not in imported:
+            visit(path)
     for path in files:
         visit(path)
     return ordered
@@ -627,7 +644,7 @@ def _apply_chunks_by_line(text: str) -> dict[int, list[str]]:
     return by_line
 
 
-def _script_class_lines(text: str, suffix: str) -> set[int]:
+def _class_context_lines(text: str, suffix: str) -> set[int]:
     from source_scan import code_without_comments, without_literals
 
     masked = without_literals(f"x{suffix}", code_without_comments(text, suffix))
@@ -636,15 +653,38 @@ def _script_class_lines(text: str, suffix: str) -> set[int]:
         for number, line in enumerate(masked.splitlines(), 1)
         if SCRIPT_CLASS_CONTEXT.search(line)
     }
-    for match in SCRIPT_CALL_OPEN.finditer(masked):
-        start_line = masked.count("\n", 0, match.start()) + 1
-        end = _balanced_end(masked, match.end(), "(", ")")
-        end_line = masked.count("\n", 0, end) + 1
-        lines.update(range(start_line, end_line + 1))
+    for pattern, opener, closer in (
+        (SCRIPT_CALL_OPEN, "(", ")"),
+        (CLASS_ATTR_EXPR, "{", "}"),
+    ):
+        for match in pattern.finditer(masked):
+            start_line = masked.count("\n", 0, match.start()) + 1
+            end = _balanced_end(masked, match.end(), opener, closer)
+            end_line = masked.count("\n", 0, end) + 1
+            lines.update(range(start_line, end_line + 1))
     return lines
 
 
-def _multiline_template_chunks(text: str, suffix: str) -> dict[int, list[str]]:
+def _mask_comparison_strings(text: str, suffix: str) -> str:
+    from source_scan import blank_spans, code_without_comments
+
+    code = (
+        code_without_comments(text, suffix)
+        if suffix in (".ts", ".js", ".tsx", ".jsx")
+        else text
+    )
+    spans: list[tuple[int, int]] = []
+    for match in STRING_TOKEN.finditer(code):
+        before = code[max(0, match.start() - 64) : match.start()]
+        after = code[match.end() : min(len(code), match.end() + 32)]
+        if COMPARE_BEFORE.search(before) or COMPARE_AFTER.search(after):
+            spans.append((match.start(), match.end()))
+    return blank_spans(text, spans) if spans else text
+
+
+def _multiline_template_chunks(
+    text: str, suffix: str, allowed_lines: set[int]
+) -> dict[int, list[str]]:
     from source_scan import scanned_spans
 
     by_line: dict[int, list[str]] = {}
@@ -663,7 +703,7 @@ def _multiline_template_chunks(text: str, suffix: str) -> dict[int, list[str]]:
             body = body[:-2] + " \x00"
         line_no = text.count("\n", 0, start) + 1
         for offset, part in enumerate(body.split("\n")):
-            if part.strip():
+            if part.strip() and (line_no + offset) in allowed_lines:
                 by_line.setdefault(line_no + offset, []).append(part)
     return by_line
 
@@ -706,8 +746,13 @@ def _class_chunks(
         )
         if not allowed:
             return []
+        line = (
+            masked_lines[number - 1]
+            if masked_lines is not None and 0 < number <= len(masked_lines)
+            else text
+        )
         extra = template_lines.get(number, []) if template_lines is not None else []
-        return [*_string_chunks(text), *extra]
+        return [*_string_chunks(line), *extra]
     if not name.endswith(MARKUP_TOKEN_SUFFIXES):
         return []
     line = (
@@ -763,16 +808,22 @@ def _file_token_context(
     if name.endswith(STYLE_TOKEN_SUFFIXES):
         return _apply_chunks_by_line(normalized), None, None, None
     if name.endswith(SCRIPT_TOKEN_SUFFIXES):
+        allowed = _class_context_lines(normalized, suffix)
+        masked = _mask_comparison_strings(normalized, suffix)
         return (
             None,
-            _script_class_lines(normalized, suffix),
-            None,
-            _multiline_template_chunks(normalized, suffix),
+            allowed,
+            masked.split("\n"),
+            _multiline_template_chunks(masked, suffix, allowed),
         )
     if name.endswith(MARKUP_TOKEN_SUFFIXES):
-        masked = _mask_non_class_attrs(normalized, suffix)
+        masked = _mask_comparison_strings(
+            _mask_non_class_attrs(normalized, suffix), suffix
+        )
         templates = (
-            _multiline_template_chunks(masked, suffix)
+            _multiline_template_chunks(
+                masked, suffix, _class_context_lines(masked, suffix)
+            )
             if suffix in (".tsx", ".jsx")
             else None
         )

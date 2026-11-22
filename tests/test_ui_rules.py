@@ -562,30 +562,54 @@ def test_multiline_apply_and_script_class_helper_refuse_undefined_tokens(
         THEME_CSS,
         "src/ui.ts",
         'export const cls = (v: string) => cn(\n  "bg-brand",\n);\n',
-        'export const cls = (v: string) => cn(\n  v === "text-only" && "bg-brand",\n  "bg-late" !== v && "text-brand",\n);\n',
+        'export const cls = (v: string) => cn(\n  v === "text-only" && "bg-brand",\n  v ===\n    "text-wrapped" && "bg-brand",\n  "bg-late" !== v && "text-brand",\n);\n',
     )
     validate_suppressions(cmp_root, "HEAD")
 
+    tsx_code_root = theme_repo(
+        tmp_path / "tsx_code",
+        THEME_CSS,
+        "src/Docs.tsx",
+        "export const Docs = () => <code />;\n",
+        "export const Docs = () => (\n  <code>{`\n  text-input\n  bg-missing\n  `}</code>\n);\n",
+    )
+    validate_suppressions(tsx_code_root, "HEAD")
+
+    tsx_cls_root = theme_repo(
+        tmp_path / "tsx_cls",
+        THEME_CSS,
+        "src/Box.tsx",
+        "export const Box = () => <div />;\n",
+        "export const Box = () => (\n  <div className={`\n  bg-brand\n  bg-missing\n  `} />\n);\n",
+    )
+    assert "src/Box.tsx:4:" in refused(tsx_cls_root)
+
 
 def test_css_import_order_governs_color_reset_and_restore(tmp_path: Path) -> None:
-    """HE-UI-SOURCE: imported CSS @theme blocks run before their importer, matching Tailwind's cascade."""
+    """HE-UI-SOURCE: imported CSS @theme blocks run in exact @import order before their importer."""
     restored = theme_repo(
         tmp_path / "restore",
-        '@import "./z_reset.css";\n@theme {\n  --color-red-500: #dc2626;\n}\n',
+        '@import "./z_reset.css";\n@import "./a_define.css";\n',
         "src/Card.tsx",
         "// base\n",
         '// base\n<p className="text-red-500" />\n',
-        extra={"src/app/z_reset.css": "@theme {\n  --color-red-500: initial;\n}\n"},
+        extra={
+            "src/app/z_reset.css": "@theme {\n  --color-red-500: initial;\n}\n",
+            "src/app/a_define.css": "@theme {\n  --color-red-500: #dc2626;\n}\n",
+        },
     )
     validate_suppressions(restored, "HEAD")
 
     cleared = theme_repo(
         tmp_path / "clear",
-        '@import "./z_define.css";\n@theme {\n  --color-red-500: initial;\n}\n',
+        '@import "./a_define.css";\n@import "./z_reset.css";\n',
         "src/Card.tsx",
         "// base\n",
         '// base\n<p className="text-red-500" />\n',
-        extra={"src/app/z_define.css": "@theme {\n  --color-red-500: #dc2626;\n}\n"},
+        extra={
+            "src/app/z_reset.css": "@theme {\n  --color-red-500: initial;\n}\n",
+            "src/app/a_define.css": "@theme {\n  --color-red-500: #dc2626;\n}\n",
+        },
     )
     assert "text-red-500" in refused(cleared)
 
