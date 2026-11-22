@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-Classify Fallow 3.46's new `health.inlineThresholdOverrides` setting as `free` in `.hooks/fallow_table.py` so projects can leave it at its default (`true`) or turn inline overrides off (`false`), and refuse Fallow inline threshold-override comments in both `.hooks/comments.py` (`SECURITY_OFF`) and `.hooks/fallow_report.py` (`validate_complexity`). Non-goals: changing Fallow's health ceilings or other settings tables.
+Classify Fallow 3.46's new `health.inlineThresholdOverrides` setting as `free` in `.hooks/fallow_table.py` so projects can leave it at its default (`true`) or turn inline overrides off (`false`), and refuse Fallow inline threshold-override comments in both `.hooks/comments.py` (`SCRIPT_OFF`) and `.hooks/fallow_report.py` (`validate_complexity`). Non-goals: changing Fallow's health ceilings or other settings tables.
 
 ## Sources + coverage
 
@@ -12,7 +12,7 @@ Sources: N/A — Fallow v3.46.0 tool release note only; no external project spec
 
 ## Repository context
 
-Owners: `.hooks/fallow_table.py` (`FALLOW_KEYS`), `.hooks/comments.py` (`SECURITY_OFF`), `.hooks/fallow_report.py` (`validate_complexity`), `tests/test_settings_tables.py`, and `tests/switch_off_forms.py`.
+Owners: `.hooks/fallow_table.py` (`FALLOW_KEYS`), `.hooks/comments.py` (`SCRIPT_OFF`), `.hooks/fallow_report.py` (`validate_complexity`), `tests/test_settings_tables.py`, `tests/switch_off_forms.py`, and `tests/test_strict_refusals.py`.
 Same cause: Fallow 3.46.0 introduced per-function inline threshold-override comments controlled by `health.inlineThresholdOverrides` (default `true`) and reported under `inline_threshold_overrides`; without classifying the key and blocking the comment form, `test_every_setting_that_fallow_prints_has_a_class` failed and projects could raise health limits inline under `HE-NO-SWITCH-OFF`.
 Single source: `.hooks/fallow_table.py` owns Fallow setting classes, `.hooks/comments.py` owns inline suppression patterns, and `.hooks/fallow_report.py` owns Fallow JSON health report checks.
 

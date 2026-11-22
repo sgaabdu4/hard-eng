@@ -207,6 +207,15 @@ QUOTED_SWITCHES = [
     ),
     ("src/rule.test.ts", "const sample = `\n// eslint-" + "disable-next-line\n`;\n"),
     ("src/a.ts", "const t = `${f('// @ts-" + "ignore')}`;\n"),
+    (
+        "src/a.ts",
+        "const note = '// fallow-"
+        + "override-threshold-next-line maxCognitive=40 -- reason';\n",
+    ),
+    (
+        "README.md",
+        "Do not write fallow-" + "override-threshold-next-line in source files.\n",
+    ),
     ("scripts/scan.mjs", "const banned = /(?<!dart-)x|eslint-" + "disable/;\n"),
     (
         "tool/scan.py",
