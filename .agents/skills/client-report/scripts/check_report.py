@@ -153,7 +153,7 @@ def _check_gitdir(gitdir: Path) -> str:
         return "invalid"
     commondir = gitdir / "commondir"
     if commondir.is_file():
-        raw = commondir.read_text(errors="replace").strip()
+        raw = commondir.read_text(errors="replace").rstrip("\r\n")
         if not raw:
             return "stop"
         target = Path(raw)
