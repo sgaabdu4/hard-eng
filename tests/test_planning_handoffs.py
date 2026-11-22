@@ -875,3 +875,92 @@ def test_a_passing_changed_complete_plan_starts_no_word_comparison(
     monkeypatch.setattr(plans, "validate_plan", counted_validate)
     assert change_size.judged_stage(root, base, None) == "Complete"
     assert calls.count("validate") == 1 and "show" not in calls
+
+
+def test_repairing_only_acceptance_test_refs_in_an_old_complete_plan_counts_as_unchanged(
+    tmp_path: Path, completed_plan: str
+) -> None:
+    root = tmp_path / "project"
+    old = plan_from_before_newer_fields(
+        completed_plan.replace(
+            "- [x] Observe the configured command exit → N/A — fixture plan has no product test.",
+            "- [x] Observe the configured command exit → `tests/test_one.py::test_old`.",
+        )
+    )
+    finished_before_the_update(root, old)
+    (root / "tests").mkdir(parents=True)
+    (root / "tests/test_one.py").write_text(
+        "def test_old():\n    pass\n\ndef test_kept():\n    pass\n"
+    )
+    dated(root, 2, "add test")
+    base = git(root, "rev-parse", "HEAD")
+
+    repaired_only = old.replace(
+        "`tests/test_one.py::test_old`",
+        "`tests/test_one.py::test_kept`",
+    )
+    (root / OLD_NAME).write_text(repaired_only)
+
+    assert "Same cause" in str(
+        pytest.raises(ValueError, validate_plan, root / OLD_NAME).value
+    )
+    assert change_size.judged_stage(root, base, None) == "Draft"
+
+    (root / "tests/test_one.py").write_text(
+        "def test_new_one():\n    pass\n\ndef test_new_two():\n    pass\n"
+    )
+    repaired = old.replace(
+        "`tests/test_one.py::test_old`",
+        "`tests/test_one.py::test_new_one` and `tests/test_one.py::test_new_two`",
+    )
+    (root / OLD_NAME).write_text(repaired)
+    with pytest.raises(ValueError, match="applicable PLAN"):
+        change_size.judged_stage(root, base, None)
+
+    mine = root / "features/mine/PLAN.md"
+    mine.parent.mkdir(parents=True)
+    mine.write_text(completed_plan)
+    assert change_size.judged_stage(root, base, None) == "Complete"
+
+
+@pytest.mark.parametrize(
+    ("case", "replacement", "expected"),
+    [
+        (
+            "missing test",
+            "`tests/test_one.py::test_missing`",
+            "acceptance names tests that do not exist",
+        ),
+        ("weakened to N/A", "N/A — skipped now", "Same cause"),
+        ("outcome changed", None, "Same cause"),
+    ],
+)
+def test_old_plan_test_ref_repair_still_refuses_missing_tests_na_or_word_edits(
+    tmp_path: Path,
+    completed_plan: str,
+    case: str,
+    replacement: str | None,
+    expected: str,
+) -> None:
+    root = tmp_path / "project"
+    old = plan_from_before_newer_fields(
+        completed_plan.replace(
+            "- [x] Observe the configured command exit → N/A — fixture plan has no product test.",
+            "- [x] Observe the configured command exit → `tests/test_one.py::test_old`.",
+        )
+    )
+    finished_before_the_update(root, old)
+    (root / "tests").mkdir(parents=True)
+    (root / "tests/test_one.py").write_text("def test_old():\n    pass\n")
+    dated(root, 2, "add test")
+    base = git(root, "rev-parse", "HEAD")
+
+    if case == "outcome changed":
+        edited = old.replace("Observe the configured", "Observe any configured")
+    else:
+        assert replacement is not None
+        edited = old.replace("`tests/test_one.py::test_old`", replacement)
+    (root / OLD_NAME).write_text(edited)
+
+    with pytest.raises(ValueError, match=expected):
+        change_size.judged_stage(root, base, None)
