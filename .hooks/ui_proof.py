@@ -229,6 +229,7 @@ def _unchanged_width_problem(
     head: str,
     base: str,
     *,
+    route: str,
     allow_dirty_after: bool,
     min_mtime_ns: int,
 ) -> str | None:
@@ -238,6 +239,11 @@ def _unchanged_width_problem(
         return f"the unchanged pair has no measured record at {width} px; capture it at every width"
     _, before = before_entry
     after_path, after = after_entry
+    if route and not on_route(str(after.get("route", "")), route):
+        return (
+            f"the unchanged After capture {after['image']} is of the page "
+            f"{after.get('route') or 'unknown'}, but the plan names {route}; capture the changed screen"
+        )
     if before["sha256"] != after["sha256"]:
         return f"the unchanged pair differs at {width} px; the screen changed, so write a real ux_reference"
     if before["commit"] != base or after["commit"] != head:
@@ -246,8 +252,9 @@ def _unchanged_width_problem(
         return f"the unchanged pair was taken with uncommitted changes at {width} px; commit and capture again"
     if min_mtime_ns and after_path.stat().st_mtime_ns < min_mtime_ns:
         return f"the unchanged pair predates the latest UI edit at {width} px; capture again"
-    if after.get("findings"):
-        return f"the unchanged After capture {after['image']} has findings ({_finding_rules(after)}); fix the screen and capture again"
+    for side, record in (("Before", before), ("After", after)):
+        if record.get("findings"):
+            return f"the unchanged {side} capture {record['image']} has findings ({_finding_rules(record)}); fix the screen and capture again"
     return None
 
 
@@ -257,6 +264,7 @@ def unchanged_problem(
     head: str,
     base: str,
     *,
+    route: str = "",
     allow_dirty_after: bool = False,
     min_mtime_ns: int = 0,
 ) -> str | None:
@@ -285,6 +293,7 @@ def unchanged_problem(
             width,
             head,
             base,
+            route=route,
             allow_dirty_after=allow_dirty_after,
             min_mtime_ns=min_mtime_ns,
         ):

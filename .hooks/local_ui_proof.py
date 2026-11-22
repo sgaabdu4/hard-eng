@@ -1,13 +1,18 @@
 """Fast local Complete-stage UI proof checks: pure file-record checks before ship, skipped in CI and --quick."""
 
+import fnmatch
 import json
 import os
+import re
 import subprocess
 from pathlib import Path, PurePosixPath
 from typing import cast
 
 from gate_config import ALL_ZERO_OBJECT_ID
 from plans import _is_test as is_test_path
+
+PLAN_PATH_TOKEN = re.compile(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?")
+PLAN_ROUTE_TOKEN = re.compile(r"(?:^|[\s`(/])(/[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*)")
 from ui_proof import (
     UNCHANGED_LINE,
     Change,
@@ -153,12 +158,35 @@ def _git_index_mtime_ns(root: Path) -> int:
     return path.stat().st_mtime_ns if path.is_file() else 0
 
 
-def _dirty_mtime_ns(root: Path, visible: list[str]) -> tuple[bool, int]:
-    status = _git_stdout(root, "status", "--porcelain") or ""
-    if not status.strip():
+def _dirty_ui_paths(root: Path, patterns: list[str]) -> list[str]:
+    raw = _git_stdout(root, "-c", "core.quotepath=off", "status", "--porcelain", "-z")
+    if not raw:
+        return []
+    found: list[str] = []
+    entries = iter(raw.split("\0"))
+    for entry in entries:
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2], entry[3:]
+        paths = [path]
+        if code[0] in ("R", "C"):
+            paths.append(next(entries, ""))
+        for item in paths:
+            if (
+                item
+                and matches(item, patterns)
+                and not is_test_path(PurePosixPath(item))
+            ):
+                found.append(item)
+    return found
+
+
+def _dirty_ui_mtime_ns(root: Path, patterns: list[str]) -> tuple[bool, int]:
+    dirty_ui = _dirty_ui_paths(root, patterns)
+    if not dirty_ui:
         return False, 0
-    mtimes = [_path_mtime_ns(root, name) for name in visible]
-    if any(not (root / name).exists() for name in visible):
+    mtimes = [_path_mtime_ns(root, name) for name in dirty_ui]
+    if any(not (root / name).exists() for name in dirty_ui):
         mtimes.append(_git_index_mtime_ns(root))
     return True, max(mtimes, default=0)
 
@@ -302,11 +330,33 @@ def _active_plan_texts(root: Path, base: str | None, changed: set[str]) -> list[
     ]
 
 
+def _plan_owns_visible(text: str, visible: list[str]) -> list[str]:
+    tokens = set(PLAN_PATH_TOKEN.findall(text))
+    owned: list[str] = []
+    for name in visible:
+        if name in text or any(
+            (token.endswith("/") and name.startswith(token))
+            or fnmatch.fnmatchcase(name, token)
+            for token in tokens
+        ):
+            owned.append(name)
+    return owned
+
+
+def _unchanged_route(plan_text: str, reference: str) -> str:
+    if route := surface_route(plan_text):
+        return route
+    tail = reference.rpartition(" — ")[2]
+    if match := PLAN_ROUTE_TOKEN.search(tail):
+        return match[1]
+    return ""
+
+
 def _plans_reference_problem(plans: list[str], visible: list[str]) -> str | None:
     if not plans:
         return None
     for text in plans:
-        owned = [name for name in visible if name in text]
+        owned = _plan_owns_visible(text, visible)
         if (len(plans) == 1 or owned) and (
             problem := reference_problem(text, owned or visible, "", False)
         ):
@@ -317,7 +367,7 @@ def _plans_reference_problem(plans: list[str], visible: list[str]) -> str | None
 
 def _local_visible_context(
     root: Path, base: str | None, changed_names: set[str] | None = None
-) -> tuple[str, str, set[str], list[str]] | None:
+) -> tuple[str, str, list[str], set[str], list[str]] | None:
     if in_ci():
         return None
     policy = _shipping_ui(root)
@@ -355,26 +405,27 @@ def _local_visible_context(
 
     visible = visible_files(_local_changes(root, point, candidates))
     visible = [name for name in visible if name not in generated_sources(root, visible)]
-    return (head, base_branch, changed, visible) if visible else None
+    return (head, base_branch, patterns, changed, visible) if visible else None
 
 
 def _unchanged_plans_problem(
     root: Path,
     evidence: Path,
-    refs: list[str],
+    items: list[tuple[str, str]],
     head: str,
     base_branch: str,
-    dirty_tree: bool,
+    dirty_ui: bool,
     min_mtime_ns: int,
 ) -> str | None:
     base_sha = merge_base(root, base_branch, head=head)
-    for ref in refs:
+    for ref, route in items:
         if problem := unchanged_problem(
             evidence,
             ref,
             head,
             base_sha,
-            allow_dirty_after=dirty_tree,
+            route=route,
+            allow_dirty_after=dirty_ui,
             min_mtime_ns=min_mtime_ns,
         ):
             return problem
@@ -388,7 +439,7 @@ def local_ui_proof_problem(
     context = _local_visible_context(root, base, changed_names)
     if context is None:
         return None
-    head, base_branch, changed, visible = context
+    head, base_branch, patterns, changed, visible = context
     plans = _active_plan_texts(root, base, changed)
     if problem := _plans_reference_problem(plans, visible):
         return problem
@@ -397,11 +448,11 @@ def local_ui_proof_problem(
     ):
         return problem
     evidence = evidence_root(root)
-    dirty_tree, min_mtime_ns = _dirty_mtime_ns(root, visible)
+    dirty_ui, min_mtime_ns = _dirty_ui_mtime_ns(root, patterns)
     unchanged = [
-        reference_section(text)
+        (ref, _unchanged_route(text, ref))
         for text in plans
-        if UNCHANGED_LINE.match(reference_section(text))
+        if UNCHANGED_LINE.match(ref := reference_section(text))
     ]
     visual_plans = [
         text
@@ -412,7 +463,7 @@ def local_ui_proof_problem(
     ]
     if unchanged:
         if problem := _unchanged_plans_problem(
-            root, evidence, unchanged, head, base_branch, dirty_tree, min_mtime_ns
+            root, evidence, unchanged, head, base_branch, dirty_ui, min_mtime_ns
         ):
             return problem
         if not visual_plans:
@@ -425,7 +476,7 @@ def local_ui_proof_problem(
     if not native:
         for route in routes or [""]:
             hashes, problem = _local_browser_proof(
-                evidence, head, route, dirty_tree, min_mtime_ns
+                evidence, head, route, dirty_ui, min_mtime_ns
             )
             if problem:
                 return problem

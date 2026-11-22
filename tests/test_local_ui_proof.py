@@ -207,17 +207,47 @@ def test_local_complete_check_validates_unchanged_pair_when_dirty_and_skips_in_c
     write_pair(root, base, head)
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
-    for path in (root / ".hard-eng/browser").glob("after-*.json"):
-        data = json.loads(path.read_text())
-        data["findings"] = [{"rule": "tap-size", "at": "btn"}]
-        path.write_text(json.dumps(data))
-    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
-    assert problem is not None and "tap-size" in problem
+    for side in ("before", "after"):
+        write_pair(root, base, head)
+        for path in (root / ".hard-eng/browser").glob(f"{side}-*.json"):
+            data = json.loads(path.read_text())
+            data["findings"] = [{"rule": "tap-size", "at": "btn"}]
+            path.write_text(json.dumps(data))
+        problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+        assert problem is not None and "tap-size" in problem
 
+    write_pair(root, base, head, after_dirty=True)
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "uncommitted changes" in problem
+
+    (root / "src/App.tsx").write_text("export const App = () => <p>Dirty</p>;\n")
     write_pair(root, base, head, after_dirty=True)
     touch_after_capture(root)
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "predates the latest UI edit" in problem
+
+
+def test_local_complete_check_rejects_discarded_dirty_capture_and_allows_staged_plan_after_committed_delete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path)
+    (root / "src/Gone.tsx").write_text("export const Gone = () => <p>Gone</p>;\n")
+    commit(root, "add gone")
+    (root / "src/Gone.tsx").unlink()
+    commit(root, "delete gone")
+    head = git(root, "rev-parse", "HEAD").strip()
+
+    dirty_after = write_clean_browser(root, route="/account", dirty_override=True)
+    write_look(root, head, dirty_after)
+    (root / "PLAN.md").write_text((root / "PLAN.md").read_text() + "\n")
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "clean tree" in problem
+
+    clean_after = write_clean_browser(root, route="/account", dirty_override=False)
+    write_look(root, head, clean_after)
+    git(root, "add", "PLAN.md")
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
 
 def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
@@ -252,17 +282,33 @@ def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
     (root / "features/ui-b/PLAN.md").write_text(
-        base_plan.replace(REAL_UX, UNCHANGED_UX)
+        base_plan.replace(
+            REAL_UX, UNCHANGED_UX.replace("the card at rest", "/settings screen")
+        )
     )
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "unchanged pair" in problem
 
     write_pair(root, base, head)
+    for path in (root / ".hard-eng/browser").glob("after-*.json"):
+        data = json.loads(path.read_text())
+        data["route"] = "/pricing"
+        path.write_text(json.dumps(data))
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "/settings" in problem
+
+    for path in (root / ".hard-eng/browser").glob("after-*.json"):
+        data = json.loads(path.read_text())
+        data["route"] = "/settings"
+        path.write_text(json.dumps(data))
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
-    (root / "src/Other.tsx").write_text("export const Other = () => <p>New</p>;\n")
+    (root / "src/settings").mkdir()
+    (root / "src/settings/Card.tsx").write_text(
+        "export const Card = () => <p>New</p>;\n"
+    )
     (root / "features/ui-b/PLAN.md").write_text(
-        base_plan.replace(REAL_UX, NO_UX) + "\nOwners: src/Other.tsx\n"
+        base_plan.replace(REAL_UX, NO_UX) + "\nOwners: src/settings/\n"
     )
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "ux_reference says N/A" in problem
