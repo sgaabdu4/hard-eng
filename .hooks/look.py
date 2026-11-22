@@ -47,6 +47,7 @@ FENCE_OPEN = re.compile(r"^(`{3,}|~{3,})(.*)$")
 HEADING_LINE = re.compile(r"^[ ]{0,3}(#{1,2})[ \t]+([^\n]+?)\s*$")
 TRAILING_HASHES = re.compile(r"[ \t]+#+[ \t]*$")
 LIST_MARKER = re.compile(r"^([-+*]|[0-9]{1,9}[.)])([ \t]+|$)")
+THEMATIC_BREAK = re.compile(r"^(?:(?:-[ \t]*){3,}|(?:_[ \t]*){3,}|(?:\*[ \t]*){3,})$")
 HTML_ENDERS = (
     (
         re.compile(r"(?i)^<(?:pre|script|style|textarea)(?:[\s>]|$)"),
@@ -308,19 +309,31 @@ def _is_closing_fence(
     )
 
 
+def _scan_html_ender(
+    lines: list[str], start: int, container: int, ender: re.Pattern[str]
+) -> int:
+    if ender.search(lines[start]):
+        return start
+    for index in range(start + 1, len(lines)):
+        line_cols, line_rest = _leading_cols(lines[index])
+        if container > 0 and line_rest and line_cols < container:
+            return index - 1
+        if ender.search(lines[index]):
+            return index
+    return len(lines) - 1
+
+
 def _html_block_end(lines: list[str], start: int, container: int) -> int | None:
     cols, rest = _leading_cols(lines[start])
     if not (container <= cols <= container + 3) or not rest.startswith("<"):
         return None
     for opener, ender in HTML_ENDERS:
         if opener.match(rest):
-            for index in range(start, len(lines)):
-                if ender.search(lines[index]):
-                    return index
-            return len(lines) - 1
+            return _scan_html_ender(lines, start, container, ender)
     if HTML_BLOCK_TAG.match(rest):
         for index in range(start + 1, len(lines)):
-            if not lines[index].strip():
+            line_cols, line_rest = _leading_cols(lines[index])
+            if not line_rest or (container > 0 and line_cols < container):
                 return index - 1
         return len(lines) - 1
     return None
@@ -330,7 +343,7 @@ def _list_opener(
     line: str, container: int
 ) -> tuple[int, tuple[str, int] | None] | None:
     cols, rest = _leading_cols(line)
-    if not (container <= cols <= container + 3):
+    if not (container <= cols <= container + 3) or THEMATIC_BREAK.match(rest):
         return None
     found = LIST_MARKER.match(rest)
     if found is None:
@@ -348,6 +361,7 @@ def _is_block_starter(line: str, container: int) -> bool:
     return bool(
         HEADING_LINE.match(line)
         or rest.startswith(">")
+        or THEMATIC_BREAK.match(rest)
         or _fence_opener(rest)
         or LIST_MARKER.match(rest)
         or _html_block_end([line], 0, container) is not None
