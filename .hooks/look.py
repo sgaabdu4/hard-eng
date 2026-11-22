@@ -13,13 +13,8 @@ from pathlib import Path
 from typing import cast
 
 from challenge import git_text, host_for, reviewers_for, store, without_host_markers
-from models import cli_flags
-from plans import (
-    default_branch_point,
-    split_rule_line,
-    usability_lines,
-    usability_rules,
-)
+from models import cli_flags, trusted_base_ref
+from plans import split_rule_line, usability_lines, usability_rules
 from process_group import run_in_group
 
 TIMEOUT_SECONDS = 1800
@@ -51,8 +46,7 @@ def sha256(data: bytes) -> str:
 def command(
     reviewer: str, prompt: str, folder: Path, root: Path | None = None
 ) -> list[str]:
-    trusted_ref = default_branch_point(root) if root is not None else None
-    flags = cli_flags(reviewer, "reasoning", root, trusted_ref=trusted_ref)
+    flags = cli_flags(reviewer, "reasoning", root, trusted_ref=trusted_base_ref(root))
     if reviewer == "codex":
         return [
             "codex",

@@ -300,6 +300,37 @@ def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
     assert look.choose_reviewer("codex", project) == ("codex", True)
 
 
+def test_look_ignores_uncommitted_shipping_base_edit(
+    tmp_path: Path, project: Path
+) -> None:
+    git(project, "branch", "-M", "main")
+    (project / ".agents").mkdir(exist_ok=True)
+    (project / ".agents/models.json").write_text(
+        (SOURCE / ".agents/models.json").read_text()
+    )
+    (project / "hard-eng.gates.json").write_text(
+        json.dumps({"version": 1, "shipping": {"base": "main"}, "packages": []})
+    )
+    commit(project, "trusted base")
+    git(project, "checkout", "-qb", "feature")
+    tampered = json.loads((SOURCE / ".agents/models.json").read_text())
+    tampered["hosts"]["codex"]["reasoning"]["model"] = "tampered-branch-model"
+    (project / ".agents/models.json").write_text(json.dumps(tampered))
+    commit(project, "branch models edit")
+    (project / "hard-eng.gates.json").write_text(
+        json.dumps({"version": 1, "shipping": {"base": "feature"}, "packages": []})
+    )
+    images = make_images(project, 1)
+    codex_log = install_agent(tmp_path, "codex", 1, good_answer(1))
+    record = run_look(project, "claude", images)
+    assert record["outcome"] == "clean"
+    assert json.loads(codex_log.read_text())["argv"][:3] == [
+        "exec",
+        "-m",
+        "gpt-6.2-sol",
+    ]
+
+
 def test_look_reads_a_real_claude_answer() -> None:
     import look
 

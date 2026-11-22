@@ -68,6 +68,45 @@ def _read_object(path: Path, label: str) -> dict[str, object]:
     return _parse_object(text, label)
 
 
+def _git_stdout(root: Path, *args: str) -> str | None:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def _committed_base_refs(root: Path) -> tuple[str, ...]:
+    raw = _git_stdout(root, "show", "HEAD:hard-eng.gates.json")
+    if raw is not None:
+        try:
+            config = json.loads(raw)
+        except ValueError:
+            config = None
+        if isinstance(config, dict) and isinstance(config.get("shipping"), dict):
+            base = config["shipping"].get("base")
+            if isinstance(base, str) and base.strip():
+                name = base.strip()
+                return (f"origin/{name}", name)
+    local = (
+        _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
+    ).strip() or "master"
+    return ("origin/main", "main", "origin/HEAD", local)
+
+
+def trusted_base_ref(root: Path | None) -> str | None:
+    """Resolve the merge-base commit from committed HEAD policy, ignoring dirty working-tree edits."""
+    if root is None:
+        return None
+    for ref in _committed_base_refs(root):
+        if point := _git_stdout(root, "merge-base", "HEAD", ref):
+            return point.strip()
+    return None
+
+
 def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, object]:
     if root is not None and trusted_ref is not None:
         shown = subprocess.run(
@@ -79,7 +118,13 @@ def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, 
         )
         if shown.returncode == 0:
             return _parse_object(shown.stdout, f"{trusted_ref}:{MODELS_FILE}")
-        return _read_object(SHIPPED_MODELS, MODELS_FILE)
+        listed = _git_stdout(root, "ls-tree", trusted_ref, "--", MODELS_FILE)
+        if listed == "":
+            return _read_object(SHIPPED_MODELS, MODELS_FILE)
+        reason = shown.stderr.strip() or "git read failed"
+        raise ValueError(
+            f"{trusted_ref}:{MODELS_FILE}: unreadable trusted base ({reason})"
+        )
     return _read_object(base_models_path(root), MODELS_FILE)
 
 
