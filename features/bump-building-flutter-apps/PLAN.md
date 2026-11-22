@@ -21,7 +21,7 @@ Single source: Canonical Flutter analyzer plugin version is owned by `.agents/sk
 
 Blockers: None
 Handoff: Approval
-Authority: Full-access autonomous execution; user explicitly approved bumping `.agents/skill-sources/building-flutter-apps` in this thread.
+Authority: User approved bumping `.agents/skill-sources/building-flutter-apps` to include the merged `dart migrate` docs.
 
 ## Acceptance + steps
 
@@ -48,6 +48,9 @@ Evidence: `uv run pytest tests/test_dart_config.py tests/test_ui_rules.py -q` pa
 E2E: N/A — submodule pin and Python unit-test update only; no interactive end-to-end user journey changed.
 Real service: N/A — no external runtime service or API call changed.
 Retro: What worked: checking `tests/test_dart_config.py` immediately caught the `^0.14.0 -> ^0.15.0` canonical plugin shift before pushing. Prevention: none needed; the existing test suite already enforces alignment with the canonical `analysis_options.yaml`.
+
+Review declined: nested `analysis_options.yaml` overriding `flutter_skill_lints` stays unmigrated (`setup.py:289`, `dart_boundaries.py:587`) :: pre-existing `setup.py` and `dart_boundaries.py` behavior outside this submodule-pin PR; neither file is changed here.
+Review declined: `dart migrate` default one-minor target in `core-stack.md:51` and `PlatformDispatcher.instance.onError` return value in `error-reporting.md:64` :: both files live in the upstream `building-flutter-apps` repository, not `hard-eng`; any prose or snippet edit belongs in an upstream `building-flutter-apps` PR.
 
 Delivery target: Merge
 Delivery: Pending — required remote proof.
