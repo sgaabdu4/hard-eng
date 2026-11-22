@@ -1,6 +1,5 @@
 import argparse
 import re
-import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import override
@@ -118,13 +117,14 @@ def problems(report: Path, template: Path) -> list[str]:
 
 
 def saved_template() -> Path | None:
-    done = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
+    cwd = Path.cwd().resolve()
+    if ".git" in cwd.parts:
+        return None
+    root = next(
+        (folder for folder in (cwd, *cwd.parents) if (folder / ".git").exists()),
+        None,
     )
-    return Path(done.stdout.strip()) / TEMPLATE if done.returncode == 0 else None
+    return root / TEMPLATE if root is not None else None
 
 
 def main() -> int:

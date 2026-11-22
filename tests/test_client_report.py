@@ -319,3 +319,13 @@ def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
     ]
     assert problems(broken, template) == []
     assert problems(rows, template) == []
+
+
+def test_check_report_script_passes_strict_ruff_subprocess_rules() -> None:
+    done = subprocess.run(
+        ["ruff", "check", "--select", "S603,S607", str(SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
