@@ -1,6 +1,7 @@
 """Service selection and preservation across native harness configuration."""
 
 import json
+import subprocess
 import tomllib
 from pathlib import Path
 from types import ModuleType
@@ -944,6 +945,19 @@ def test_agy_mcp_skips_gitignored_mcp_sources(
     changes = {}
     assert installer.configure_mcp(tmp_path, changes) == []
     assert ".agents/mcp_config.json" not in changes
+    (tmp_path / ".mcp.json").unlink()
+    (tmp_path / "shared.mcp.json").write_text(
+        json.dumps({"mcpServers": {"tracked-link": {"command": "tool-c"}}})
+    )
+    (tmp_path / ".mcp.json").symlink_to("shared.mcp.json")
+    subprocess.run(
+        ["git", "add", "shared.mcp.json", ".mcp.json"], cwd=tmp_path, check=True
+    )
+    changes = {}
+    assert installer.configure_mcp(tmp_path, changes) == []
+    assert json.loads(changes[".agents/mcp_config.json"]) == {
+        "mcpServers": {"tracked-link": {"command": "tool-c"}}
+    }
 
 
 def test_agy_mcp_preserves_existing_entries_and_detected_precedence(
