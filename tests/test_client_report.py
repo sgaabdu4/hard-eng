@@ -387,6 +387,34 @@ def test_the_command_validates_symlinked_worktree_head_and_commondir(
     assert _run_script(write(abandoned, "report.html")) == (0, "")
 
 
+def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "docs/client-report").mkdir(parents=True)
+    write(tmp_path / "docs/client-report", "template.html")
+    outside = (1, "run inside the project's git checkout\n")
+
+    nested = tmp_path / "nested-missing-common"
+    meta = tmp_path.parent / (tmp_path.name + "-missing-common-meta")
+    meta.mkdir()
+    (meta / "HEAD").write_text("ref: refs/heads/main\n")
+    (meta / "commondir").write_text("gone/deeper/common\n")
+    nested.mkdir()
+    (nested / ".git").symlink_to(meta)
+    assert _run_script(write(nested, "report.html")) == outside
+
+    spaced = tmp_path.parent / (tmp_path.name + "-spaced-ref")
+    (spaced / "docs/client-report").mkdir(parents=True)
+    write(spaced / "docs/client-report", "template.html")
+    spaced_meta = spaced / "wt-meta"
+    spaced_meta.mkdir()
+    (spaced_meta / "HEAD").write_text("ref: refs/heads/a\u00a0branch\n")
+    (spaced_meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
+    (spaced / ".git").write_text(f"gitdir: {spaced_meta}\n")
+    assert _run_script(write(spaced, "report.html")) == (0, "")
+
+
 def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
     tmp_path: Path,
 ) -> None:
