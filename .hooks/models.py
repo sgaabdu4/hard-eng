@@ -187,10 +187,10 @@ def trusted_base_ref(root: Path | None) -> str | None:
         )
         remote_only = False
     for sha in candidates:
-        if resolved := _policy_merge_base(root, sha, remote_only=remote_only):
-            return resolved
         if found := _anchor_point(root, sha, allow_shallow_tip=remote_only):
-            return found[1]
+            return (
+                _policy_merge_base(root, found[0], remote_only=remote_only) or found[1]
+            )
     return None
 
 

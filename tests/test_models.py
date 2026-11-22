@@ -505,10 +505,12 @@ def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> 
     assert models.trusted_base_ref(orphan) == dev_commit
 
     git(orphan, "checkout", "-q", "main")
-    write_policy(orphan, "develop")
-    orphan_main = commit(orphan, "orphan main declaring develop")
+    write_policy(orphan, "feature")
+    orphan_main = commit(orphan, "orphan main pointing to feature")
+    feature_commit = git(orphan, "rev-parse", "feature")
     git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main)
     git(orphan, "update-ref", "refs/remotes/origin/develop", dev_commit)
+    git(orphan, "update-ref", "refs/remotes/origin/feature", feature_commit)
     git(orphan, "checkout", "-q", "feature")
     assert models.trusted_base_ref(orphan) == dev_commit
 
