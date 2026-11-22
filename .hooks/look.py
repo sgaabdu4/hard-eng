@@ -349,7 +349,7 @@ def _html_block_end(
 
 def _list_opener(
     line: str, container: int
-) -> tuple[int, str, tuple[str, int] | None] | None:
+) -> tuple[int, str, bool, tuple[str, int] | None] | None:
     cols, rest = _leading_cols(line)
     if not (container <= cols <= container + 3) or THEMATIC_BREAK.match(rest):
         return None
@@ -358,8 +358,9 @@ def _list_opener(
         return None
     after_marker = rest[len(found[1]) :]
     gap, tail = _leading_cols(after_marker)
-    content_col = cols + len(found[1]) + (1 if not tail or gap >= 5 else gap)
-    return content_col, tail, _fence_opener(tail)
+    indented = gap >= 5
+    content_col = cols + len(found[1]) + (1 if not tail or indented else gap)
+    return content_col, tail, indented, None if indented else _fence_opener(tail)
 
 
 def _is_block_starter(rest: str) -> bool:
@@ -375,11 +376,30 @@ def _is_block_starter(rest: str) -> bool:
     )
 
 
+def _strip_quote_once(text: str) -> tuple[int, str]:
+    after = text[1:]
+    if after.startswith(" "):
+        after = after[1:]
+    elif after.startswith("\t"):
+        after = "  " + after[1:]
+    return _leading_cols(after)
+
+
 def _starts_paragraph(rest: str) -> bool:
     inner = rest
-    while inner.startswith(">"):
-        inner = inner[1:].lstrip(" \t")
-    return bool(inner) and not _is_block_starter(inner)
+    while True:
+        if inner.startswith(">"):
+            cols, inner = _strip_quote_once(inner)
+            if cols >= 4 or not inner:
+                return False
+            continue
+        if opened := _list_opener(inner, 0):
+            _, tail, indented, inline_fence = opened
+            if indented or inline_fence is not None or not tail:
+                return False
+            inner = tail
+            continue
+        return bool(inner) and not _is_block_starter(inner)
 
 
 @dataclass
@@ -387,7 +407,6 @@ class _MdScan:
     lines: list[str]
     list_stack: list[int] = field(default_factory=list)
     fence: tuple[int, str, int] | None = None
-    prev_blank: bool = True
     in_para: bool = False
     capturing: bool = False
     matches: int = 0
@@ -407,7 +426,6 @@ class _MdScan:
         self.keep(line)
         if _is_closing_fence(cols, rest, container, char, length):
             self.fence = None
-        self.prev_blank = not rest
         self.in_para = False
         self.index += 1
 
@@ -426,11 +444,10 @@ class _MdScan:
             self.keep(line)
             indented_code = not self.in_para and cols >= container + 4
             self.in_para = not indented_code and _starts_paragraph(rest)
-        self.prev_blank = False
         self.index += 1
 
     def _step_nonblank(self, line: str, cols: int, rest: str) -> None:
-        if self.prev_blank or _is_block_starter(rest):
+        if not self.in_para or _is_block_starter(rest):
             while self.list_stack and cols < self.list_stack[-1]:
                 self.list_stack.pop()
         container = self.list_stack[-1] if self.list_stack else 0
@@ -438,25 +455,24 @@ class _MdScan:
         if end is not None:
             if self.capturing:
                 self.collected.extend(self.lines[self.index : end + 1])
-            self.prev_blank = False
             self.in_para = False
             self.index = end + 1
             return
         if container <= cols <= container + 3 and (opened := _fence_opener(rest)):
             self.fence = (container, opened[0], opened[1])
             self.keep(line)
-            self.prev_blank = False
             self.in_para = False
             self.index += 1
             return
         if opened_list := _list_opener(line, container):
-            new_col, tail, inline_fence = opened_list
+            new_col, tail, indented, inline_fence = opened_list
             self.list_stack.append(new_col)
             if inline_fence is not None:
                 self.fence = (new_col, inline_fence[0], inline_fence[1])
             self.keep(line)
-            self.prev_blank = False
-            self.in_para = inline_fence is None and _starts_paragraph(tail)
+            self.in_para = (
+                not indented and inline_fence is None and _starts_paragraph(tail)
+            )
             self.index += 1
             return
         self._step_heading_or_text(line, cols, rest, container)
@@ -469,7 +485,6 @@ class _MdScan:
                 self._step_fence(line, cols, rest)
             elif not rest:
                 self.keep(line)
-                self.prev_blank = True
                 self.in_para = False
                 self.index += 1
             else:

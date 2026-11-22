@@ -491,6 +491,17 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
     )
     quote_scope = look.extract_outcome_scope(wrapped_quote_tag, "f.md")
     assert "Keep WTD." in quote_scope and "leaked" not in quote_scope
+    post_fence_html = (
+        "# T\n\n## Outcome + scope\n\n- Keep Today.\n  ```\n  x\n  ```\n"
+        "<code>\n```markdown\n</code>\n\n## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    assert "leaked" not in look.extract_outcome_scope(post_fence_html, "g.md")
+    indented_in_container = (
+        "# T\n\n## Outcome + scope\n\n>     indented code\n<code>\n"
+        "## Example report\n</code>\n\nKeep WTD.\n\n## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    container_scope = look.extract_outcome_scope(indented_in_container, "h.md")
+    assert "Keep WTD." in container_scope and "leaked" not in container_scope
 
 
 def test_ship_and_autocrlf_verify_committed_pr_plan_scope(
