@@ -41,7 +41,7 @@ Blockers: None
 Handoff: None
 Authority: User directly instructed fixing `sgaabdu4/hard-eng#693` and releasing `main` in chat on 2026-11-22.
 Review declined: Live Claude CLI run for `look` :: Local Claude CLI authentication on this machine is expired (`Failed to authenticate: this login reached its time limit`), so live verification used Codex CLI (`--host agy`); Claude CLI invocation and stream parsing are untouched and covered by `tests/test_look.py`.
-Review declined: CommonMark code fences or HTML comments containing literal `##` headings inside `## Outcome + scope` :: `.hooks/` has no third-party CommonMark parser dependency, and Hard Eng's own plan validator (`.hooks/plans.py:plan_sections`) already defines section boundaries with `^## +` without CommonMark block parsing; reusing `plans.plan_sections` as the single source and directly rejecting Usability rule verdicts and `VERDICT:` lines inside `Outcome + scope` blocks verdict leaks under every heading/markup form while allowing `#` preview examples inside `Outcome + scope`.
+Review declined: CommonMark code fences, HTML blocks, or HTML comments containing literal `##` headings inside `## Outcome + scope` :: `.hooks/` has no third-party CommonMark parser dependency, and Hard Eng's own plan validator (`.hooks/plans.py:plan_sections`) already defines section boundaries with `^## +` without CommonMark block parsing; reusing `plans.plan_sections` as the single source and directly rejecting Usability rule verdicts and `VERDICT:` lines inside `Outcome + scope` blocks verdict leaks under every heading/list/markup form while allowing ordinary requirement prose and `#` preview examples inside `Outcome + scope`.
 
 ## Acceptance + steps
 
