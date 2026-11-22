@@ -393,7 +393,13 @@ def test_declared_develop_base_on_origin_main_resolves_origin_develop(
     tampered = json.loads((SOURCE / ".agents/models.json").read_text())
     tampered["hosts"]["codex"]["reasoning"]["model"] = "gpt-6.2-tampered"
     (repository / ".agents/models.json").write_text(json.dumps(tampered))
-    commit(repository, "tamper models on feature")
+    feature_commit = commit(repository, "tamper models on feature")
+    git(repository, "checkout", "-qb", "master", develop_commit)
+    write_policy(repository, "feature")
+    master_commit = commit(repository, "competing pushed master")
+    git(repository, "update-ref", "refs/remotes/origin/master", master_commit)
+    git(repository, "update-ref", "refs/remotes/origin/feature", feature_commit)
+    git(repository, "checkout", "-q", "feature")
 
     trusted = models.trusted_base_ref(repository)
     assert trusted == develop_commit
@@ -439,6 +445,10 @@ def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
     git(repository, "checkout", "-qb", "feature")
     (repository / "work.txt").write_text("change\n")
     commit(repository, "feature work")
+    assert models.trusted_base_ref(repository) == develop_commit
+    git(repository, "update-ref", "refs/remotes/origin/develop", develop_commit)
+    git(repository, "checkout", "-q", "--detach", "HEAD")
+    git(repository, "branch", "-D", "develop")
     assert models.trusted_base_ref(repository) == develop_commit
 
     custom = tmp_path / "custom"

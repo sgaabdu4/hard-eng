@@ -109,49 +109,18 @@ def _policy_base(raw: str) -> str | None:
     return None
 
 
-def _is_ancestor(root: Path, older: str, newer: str) -> bool:
-    if older == newer:
-        return False
-    return (
-        subprocess.run(
-            ["git", "merge-base", "--is-ancestor", older, newer],
-            cwd=root,
-            capture_output=True,
-            check=False,
-        ).returncode
-        == 0
-    )
+REMOTE_ANCHORS = ("origin/HEAD", "origin/main", "origin/master", "origin/develop")
 
 
-REMOTE_ANCHORS = ("origin/HEAD", "origin/main", "origin/master")
-
-
-def _anchor_bases(root: Path, local: str) -> list[tuple[str, str]]:
-    """Remote tracking base refs when present, else local default refs; closest ancestor first."""
-    remote = [
-        (ref, point.strip())
-        for ref in REMOTE_ANCHORS
-        if (point := _git_stdout(root, "merge-base", "HEAD", ref))
-    ]
-    found = (
-        remote
-        or [
-            (ref, point.strip())
-            for ref in dict.fromkeys(("main", "master", local))
-            if (point := _git_stdout(root, "merge-base", "HEAD", ref))
-        ]
-        or [
-            (ref, point.strip())
-            for ref in ("develop",)
-            if (point := _git_stdout(root, "merge-base", "HEAD", ref))
-        ]
-    )
-    closest = [
-        pair
-        for pair in found
-        if not any(_is_ancestor(root, pair[1], other[1]) for other in found)
-    ]
-    return closest + [pair for pair in found if pair not in closest]
+def _primary_anchor(root: Path, local: str) -> tuple[str, str, bool] | None:
+    """The single highest-priority existing base ref, preferring remote tracking refs."""
+    for ref in REMOTE_ANCHORS:
+        if point := _git_stdout(root, "merge-base", "HEAD", ref):
+            return ref, point.strip(), True
+    for ref in dict.fromkeys(("main", "master", local, "develop")):
+        if point := _git_stdout(root, "merge-base", "HEAD", ref):
+            return ref, point.strip(), False
+    return None
 
 
 def _first_merge_base(root: Path, refs: tuple[str, ...]) -> str | None:
@@ -170,20 +139,17 @@ def _policy_merge_base(root: Path, ref: str, *, remote_only: bool) -> str | None
 
 
 def trusted_base_ref(root: Path | None) -> str | None:
-    """Resolve the merge-base commit from remote/default base refs, never trusting unmerged branch policies."""
+    """Resolve the merge-base commit from the single primary base ref, never trusting unmerged branch policies."""
     if root is None or not _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}"):
         return None
     local = (
         _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
     ).strip() or "master"
-    anchors = _anchor_bases(root, local)
-    if not anchors:
+    anchor = _primary_anchor(root, local)
+    if anchor is None:
         return None
-    remote_only = anchors[0][0].startswith("origin/")
-    for ref, _ in anchors:
-        if resolved := _policy_merge_base(root, ref, remote_only=remote_only):
-            return resolved
-    return anchors[0][1]
+    ref, point, remote_only = anchor
+    return _policy_merge_base(root, ref, remote_only=remote_only) or point
 
 
 def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, object]:
