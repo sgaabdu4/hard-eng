@@ -188,7 +188,7 @@ def trusted_base_ref(root: Path | None) -> str | None:
         if resolved := _policy_merge_base(root, sym, remote_only=True):
             return resolved
         found = _anchor_point(root, sym, allow_shallow_tip=True)
-        return found[1] if found else None
+        return found[1] if found else sym
     remote_shas = _remote_anchor_shas(root)
     candidates, remote_only = (
         (remote_shas, True) if remote_shas else (_local_anchor_shas(root), False)
