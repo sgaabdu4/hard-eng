@@ -425,6 +425,8 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         "  [the selected date range](./api.md#date-range) to the API.\n\n"
         "- Performance: Pass\n"
         "  <https://reports.example/api/date-range> as the report endpoint.\n\n"
+        "- Performance: Pass\n"
+        "  <body/dateRange> to the report API.\n\n"
         "- Performance:\n"
         "  Pass (`startDate`, `endDate`) to the report API.\n\n"
         "```markdown\n"

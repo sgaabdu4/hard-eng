@@ -25,8 +25,8 @@ Deliverables: None
 ## Repository context
 
 Owners:
-- `.hooks/ui_measure.py` and `.hooks/browser.py` own `.hard-eng/browser/*.json` capture records including recorded `--ring` selectors.
-- `.hooks/look.py` owns the `look` CLI, `PROMPT`, `RING_NOTE`, `has_confirmed_ring`, `extract_outcome_scope`, `plan_scope`, `prompt_for`, and look records.
+- `.hooks/ui_measure.py` and `.hooks/browser.py` own `.hard-eng/browser/*.json` capture records including recorded `--ring` `ring_boxes`.
+- `.hooks/look.py` owns the `look` CLI, `PROMPT`, `RING_NOTE`, `confirmed_ring_boxes`, `extract_outcome_scope`, `plan_scope`, `prompt_for`, and look records.
 - `.hooks/ui_proof.py` owns `browser_records`, `look_record_problem`, `ui_evidence`, and committed plan-digest verification during `ship`.
 - `.hooks/plans.py` owns `is_plan_path`, `plan_sections`, and `usability_lines` (reused directly by `.hooks/look.py`).
 - `.agents/skills/he-plan/references/ux.md` owns the `No clutter` usability rule text and `Look review` guidance.
@@ -43,6 +43,7 @@ Authority: User directly instructed fixing `sgaabdu4/hard-eng#693` and releasing
 Review declined: Live Claude CLI run for `look` :: Local Claude CLI authentication on this machine is expired (`Failed to authenticate: this login reached its time limit`), so live verification used Codex CLI (`--host agy`); Claude CLI invocation and stream parsing are untouched and covered by `tests/test_look.py`.
 Review declined: CommonMark code fences, HTML blocks, or HTML comments containing literal `##` headings inside `## Outcome + scope` :: `.hooks/` has no third-party CommonMark parser dependency, and Hard Eng's own plan validator (`.hooks/plans.py:plan_sections`) already defines section boundaries with `^## +` without CommonMark block parsing; reusing `plans.plan_sections` as the single source and directly rejecting canonical Usability rule verdicts and `VERDICT:` lines inside `Outcome + scope` blocks verdict leaks while allowing ordinary requirement prose and `#` preview examples inside `Outcome + scope`.
 Review declined: Non-canonical or free-form builder verdicts placed inside `## Outcome + scope` (such as parenthesized or Markdown-linked counts after `Pass` without Hard Eng's `—` rule-line dash) :: No punctuation rule can reliably separate `No clutter: Pass (31 kept, 0 removed)` or `Pass [31 kept](./proof.md)` from legitimate requirement prose like `Performance: Pass (startDate, endDate) to the report API` or `Pass [the selected date range](./api.md)`; `look --plan` therefore rejects canonical Hard Eng rule verdicts (`<Rule>: Pass|Fail|not-applicable — ...` and bare `<Rule>: Pass|Fail|not-applicable`) plus `VERDICT:` lines on both raw and wrapped lines, fences `Screen scope` as data-only that never overrides visual quality rules, and relies on committed PR review (since `ship` binds `look --plan` to the PR's committed plan) against non-canonical self-verdicts embedded inside `Outcome + scope`.
+Review declined: Residual Pandoc vs CommonMark grammar corner cases in `_logical_lines` beyond the explicit list, heading, fence, blockquote, and HTML block boundaries :: `.hooks/` has no third-party Markdown parser dependency; `look --plan` intentionally uses a small line-join heuristic rather than a full Markdown/HTML parser, fences `Screen scope` as data-only that never overrides visual quality rules, and relies on committed PR plan review for synthetic multi-line markup constructs.
 
 ## Acceptance + steps
 
