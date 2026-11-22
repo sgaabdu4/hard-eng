@@ -704,7 +704,9 @@ def _agy_stdio_from_claude(settings: JsonObject, command: str) -> JsonObject:
     return mirrored
 
 
-def _agy_http_from_claude(settings: JsonObject, url: str) -> JsonObject:
+def _agy_http_from_claude(settings: JsonObject, url: str) -> JsonObject | None:
+    if settings.get("headersHelper"):
+        return None
     mirrored: JsonObject = {"url": url}
     if (headers := _string_dict(settings.get("headers"))) is not None:
         mirrored["headers"] = headers
@@ -717,7 +719,7 @@ def _agy_http_from_claude(settings: JsonObject, url: str) -> JsonObject:
 
 
 def _agy_server_from_claude(settings: JsonValue) -> JsonObject | None:
-    if not isinstance(settings, dict):
+    if not isinstance(settings, dict) or settings.get("enabledTools") == []:
         return None
     transport = settings.get("type")
     if transport not in (None, "stdio", "http"):
@@ -736,6 +738,8 @@ def _agy_server_from_claude(settings: JsonValue) -> JsonObject | None:
 def _merge_codex_tool_filters(target: JsonObject, codex: JsonValue) -> None:
     if not isinstance(codex, dict):
         return
+    if "enabledTools" not in target and codex.get("enabled_tools") == []:
+        target["disabled"] = True
     for codex_key, agy_key in (
         ("disabled_tools", "disabledTools"),
         ("enabled_tools", "enabledTools"),
@@ -747,30 +751,76 @@ def _merge_codex_tool_filters(target: JsonObject, codex: JsonValue) -> None:
             target[agy_key] = items
 
 
+def _codex_timeout(settings: JsonObject) -> int | None:
+    tool = _timeout_seconds(settings.get("tool_timeout_sec"))
+    if tool is None:
+        return None
+    startup = _timeout_seconds(settings.get("startup_timeout_sec"))
+    return max(tool, startup) if startup is not None else tool
+
+
+def _agy_stdio_from_codex(settings: JsonObject, command: str) -> JsonObject | None:
+    if settings.get("environment_id"):
+        return None
+    mirrored: JsonObject = {"command": command}
+    _copy_stdio_fields(settings, mirrored)
+    return mirrored
+
+
+def _agy_http_from_codex(settings: JsonObject, url: str) -> JsonObject | None:
+    if (
+        settings.get("bearer_token_env_var")
+        or settings.get("env_http_headers")
+        or settings.get("http_headers_helper")
+    ):
+        return None
+    mirrored: JsonObject = {"url": url}
+    if (headers := _string_dict(settings.get("http_headers"))) is not None:
+        mirrored["headers"] = headers
+    return mirrored
+
+
 def _agy_server_from_codex(settings: JsonValue) -> JsonObject | None:
-    if not isinstance(settings, dict):
+    if not isinstance(settings, dict) or settings.get("enabled_tools") == []:
         return None
     command = _nonempty_str(settings.get("command"))
     url = _nonempty_str(settings.get("url"))
     if command and url:
         return None
     if command:
-        mirrored: JsonObject = {"command": command}
-        _copy_stdio_fields(settings, mirrored)
+        mirrored = _agy_stdio_from_codex(settings, command)
     elif url:
-        if settings.get("bearer_token_env_var") or settings.get("env_http_headers"):
-            return None
-        mirrored = {"url": url}
-        if (headers := _string_dict(settings.get("http_headers"))) is not None:
-            mirrored["headers"] = headers
+        mirrored = _agy_http_from_codex(settings, url)
     else:
+        return None
+    if mirrored is None:
         return None
     if settings.get("enabled") is False:
         mirrored["disabled"] = True
     _merge_codex_tool_filters(mirrored, settings)
-    if (timeout := _timeout_seconds(settings.get("tool_timeout_sec"))) is not None:
+    if (timeout := _codex_timeout(settings)) is not None:
         mirrored["timeoutSeconds"] = timeout
     return mirrored
+
+
+def _is_git_ignored(root: Path, name: str) -> bool:
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "--", name],
+        cwd=root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if ignored.returncode != 0:
+        return False
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", name],
+        cwd=root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return tracked.returncode != 0
 
 
 def _mirror_agy_servers(
@@ -826,11 +876,19 @@ def configure_agy_mcp(
         tomllib.loads(codex_config).get("mcp_servers", {}) if codex_config else {}
     )
     codex_servers: JsonObject = parsed_codex if isinstance(parsed_codex, dict) else {}
+    mirrored_claude = (
+        {} if claude_servers and _is_git_ignored(root, ".mcp.json") else claude_servers
+    )
+    mirrored_codex = (
+        {}
+        if codex_servers and _is_git_ignored(root, ".codex/config.toml")
+        else codex_servers
+    )
     _mirror_agy_servers(
         existing,
         detected.keys() | (pending or set()),
-        claude_servers,
-        codex_servers,
+        mirrored_claude,
+        mirrored_codex,
     )
     if json.dumps(current) == before:
         return []
