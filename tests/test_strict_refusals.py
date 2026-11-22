@@ -217,6 +217,11 @@ QUOTED_SWITCHES = [
         "/**\n * fallow-" + "override-threshold-next-line requires a reason.\n */\n",
     ),
     (
+        "src/a.ts",
+        "/** Example: fallow-"
+        + "override-threshold-next-line maxCognitive=40 -- reason. */\n",
+    ),
+    (
         "README.md",
         "Do not write fallow-" + "override-threshold-next-line in source files.\n",
     ),
