@@ -154,6 +154,64 @@ def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[P
     return found
 
 
+def nested_dart_options(
+    directory: Path,
+    sources: list[str] | tuple[str, ...],
+    excluded: frozenset[str] = frozenset(),
+) -> list[Path]:
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for source in sorted({*sources, "test", "tests"}):
+        for nested in sorted((directory / source).rglob("analysis_options.yaml")):
+            if (
+                nested.parent == directory
+                or nested in seen
+                or any(
+                    nested.parent.relative_to(directory).is_relative_to(skip)
+                    for skip in excluded
+                )
+            ):
+                continue
+            seen.add(nested)
+            found.append(nested)
+    return found
+
+
+def _migrate_dart_plugin_file(
+    root: Path,
+    path: Path,
+    source: Path,
+    changes: dict[str, str],
+    visited: set[Path],
+) -> None:
+    from copy import deepcopy
+
+    import yaml
+
+    from project_setup import migrate_dart_plugins
+
+    resolved = path.resolve()
+    base = root.resolve()
+    if (
+        resolved in visited
+        or not resolved.is_file()
+        or not resolved.is_relative_to(base)
+    ):
+        return
+    visited.add(resolved)
+    relative = resolved.relative_to(base).as_posix()
+    raw = changes.get(relative)
+    child = cast(
+        "JsonObject",
+        yaml.safe_load(raw) if raw is not None else dart_options(resolved),
+    )
+    original = deepcopy(child)
+    migrate_dart_plugins(child, source)
+    if child != original:
+        changes[relative] = yaml.safe_dump(child, sort_keys=False)
+    migrate_included_dart_plugins(root, resolved, child, source, changes, visited)
+
+
 def migrate_included_dart_plugins(
     root: Path,
     path: Path,
@@ -162,28 +220,26 @@ def migrate_included_dart_plugins(
     changes: dict[str, str],
     seen: set[Path] | None = None,
 ) -> None:
-    from copy import deepcopy
-
-    import yaml
-
-    from project_setup import migrate_dart_plugins
-
     visited = seen if seen is not None else {path.resolve()}
     for included in local_dart_includes(root, path, options):
-        if included in visited:
-            continue
-        visited.add(included)
-        relative = included.relative_to(root.resolve()).as_posix()
-        raw = changes.get(relative)
-        child = cast(
-            "JsonObject",
-            yaml.safe_load(raw) if raw is not None else dart_options(included),
-        )
-        original = deepcopy(child)
-        migrate_dart_plugins(child, source)
-        if child != original:
-            changes[relative] = yaml.safe_dump(child, sort_keys=False)
-        migrate_included_dart_plugins(root, included, child, source, changes, visited)
+        _migrate_dart_plugin_file(root, included, source, changes, visited)
+
+
+def migrate_nested_dart_plugins(
+    root: Path,
+    directory: Path,
+    sources: list[str] | tuple[str, ...],
+    source: Path,
+    changes: dict[str, str],
+    children: frozenset[str] = frozenset(),
+    seen: set[Path] | None = None,
+) -> None:
+    visited = (
+        seen if seen is not None else {(directory / "analysis_options.yaml").resolve()}
+    )
+    excluded = frozenset(child.removesuffix("/**") for child in children)
+    for nested in nested_dart_options(directory, sources, excluded):
+        _migrate_dart_plugin_file(root, nested, source, changes, visited)
 
 
 def dart_options(path: Path) -> DartOptions:
@@ -584,13 +640,8 @@ def validate_dart_typing(
                 )
     validate_dart_includes(path, package_root or directory, children=children)
     require_flutter_skill_lints(options, path, package_root)
-    for source in {*sources, "test", "tests"}:
-        for nested in (directory / source).rglob("analysis_options.yaml"):
-            if nested.parent != directory and not any(
-                nested.parent.relative_to(directory).is_relative_to(copy)
-                for copy in copies
-            ):
-                validate_dart_typing(nested.parent, (), package_root or directory)
+    for nested in nested_dart_options(directory, sources, copies):
+        validate_dart_typing(nested.parent, (), package_root or directory)
 
 
 JUDGED: dict[tuple[Path, str, tuple[str, ...]], bool] = {}
