@@ -421,7 +421,12 @@ def test_local_develop_and_topic_policies_cannot_override_base_refs(
     commit(repository, "earlier unmerged topic commit")
     git(repository, "checkout", "-qb", "develop")
     write_policy(repository, "topic-ancestor")
-    commit(repository, "first policy pointing to unmerged topic ancestor")
+    first_topic = commit(repository, "first policy pointing to unmerged topic ancestor")
+    git(repository, "update-ref", "refs/remotes/origin/develop", first_topic)
+    git(repository, "update-ref", "-d", "refs/remotes/origin/develop")
+    git(repository, "update-ref", "refs/remotes/origin/topic-ancestor", first_topic)
+    (repository / "topic.txt").write_text("second commit\n")
+    commit(repository, "second topic commit ahead of pushed ref")
     assert models.trusted_base_ref(repository) == main_commit
     git(repository, "checkout", "-q", "--detach", "HEAD")
     assert models.trusted_base_ref(repository) == main_commit
@@ -440,12 +445,11 @@ def test_develop_only_local_repo_and_custom_remote_base_resolve_trusted_base(
 
     custom = tmp_path / "custom"
     init(custom)
-    (custom / "README.md").write_text("base\n")
-    main_commit = commit(custom, "main without policy")
+    write_policy(custom, "integration")
+    main_commit = commit(custom, "main declaring integration base")
     git(custom, "branch", "-M", "main")
     git(custom, "update-ref", "refs/remotes/origin/main", main_commit)
     git(custom, "checkout", "-qb", "integration")
-    write_policy(custom, "integration")
     (custom / ".agents").mkdir(exist_ok=True)
     (custom / ".agents/models.json").write_text(
         (SOURCE / ".agents/models.json").read_text()
