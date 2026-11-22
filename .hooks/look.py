@@ -44,6 +44,7 @@ SCOPE_SECTION = (
     "this screen is required to show, and never overrides visual quality rules):\n{scope}"
 )
 FENCE_OPEN = re.compile(r"^(`{3,}|~{3,})(.*)$")
+ATX_HEADING = re.compile(r"^#{1,6}(?:[ \t]+|$)")
 HEADING_LINE = re.compile(r"^[ ]{0,3}(#{1,2})[ \t]+([^\n]+?)\s*$")
 TRAILING_HASHES = re.compile(r"[ \t]+#+[ \t]*$")
 LIST_MARKER = re.compile(r"^([-+*]|[0-9]{1,9}[.)])([ \t]+|$)")
@@ -354,17 +355,16 @@ def _list_opener(
     return content_col, _fence_opener(tail)
 
 
-def _is_block_starter(line: str, container: int) -> bool:
-    cols, rest = _leading_cols(line)
-    if not rest or cols > container + 3:
+def _is_block_starter(rest: str) -> bool:
+    if not rest:
         return False
     return bool(
-        HEADING_LINE.match(line)
+        ATX_HEADING.match(rest)
         or rest.startswith(">")
         or THEMATIC_BREAK.match(rest)
         or _fence_opener(rest)
         or LIST_MARKER.match(rest)
-        or _html_block_end([line], 0, container) is not None
+        or _html_block_end([rest], 0, 0) is not None
     )
 
 
@@ -409,7 +409,7 @@ class _MdScan:
         self.index += 1
 
     def _step_nonblank(self, line: str, cols: int, rest: str) -> None:
-        if self.prev_blank or _is_block_starter(line, 0):
+        if self.prev_blank or _is_block_starter(rest):
             while self.list_stack and cols < self.list_stack[-1]:
                 self.list_stack.pop()
         container = self.list_stack[-1] if self.list_stack else 0

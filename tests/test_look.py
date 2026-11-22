@@ -468,6 +468,12 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         "  ## ux_reference\n\n- No clutter: Pass — leaked\n"
     )
     assert "leaked" not in look.extract_outcome_scope(thematic, "b.md")
+    sub_heading = (
+        "# T\n\n## Outcome + scope\n\n- Keep Today.\n### Details\n"
+        "  <!--\n ## Example\n  -->\nKeep WTD.\n\n## ux_reference\n\n- No clutter: Pass — leaked\n"
+    )
+    sub_scope = look.extract_outcome_scope(sub_heading, "c.md")
+    assert "Keep WTD." in sub_scope and "leaked" not in sub_scope
 
 
 def test_ship_and_autocrlf_verify_committed_pr_plan_scope(
