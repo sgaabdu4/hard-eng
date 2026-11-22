@@ -307,7 +307,7 @@ const fetches = performance.getEntriesByType("resource")
   .sort((a, b) => a.startTime - b.startTime);
 let waves = 0, waveEnd = -1;
 for (const entry of fetches) {
-  if (waves === 0 || entry.startTime >= waveEnd - 1) {
+  if (waves === 0 || entry.startTime >= waveEnd) {
     waves += 1;
     waveEnd = entry.responseEnd;
   } else if (entry.responseEnd > waveEnd) {

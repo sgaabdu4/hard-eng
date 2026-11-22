@@ -37,6 +37,7 @@ Single source: `.hooks/ui_measure.py` (`MEASURE_SCRIPT`), `.hooks/ui_rules.py` (
 Blockers: None
 Handoff: None
 Authority: User directly authorized implementing all six UX audit guards and active-step ordering in chat on 2026-11-22 with the requirement not to slow Hard Eng down.
+Review declined: an unrelated non-mono `@font-face` satisfying a heading weight check when neither `DESIGN.md` nor `--text-<role>--font-family` names a font family for that role :: static CSS token scanning cannot resolve full DOM/CSS selector inheritance across components without causing false positives on valid secondary heading fonts (such as Merriweather headings paired with Inter body text); whenever a role explicitly declares `fontFamily` in `DESIGN.md` or `--text-<role>--font-family`, `_weight_covered` checks only that family's `@font-face` ranges.
 
 ## Acceptance + steps
 

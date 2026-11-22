@@ -147,6 +147,12 @@ class _JsxKeyScanner:
                 f"{self.name}:{key_line}: duplicate sibling React key ({key}) matching line {first_key}. {KEY_STEP}"
             )
 
+    def _pop_slot_to_parent(self) -> None:
+        frame = self.stack.pop()
+        if frame.kind == "slot":
+            for key, (tag_line, key_line) in {**frame.merged, **frame.active}.items():
+                self._record_key(key, tag_line, key_line)
+
     def _handle_open_brace(self) -> None:
         if self.stack and self.stack[-1].kind == "jsx":
             self.stack.append(_JsxFrame("slot", "", {}, {}))
@@ -159,10 +165,32 @@ class _JsxKeyScanner:
         if self.stack[-1].depth > 0:
             self.stack[-1].depth -= 1
             return
-        frame = self.stack.pop()
-        if frame.kind == "slot":
-            for key, (tag_line, key_line) in {**frame.merged, **frame.active}.items():
-                self._record_key(key, tag_line, key_line)
+        if len(self.stack) >= 2 and self.stack[-2].kind == "array":
+            return
+        self._pop_slot_to_parent()
+
+    def _in_array_item(self) -> bool:
+        return (
+            len(self.stack) >= 2
+            and self.stack[-2].kind == "array"
+            and self.stack[-1].kind in ("slot", "fn")
+            and self.stack[-1].depth == 0
+        )
+
+    def _handle_array_char(self, char: str) -> None:
+        if char == "[" and (
+            not self.stack or self.stack[-1].kind in ("slot", "fn", "array")
+        ):
+            self.stack.append(_JsxFrame("array", "", {}, {}))
+            self.stack.append(_JsxFrame("slot", "", {}, {}))
+        elif char == "," and self._in_array_item():
+            self._pop_slot_to_parent()
+            self.stack.append(_JsxFrame("slot", "", {}, {}))
+        elif char == "]":
+            if self._in_array_item():
+                self._pop_slot_to_parent()
+            if self.stack and self.stack[-1].kind == "array":
+                self.stack.pop()
 
     def _handle_open_tag(self, index: int) -> int:
         code = self.code
@@ -211,12 +239,17 @@ class _JsxKeyScanner:
             self._handle_open_brace()
         elif char == "}":
             self._handle_close_brace()
-        elif char == "[" and (
-            not self.stack or self.stack[-1].kind in ("slot", "fn", "array")
+        elif char == "(" and self.stack and self.stack[-1].kind in ("slot", "fn"):
+            self.stack[-1].depth += 1
+        elif (
+            char == ")"
+            and self.stack
+            and self.stack[-1].kind in ("slot", "fn")
+            and self.stack[-1].depth > 0
         ):
-            self.stack.append(_JsxFrame("array", "", {}, {}))
-        elif char == "]" and self.stack and self.stack[-1].kind == "array":
-            self.stack.pop()
+            self.stack[-1].depth -= 1
+        elif char in ("[", ",", "]"):
+            self._handle_array_char(char)
         elif (
             char in ("?", ":")
             and self.stack
@@ -388,11 +421,36 @@ def _design_weight_mismatches(
     return findings
 
 
+def _group_weight_findings(
+    design_rel: str,
+    design_weights: dict[str, int],
+    design_role_fams: dict[str, str],
+    css_texts: list[str],
+) -> list[str]:
+    from ui_rules import _theme_bodies
+
+    theme_bodies = [body for text in css_texts for body in _theme_bodies(text)]
+    if not theme_bodies:
+        return []
+    defined_roles, defined_weights, theme_role_fams = _theme_text_tokens(theme_bodies)
+    findings = _design_weight_mismatches(
+        design_rel, design_weights, defined_roles, defined_weights
+    )
+    by_family, mono_only = _font_face_ranges(css_texts)
+    role_families = {**design_role_fams, **theme_role_fams}
+    for role, weight in sorted(defined_weights.items()):
+        if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
+            findings.append(
+                f"{design_rel}: --text-{role}--font-weight ({weight}) is outside loaded @font-face font-weight ranges"
+            )
+    return findings
+
+
 def design_weight_findings(
     root: Path, package: Path, css_entries: list[str], changed: set[str]
 ) -> list[str]:
     """Verify DESIGN.md YAML fontWeight declarations match @theme --text-*--font-weight and loaded @font-face weights."""
-    from ui_rules import CSS_COMMENT, _css_files, _theme_bodies
+    from ui_rules import CSS_COMMENT, _css_entrypoint_orders, _css_files
 
     design_path = (
         package / "DESIGN.md"
@@ -405,31 +463,24 @@ def design_weight_findings(
     if not files:
         return []
     design_rel = design_path.relative_to(root).as_posix()
-    css_map = {path.relative_to(root).as_posix(): path for path in files}
-    skipped_css = generated_sources(root, sorted(css_map))
-    live_css = {rel: path for rel, path in css_map.items() if rel not in skipped_css}
-    if not live_css or (design_rel not in changed and not (live_css.keys() & changed)):
+    css_rels = {path.relative_to(root).as_posix() for path in files}
+    if design_rel not in changed and not (css_rels & changed):
         return []
-    css_texts = [
-        CSS_COMMENT.sub("", path.read_text(errors="replace"))
-        for path in live_css.values()
-    ]
-    theme_bodies = [body for text in css_texts for body in _theme_bodies(text)]
-    if not theme_bodies:
-        return []
-    defined_roles, defined_weights, theme_role_fams = _theme_text_tokens(theme_bodies)
+    text_by_path = {
+        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
+    }
     design_weights, design_role_fams = _design_yaml_typography(design_path)
-    findings = _design_weight_mismatches(
-        design_rel, design_weights, defined_roles, defined_weights
-    )
-    by_family, mono_only = _font_face_ranges(css_texts)
-    role_families = {**design_role_fams, **theme_role_fams}
-    for role, weight in sorted(defined_weights.items()):
-        if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
-            findings.append(
-                f"{design_rel}: --text-{role}--font-weight ({weight}) is outside loaded @font-face font-weight ranges"
-            )
-    return findings
+    seen: list[str] = []
+    for group in _css_entrypoint_orders(files, text_by_path):
+        for hit in _group_weight_findings(
+            design_rel,
+            design_weights,
+            design_role_fams,
+            [text_by_path[path] for path in group],
+        ):
+            if hit not in seen:
+                seen.append(hit)
+    return seen
 
 
 def audit_findings(
