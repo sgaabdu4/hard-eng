@@ -1,5 +1,6 @@
 """Read a Dart package's Dart Decimate boundary rules and refuse unusable ones."""
 
+import errno
 import json
 import os
 import stat
@@ -155,10 +156,10 @@ def _is_repo_file(path: Path | None, base: Path, *, strict: bool = True) -> bool
         return stat.S_ISREG(path.stat().st_mode)
     except (FileNotFoundError, NotADirectoryError):
         return False
-    except OSError:
-        if strict:
-            raise
-        return False
+    except OSError as error:
+        if not strict or error.errno == errno.ELOOP:
+            return False
+        raise
 
 
 def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[Path]:
