@@ -19,6 +19,7 @@ Single source: repository-root lookup lives once in `saved_template()`.
 
 ## Decisions + authorization
 
+Decisions: `saved_template()` checks standard `.git` directories, `gitdir:` files, `commondir`, `HEAD` ref/SHA content, `objects/`, and `refs/` without spawning `git`; non-standard repository setups (`GIT_DIR`, bare repos, or alternative ref backends) pass `--template` explicitly.
 Blockers: None
 Handoff: None
 Authority: Maintainer autonomous rollout approval on 2026-11-22 to fix defects blocking Hard Eng rollout and deliver through `develop`.

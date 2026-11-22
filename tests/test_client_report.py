@@ -344,6 +344,15 @@ def test_the_command_validates_gitdir_and_worktree_metadata(
     (missing_refs / ".git").write_text(f"gitdir: {wt_no_refs}\n")
     assert _run_script(write(missing_refs, "report.html")) == outside
 
+
+def test_the_command_validates_symlinked_worktree_head_and_commondir(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "docs/client-report").mkdir(parents=True)
+    write(tmp_path / "docs/client-report", "template.html")
+    outside = (1, "run inside the project's git checkout\n")
+
     symlink_wt = tmp_path.parent / (tmp_path.name + "-symlink-wt")
     (symlink_wt / "docs/client-report").mkdir(parents=True)
     write(symlink_wt / "docs/client-report", "template.html")
@@ -353,6 +362,19 @@ def test_the_command_validates_gitdir_and_worktree_metadata(
     (wt_meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
     (symlink_wt / ".git").symlink_to(wt_meta)
     assert _run_script(write(symlink_wt, "report.html")) == (0, "")
+
+    (wt_meta / "HEAD").write_text("")
+    assert _run_script(write(symlink_wt, "report.html")) == outside
+    (wt_meta / "HEAD").write_text("ref: refs/heads/main\n")
+
+    nested_empty_common = tmp_path / "nested-empty-common"
+    nested_meta = tmp_path.parent / (tmp_path.name + "-empty-common-meta")
+    nested_meta.mkdir()
+    (nested_meta / "HEAD").write_text("ref: refs/heads/main\n")
+    (nested_meta / "commondir").write_text("")
+    nested_empty_common.mkdir()
+    (nested_empty_common / ".git").symlink_to(nested_meta)
+    assert _run_script(write(nested_empty_common, "report.html")) == outside
 
 
 def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(

@@ -116,18 +116,30 @@ def problems(report: Path, template: Path) -> list[str]:
     return found
 
 
-def _is_valid_gitdir(gitdir: Path) -> bool:
-    if not (gitdir / "HEAD").is_file():
+HEX = re.compile(r"^[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
+
+
+def _valid_head(head: Path) -> bool:
+    if not head.is_file():
         return False
+    text = head.read_text(errors="replace").strip()
+    return text.startswith("ref: ") or bool(HEX.fullmatch(text))
+
+
+def _check_gitdir(gitdir: Path) -> str:
+    if not _valid_head(gitdir / "HEAD"):
+        return "invalid"
     commondir = gitdir / "commondir"
     if commondir.is_file():
-        common_target = Path(commondir.read_text(errors="replace").strip())
-        common = (
-            common_target if common_target.is_absolute() else (gitdir / common_target)
-        )
+        raw = commondir.read_text(errors="replace").strip()
+        if not raw:
+            return "stop"
+        target = Path(raw)
+        common = target if target.is_absolute() else (gitdir / target)
     else:
         common = gitdir
-    return (common / "objects").is_dir() and (common / "refs").is_dir()
+    ok = (common / "objects").is_dir() and (common / "refs").is_dir()
+    return "valid" if ok else "stop"
 
 
 def saved_template() -> Path | None:
@@ -137,8 +149,15 @@ def saved_template() -> Path | None:
     for folder in (cwd, *cwd.parents):
         marker = folder / ".git"
         if marker.is_dir():
-            if _is_valid_gitdir(marker):
+            if (marker / "commondir").is_file() and not (
+                marker / "commondir"
+            ).read_text(errors="replace").strip():
+                return None
+            status = _check_gitdir(marker)
+            if status == "valid":
                 return folder / TEMPLATE
+            if status == "stop":
+                return None
             continue
         if marker.is_file():
             lines = marker.read_text(errors="replace").splitlines()
@@ -146,7 +165,7 @@ def saved_template() -> Path | None:
                 return None
             target = Path(lines[0].removeprefix("gitdir:").strip())
             gitdir = target if target.is_absolute() else (folder / target)
-            return folder / TEMPLATE if _is_valid_gitdir(gitdir) else None
+            return folder / TEMPLATE if _check_gitdir(gitdir) == "valid" else None
     return None
 
 
