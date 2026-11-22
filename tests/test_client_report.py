@@ -1,6 +1,5 @@
 """The client report check refuses a report that left the saved template or shows cross-reference codes."""
 
-import ast
 import importlib
 import subprocess
 import sys
@@ -299,6 +298,26 @@ def test_the_command_finds_the_template_from_the_git_top_level(
         1,
         "run inside the project's git checkout\n",
     )
+    nested_stale = tmp_path / "nested-stale"
+    nested_stale.mkdir()
+    (nested_stale / ".git").write_text("gitdir: /nonexistent/nested/gitdir\n")
+    assert run(write(nested_stale, "report.html")) == (
+        1,
+        "run inside the project's git checkout\n",
+    )
+    missing_common = tmp_path.parent / (tmp_path.name + "-missing-common")
+    missing_common.mkdir()
+    fake_gitdir = missing_common / "wt-meta"
+    fake_gitdir.mkdir()
+    (fake_gitdir / "HEAD").write_text("ref: refs/heads/main\n")
+    (fake_gitdir / "commondir").write_text("../missing-common-dir\n")
+    (missing_common / ".git").write_text(f"gitdir: {fake_gitdir}\n")
+    (missing_common / "docs/client-report").mkdir(parents=True)
+    write(missing_common / "docs/client-report", "template.html")
+    assert run(write(missing_common, "report.html")) == (
+        1,
+        "run inside the project's git checkout\n",
+    )
     git_inner = tmp_path / ".git/hooks"
     git_inner.mkdir(parents=True, exist_ok=True)
     assert run(write(git_inner, "report.html")) == (
@@ -338,15 +357,10 @@ def test_a_heading_broken_by_a_line_break_and_separate_rows_with_brackets_pass(
 
 
 def test_check_report_script_passes_strict_ruff_subprocess_rules() -> None:
-    tree = ast.parse(SCRIPT.read_text())
-    imported = {
-        alias.name.split(".")[0]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Import)
-        for alias in node.names
-    } | {
-        node.module.split(".")[0]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.module
-    }
-    assert "subprocess" not in imported
+    done = subprocess.run(
+        ["uvx", "ruff@latest", "check", "--select", "S603,S607", str(SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
