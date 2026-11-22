@@ -62,6 +62,275 @@ def test_mermaid_blocks_in_tilde_fences_count_like_backtick_fences() -> None:
     assert body_problem("Undo: revert.\n" + tilde + "Not checked: x\n") is not None
 
 
+def _flow(*lines: str, head: str = "flowchart TD") -> str:
+    body = "\n".join(f"    {line}" for line in lines)
+    return f"```mermaid\n{head}\n{body}\n```\n"
+
+
+def _with(diagram: str) -> str:
+    return "Undo: revert.\n" + _DIAGRAM + diagram + "Not checked: x\n"
+
+
+_FORMS = [
+    'A["{}"] --> B["ok"]',
+    "A[{}] --> B[ok]",
+    "A({}) --> B(ok)",
+    "A([{}]) --> B([ok])",
+    "A{{{}}} --> B{{ok}}",
+    "A{{{{{}}}}} --> B{{{{ok}}}}",
+    "A[({})] --> B[(ok)]",
+    "A(({})) --> B((ok))",
+    "A[[{}]] --> B[[ok]]",
+    "A[ok] -->|{}| B[ok]",
+    'A[ok] -->|"{}"| B[ok]',
+    "A[ok] -- {} --> B[ok]",
+    "A[ok] -.-> B({})",
+    "A[ok] ==> B[ok] --> C[{}]",
+]
+_TOO_LONG = "Tidy the pantry shelves"
+
+
+@pytest.mark.parametrize("form", _FORMS)
+def test_a_mermaid_label_line_over_13_characters_is_refused_by_name(
+    form: str,
+) -> None:
+    problem = body_problem(_with(_flow(form.format(_TOO_LONG))))
+    assert problem is not None
+    assert f'"{_TOO_LONG}"' in problem
+    assert "<br>" in problem
+
+
+@pytest.mark.parametrize("form", _FORMS)
+def test_mermaid_labels_of_13_characters_or_fewer_pass_in_every_form(
+    form: str,
+) -> None:
+    assert body_problem(_with(_flow(form.format("Tidy shelves!")))) is None
+
+
+def test_a_label_of_14_characters_is_refused() -> None:
+    assert body_problem(_with(_flow('A["Tidy shelves!!"]'))) is not None
+
+
+@pytest.mark.parametrize("tag", ["<br>", "<br/>", "<br />", "<BR>"])
+def test_each_line_of_a_label_split_by_a_break_counts_alone(tag: str) -> None:
+    ok = _with(_flow(f'A["Tidy shelves{tag}Wipe jars{tag}Sweep up"]'))
+    assert body_problem(ok) is None
+    bad = _with(_flow(f'A["Tidy shelves{tag}Wipe the counters"]'))
+    problem = body_problem(bad)
+    assert problem is not None
+    assert '"Wipe the counters"' in problem
+
+
+def test_an_entity_code_counts_as_one_character() -> None:
+    assert body_problem(_with(_flow('A["Sort #quot;jars#quot;"]'))) is None
+    problem = body_problem(_with(_flow('A["Sort #quot;jars#quot; now"]')))
+    assert problem is not None
+
+
+def test_a_long_label_in_a_later_block_is_refused() -> None:
+    body = _with(_flow("A[ok] --> B[ok]") + _flow(f'C["{_TOO_LONG}"]'))
+    assert body_problem(body) is not None
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ("subgraph The whole pantry cleanup", "A[ok]", "end"),
+        ("A[ok]", "style A fill:#ffffff,stroke:#333333,stroke-width:2px"),
+        ("A[ok]", "classDef important fill:#f9f,stroke:#333333"),
+        ("A[ok]", "%% a long comment line that nobody draws"),
+        ("A[ok] --> B[ok]", "linkStyle 0 stroke:#ff3,stroke-width:4px"),
+        ("direction LR", "A[ok]:::important"),
+    ],
+)
+def test_lines_that_are_not_labels_are_not_counted(lines: tuple[str, ...]) -> None:
+    assert body_problem(_with(_flow(*lines))) is None
+
+
+def test_front_matter_is_not_counted() -> None:
+    front = "---\ntitle: A long title for the whole picture\n---\n"
+    diagram = f"```mermaid\n{front}flowchart TD\n    A[ok] --> B[ok]\n```\n"
+    assert body_problem(_with(diagram)) is None
+
+
+def test_a_graph_block_is_counted_like_a_flowchart() -> None:
+    diagram = _flow(f'A["{_TOO_LONG}"]', head="graph TD")
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_compact_link_between_short_labels_passes() -> None:
+    assert body_problem(_with(_flow('Pick["Open"]-->Pack["Check"]'))) is None
+
+
+def test_a_compact_link_with_one_long_label_names_that_label() -> None:
+    problem = body_problem(_with(_flow(f'Pick["Open"]-->Pack["{_TOO_LONG}"]')))
+    assert problem is not None
+    assert f'"{_TOO_LONG}"' in problem
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "TidyThePantryShelves --> B[ok]",
+        "A>Tidy the pantry shelves]",
+        'A["ok"]; B["Tidy the pantry shelves"]',
+    ],
+)
+def test_a_long_node_id_or_asymmetric_or_second_statement_label_is_refused(
+    line: str,
+) -> None:
+    assert body_problem(_with(_flow(line))) is not None
+
+
+def test_an_asymmetric_node_of_13_characters_passes() -> None:
+    assert body_problem(_with(_flow("A>Tidy shelves!] --> B[ok]"))) is None
+
+
+@pytest.mark.parametrize(
+    "preamble",
+    [
+        "\n",
+        '%%{init: {"theme": "base"}}%%\n',
+        "%% a note\n\n",
+    ],
+)
+def test_a_blank_line_or_directive_before_the_header_does_not_hide_labels(
+    preamble: str,
+) -> None:
+    diagram = f'```mermaid\n{preamble}flowchart TD\n    A["{_TOO_LONG}"]\n```\n'
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_label_after_a_semicolon_on_the_header_line_is_checked() -> None:
+    diagram = f'```mermaid\nflowchart TD; A["{_TOO_LONG}"]\n```\n'
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_four_backtick_block_is_checked() -> None:
+    diagram = f'````mermaid\nflowchart TD\n    A["{_TOO_LONG}"]\n````\n'
+    assert body_problem(_with(diagram)) is not None
+
+
+def test_a_mermaid_example_inside_another_fence_or_comment_is_not_checked() -> None:
+    bad = f'```mermaid\nflowchart TD\n    A["{_TOO_LONG}"]\n```\n'
+    wrapped = "````markdown\n" + bad + "````\n"
+    assert body_problem(_with(_flow("A[ok]")) + wrapped) is None
+    assert body_problem(_with(_flow("A[ok]")) + f"<!--\n{bad}-->\n") is None
+
+
+def test_a_literal_mermaid_opener_inside_a_markdown_fence_does_not_end_it() -> None:
+    example = "```markdown\n```mermaid\nflowchart TD\n```\n"
+    body = "Undo: x\n" + _DIAGRAM + example + _DIAGRAM + "Not checked: x\n"
+    assert body_problem(body) is None
+
+
+def test_a_closing_fence_longer_than_its_opener_ends_the_block() -> None:
+    longer = _DIAGRAM.replace("```\n", "````\n")
+    body = "Undo: x\n" + _DIAGRAM + longer + "Not checked: x\n"
+    assert body_problem(body) is None
+    swallowed = "```text\nnote\n````\n" + _flow(f'A["{_TOO_LONG}"]')
+    assert body_problem("Undo: x\n" + _DIAGRAM * 2 + swallowed + "Not checked: x\n")
+
+
+def test_a_triple_round_node_of_13_characters_passes_and_14_is_refused() -> None:
+    assert body_problem(_with(_flow("A(((abcdefghijklm)))"))) is None
+    assert body_problem(_with(_flow("A(((abcdefghijklmn)))"))) is not None
+
+
+def test_the_refusal_explains_entity_codes_and_gives_a_bare_id_example() -> None:
+    entity = body_problem(_with(_flow('A["Sort #quot;jars#quot; now"]')))
+    assert entity is not None
+    assert "entity code" in entity
+    bare = body_problem(_with(_flow("PullRequestOpened --> Done")))
+    assert bare is not None
+    assert 'A["Pull request<br>opened"]' in bare
+
+
+def test_a_trailing_slash_in_a_plain_square_label_is_text() -> None:
+    assert body_problem(_with(_flow("A[Moved to src/]"))) is None
+    problem = body_problem(_with(_flow("A[Also moved under src/]")))
+    assert problem is not None
+    assert '"Also moved under src/"' in problem
+
+
+def test_a_semicolon_inside_an_unquoted_bracket_label_stays_in_the_label() -> None:
+    problem = body_problem(_with(_flow("A[done; later releases come]")))
+    assert problem is not None
+    assert '"done; later releases come"' in problem
+    assert body_problem(_with(_flow("A[a; b]; B[c; d]"))) is None
+
+
+def test_accessibility_text_is_not_a_label() -> None:
+    lines = ('accTitle: "A long title for the whole picture"', "A[ok] --> B[ok]")
+    assert body_problem(_with(_flow(*lines))) is None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'A["Draft; check; send"]',
+        'A["Fix | lint | type"]',
+        'A --> |"Draft; check; send"| B',
+        'title["Publish the pull request"]',
+        'A@{ shape: rect, label: "Publish the pull request" }',
+        'A[/"Publish the pull request"/]',
+    ],
+)
+def test_a_long_label_in_a_quote_a_title_node_or_attribute_form_is_refused(
+    line: str,
+) -> None:
+    assert body_problem(_with(_flow(line))) is not None
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ('A["Check A | B"]-->B["Check X | Y"]',),
+        ('CheckoutValidation["Check"]', "CheckoutValidation --> B[Pay]"),
+        ("B[Pay]", "CheckoutValidation --> B", 'CheckoutValidation["Check"]'),
+        ('A["Open"]; classDef completedPayment fill:#f96',),
+        ("accDescr {", "Waiting for reauthentication", "}", "A[ok]"),
+        ('A[/"Confirm order"/]',),
+        ('A@{ shape: rect, label: "Pay now" }',),
+    ],
+)
+def test_valid_short_labels_in_these_forms_stay_valid(lines: tuple[str, ...]) -> None:
+    assert body_problem(_with(_flow(*lines))) is None
+
+
+def test_a_one_line_description_with_a_brace_does_not_hide_later_labels() -> None:
+    lines = ("accDescr: Show the { symbol", f'A["{_TOO_LONG}"]')
+    assert body_problem(_with(_flow(*lines))) is not None
+
+
+def test_a_bare_node_id_that_was_never_given_a_label_is_checked() -> None:
+    assert body_problem(_with(_flow("Checkout-validation --> B[ok]"))) is not None
+
+
+def test_a_diagram_nested_in_a_list_item_is_checked() -> None:
+    nested = (
+        "1. **After**\n\n    "
+        + _flow(f'A["{_TOO_LONG}"]').replace("\n", "\n    ")
+        + "\n"
+    )
+    assert body_problem(_with(_flow("A[ok]")) + nested) is not None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'A -->|"Fix | lint | type"| B',
+        'A -->|"Call validate(x)"| B',
+        "A@{ shape: rect, label: 'Publish the pull request' }",
+        "A(/api/checkouts/)",
+    ],
+)
+def test_a_long_quoted_edge_single_quote_attribute_or_slash_label_is_refused(
+    line: str,
+) -> None:
+    assert body_problem(_with(_flow(line))) is not None
+
+
 def _lines(count: int, width: int = 49) -> str:
     return ("a" * width + "\n") * count
 

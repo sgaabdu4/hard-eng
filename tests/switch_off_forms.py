@@ -114,6 +114,21 @@ SWITCHES = [
     ),
     ("src/a.ts", "// jscpd:" + "ignore-start\n", "jscpd:" + "ignore"),
     ("src/a.ts", "// fallow-" + "ignore-next-line\n", "fallow-" + "ignore"),
+    (
+        "src/a.ts",
+        "// fallow-" + "override-threshold-next-line maxCognitive=40 -- reason\n",
+        "// fallow-" + "override-threshold-next-line maxCognitive=",
+    ),
+    (
+        "src/a.ts",
+        "// fallow-" + "override-threshold-next-line ,maxCognitive=40 -- reason\n",
+        "// fallow-" + "override-threshold-next-line ,maxCognitive=",
+    ),
+    (
+        "src/a.ts",
+        "/** fallow-" + "override-threshold-next-line maxCognitive=40 -- reason */\n",
+        "/** fallow-" + "override-threshold-next-line maxCognitive=",
+    ),
     ("build.sh", "# shellcheck " + "disable=SC2086\n", "shellcheck " + "disable="),
     (
         "build.sh",

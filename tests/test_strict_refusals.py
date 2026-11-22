@@ -207,6 +207,24 @@ QUOTED_SWITCHES = [
     ),
     ("src/rule.test.ts", "const sample = `\n// eslint-" + "disable-next-line\n`;\n"),
     ("src/a.ts", "const t = `${f('// @ts-" + "ignore')}`;\n"),
+    (
+        "src/a.ts",
+        "const note = '// fallow-"
+        + "override-threshold-next-line maxCognitive=40 -- reason';\n",
+    ),
+    (
+        "src/a.ts",
+        "/**\n * fallow-" + "override-threshold-next-line requires a reason.\n */\n",
+    ),
+    (
+        "src/a.ts",
+        "/** Example: fallow-"
+        + "override-threshold-next-line maxCognitive=40 -- reason. */\n",
+    ),
+    (
+        "README.md",
+        "Do not write fallow-" + "override-threshold-next-line in source files.\n",
+    ),
     ("scripts/scan.mjs", "const banned = /(?<!dart-)x|eslint-" + "disable/;\n"),
     (
         "tool/scan.py",
@@ -230,6 +248,22 @@ def test_switch_off_text_inside_a_literal_passes(
     validate_suppressions(root, "HEAD")
     commit(root, "old")
     validate_whole_project(root)
+
+
+def test_multiline_fallow_threshold_override_block_comment_fails(
+    tmp_path: Path,
+) -> None:
+    root = project(
+        tmp_path,
+        {
+            "src/a.ts": "/*\nfallow-"
+            + "override-threshold-next-line maxCrap=45 -- reason\n*/\n"
+        },
+    )
+    assert (
+        "src/a.ts:2 holds 'fallow-" + "override-threshold-next-line maxCrap='"
+        in refusal(root)
+    )
 
 
 QUOTED_NEAR_MISSES = [
