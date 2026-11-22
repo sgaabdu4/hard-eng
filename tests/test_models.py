@@ -490,6 +490,8 @@ def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> 
     git(trunk, "checkout", "-q", "--detach", "HEAD")
     assert models.trusted_base_ref(trunk) == trunk_topic
 
+
+def test_orphan_anchor_and_symbolic_origin_head_resolution(tmp_path: Path) -> None:
     orphan = tmp_path / "orphan-main"
     init(orphan)
     git(orphan, "branch", "-M", "develop")
@@ -527,6 +529,13 @@ def test_direct_origin_head_and_orphan_local_branch_ancestry(tmp_path: Path) -> 
     )
     git(orphan, "checkout", "-q", "feature")
     assert models.trusted_base_ref(orphan) == dev_commit
+
+    git(orphan, "checkout", "-q", "main")
+    (orphan / "hard-eng.gates.json").unlink()
+    orphan_main_no_policy = commit(orphan, "orphan main without policy")
+    git(orphan, "update-ref", "refs/remotes/origin/main", orphan_main_no_policy)
+    git(orphan, "checkout", "-q", "feature")
+    assert models.trusted_base_ref(orphan) == orphan_main_no_policy
 
 
 def test_model_roles_rule_references_ssot_without_hardcoded_models() -> None:
