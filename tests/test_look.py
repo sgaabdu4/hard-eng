@@ -421,7 +421,8 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
     plan_file.parent.mkdir(parents=True)
     plan_text = full_plan(
         "Show six reporting columns: Today, WTD, MTD.\n\n"
-        "Performance: Pass [the selected date range](./api.md#date-range) to the API.\n\n"
+        "- Performance: Pass\n"
+        "  [the selected date range](./api.md#date-range) to the API.\n\n"
         "- Performance:\n"
         "  Pass (`startDate`, `endDate`) to the report API.\n\n"
         "```markdown\n"
@@ -469,8 +470,8 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         full_plan(
             "Keep Today.\n# Builder checks\n1. No clutter: Pass — 31 kept, 0 removed"
         ),
-        full_plan("Keep Today.\nRules:\nNo clutter: Pass — 31 kept, 0 removed"),
-        full_plan("Keep Today.\nBuilder review:\nVERDICT: clean"),
+        full_plan("Keep Today.\nRules:\n  No clutter: Pass — 31 kept, 0 removed"),
+        full_plan("Keep Today.\nBuilder review:\n  VERDICT: clean"),
         full_plan("Keep Today.\n- [x] No clutter: **Pass** — 31 kept, 0 removed"),
         full_plan("Keep Today.\n- No clutter:\n  Pass — 31 kept, 0 removed"),
         full_plan("Keep Today.\n##\tux_reference\n- No clutter: Pass — leaked"),

@@ -262,7 +262,22 @@ def bound_utf8(text: str, limit: int) -> str:
     )
 
 
-def _logical_lines(scope: str) -> list[str]:
+def _normalize_line(raw: str) -> str:
+    stripped = raw.replace("\t", " ").lstrip(" >")
+    while LIST_PREFIX.match(stripped):
+        stripped = LIST_PREFIX.sub("", stripped)
+    return clean_line(stripped).replace("*", "").replace("_", "")
+
+
+def _starts_rule_or_verdict(stripped: str, wanted: set[str]) -> bool:
+    cleaned = _normalize_line(stripped)
+    if VERDICT_LINE.match(cleaned):
+        return True
+    head, sep, _ = cleaned.partition(":")
+    return bool(sep) and head.strip().lower() in wanted
+
+
+def _logical_lines(scope: str, wanted: set[str]) -> list[str]:
     joined: list[str] = []
     for raw in scope.splitlines():
         line = raw.replace("\t", " ")
@@ -270,12 +285,18 @@ def _logical_lines(scope: str) -> list[str]:
         if not stripped:
             joined.append("")
             continue
-        if (
-            joined
-            and joined[-1]
+        can_join = (
+            bool(joined)
+            and bool(joined[-1])
             and not LIST_PREFIX.match(stripped)
-            and (line[:1] == " " or joined[-1].rstrip().endswith(":"))
-        ):
+            and not _starts_rule_or_verdict(stripped, wanted)
+        )
+        prev_is_rule = (
+            bool(joined)
+            and joined[-1].rstrip().endswith(":")
+            and _starts_rule_or_verdict(joined[-1], wanted)
+        )
+        if can_join and (line[:1] == " " or prev_is_rule):
             joined[-1] = f"{joined[-1]} {stripped}"
         else:
             joined.append(stripped)
@@ -284,12 +305,8 @@ def _logical_lines(scope: str) -> list[str]:
 
 def _scope_verdict_problem(scope: str) -> str | None:
     wanted = {name.lower() for name, _ in usability_rules()}
-    candidates = [*scope.splitlines(), *_logical_lines(scope)]
-    for raw in candidates:
-        stripped = raw.replace("\t", " ").lstrip(" >")
-        while LIST_PREFIX.match(stripped):
-            stripped = LIST_PREFIX.sub("", stripped)
-        cleaned = clean_line(stripped).replace("*", "").replace("_", "")
+    for raw in _logical_lines(scope, wanted):
+        cleaned = _normalize_line(raw)
         if VERDICT_LINE.match(cleaned):
             return cleaned
         rule, verdict, _, problem = split_rule_line(cleaned)
