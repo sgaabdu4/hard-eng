@@ -584,6 +584,15 @@ def test_multiline_apply_and_script_class_helper_refuse_undefined_tokens(
     )
     assert "src/Box.tsx:4:" in refused(tsx_cls_root)
 
+    tsx_spread_root = theme_repo(
+        tmp_path / "tsx_spread",
+        THEME_CSS,
+        "src/Spread.tsx",
+        "export const Spread = () => <div />;\n",
+        "export const Spread = () => {\n  const props = {\n    className: `\n      bg-brand\n      bg-missing\n    `,\n  };\n  return <div {...props} />;\n};\n",
+    )
+    assert "src/Spread.tsx:5:" in refused(tsx_spread_root)
+
 
 def test_css_import_order_governs_color_reset_and_restore(tmp_path: Path) -> None:
     """HE-UI-SOURCE: imported CSS @theme blocks run in exact @import order before their importer."""
@@ -612,6 +621,20 @@ def test_css_import_order_governs_color_reset_and_restore(tmp_path: Path) -> Non
         },
     )
     assert "text-red-500" in refused(cleared)
+
+    reimported = theme_repo(
+        tmp_path / "reimport",
+        '@import "./theme.css";\n@import "./z_reset.css";\n@import "./feature.css";\n',
+        "src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="text-red-500" />\n',
+        extra={
+            "src/app/theme.css": "@theme {\n  --color-red-500: #dc2626;\n}\n",
+            "src/app/z_reset.css": "@theme {\n  --color-red-500: initial;\n}\n",
+            "src/app/feature.css": '@import "./theme.css";\n',
+        },
+    )
+    validate_suppressions(reimported, "HEAD")
 
 
 def test_theme_with_color_reset_refuses_default_palette_colours(

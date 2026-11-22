@@ -260,6 +260,8 @@ SCRIPT_CALL_OPEN = re.compile(
     r"\b(?:cn|clsx|cva|twMerge|classNames|classList\.\w+)\s*\("
 )
 CLASS_ATTR_EXPR = re.compile(r"\b(?:className|class)\s*=\s*\{")
+CLASS_PROP_EXPR = re.compile(r"\bclassName\s*:\s*")
+CLASS_TEMPLATE_ASSIGN = re.compile(r"\bclassName\s*=\s*`")
 COMPARE_BEFORE = re.compile(
     r"(?:===?|!==?|\bcase)\s*$|\.(?:includes|startsWith|endsWith|indexOf|match)\(\s*$"
 )
@@ -404,10 +406,11 @@ def _ordered_css_files(files: list[Path], texts: dict[Path, str]) -> list[Path]:
     ordered: list[Path] = []
     visited: set[Path] = set()
     visiting: set[Path] = set()
+    limit = max(64, len(files) * 8)
 
     def visit(path: Path) -> None:
         resolved = path.resolve()
-        if resolved in visited or resolved in visiting:
+        if resolved in visiting or len(ordered) >= limit:
             return
         visiting.add(resolved)
         for target in edges[path]:
@@ -420,7 +423,8 @@ def _ordered_css_files(files: list[Path], texts: dict[Path, str]) -> list[Path]:
         if path.resolve() not in imported:
             visit(path)
     for path in files:
-        visit(path)
+        if path.resolve() not in visited:
+            visit(path)
     return ordered
 
 
@@ -644,10 +648,28 @@ def _apply_chunks_by_line(text: str) -> dict[int, list[str]]:
     return by_line
 
 
-def _class_context_lines(text: str, suffix: str) -> set[int]:
-    from source_scan import code_without_comments, without_literals
+def _prop_expr_end(text: str, start: int) -> int:
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                return index
+            depth -= 1
+        elif depth == 0 and char in ",;":
+            return index
+        index += 1
+    return index
 
-    masked = without_literals(f"x{suffix}", code_without_comments(text, suffix))
+
+def _class_context_lines(text: str, suffix: str) -> set[int]:
+    from source_scan import code_without_comments, string_end, without_literals
+
+    code = code_without_comments(text, suffix)
+    masked = without_literals(f"x{suffix}", code)
     lines = {
         number
         for number, line in enumerate(masked.splitlines(), 1)
@@ -662,6 +684,16 @@ def _class_context_lines(text: str, suffix: str) -> set[int]:
             end = _balanced_end(masked, match.end(), opener, closer)
             end_line = masked.count("\n", 0, end) + 1
             lines.update(range(start_line, end_line + 1))
+    for match in CLASS_PROP_EXPR.finditer(masked):
+        start_line = masked.count("\n", 0, match.start()) + 1
+        end = _prop_expr_end(masked, match.end())
+        end_line = masked.count("\n", 0, end) + 1
+        lines.update(range(start_line, end_line + 1))
+    for match in CLASS_TEMPLATE_ASSIGN.finditer(code):
+        start_line = code.count("\n", 0, match.start()) + 1
+        end = string_end(code, match.end(), "`", False)
+        end_line = code.count("\n", 0, end) + 1
+        lines.update(range(start_line, end_line + 1))
     return lines
 
 
