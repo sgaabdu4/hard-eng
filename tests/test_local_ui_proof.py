@@ -136,6 +136,51 @@ def touch_after_capture(root: Path, rel: str = "src/App.tsx") -> None:
     os.utime(root / rel, ns=(future, future))
 
 
+def _assert_reverted_and_untracked_dirty_ui(tmp_path: Path) -> None:
+    reverted_root = web_change_repo(tmp_path / "rev", commit_work=False)
+    (reverted_root / "src/Other.tsx").write_text("export const O = () => <p>v1</p>;\n")
+    commit(reverted_root, "both components")
+    rev_head = git(reverted_root, "rev-parse", "HEAD").strip()
+    (reverted_root / "src/App.tsx").write_text("export const App = () => <p>D1</p>;\n")
+    (reverted_root / "src/Other.tsx").write_text("export const O = () => <p>tmp</p>;\n")
+    rev_after = write_clean_browser(reverted_root, route="/account")
+    write_look(reverted_root, rev_head, rev_after)
+    assert local_ui_proof.local_ui_proof_problem(reverted_root, "origin/main") is None
+    git(reverted_root, "checkout", "--", "src/Other.tsx")
+    touch_after_capture(reverted_root, "src/Other.tsx")
+    problem = local_ui_proof.local_ui_proof_problem(reverted_root, "origin/main")
+    assert problem is not None and "predates the latest UI edit" in problem
+
+    (tmp_path / "udir").mkdir()
+    untracked_dir_root = _fixture(tmp_path / "udir", ui_paths=["src/**/*.tsx"]).root
+    (untracked_dir_root / ".git/info/exclude").write_text(".hard-eng/\n")
+    (untracked_dir_root / "src").mkdir()
+    (untracked_dir_root / "src/App.tsx").write_text(
+        "export const App = () => <p>A</p>;\n"
+    )
+    commit(untracked_dir_root, "base")
+    git(untracked_dir_root, "branch", "-f", "main", "HEAD")
+    git(
+        untracked_dir_root,
+        "update-ref",
+        "refs/remotes/origin/main",
+        git(untracked_dir_root, "rev-parse", "main"),
+    )
+    (untracked_dir_root / "PLAN.md").write_text(
+        (untracked_dir_root / "PLAN.md").read_text().replace(NO_UX, REAL_UX)
+    )
+    (untracked_dir_root / "src/widgets").mkdir()
+    (untracked_dir_root / "src/widgets/Card.tsx").write_text(
+        "export const Card = () => <p>New</p>;\n"
+    )
+    udir_head = git(untracked_dir_root, "rev-parse", "HEAD").strip()
+    udir_after = write_clean_browser(untracked_dir_root, route="/account")
+    write_look(untracked_dir_root, udir_head, udir_after)
+    assert (
+        local_ui_proof.local_ui_proof_problem(untracked_dir_root, "origin/main") is None
+    )
+
+
 def test_local_complete_check_supports_dirty_build_and_rejects_stale_and_deleted_edits(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -182,49 +227,7 @@ def test_local_complete_check_supports_dirty_build_and_rejects_stale_and_deleted
     ).stat().st_mtime_ns + 5_000_000_000
     os.utime(legacy_root / "src/legacy", ns=(future_ns, future_ns))
     assert local_ui_proof.local_ui_proof_problem(legacy_root, "origin/main") is None
-
-    reverted_root = web_change_repo(tmp_path / "rev", commit_work=False)
-    (reverted_root / "src/Other.tsx").write_text("export const O = () => <p>v1</p>;\n")
-    commit(reverted_root, "both components")
-    rev_head = git(reverted_root, "rev-parse", "HEAD").strip()
-    (reverted_root / "src/App.tsx").write_text("export const App = () => <p>D1</p>;\n")
-    (reverted_root / "src/Other.tsx").write_text("export const O = () => <p>tmp</p>;\n")
-    rev_after = write_clean_browser(reverted_root, route="/account")
-    write_look(reverted_root, rev_head, rev_after)
-    assert local_ui_proof.local_ui_proof_problem(reverted_root, "origin/main") is None
-    git(reverted_root, "checkout", "--", "src/Other.tsx")
-    touch_after_capture(reverted_root, "src/Other.tsx")
-    problem = local_ui_proof.local_ui_proof_problem(reverted_root, "origin/main")
-    assert problem is not None and "predates the latest UI edit" in problem
-
-    (tmp_path / "udir").mkdir()
-    untracked_dir_root = _fixture(tmp_path / "udir", ui_paths=["src/**/*.tsx"]).root
-    (untracked_dir_root / ".git/info/exclude").write_text(".hard-eng/\n")
-    (untracked_dir_root / "src").mkdir()
-    (untracked_dir_root / "src/App.tsx").write_text(
-        "export const App = () => <p>A</p>;\n"
-    )
-    commit(untracked_dir_root, "base")
-    git(untracked_dir_root, "branch", "-f", "main", "HEAD")
-    git(
-        untracked_dir_root,
-        "update-ref",
-        "refs/remotes/origin/main",
-        git(untracked_dir_root, "rev-parse", "main"),
-    )
-    (untracked_dir_root / "PLAN.md").write_text(
-        (untracked_dir_root / "PLAN.md").read_text().replace(NO_UX, REAL_UX)
-    )
-    (untracked_dir_root / "src/widgets").mkdir()
-    (untracked_dir_root / "src/widgets/Card.tsx").write_text(
-        "export const Card = () => <p>New</p>;\n"
-    )
-    udir_head = git(untracked_dir_root, "rev-parse", "HEAD").strip()
-    udir_after = write_clean_browser(untracked_dir_root, route="/account")
-    write_look(untracked_dir_root, udir_head, udir_after)
-    assert (
-        local_ui_proof.local_ui_proof_problem(untracked_dir_root, "origin/main") is None
-    )
+    _assert_reverted_and_untracked_dirty_ui(tmp_path)
 
 
 def test_local_complete_check_reads_owner_evidence_inside_pre_push_snapshot(
@@ -313,6 +316,43 @@ def test_local_complete_check_rejects_discarded_dirty_capture_and_allows_staged_
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
 
+def _assert_unchanged_routes_and_owners(root: Path, base_plan: str) -> None:
+    (root / "features/ui-b/PLAN.md").write_text(
+        base_plan.replace(
+            REAL_UX, UNCHANGED_UX.replace("the card at rest", "home route `/`")
+        )
+    )
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "names /" in problem
+
+    for desc, expected in (
+        ("/settings/ screen", "/settings/"),
+        ("/settings?tab=security screen", "/settings"),
+        ("/ signed out", "/"),
+        ("Settings at desktop / mobile sizes", ""),
+    ):
+        plan_body = base_plan.replace(
+            REAL_UX, UNCHANGED_UX.replace("the card at rest", desc)
+        )
+        assert (
+            local_ui_proof._unchanged_route(
+                plan_body, local_ui_proof.reference_section(plan_body)
+            )
+            == expected
+        )
+
+    (root / "src/settings").mkdir()
+    (root / "src/settings/Card.tsx").write_text(
+        "export const Card = () => <p>New</p>;\n"
+    )
+    for owner in ("src/settings/", "src/"):
+        (root / "features/ui-b/PLAN.md").write_text(
+            base_plan.replace(REAL_UX, NO_UX) + f"\nOwners: {owner}\n"
+        )
+        problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+        assert problem is not None and "ux_reference says N/A" in problem
+
+
 def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -372,46 +412,7 @@ def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
         data["route"] = "/settings"
         path.write_text(json.dumps(data))
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
-
-    (root / "features/ui-b/PLAN.md").write_text(
-        base_plan.replace(
-            REAL_UX, UNCHANGED_UX.replace("the card at rest", "home route `/`")
-        )
-    )
-    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
-    assert problem is not None and "names /" in problem
-
-    for desc, expected in (
-        ("/settings/ screen", "/settings/"),
-        ("/settings?tab=security screen", "/settings"),
-        ("/ signed out", "/"),
-        ("Settings at desktop / mobile sizes", ""),
-    ):
-        plan_body = base_plan.replace(
-            REAL_UX, UNCHANGED_UX.replace("the card at rest", desc)
-        )
-        assert (
-            local_ui_proof._unchanged_route(
-                plan_body, local_ui_proof.reference_section(plan_body)
-            )
-            == expected
-        )
-
-    (root / "src/settings").mkdir()
-    (root / "src/settings/Card.tsx").write_text(
-        "export const Card = () => <p>New</p>;\n"
-    )
-    (root / "features/ui-b/PLAN.md").write_text(
-        base_plan.replace(REAL_UX, NO_UX) + "\nOwners: src/settings/\n"
-    )
-    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
-    assert problem is not None and "ux_reference says N/A" in problem
-
-    (root / "features/ui-b/PLAN.md").write_text(
-        base_plan.replace(REAL_UX, NO_UX) + "\nOwners: src/\n"
-    )
-    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
-    assert problem is not None and "ux_reference says N/A" in problem
+    _assert_unchanged_routes_and_owners(root, base_plan)
 
 
 def test_local_complete_check_detects_quoted_binary_ui_asset_diff(
