@@ -2,6 +2,7 @@
 
 import json
 import os
+import stat
 import subprocess
 import threading
 from pathlib import Path, PurePosixPath
@@ -147,8 +148,17 @@ def _safe_resolve(path: Path) -> Path | None:
         return None
 
 
-def _is_repo_file(path: Path | None, base: Path) -> bool:
-    return path is not None and path.is_relative_to(base) and path.is_file()
+def _is_repo_file(path: Path | None, base: Path, *, strict: bool = True) -> bool:
+    if path is None or not path.is_relative_to(base):
+        return False
+    try:
+        return stat.S_ISREG(path.stat().st_mode)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError:
+        if strict:
+            raise
+        return False
 
 
 def local_dart_includes(root: Path, path: Path, options: "JsonObject") -> list[Path]:
@@ -214,7 +224,7 @@ def _includes_target(
     if (
         resolved is None
         or resolved in visited
-        or not _is_repo_file(resolved, base)
+        or not _is_repo_file(resolved, base, strict=False)
         or _inside_nested_repo(resolved, base)
     ):
         return False
