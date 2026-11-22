@@ -79,6 +79,7 @@ def _read_trusted_base(root: Path | None, trusted_ref: str | None) -> dict[str, 
         )
         if shown.returncode == 0:
             return _parse_object(shown.stdout, f"{trusted_ref}:{MODELS_FILE}")
+        return _read_object(SHIPPED_MODELS, MODELS_FILE)
     return _read_object(base_models_path(root), MODELS_FILE)
 
 

@@ -416,20 +416,23 @@ def test_challenge_honors_local_models_overlay_for_order_and_flags(
     assert record_of(branch)["reviewer"] == "agy"
 
 
+@pytest.mark.parametrize("on_base", [True, False])
 def test_branch_models_json_edit_cannot_override_trusted_base_for_challenge(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, on_base: bool
 ) -> None:
     from conftest import SOURCE
 
-    git(branch, "checkout", "-q", "main")
-    (branch / ".agents").mkdir(exist_ok=True)
     shipped = json.loads((SOURCE / ".agents/models.json").read_text())
-    (branch / ".agents/models.json").write_text(json.dumps(shipped))
-    commit(branch, "add trusted models config")
-    git(branch, "checkout", "-q", "-B", "feature", "main")
+    if on_base:
+        git(branch, "checkout", "-q", "main")
+        (branch / ".agents").mkdir(exist_ok=True)
+        (branch / ".agents/models.json").write_text(json.dumps(shipped))
+        commit(branch, "add trusted models config")
+        git(branch, "checkout", "-q", "-B", "feature", "main")
     tampered = json.loads((SOURCE / ".agents/models.json").read_text())
     tampered["challenge_order"]["claude"] = ["agy", "codex"]
     tampered["hosts"]["codex"]["reasoning"]["model"] = "broken-branch-model"
+    (branch / ".agents").mkdir(exist_ok=True)
     (branch / ".agents/models.json").write_text(json.dumps(tampered))
     big(branch)
 
@@ -438,8 +441,11 @@ def test_branch_models_json_edit_cannot_override_trusted_base_for_challenge(
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 0
     assert not agy_log.exists()
-    argv = json.loads(codex_log.read_text())["argv"]
-    assert argv[:3] == ["exec", "-m", "gpt-6.2-sol"]
+    assert json.loads(codex_log.read_text())["argv"][:3] == [
+        "exec",
+        "-m",
+        "gpt-6.2-sol",
+    ]
     assert record_of(branch)["reviewer"] == "codex"
 
 
