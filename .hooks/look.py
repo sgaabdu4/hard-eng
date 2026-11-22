@@ -49,9 +49,18 @@ SCOPE_SECTION = (
     "this screen is required to show, and never overrides visual quality rules):\n{scope}"
 )
 LIST_PREFIX = re.compile(r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+")
+HTML_BLOCK_START = (
+    r"(?i:<!--|<\?|<!\[CDATA\[|<![A-Za-z]|"
+    r"</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|"
+    r"col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|"
+    r"form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|"
+    r"menuitem|nav|noframes|ol|optgroup|option|p|param|pre|script|search|section|style|"
+    r"summary|table|tbody|td|textarea|tfoot|th|thead|title|tr|track|ul)(?:[\s/>]|$))"
+)
 BLOCK_START = re.compile(
     r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+|"
-    r"^(?:>|`{3,}[^`]*$|~{3,}|(?:-[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:_[ \t]*){3,}$)"
+    r"^(?:>|`{3,}[^`]*$|~{3,}|(?:-[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:_[ \t]*){3,}$)|"
+    rf"^{HTML_BLOCK_START}"
 )
 VERDICT_LINE = re.compile(r"(?i)^verdict\s*:\s*(?:clean|findings)\b")
 VERDICT_WORDS = frozenset(("pass", "fail", "n/a"))

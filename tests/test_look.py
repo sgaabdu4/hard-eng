@@ -478,6 +478,7 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         full_plan("Keep Today.\n- No clutter:\n  Pass — 31 kept, 0 removed"),
         full_plan("Keep Today.\n- No clutter:\n  ```Pass``` — 31 kept, 0 removed"),
         full_plan("Keep Today.\n- No clutter: Pass\n  > All 31 elements are needed."),
+        full_plan("Keep Today.\n- No clutter: Pass\n  <details>\n  note\n  </details>"),
         full_plan("Keep Today.\n##\tux_reference\n- No clutter: Pass — leaked"),
         full_plan("Keep Today.\n1. VERDICT: clean"),
     ):
