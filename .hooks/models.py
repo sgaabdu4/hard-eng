@@ -111,32 +111,34 @@ def _policy_base(raw: str) -> str | None:
 
 def _exact_ref_sha(root: Path, full_ref: str) -> str | None:
     """Resolve an exact branch or remote-tracking ref without ever matching tags."""
-    if full_ref == "refs/remotes/origin/HEAD":
-        target = (_git_stdout(root, "symbolic-ref", "-q", full_ref) or "").strip()
-        if target:
-            if not target.startswith("refs/remotes/origin/"):
-                return None
-            full_ref = target
     sha = (_git_stdout(root, "show-ref", "--verify", "--hash", full_ref) or "").strip()
     return sha or None
 
 
-def _exact_merge_base(root: Path, full_ref: str) -> tuple[str, str] | None:
-    sha = _exact_ref_sha(root, full_ref)
-    if sha is None:
+def _symbolic_origin_head(root: Path) -> str | None:
+    target = (
+        _git_stdout(root, "symbolic-ref", "-q", "refs/remotes/origin/HEAD") or ""
+    ).strip()
+    if not target.startswith("refs/remotes/origin/"):
         return None
+    return _exact_ref_sha(root, target)
+
+
+def _anchor_point(root: Path, sha: str) -> tuple[str, str]:
     point = _git_stdout(root, "merge-base", "HEAD", sha)
-    return (sha, point.strip()) if point else None
+    return sha, (point.strip() if point else sha)
 
 
 def _primary_anchor(root: Path, local: str) -> tuple[str, str, bool] | None:
-    """The single highest-priority existing base ref via exact ref lookup (no tag fallback)."""
-    for name in ("HEAD", "main", "master", "develop"):
-        if found := _exact_merge_base(root, f"refs/remotes/origin/{name}"):
-            return found[0], found[1], True
+    """Single highest-priority existing base ref; symbolic origin/HEAD first, direct origin/HEAD after conventional remotes."""
+    if sha := _symbolic_origin_head(root):
+        return *_anchor_point(root, sha), True
+    for name in ("main", "master", "develop", "HEAD"):
+        if sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"):
+            return *_anchor_point(root, sha), True
     for name in dict.fromkeys(("main", "master", local, "develop")):
-        if found := _exact_merge_base(root, f"refs/heads/{name}"):
-            return found[0], found[1], False
+        if sha := _exact_ref_sha(root, f"refs/heads/{name}"):
+            return *_anchor_point(root, sha), False
     return None
 
 
@@ -150,8 +152,8 @@ def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | 
         else (f"refs/remotes/origin/{base}", f"refs/heads/{base}")
     )
     for full_ref in refs:
-        if found := _exact_merge_base(root, full_ref):
-            return found[1]
+        if sha := _exact_ref_sha(root, full_ref):
+            return _anchor_point(root, sha)[1]
     return None
 
 
