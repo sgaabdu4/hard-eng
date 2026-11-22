@@ -21,7 +21,7 @@ Why not `diff` and `grep` alone: the check compares CSS after whitespace changes
 
 Blockers: None.
 Handoff: Approval
-Authority: Autonomous. The launcher's brief fixes the design: own skill, template in the project, reuse `browser`, smallest check. Delivery is a draft PR to `develop`, no merge.
+Authority: Autonomous. The launcher's brief fixes the design: own skill, template in the project, reuse `browser`, smallest check. Delivery is a PR merged into `develop` after the release.
 Decision: PDF by Chrome `--print-to-pdf` as the brief names it. The browser tool has a `pdf` step, but it was not tried. Page images: `pdftoppm` where it exists, else one `uv run --with pymupdf` command (run and proven on the sample). No new tool is added to `tool_setup.py`.
 
 ## Acceptance + steps
