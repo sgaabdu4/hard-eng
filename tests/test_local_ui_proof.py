@@ -384,6 +384,7 @@ def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
     for desc, expected in (
         ("/settings/ screen", "/settings/"),
         ("/settings?tab=security screen", "/settings"),
+        ("/ signed out", "/"),
         ("Settings at desktop / mobile sizes", ""),
     ):
         plan_body = base_plan.replace(

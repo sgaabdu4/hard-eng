@@ -16,6 +16,7 @@ PLAN_PATH_TOKEN = re.compile(
 )
 PLAN_ROUTE_TOKEN = re.compile(
     r"(?:^|[\s`(])(/(?:[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*/?))(?=$|[\s`),.;:?#])"
+    r"|^(/)(?=$|[\s`),.;:?#])"
     r"|`(/)(?=`)"
     r"|\b(?:route|page|path|url)\s+(/)(?=$|[\s`),.;:?#])",
     re.IGNORECASE,
@@ -363,9 +364,9 @@ def _plan_owns_visible(text: str, visible: list[str]) -> list[str]:
 def _unchanged_route(plan_text: str, reference: str) -> str:
     if route := surface_route(plan_text):
         return route
-    tail = reference.rpartition(" — ")[2]
+    tail = reference.rpartition(" — ")[2].strip()
     if match := PLAN_ROUTE_TOKEN.search(tail):
-        return match[1] or match[2] or match[3] or ""
+        return match[1] or match[2] or match[3] or match[4] or ""
     return ""
 
 
