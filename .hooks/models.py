@@ -123,7 +123,7 @@ def _is_ancestor(root: Path, older: str, newer: str) -> bool:
     )
 
 
-REMOTE_ANCHORS = ("origin/HEAD", "origin/develop", "origin/main", "origin/master")
+REMOTE_ANCHORS = ("origin/HEAD", "origin/main", "origin/master")
 
 
 def _anchor_bases(root: Path, local: str) -> list[tuple[str, str]]:
