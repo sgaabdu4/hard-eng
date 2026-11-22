@@ -348,8 +348,9 @@ def extract_outcome_scope(text: str, label: str) -> str:
 
 def committed_plan_blob(root: Path, rev: str, rel: str) -> bytes | None:
     """Committed Git blob for `rel` at `rev`, or None when uncommitted or modified in index/worktree."""
+    spec = f"{rev}:{rel}"
     shown = subprocess.run(
-        ["git", "show", f"{rev}:{rel}"],
+        ["git", "show", spec],
         cwd=root,
         capture_output=True,
         check=False,
