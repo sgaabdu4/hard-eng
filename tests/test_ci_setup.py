@@ -63,6 +63,7 @@ def test_native_tool_bootstrap_preserves_ci_sdk_executables(
         path.chmod(0o755)
     monkeypatch.setenv("PATH", str(sdk))
     monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(tool_setup, "VISIBLE_TEMP", tmp_path)
     captured: list[str] = []
 
     def native_environment(
@@ -110,6 +111,7 @@ def test_managed_python_scanner_provisions_project_local_uv(
     uv_bin = storage / "mise/data/installs/uv/latest/bin"
     commands: list[list[str]] = []
     monkeypatch.setattr(tool_setup.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(tool_setup, "VISIBLE_TEMP", tmp_path)
     monkeypatch.setenv("PATH", "")
     monkeypatch.setenv("MISE_DATA_DIR", str(storage / "mise/data"))
     monkeypatch.setenv("MISE_CACHE_DIR", str(storage / "mise/cache"))
