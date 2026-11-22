@@ -148,3 +148,41 @@ def test_the_six_keys_of_fallow_3_43_have_a_class() -> None:
         and not any(key.startswith(prefix) for prefix in FALLOW_PREFIXES)
     ]
     assert not missing
+
+
+def test_fallow_3_46_inline_threshold_overrides_has_a_class_and_report_rejects_it() -> (
+    None
+):
+    from fallow_report import validate_complexity
+
+    assert FALLOW_KEYS["health.inlineThresholdOverrides"] == "free"
+    assert (
+        judge(
+            {"health": {"inlineThresholdOverrides": False}},
+            {"health": {"inlineThresholdOverrides": True}},
+            lambda patterns: [],
+            lambda glob: "",
+        )
+        == []
+    )
+    summary = {
+        "max_cyclomatic_threshold": 20,
+        "max_cognitive_threshold": 15,
+        "max_crap_threshold": 30,
+        "max_unit_size_threshold": 60,
+        "functions_above_threshold": 0,
+        "severity_critical_count": 0,
+        "severity_high_count": 0,
+        "severity_moderate_count": 0,
+        "files_analyzed": 1,
+        "functions_analyzed": 1,
+    }
+    validate_complexity({"findings": [], "summary": summary})
+    with pytest.raises(ValueError, match="inline threshold override"):
+        validate_complexity(
+            {
+                "findings": [],
+                "summary": summary,
+                "inline_threshold_overrides": [{"file": "a.ts", "line": 3}],
+            }
+        )
