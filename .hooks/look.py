@@ -51,7 +51,7 @@ SCOPE_SECTION = (
 LIST_PREFIX = re.compile(r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+")
 BLOCK_START = re.compile(
     r"^(?:[-*•+]|\d+[.)]|\[[ xX]\]|#{1,6})\s+|"
-    r"^(?:>|`{3,}|~{3,}|<|(?:-[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:_[ \t]*){3,}$)"
+    r"^(?:>|`{3,}[^`]*$|~{3,}|(?:-[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:_[ \t]*){3,}$)"
 )
 VERDICT_LINE = re.compile(r"(?i)^verdict\s*:\s*(?:clean|findings)\b")
 VERDICT_WORDS = frozenset(("pass", "fail", "n/a"))
