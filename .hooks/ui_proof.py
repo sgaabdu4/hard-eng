@@ -193,16 +193,22 @@ def guideline_problem(root: Path, visible: list[str]) -> str | None:
     return None
 
 
-def merge_base(root: Path, base_ref: str) -> str:
+def merge_base(
+    root: Path, base_ref: str, head: str = "HEAD", base_sha: str | None = None
+) -> str:
+    target = head or "HEAD"
     remote_ref = f"origin/{base_ref}"
-    done = subprocess.run(
-        ["git", "merge-base", "HEAD", remote_ref],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return done.stdout.strip() if done.returncode == 0 else ""
+    for ref in (base_sha, remote_ref) if base_sha else (remote_ref,):
+        done = subprocess.run(
+            ["git", "merge-base", target, ref],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if done.returncode == 0:
+            return done.stdout.strip()
+    return ""
 
 
 def unchanged_problem(root: Path, reference: str, head: str, base: str) -> str | None:
@@ -377,6 +383,7 @@ def ship_problem(
     after_urls: list[str],
     base_ref: str,
     videos: int = 0,
+    base_sha: str | None = None,
 ) -> str | None:
     """What the PR lacks of screen evidence for its visible changes; None when the checks pass."""
     from gate_config import generated_sources
@@ -398,7 +405,10 @@ def ship_problem(
         return problem
     if visible and UNCHANGED_LINE.match(reference_section(plan_text)):
         return unchanged_problem(
-            root, reference_section(plan_text), head, merge_base(root, base_ref)
+            root,
+            reference_section(plan_text),
+            head,
+            merge_base(root, base_ref, head=head, base_sha=base_sha),
         )
     if problem := guideline_problem(
         root, [name for name in visible if (root / name).is_file()]
@@ -541,6 +551,7 @@ def ui_evidence(
         after,
         pull.base_ref,
         videos,
+        base_sha=getattr(pull, "base_sha", None),
     )
     if problem:
         raise ValueError(f"UI evidence: {problem}")
