@@ -81,8 +81,9 @@ def _git_stdout(root: Path, *args: str) -> str | None:
 
 def _git_blob_if_present(root: Path, ref: str, path: str) -> str | None:
     """Read ref:path; return None only when ls-tree proves the path is absent in ref."""
+    spec = f"{ref}:{path}"
     shown = subprocess.run(
-        ["git", "show", f"{ref}:{path}"],
+        ["git", "show", spec],
         cwd=root,
         capture_output=True,
         text=True,
