@@ -420,6 +420,7 @@ def test_challenge_honors_local_models_overlay_for_order_and_flags(
 def test_branch_models_json_edit_cannot_override_trusted_base_for_challenge(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, on_base: bool
 ) -> None:
+    import models
     from conftest import SOURCE
 
     shipped = json.loads((SOURCE / ".agents/models.json").read_text())
@@ -429,6 +430,7 @@ def test_branch_models_json_edit_cannot_override_trusted_base_for_challenge(
         (branch / ".agents/models.json").write_text(json.dumps(shipped))
         commit(branch, "add trusted models config")
         git(branch, "checkout", "-q", "-B", "feature", "main")
+        monkeypatch.setattr(models, "SHIPPED_MODELS", branch / ".agents/models.json")
     tampered = json.loads((SOURCE / ".agents/models.json").read_text())
     tampered["challenge_order"]["claude"] = ["agy", "codex"]
     tampered["hosts"]["codex"]["reasoning"]["model"] = "broken-branch-model"
