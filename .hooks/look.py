@@ -66,6 +66,11 @@ HTML_BLOCK_TAG = re.compile(
     r"menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|"
     r"tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\s/>]|$)"
 )
+HTML_TYPE7_TAG = re.compile(
+    r"^(?:<[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*"
+    r"(?:\s*=\s*(?:[^\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*\s*/?>|"
+    r"</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*$"
+)
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
 BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "image", "verdict", "record")
@@ -324,14 +329,16 @@ def _scan_html_ender(
     return len(lines) - 1
 
 
-def _html_block_end(lines: list[str], start: int, container: int) -> int | None:
+def _html_block_end(
+    lines: list[str], start: int, container: int, *, in_para: bool = False
+) -> int | None:
     cols, rest = _leading_cols(lines[start])
     if not (container <= cols <= container + 3) or not rest.startswith("<"):
         return None
     for opener, ender in HTML_ENDERS:
         if opener.match(rest):
             return _scan_html_ender(lines, start, container, ender)
-    if HTML_BLOCK_TAG.match(rest):
+    if HTML_BLOCK_TAG.match(rest) or (not in_para and HTML_TYPE7_TAG.match(rest)):
         for index in range(start + 1, len(lines)):
             line_cols, line_rest = _leading_cols(lines[index])
             if not line_rest or (container > 0 and line_cols < container):
@@ -374,6 +381,7 @@ class _MdScan:
     list_stack: list[int] = field(default_factory=list)
     fence: tuple[int, str, int] | None = None
     prev_blank: bool = True
+    in_para: bool = False
     capturing: bool = False
     matches: int = 0
     collected: list[str] = field(default_factory=list)
@@ -393,9 +401,10 @@ class _MdScan:
         if _is_closing_fence(cols, rest, container, char, length):
             self.fence = None
         self.prev_blank = not rest
+        self.in_para = False
         self.index += 1
 
-    def _step_heading_or_text(self, line: str) -> None:
+    def _step_heading_or_text(self, line: str, rest: str) -> None:
         if not self.list_stack and (heading := HEADING_LINE.match(line)):
             title = TRAILING_HASHES.sub("", heading[2]).strip()
             if heading[1] == "##" and title == "Outcome + scope":
@@ -403,8 +412,14 @@ class _MdScan:
                 self.capturing = True
             else:
                 self.capturing = False
+            self.in_para = False
         else:
             self.keep(line)
+            self.in_para = not (
+                ATX_HEADING.match(rest)
+                or THEMATIC_BREAK.match(rest)
+                or rest.startswith(">")
+            )
         self.prev_blank = False
         self.index += 1
 
@@ -413,16 +428,19 @@ class _MdScan:
             while self.list_stack and cols < self.list_stack[-1]:
                 self.list_stack.pop()
         container = self.list_stack[-1] if self.list_stack else 0
-        if (end := _html_block_end(self.lines, self.index, container)) is not None:
+        end = _html_block_end(self.lines, self.index, container, in_para=self.in_para)
+        if end is not None:
             if self.capturing:
                 self.collected.extend(self.lines[self.index : end + 1])
             self.prev_blank = False
+            self.in_para = False
             self.index = end + 1
             return
         if container <= cols <= container + 3 and (opened := _fence_opener(rest)):
             self.fence = (container, opened[0], opened[1])
             self.keep(line)
             self.prev_blank = False
+            self.in_para = False
             self.index += 1
             return
         if opened_list := _list_opener(line, container):
@@ -432,9 +450,10 @@ class _MdScan:
                 self.fence = (new_col, inline_fence[0], inline_fence[1])
             self.keep(line)
             self.prev_blank = False
+            self.in_para = False
             self.index += 1
             return
-        self._step_heading_or_text(line)
+        self._step_heading_or_text(line, rest)
 
     def run(self) -> None:
         while self.index < len(self.lines):
@@ -445,6 +464,7 @@ class _MdScan:
             elif not rest:
                 self.keep(line)
                 self.prev_blank = True
+                self.in_para = False
                 self.index += 1
             else:
                 self._step_nonblank(line, cols, rest)
