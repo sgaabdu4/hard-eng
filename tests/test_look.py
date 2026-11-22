@@ -369,16 +369,24 @@ def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
     ux = (SOURCE / ".agents/skills/he-plan/references/ux.md").read_text()
     assert "0 removed" in ux
 
-    ui_measure.write_record(project, images[0], 1280, [], "/kpi", rings=[])
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[])
     run_look(project, "codex", images)
     assert "--ring" not in " ".join(json.loads(log.read_text())["argv"])
 
-    ui_measure.write_record(project, images[0], 1280, [], "/kpi", rings=["#kpi-panel"])
+    ui_measure.write_record(
+        project,
+        images[0],
+        1280,
+        [],
+        "/kpi",
+        ring_boxes=[{"x": 32, "y": 40, "w": 800, "h": 120}],
+    )
     ui_measure.write_record(project, images[1], 1280, [], "/kpi")
     run_look(project, "codex", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "In image-1.png, ignore 3px solid red" in prompt
-    assert "image-2.png, ignore" not in prompt
+    assert "image-1.png: (x=32, y=40, 800x120px)" in prompt
+    assert "still fault any other red border" in prompt
+    assert "image-2.png:" not in prompt
 
     images[0].write_bytes(PNG + b"edited-after-capture")
     run_look(project, "codex", images)
@@ -389,7 +397,6 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
     tmp_path: Path, project: Path
 ) -> None:
     import look
-    import ui_proof
 
     images = make_images(project, 1)
     plan_file = project / "features/kpi-board/PLAN.md"
@@ -402,19 +409,18 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         "```markdown\n"
         "## Example heading inside fence\n"
         "```\n\n"
-        "Also keep Last Month, Last 3 Months, Last 6 Months.\n\n"
+        "- List item with unclosed fence:\n"
+        "  ```\n"
+        "  Also keep Last Month, Last 3 Months, Last 6 Months.\n\n"
         "##\tux_reference\n\n"
         "Rules:\n"
         "- No clutter: Pass — builder secret claim\n\n"
         "## Verification\n\n"
         "Result: Passed\n"
     )
+    (project / ".gitignore").write_text(".hard-eng/\n")
     plan_file.write_text(plan_text)
-    other_plan = project / "features/other/PLAN.md"
-    other_plan.parent.mkdir(parents=True)
-    other_plan.write_text("# Other\n\n## Outcome + scope\n\nOther screen.\n")
-    commit(project, "add plans")
-    head = git(project, "rev-parse", "HEAD").strip()
+    commit(project, "add plan")
     digest = hashlib.sha256(plan_file.read_bytes()).hexdigest()
 
     log = install_agent(tmp_path, "codex", 1, good_answer(1))
@@ -434,6 +440,45 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
     assert look.block_problem(block, 1) is None
     assert str(project) not in block
 
+    plan_file.write_text(
+        "# Big scope\n\n## Outcome + scope\n\n"
+        + ("é" * 3000)
+        + "\n\n## Verification\n\nok\n"
+    )
+    commit(project, "big scope")
+    rel, bounded, big_digest = look.plan_scope(
+        project, Path("features/kpi-board/PLAN.md")
+    )
+    assert rel == "features/kpi-board/PLAN.md"
+    assert bounded.endswith("\n[truncated]")
+    assert len(bounded.encode("utf-8")) <= look.MAX_SCOPE_BYTES
+    assert big_digest == hashlib.sha256(plan_file.read_bytes()).hexdigest()
+
+
+def test_ship_and_autocrlf_verify_committed_pr_plan_scope(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import look
+    import ui_measure
+    import ui_proof
+
+    images = make_images(project, 1)
+    plan_file = project / "features/kpi-board/PLAN.md"
+    plan_file.parent.mkdir(parents=True)
+    plan_text = (
+        "# KPI\n\n## Outcome + scope\n\nSix columns.\n\n"
+        "## ux_reference\n\nSurface: Existing — /kpi, rendered by app\n"
+    )
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    plan_file.write_text(plan_text)
+    commit(project, "add plan")
+    head = git(project, "rev-parse", "HEAD").strip()
+    digest = hashlib.sha256(plan_file.read_bytes()).hexdigest()
+
+    git(project, "config", "core.autocrlf", "true")
+    plan_file.unlink()
+    git(project, "checkout", "--", "features/kpi-board/PLAN.md")
+    assert b"\r\n" in plan_file.read_bytes()
     assert ui_proof._committed_plan_digest(project, head, plan_file) == (
         "features/kpi-board/PLAN.md",
         digest,
@@ -443,6 +488,12 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         "",
         "",
     )
+
+    install_agent(tmp_path, "codex", 1, good_answer(1))
+    record = run_look(
+        project, "claude", images, extra=["--plan", "features/kpi-board/PLAN.md"]
+    )
+    block = look.block_text(record)
     after_bytes = [images[0].read_bytes()]
     assert (
         ui_proof.look_problem(
@@ -464,7 +515,50 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
         is not None
     )
 
-    plan_file.write_text(plan_text + "\nUncommitted draft line.\n")
+    for width in (390, 768, 1280):
+        capture = project / f".hard-eng/browser/after-{width}.png"
+        capture.write_bytes(after_bytes[0])
+        ui_measure.write_record(project, capture, width, [], "/kpi")
+
+    def _download(_root: Path, _url: str) -> bytes:
+        return after_bytes[0]
+
+    monkeypatch.setattr(ui_proof, "download", _download)
+    pr_without_plan = ui_proof.ship_problem(
+        project,
+        head,
+        block,
+        [{"filename": "src/App.tsx", "patch": "+<p>hi</p>"}],
+        ["src/**"],
+        plan_text,
+        ["https://example.test/after.png"],
+        "main",
+        plan_rel="features/kpi-board/PLAN.md",
+        plan_digest=digest,
+    )
+    assert (
+        pr_without_plan is not None
+        and "different or uncommitted plan" in pr_without_plan
+    )
+    pr_with_plan = ui_proof.ship_problem(
+        project,
+        head,
+        block,
+        [
+            {"filename": "src/App.tsx", "patch": "+<p>hi</p>"},
+            {"filename": "features/kpi-board/PLAN.md", "patch": "+## Outcome + scope"},
+        ],
+        ["src/**"],
+        plan_text,
+        ["https://example.test/after.png"],
+        "main",
+        plan_rel="features/kpi-board/PLAN.md",
+        plan_digest=digest,
+    )
+    assert pr_with_plan is None
+
+    git(project, "config", "core.autocrlf", "false")
+    plan_file.write_text(plan_text + "\nDraft.\n")
     assert ui_proof._committed_plan_digest(project, head, plan_file) == (
         "features/kpi-board/PLAN.md",
         "",
@@ -480,20 +574,6 @@ def test_look_plan_option_passes_only_committed_outcome_and_scope_as_data(
                 str(images[0]),
             ],
         )
-
-    plan_file.write_text(
-        "# Big scope\n\n## Outcome + scope\n\n"
-        + ("é" * 3000)
-        + "\n\n## Verification\n\nok\n"
-    )
-    commit(project, "big scope")
-    rel, bounded, big_digest = look.plan_scope(
-        project, Path("features/kpi-board/PLAN.md")
-    )
-    assert rel == "features/kpi-board/PLAN.md"
-    assert bounded.endswith("\n[truncated]")
-    assert len(bounded.encode("utf-8")) <= look.MAX_SCOPE_BYTES
-    assert big_digest == hashlib.sha256(plan_file.read_bytes()).hexdigest()
 
 
 def test_look_plan_option_refuses_invalid_missing_symlink_and_empty_plans(
