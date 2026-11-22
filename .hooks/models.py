@@ -141,13 +141,13 @@ def _anchor_point(
 
 
 def _remote_anchor_shas(root: Path) -> list[str]:
-    shas: list[str] = []
-    if sym := _symbolic_origin_head(root):
-        shas.append(sym)
-    for name in ("main", "master", "develop", "HEAD"):
-        if sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"):
-            shas.append(sha)
-    return list(dict.fromkeys(shas))
+    return list(
+        dict.fromkeys(
+            sha
+            for name in ("main", "master", "develop", "HEAD")
+            if (sha := _exact_ref_sha(root, f"refs/remotes/origin/{name}"))
+        )
+    )
 
 
 def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | None:
@@ -167,25 +167,32 @@ def _policy_merge_base(root: Path, ref_sha: str, *, remote_only: bool) -> str | 
     return None
 
 
+def _local_anchor_shas(root: Path) -> list[str]:
+    local = (
+        _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
+    ).strip() or "master"
+    return list(
+        dict.fromkeys(
+            sha
+            for name in dict.fromkeys(("main", "master", local, "develop"))
+            if (sha := _exact_ref_sha(root, f"refs/heads/{name}"))
+        )
+    )
+
+
 def trusted_base_ref(root: Path | None) -> str | None:
-    """Resolve the merge-base commit from the highest-priority base ref, never trusting unmerged branch policies."""
+    """Resolve the merge-base commit from the default base ref, never trusting unmerged branch policies."""
     if root is None or not _git_stdout(root, "rev-parse", "--verify", "HEAD^{commit}"):
         return None
+    if sym := _symbolic_origin_head(root):
+        if resolved := _policy_merge_base(root, sym, remote_only=True):
+            return resolved
+        found = _anchor_point(root, sym, allow_shallow_tip=True)
+        return found[1] if found else None
     remote_shas = _remote_anchor_shas(root)
-    if remote_shas:
-        candidates, remote_only = remote_shas, True
-    else:
-        local = (
-            _git_stdout(root, "config", "--get", "init.defaultBranch") or ""
-        ).strip() or "master"
-        candidates = list(
-            dict.fromkeys(
-                sha
-                for name in dict.fromkeys(("main", "master", local, "develop"))
-                if (sha := _exact_ref_sha(root, f"refs/heads/{name}"))
-            )
-        )
-        remote_only = False
+    candidates, remote_only = (
+        (remote_shas, True) if remote_shas else (_local_anchor_shas(root), False)
+    )
     for sha in candidates:
         if found := _anchor_point(root, sha, allow_shallow_tip=remote_only):
             return (
