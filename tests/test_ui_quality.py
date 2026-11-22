@@ -33,14 +33,14 @@ from ui_capture import WIDTHS, capture
 FIXTURES = Path(__file__).parent / "fixtures/ui_quality"
 
 
-def pair(first: str, second: str) -> str:
-    return f"<div>{button(first)}{button(second)}</div>"
+def pair(first: str, second: str, labels: tuple[str, str] = ("Save", "Next")) -> str:
+    return f"<div>{button(first, labels[0])}{button(second, labels[1])}</div>"
 
 
-def button(fill: str) -> str:
+def button(fill: str, label: str = "Go") -> str:
     return (
         "<button style='min-height:44px;min-width:44px;font-size:16px;"
-        f"color:#fff;background:{fill};border:0'>Go</button>"
+        f"color:#fff;background:{fill};border:0'>{label}</button>"
     )
 
 
@@ -58,7 +58,7 @@ FAULTS = {
     "link": (f"<p style='margin:0'>{LINK}{LINK}</p>", "link-size", 2),
     "competing": (f"<div>{pair('#b00', '#00b')}</div>", "competing-buttons", 1),
     "accents": (
-        f"<div><p style='color:#b00'>a</p><p style='color:#060'>b</p>{pair('#00b', '#00b')}</div>",
+        f"<div><p style='color:#b00'>a</p><p style='color:#060'>b</p>{pair('#00b', 'transparent')}</div>",
         "accent-colours",
         1,
     ),

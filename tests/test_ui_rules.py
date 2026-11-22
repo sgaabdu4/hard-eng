@@ -779,3 +779,87 @@ def test_monorepo_theme_is_scoped_to_its_own_package(tmp_path: Path) -> None:
         '// base\n<p className="text-danger" />\n'
     )
     assert "apps/web/src/App.tsx:2:" in refused(root)
+
+
+def test_duplicate_sibling_react_keys_are_refused_without_flagging_ternaries_or_maps(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: duplicate sibling React keys in a fragment, element or array are refused."""
+    frag_dup = change(
+        tmp_path / "frag",
+        "src/Panel.tsx",
+        "export const Panel = ({ id }: { id: string }) => <div />;\n",
+        "export const Panel = ({ id, a, b }: { id: string; a: boolean; b: boolean }) => (\n"
+        "  <>\n"
+        "    {a && <button key={id}>Approve</button>}\n"
+        "    {b && <button key={id}>Remind</button>}\n"
+        "  </>\n"
+        ");\n",
+    )
+    assert "duplicate sibling React key ({id})" in refused(frag_dup)
+
+    direct_dup = change(
+        tmp_path / "direct",
+        "src/Tabs.tsx",
+        "export const Tabs = () => <div />;\n",
+        'export const Tabs = () => <div><span key="tab" /><span key="tab" /></div>;\n',
+    )
+    assert 'duplicate sibling React key ("tab")' in refused(direct_dup)
+
+    valid = change(
+        tmp_path / "valid",
+        "src/Valid.tsx",
+        "export const Valid = () => <div />;\n",
+        "export const Valid = ({ id, ok, a, b }: { id: string; ok: boolean; a: string[]; b: string[] }) => (\n"
+        "  <div>\n"
+        "    {ok ? <section key={id} /> : <article key={id} />}\n"
+        "    {a.map((x) => <span key={x} />)}\n"
+        "    {b.map((x) => <span key={x} />)}\n"
+        "    <div key={`outer-${id}`}><span key={`outer-${id}`} /></div>\n"
+        "  </div>\n"
+        ");\n",
+    )
+    validate_suppressions(valid, "HEAD")
+
+
+def test_design_md_font_weight_parity_catches_missing_theme_weight_and_unloaded_font_face(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: DESIGN.md heading fontWeight declarations require matching @theme weight tokens and @font-face coverage."""
+    design_doc = (
+        "---\n"
+        "typography:\n"
+        "  heading:\n"
+        "    fontSize: 20px\n"
+        "    fontWeight: 500\n"
+        "---\n"
+        "# App Design\n"
+    )
+    missing_weight = theme_repo(
+        tmp_path / "missing_weight",
+        "@theme {\n  --text-heading: 1.25rem;\n}\n",
+        "DESIGN.md",
+        "# App Design\n",
+        design_doc,
+    )
+    assert "--text-heading--font-weight" in refused(missing_weight)
+
+    unloaded_face = theme_repo(
+        tmp_path / "unloaded_face",
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 500;\n}\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.25rem;\n  --text-heading--font-weight: 700;\n}\n',
+        "DESIGN.md",
+        "# App Design\n",
+        design_doc.replace("500", "700"),
+    )
+    assert "outside loaded @font-face font-weight ranges" in refused(unloaded_face)
+
+    matched = theme_repo(
+        tmp_path / "matched",
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 700;\n}\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.25rem;\n  --text-heading--font-weight: 500;\n}\n',
+        "DESIGN.md",
+        "# App Design\n",
+        design_doc,
+    )
+    validate_suppressions(matched, "HEAD")

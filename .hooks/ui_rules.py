@@ -953,6 +953,8 @@ def line_findings(
 
 def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> list[str]:
     """Findings for the marked lines of each UI file; only a file with a finding is looked up as generated."""
+    from ui_audit_rules import JSX_SUFFIXES, audit_findings, duplicate_sibling_keys
+
     css_entries: list[str] | None = None
     themes: dict[Path, ThemeTokens | None] = {}
     found: dict[str, list[str]] = {}
@@ -973,9 +975,17 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
             if package not in themes:
                 themes[package] = _load_theme(root, package, css_entries)
             theme = themes[package]
-            if theme is not None and (root / name).is_file():
+            if (theme is not None or name.endswith(JSX_SUFFIXES)) and (
+                root / name
+            ).is_file():
                 file_text = (root / name).read_text(errors="replace")
-        found[name] = line_findings(name, lines, theme, file_text)
+        items = line_findings(name, lines, theme, file_text)
+        if file_text is not None and name.endswith(JSX_SUFFIXES):
+            items.extend(
+                duplicate_sibling_keys(name, file_text, {num for num, _ in lines})
+            )
+        found[name] = items
     named = sorted(name for name, items in found.items() if items)
     skipped = generated_sources(root, named) if named else set()
-    return [item for name in named if name not in skipped for item in found[name]]
+    hits = [item for name in named if name not in skipped for item in found[name]]
+    return [*hits, *audit_findings(root, candidates, css_entries)]
