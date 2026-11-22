@@ -428,6 +428,9 @@ def test_the_command_stops_at_a_missing_commondir_and_accepts_any_ref_name(
     (meta / "commondir").write_text(str(file_slash_link) + "\n")
     assert _run_script(write(nested, "report.html")) == (0, "")
 
+    (meta / "commondir").write_text(str(regular_file) + "/ \n")
+    assert _run_script(write(nested, "report.html")) == OUTSIDE_GIT
+
     (meta / "HEAD").write_text("ref:\u00a0refs/heads/main\n")
     (meta / "commondir").write_text(str(tmp_path / ".git") + "\n")
     assert _run_script(write(nested, "report.html")) == (0, "")
