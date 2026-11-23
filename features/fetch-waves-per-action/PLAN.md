@@ -1,6 +1,6 @@
 # Count fetch waves for each input step, and keep a tab bar's accent colours to its own row
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -69,11 +69,15 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending the final checks.
+Result: Passed
+Evidence: Red first: at the red commit the new tests failed on develop code (the press page gave `fetch-waterfall` at `page`; the issue page gave `accent-colours` with 4 colours; 51 of the new fetch tests failed, most for the missing `action_mark`). Focused after the change: `tests/test_ui_audit_guards.py` 64 passed, `tests/test_ui_accent_block.py` 5 passed, `tests/test_skill_links.py` and `tests/test_ui_text_rows.py` 20 passed. Ready check on 0c14696f: the full suite 7764 passed, and every native check passed. Static gates (ruff format, lint, complexity, annotations, pyrefly, vulture, deptry, jscpd, security) passed. Mutation checks: with the quiet test removed, the in-flight test fails; with the origin filter removed, the older-action test fails; with the reaction test removed, the quiet-gap click test fails. Timing, compiled modules, two runs each, develop against this branch: one plain `click` step through `dispatch` took 0.033 ms and 0.033 ms before, 0.063 ms and 0.062 ms after (one line appended to a file), and the import took 18.9 and 15.6 ms before, 16.1 and 15.1 ms after; the measure script on a 5 KB page and on a large public page took a median of 1.0 and 5.4 ms before and 1.0 and 5.3 ms after. Full check: the `check --plan-stage Complete` run on the final head and the CI runs of the PR.
+Review declined: a recorded `click` in the last second of a quiet gap in a load, when a load fetch follows within 1000 ms, still splits that load :: it needs a quiet time of 500 ms and a fetch within 1000 ms after the step, the rule that the request set; a reaction check on the page itself would need page-side telemetry that the request did not ask for, and the miss lets a 4-wave load pass only when an agent times a click.
+Review declined: the `hover` run of the quiet-gap test cannot fail through the cut logic :: `hover` is never recorded by design; that run guards the verb table, and the `click` run guards the cut logic.
+Review declined: a card that holds the page's first `h1` counts as page level :: the request defines the page-level container as an element that holds the page's `h1`, and a block that holds the page heading is the whole screen in a real page.
+Reviews: two fresh Opus review sessions read the diff (the outside reviewers could not run: one is over its usage limit and one rejects the call). The first found a click in a long quiet gap splitting a load, a hover test that proves nothing alone, and the h1 choice; the first is fixed with the reaction test. The second found the same click timing (declined above), an older-action test that could not fail for its reason, and part labels that counted the wrong steps; both are fixed with a red test first.
 E2E: N/A — the proof is the real-browser tests above, which drive `browser.browser_command` and a real page; no journey of an app is changed.
 Real service: N/A — no outside service is called; the test pages are served from a local folder.
-Retro: Pending
+Retro: (1) Fault on the base branch, a press-then-result screen could never pass the fetch limit → `tests/test_ui_audit_guards.py::test_each_press_is_measured_apart_from_the_load`. (2) Fault on the base branch, a tab bar in the page container counted the whole page → `tests/test_ui_accent_block.py::test_a_tab_bar_in_the_page_container_does_not_count_the_whole_page`. (3) A review found a no-op click splitting a load → `tests/test_ui_audit_guards.py::test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterfall`.
 
 Delivery target: Merge
 Delivery: Pending — CI, the guarded merge into `develop`, then the hotfix PR into `main`.

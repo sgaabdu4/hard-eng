@@ -324,10 +324,11 @@ const wavesOf = (list) => {
 };
 const quiet = (t) => !fetches.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
 const reacts = (t) => fetches.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
-const cuts = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin, verb }))
-  .filter((c) => c.t > 0 && quiet(c.t) && reacts(c.t))
+const taken = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin, verb }))
+  .filter((c) => c.t > 0)
   .sort((a, b) => a.t - b.t);
-const parts = [{ at: "load", entries: [] }, ...cuts.map((c, i) => ({ at: `${c.verb} ${i + 1}`, entries: [] }))];
+const cuts = taken.filter((c) => quiet(c.t) && reacts(c.t));
+const parts = [{ at: "load", entries: [] }, ...cuts.map((c) => ({ at: `${c.verb} ${taken.filter((o) => o.verb === c.verb && o.t <= c.t).length}`, entries: [] }))];
 for (const entry of fetches) parts[cuts.filter((c) => c.t <= entry.startTime).length].entries.push(entry);
 for (const part of parts) {
   const waves = wavesOf(part.entries);

@@ -227,12 +227,13 @@ def test_a_four_wave_load_still_fails_after_an_older_action_in_the_session(
 ) -> None:
     board(tmp_path, "waterfall", CHAIN)
     name = session()
-    browser.actions_file(browser.output_folder(tmp_path), name).write_text(
-        "1000 click\n"
-    )
     open_board(tmp_path, site, name, "waterfall")
     try:
         time.sleep(QUIET_SECONDS)
+        origin = float(plain_step(tmp_path, name, "eval", "performance.timeOrigin"))
+        browser.actions_file(browser.output_folder(tmp_path), name).write_text(
+            f"{int(origin) - 100} click\n"
+        )
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
     finally:
         plain_step(tmp_path, name, "close")
@@ -246,9 +247,11 @@ def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
     open_board(tmp_path, site, name, "chain")
     try:
         time.sleep(QUIET_SECONDS)
+        plain_step(tmp_path, name, "click", "body")
+        time.sleep(2)
         plain_step(tmp_path, name, "click", "#go")
         time.sleep(QUIET_SECONDS)
-        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 1")]
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 2")]
     finally:
         plain_step(tmp_path, name, "close")
 
