@@ -28,9 +28,9 @@ def project(repository: Path) -> list[Group]:
     ("changed", "checks", "docs_only"),
     [
         ("AGENTS.md", [SECRETS, BUDGET], "false"),
-        ("CLAUDE.md", [SECRETS, BUDGET], "false"),
         (".agents/models.json", [SECRETS, BUDGET], "false"),
         ("README.md", [SECRETS], "true"),
+        ("CLAUDE.md", [SECRETS], "true"),
         ("docs/notes.md", [SECRETS], "true"),
     ],
 )
