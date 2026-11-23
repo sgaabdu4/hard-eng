@@ -39,7 +39,7 @@ Authority: Autonomous — the user asked to look at the open Hard Eng issues on 
 - [x] A mockup that `look` opened in the pushing checkout, or in a linked worktree, passes the plan check in the pre-push copy, and an unlooked mockup is still refused there → `tests/test_plan_controls.py::test_a_look_record_of_the_pushing_checkout_counts_in_the_push_snapshot`, `test_a_look_record_of_a_linked_worktree_counts_in_the_push_snapshot` and `test_a_mockup_nobody_looked_at_is_still_refused_in_the_push_snapshot`.
 - [x] A mockup path outside the repository is refused even when a `look` record exists for its image → `tests/test_plan_controls.py::test_a_mockup_outside_the_repository_is_refused_even_with_a_look_record`.
 - [x] The https opener keeps the proxy settings and ends a redirect to another scheme as a network error → `tests/test_https_open.py::test_the_opener_loads_https_through_the_proxy_settings_and_no_file` and `test_a_redirect_to_another_scheme_ends_as_a_network_error`.
-- [x] Fetched URLs open through an https-only opener, and the security gate with `p/default` finds nothing in Hard Eng's own files of an invented Swift project that holds develop's files → `tests/test_https_open.py` and the sealed run in Verification.
+- [x] Fetched URLs open through an https-only opener, and the security gate with `p/default` finds nothing in Hard Eng's own files of an invented Swift project that holds develop's files → `tests/test_https_open.py::test_a_url_that_is_not_https_is_refused_before_any_connection` and the sealed run in Verification.
 - [x] The affected check is not slower → N/A — timing, no test can prove it; compiled runs on each version are in Verification.
 
 ## Baseline + execution
