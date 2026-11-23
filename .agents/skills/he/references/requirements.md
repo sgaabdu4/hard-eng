@@ -104,7 +104,7 @@ Proof: check
 
 ## HE-YAGNI
 
-Add a file, dependency, abstraction, configuration or stored state only for a current agreed requirement that existing code or a direct command cannot meet.
+Add a file, dependency, abstraction, configuration or stored state only for a current agreed requirement that existing code or a direct command cannot meet. Content that operators own and will change or repeat (message text, dates, send windows, prices, audiences) is a current requirement for stored data, not code; when unclear, ask whether the task is one-time.
 
 Proof: guidance
 
