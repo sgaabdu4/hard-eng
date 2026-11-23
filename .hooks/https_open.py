@@ -6,8 +6,13 @@ from http.client import HTTPResponse
 
 def https_opener() -> urllib.request.OpenerDirector:
     opener = urllib.request.OpenerDirector()
+    secure = {
+        scheme: proxy
+        for scheme, proxy in urllib.request.getproxies().items()
+        if scheme == "https"
+    }
+    opener.add_handler(urllib.request.ProxyHandler(secure))
     for handler in (
-        urllib.request.ProxyHandler,
         urllib.request.HTTPSHandler,
         urllib.request.HTTPRedirectHandler,
         urllib.request.HTTPDefaultErrorHandler,
