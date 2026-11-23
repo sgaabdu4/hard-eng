@@ -144,7 +144,7 @@ HELD_CHAIN = (
 )
 GAP_CHAIN = (
     "(async () => { await fetch('/step.json?a'); await fetch('/step.json?b'); "
-    "await new Promise((done) => setTimeout(done, 1500)); "
+    "await new Promise((done) => setTimeout(done, 5000)); "
     "await fetch('/step.json?c'); await fetch('/step.json?d'); })();"
 )
 
@@ -253,15 +253,17 @@ def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
         plain_step(tmp_path, name, "close")
 
 
-def test_a_hover_in_a_quiet_gap_does_not_split_a_load_waterfall(
-    tmp_path: Path, site: str, browser: ModuleType
+@pytest.mark.parametrize("verb", ["hover", "click"])
+def test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterfall(
+    tmp_path: Path, site: str, browser: ModuleType, verb: str
 ) -> None:
     board(tmp_path, "gap", GAP_CHAIN)
     name = session()
     open_board(tmp_path, site, name, "gap")
     try:
-        plain_step(tmp_path, name, "hover", "body")
-        time.sleep(2.5)
+        time.sleep(QUIET_SECONDS)
+        plain_step(tmp_path, name, verb, "body")
+        time.sleep(5)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
     finally:
         plain_step(tmp_path, name, "close")

@@ -14,6 +14,7 @@ Deliverables: None
 
 - Per-step fetch waves, the load and each input step measured apart: In scope — A page with one parallel load wave and three presses that each post then load has no finding
 - A step that changes nothing must not split a waterfall: In scope — A `hover` in a quiet gap, and a `click body` while a fetch is in flight, do not split a 4-wave load
+- A recorded step with no fetch after it must not split a waterfall: In scope — A `hover` or a `click body` in a 5-second quiet gap of a load, with no fetch starting after it, does not split the 4-wave load
 - The page must not fake action times: In scope — An `eval` step, and the page itself, add no action; a real press adds one line
 - Verb parsing fails closed: In scope — Each verb of the request is marked, each other or misread step is not
 - Recording an action never fails or changes the step and prints nothing: In scope — A file that cannot be written leaves the step running and prints nothing
@@ -40,7 +41,8 @@ Authority: Autonomous — the user's standing rule: merge each task PR once its 
 - [x] A page with one parallel load wave and three presses that each post then load has no finding → `tests/test_ui_audit_guards.py::test_each_press_is_measured_apart_from_the_load`
 - [x] A 4-wave load still fails at `load`, even when an older action sits in the session file → `tests/test_ui_audit_guards.py::test_a_four_wave_load_still_fails_after_an_older_action_in_the_session`
 - [x] A press that starts a 4-wave chain fails at that press → `tests/test_ui_audit_guards.py::test_a_press_that_starts_a_four_wave_chain_fails_at_that_press`
-- [x] A `hover` in a quiet gap, and a `click body` while a fetch is in flight, do not split a 4-wave load → `tests/test_ui_audit_guards.py::test_a_hover_in_a_quiet_gap_does_not_split_a_load_waterfall`, `tests/test_ui_audit_guards.py::test_a_click_while_a_fetch_is_in_flight_does_not_split_a_load_waterfall`
+- [x] A `hover` in a quiet gap, and a `click body` while a fetch is in flight, do not split a 4-wave load → `tests/test_ui_audit_guards.py::test_a_click_while_a_fetch_is_in_flight_does_not_split_a_load_waterfall`
+- [x] A `hover` or a `click body` in a 5-second quiet gap of a load, with no fetch starting after it, does not split the 4-wave load → `tests/test_ui_audit_guards.py::test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterfall`
 - [x] An `eval` step, and the page itself, add no action; a real press adds one line → `tests/test_ui_audit_guards.py::test_an_eval_step_and_the_page_cannot_add_an_action`
 - [x] Each verb of the request is marked, each other or misread step is not, and `--session=S` reads like `--session S` → `tests/test_ui_audit_guards.py::test_a_step_that_commits_input_is_marked`, `tests/test_ui_audit_guards.py::test_any_other_step_is_not_marked`, `tests/test_ui_audit_guards.py::test_a_misread_step_is_not_marked`
 - [x] A file that cannot be written leaves the step running and prints nothing; unreadable lines are skipped → `tests/test_ui_audit_guards.py::test_recording_an_action_never_fails_the_step_or_prints`
@@ -58,7 +60,7 @@ Execution: One builder, test first: the two red commits of tests, then `.hooks/b
 
 ## Risks + recovery
 
-A page whose waterfall has a gap of 500 ms or more, with an input step in the gap, is now measured as two parts. That step really did start new work after a quiet time, so the limit is the stated one: a quiet time of 500 ms before an input step. A step whose verb the tool reads in a form this code does not know records nothing, so the old single count applies. Recovery: revert the commits.
+A step starts a new part only when the page was quiet for 500 ms before it and a fetch starts within 1000 ms after it. A waterfall with a gap of 500 ms or more is split only by an input step that is followed by a fetch within 1000 ms, which is the last second of the gap; that step started new work after a quiet time. A step whose verb the tool reads in a form this code does not know records nothing, so the old single count applies. Recovery: revert the commits.
 Not checked: browsers other than the one that `agent-browser` starts; a remote browser on another machine, whose clock may differ from the clock of the action file.
 
 ## ux_reference
