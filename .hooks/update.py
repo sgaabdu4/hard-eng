@@ -944,13 +944,13 @@ def release_installed(
     return True
 
 
-def check_scaffold_update(root: Path, base: str, *, sources: bool = True) -> bool:
+def check_scaffold_update(
+    root: Path, base: str, *, sources: bool = True, rules_proven: bool = True
+) -> bool:
     found = update_in_diff(root, base)
-    if (
-        found is None
-        or found[2] & RULE_FILES
-        or not all(maybe_installed(name) for name in found[2])
-    ):
+    if found is None or not all(maybe_installed(name) for name in found[2]):
+        return False
+    if not rules_proven and found[2] & RULE_FILES:
         return False
     revision, previous, names = found
     if not verified_revision(revision):

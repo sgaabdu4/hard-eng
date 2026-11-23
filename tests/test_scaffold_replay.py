@@ -313,7 +313,7 @@ def test_an_update_that_adds_codex_rules_stays_a_verified_scaffold_update(
         update.check_scaffold_update(target, base)
 
 
-def test_update_that_changes_the_project_rules_file_is_not_scaffold_only(
+def test_update_that_changes_the_project_rules_file_does_not_prove_the_project_checks(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Escaped bug: a root AGENTS.md change in a verified update skipped every project check that reads that file."""
@@ -325,4 +325,28 @@ def test_update_that_changes_the_project_rules_file_is_not_scaffold_only(
     update.update(target)
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     assert "AGENTS.md" in git(target, "diff", "--name-only", base).splitlines()
-    assert not update.check_scaffold_update(target, base)
+    assert update.check_scaffold_update(target, base)
+    assert not update.check_scaffold_update(target, base, rules_proven=False)
+
+
+def test_the_runner_takes_an_update_as_proof_unless_it_changes_the_rules_file(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    runner = load_module("runner_proof", SOURCE / ".hooks/gate_runner.py")
+    runner.__dict__["ROOT"] = target
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    base = git(target, "rev-parse", "HEAD")
+    with (source / RUN).open("a") as extra:
+        extra.write("- Release note.\n")
+    release_now(source, monkeypatch, "release without a rule")
+    update.update(target)
+    assert "AGENTS.md" not in git(target, "diff", "--name-only", base).splitlines()
+    assert runner.proven_elsewhere(base)
+    later = git(target, "rev-parse", "HEAD")
+    with (source / "AGENTS.md").open("a") as rules:
+        rules.write("- Another shared rule.\n")
+    release_now(source, monkeypatch, "release with a rule")
+    update.update(target)
+    assert "AGENTS.md" in git(target, "diff", "--name-only", later).splitlines()
+    assert not runner.proven_elsewhere(later)

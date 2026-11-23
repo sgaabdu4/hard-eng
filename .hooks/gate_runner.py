@@ -620,7 +620,7 @@ def proven_elsewhere(base: str | None, quick: bool = False) -> bool:
                 flush=True,
             )
             return True
-    return check_scaffold_update(ROOT, base, sources=not quick)
+    return check_scaffold_update(ROOT, base, sources=not quick, rules_proven=False)
 
 
 def run_gates(groups: list[Group], timeout: float, related: str | None) -> bool | None:
