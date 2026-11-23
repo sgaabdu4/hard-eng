@@ -140,12 +140,15 @@ def is_workflow(name: str) -> bool:
     }
 
 
+DOCS_ROLES = frozenset(("secrets-files", "secrets-history", "workflows", "ci-security"))
+
+
 def shared_only(shared: Group, names: set[str]) -> Group:
     """No package reads the change; workflow edits still need workflow linting."""
     roles = {"secrets-files", "secrets-history"}
     if any(name.startswith(".github/workflows/") for name in names):
         print("No package reads this change; running workflow and secret checks.")
-        roles |= {"workflows", "ci-security"}
+        roles |= DOCS_ROLES
     else:
         print("No package reads this change; running the secret scan only.")
     checks = [gate for gate in shared["checks"] if gate.get("role") in roles]

@@ -197,6 +197,7 @@ def impact_outputs(
 ) -> int:
     """Tell CI the runner, the tools and whether Swift is affected, before tools exist."""
     from ci_setup import impact_tools, push_base, require_ci_base
+    from dependency_graph import DOCS_ROLES
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base, root)
@@ -217,7 +218,11 @@ def impact_outputs(
     with redirect_stdout(sys.stderr):
         selected = affected_groups(root, groups, base)
         needed = language_groups(selected, languages)
-    docs_only = bool(config["packages"]) and len(selected) == 1
+    docs_only = (
+        bool(config["packages"])
+        and len(selected) == 1
+        and all(gate.get("role") in DOCS_ROLES for gate in selected[0]["checks"])
+    )
     print(f"docs_only={str(docs_only).lower()}")
     tools = impact_tools(root, needed)
     print("tools=" + " ".join(tools))
