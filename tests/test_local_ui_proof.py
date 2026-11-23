@@ -476,6 +476,45 @@ def test_local_complete_check_validates_native_flutter_guideline_and_look(
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
 
+def test_local_complete_check_skips_flutter_guideline_for_unchanged_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    fixture = _fixture(tmp_path, ui_paths=["app/**"])
+    root = fixture.root
+    gates = json.loads((root / "hard-eng.gates.json").read_text())
+    gates["packages"] = [
+        {"name": "shop", "path": "app", "language": "dart", "checks": []}
+    ]
+    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
+    (root / ".git/info/exclude").write_text(".hard-eng/\n")
+    (root / "app/lib/ui").mkdir(parents=True)
+    (root / "app/test").mkdir(parents=True)
+    (root / "app/pubspec.yaml").write_text(
+        "name: shop\ndependencies:\n  flutter:\n    sdk: flutter\n"
+    )
+    (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('Old');\n")
+    commit(root, "base")
+    git(root, "branch", "-f", "main", "HEAD")
+    git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
+    (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('New');\n")
+    (root / "PLAN.md").write_text(
+        (root / "PLAN.md").read_text().replace(NO_UX, UNCHANGED_UX)
+    )
+    commit(root, "unchanged flutter refactor")
+    base = git(root, "rev-parse", "origin/main").strip()
+    head = git(root, "rev-parse", "HEAD").strip()
+    write_pair(root, base, head)
+
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+    (root / "PLAN.md").write_text(
+        (root / "PLAN.md").read_text().replace(UNCHANGED_UX, REAL_UX)
+    )
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "meetsGuideline" in problem
+
+
 def test_local_complete_check_fast_path_and_quick_import_isolation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

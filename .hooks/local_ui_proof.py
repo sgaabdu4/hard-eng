@@ -461,10 +461,6 @@ def local_ui_proof_problem(
     plans = _active_plan_texts(root, base, changed)
     if problem := _plans_reference_problem(plans, visible):
         return problem
-    if problem := guideline_problem(
-        root, [name for name in visible if (root / name).is_file()]
-    ):
-        return problem
     evidence = evidence_root(root)
     dirty_ui, min_mtime_ns = _dirty_ui_mtime_ns(root, patterns, visible)
     unchanged = [
@@ -486,6 +482,10 @@ def local_ui_proof_problem(
             return problem
         if not visual_plans:
             return None
+    if problem := guideline_problem(
+        root, [name for name in visible if (root / name).is_file()]
+    ):
+        return problem
     routes = list(
         dict.fromkeys(r for text in visual_plans if (r := surface_route(text)))
     )
