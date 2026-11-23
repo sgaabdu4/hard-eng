@@ -165,3 +165,13 @@ def test_a_look_record_of_a_linked_worktree_counts_in_the_push_snapshot(
         json.dumps({"images": [{"sha256": digest, "read": True}]})
     )
     assert plan_in_push_snapshot(project) == "Complete"
+
+
+def test_a_mockup_outside_the_repository_is_refused_even_with_a_look_record(
+    project: Path, visual_plan: str
+) -> None:
+    outside = project.parent / "outside.png"
+    outside.write_bytes(MOCKUP)
+    record_look(project)
+    line = f"Search box — new `src/ui/SearchField.tsx` — mockup ![M]({outside})"
+    assert "image file in the repository" in refusal(project, visual_plan, line)
