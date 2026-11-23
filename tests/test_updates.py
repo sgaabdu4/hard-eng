@@ -10,7 +10,6 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock
 
-import https_open
 import pytest
 import update
 from conftest import SOURCE, commit, git, init, remove_application
@@ -947,7 +946,7 @@ def test_no_network_names_the_address_and_the_step(
             raise answer
         return answer
 
-    monkeypatch.setattr(https_open, "open_https", opener)
+    monkeypatch.setattr("https_open.open_https", opener)
     monkeypatch.setattr(update, "github_token", Mock(return_value=None))
     with pytest.raises(OSError) as refused:
         update.github_json("repos/example/commits/main")
