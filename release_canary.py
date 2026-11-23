@@ -512,8 +512,10 @@ def prepare(
 
 
 def agent_command(agent: str, work: Path) -> list[str]:
-    if agent in ("claude", "agy"):
-        return [agent, "-p", "--dangerously-skip-permissions", TASK]
+    if agent == "agy":
+        return ["agy", "--dangerously-skip-permissions", f"--print={TASK}"]
+    if agent == "claude":
+        return ["claude", "-p", "--dangerously-skip-permissions", TASK]
     # Codex lists untrusted project hooks but runs none; this release's hooks are under test.
     return [
         *("codex", "exec", "--enable", "hooks", "--dangerously-bypass-hook-trust"),

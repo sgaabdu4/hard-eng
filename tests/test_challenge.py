@@ -425,8 +425,7 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     argv = ran["argv"]
     assert ran["stdin_is_null"]
     assert Path(ran["cwd"]).resolve() != branch.resolve()
-    assert argv[:8] == [
-        "-p",
+    assert argv[:7] == [
         "--model",
         "gemini-4-neon",
         "--effort",
@@ -435,13 +434,16 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
         "--disable-slash-commands",
         "--settings",
     ]
-    settings = json.loads(argv[8])
+    assert "-p" not in argv
+    assert len(argv) == 9
+    assert argv[8].startswith("--print=")
+    settings = json.loads(argv[7])
     assert settings["toolPermission"] == "proceed-in-sandbox"
     assert settings["enableTerminalSandbox"] is True
     assert "write_file(*)" in settings["permissions"]["deny"]
     assert "mcp(*)" in settings["permissions"]["deny"]
     assert settings["permissions"]["allow"] == [f"read_file({branch.resolve()}/)"]
-    assert str(branch.resolve()) in argv[9]
+    assert str(branch.resolve()) in argv[8]
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
 
@@ -478,7 +480,7 @@ def test_challenge_honors_local_models_overlay_for_order_and_flags(
     assert challenge.challenge(branch, None, None) == 0
     assert not codex_log.exists()
     argv = json.loads(agy_log.read_text())["argv"]
-    assert argv[:5] == ["-p", "--model", "gemini-4.2-custom", "--effort", "max"]
+    assert argv[:4] == ["--model", "gemini-4.2-custom", "--effort", "max"]
     assert record_of(branch)["reviewer"] == "agy"
 
 

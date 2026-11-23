@@ -138,13 +138,12 @@ def command(reviewer: str, prompt: str, root: Path) -> list[str]:
         )
         return [
             "agy",
-            "-p",
             *flags,
             "--sandbox",
             "--disable-slash-commands",
             "--settings",
             agy_read_only_settings(root),
-            location + prompt,
+            f"--print={location + prompt}",
         ]
     # A Bash(git diff *) rule would also allow --output=<file>; built-in read-only git forms refuse it.
     return [
