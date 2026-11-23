@@ -174,6 +174,68 @@ def test_a_generated_stylesheet_is_not_judged_for_its_import(tmp_path: Path) -> 
     validate_suppressions(root, "HEAD")
 
 
+def test_an_import_added_to_a_token_file_is_refused(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: the app's own token file may not pull tokens from outside the app either."""
+    root = theme_repo(
+        tmp_path,
+        "",
+        "apps/web/src/app/tokens.css",
+        OUTSIDE_TOKENS,
+        '@import "../../../../styles/tokens.css";\n' + OUTSIDE_TOKENS,
+        extra={
+            "apps/web/package.json": '{"name":"web"}\n',
+            "styles/tokens.css": OUTSIDE_TOKENS,
+        },
+    )
+    assert "apps/web/src/app/tokens.css:1: imports" in refused(root)
+
+
+def test_a_generated_import_does_not_hide_a_typo_in_authored_code(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: when the only outside import is in a generated stylesheet, an undefined token stays a finding."""
+    root = theme_repo(
+        tmp_path,
+        "",
+        "apps/web/src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="bg-brnad" />\n',
+        extra={
+            "apps/web/package.json": '{"name":"web"}\n',
+            APP_GLOBALS: '@import "../../../../styles/reset.css";\n@theme {\n  --color-local: #111;\n}\n',
+            "styles/reset.css": "body {\n  margin: 0;\n}\n",
+            ".gitattributes": f"{APP_GLOBALS} linguist-generated=true\n",
+        },
+    )
+    message = refused(root)
+    assert "(bg-brnad)" in message
+    assert "from outside" not in message
+
+
+def test_a_generated_import_does_not_hide_a_design_weight_mismatch(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: the DESIGN.md weight audit skips generated stylesheets for the import finding too."""
+    design = "---\ntypography:\n  heading:\n    fontSize: 20px\n    fontWeight: 700\n---\n# App Design\n"
+    root = theme_repo(
+        tmp_path,
+        "",
+        "apps/web/DESIGN.md",
+        "# App Design\n",
+        design,
+        extra={
+            "apps/web/package.json": '{"name":"web"}\n',
+            APP_GLOBALS: '@import "../../../../styles/reset.css";\n',
+            "apps/web/src/app/theme.css": "@theme {\n  --text-heading: 1.25rem;\n  --text-heading--font-weight: 500;\n}\n",
+            "styles/reset.css": "body {\n  margin: 0;\n}\n",
+            ".gitattributes": f"{APP_GLOBALS} linguist-generated=true\n",
+        },
+    )
+    message = refused(root)
+    assert "fontWeight 700" in message
+    assert "from outside" not in message
+
+
 def test_the_same_tokens_inside_the_app_pass(tmp_path: Path) -> None:
     """HE-UI-SOURCE: tokens in the app's own folder, and package imports, give no finding."""
     root = outside_repo(
