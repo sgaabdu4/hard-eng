@@ -39,6 +39,7 @@ class _JsxFrame:
     active: dict[str, tuple[int, int]]
     merged: dict[str, tuple[int, int]]
     depth: int = 0
+    paren: int = 0
 
 
 def _first_family(raw: str) -> str:
@@ -175,6 +176,7 @@ class _JsxKeyScanner:
             and self.stack[-2].kind == "array"
             and self.stack[-1].kind in ("slot", "fn")
             and self.stack[-1].depth == 0
+            and self.stack[-1].paren == 0
         )
 
     def _handle_array_char(self, char: str) -> None:
@@ -240,14 +242,14 @@ class _JsxKeyScanner:
         elif char == "}":
             self._handle_close_brace()
         elif char == "(" and self.stack and self.stack[-1].kind in ("slot", "fn"):
-            self.stack[-1].depth += 1
+            self.stack[-1].paren += 1
         elif (
             char == ")"
             and self.stack
             and self.stack[-1].kind in ("slot", "fn")
-            and self.stack[-1].depth > 0
+            and self.stack[-1].paren > 0
         ):
-            self.stack[-1].depth -= 1
+            self.stack[-1].paren -= 1
         elif char in ("[", ",", "]"):
             self._handle_array_char(char)
         elif (
@@ -364,23 +366,46 @@ def _font_face_ranges(
     return by_family, mono_only - non_mono
 
 
+def _theme_blocks(css: str) -> list[tuple[str, bool]]:
+    from ui_rules import THEME_BLOCK
+
+    blocks: list[tuple[str, bool]] = []
+    for match in THEME_BLOCK.finditer(css):
+        depth, index = 1, match.end()
+        while index < len(css) and depth:
+            depth += (css[index] == "{") - (css[index] == "}")
+            index += 1
+        is_default = bool(re.search(r"\bdefault\b", match.group(0), re.IGNORECASE))
+        blocks.append((css[match.end() : max(match.end(), index - 1)], is_default))
+    return blocks
+
+
 def _theme_text_tokens(
-    theme_bodies: list[str],
+    theme_blocks: list[tuple[str, bool]],
 ) -> tuple[set[str], dict[str, int], dict[str, str]]:
     from ui_rules import THEME_VAR
 
     roles: set[str] = set()
     weights: dict[str, int] = {}
     families: dict[str, str] = {}
-    for body in theme_bodies:
+    explicit_w: set[str] = set()
+    explicit_f: set[str] = set()
+    for body, is_default in theme_blocks:
         for kind, token, _ in THEME_VAR.findall(body):
             if kind == "text" and "--" not in token:
                 roles.add(token)
         for role, wt in TEXT_WEIGHT_VAR.findall(body):
-            weights[role] = int(wt)
+            if not is_default or role not in explicit_w:
+                weights[role] = int(wt)
+            if not is_default:
+                explicit_w.add(role)
         for role, raw in TEXT_FAMILY_VAR.findall(body):
-            if fam := _first_family(raw):
+            if (fam := _first_family(raw)) and (
+                not is_default or role not in explicit_f
+            ):
                 families[role] = fam
+            if not is_default and _first_family(raw):
+                explicit_f.add(role)
     return roles, weights, families
 
 
@@ -426,17 +451,16 @@ def _group_weight_findings(
     design_weights: dict[str, int],
     design_role_fams: dict[str, str],
     css_texts: list[str],
+    pkg_faces: tuple[dict[str, list[tuple[int, int]]], set[str]],
 ) -> list[str]:
-    from ui_rules import _theme_bodies
-
-    theme_bodies = [body for text in css_texts for body in _theme_bodies(text)]
-    if not theme_bodies:
+    theme_blocks = [blk for text in css_texts for blk in _theme_blocks(text)]
+    if not theme_blocks:
         return []
-    defined_roles, defined_weights, theme_role_fams = _theme_text_tokens(theme_bodies)
+    defined_roles, defined_weights, theme_role_fams = _theme_text_tokens(theme_blocks)
     findings = _design_weight_mismatches(
         design_rel, design_weights, defined_roles, defined_weights
     )
-    by_family, mono_only = _font_face_ranges(css_texts)
+    by_family, mono_only = pkg_faces
     role_families = {**design_role_fams, **theme_role_fams}
     for role, weight in sorted(defined_weights.items()):
         if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
@@ -469,14 +493,26 @@ def design_weight_findings(
     text_by_path = {
         path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
     }
+    groups = _css_entrypoint_orders(files, text_by_path)
+    skipped_roots = generated_sources(
+        root, [group[-1].relative_to(root).as_posix() for group in groups if group]
+    )
+    live_groups = [
+        group
+        for group in groups
+        if group and group[-1].relative_to(root).as_posix() not in skipped_roots
+    ]
+    live_paths = list(dict.fromkeys(path for group in live_groups for path in group))
+    pkg_faces = _font_face_ranges([text_by_path[path] for path in live_paths])
     design_weights, design_role_fams = _design_yaml_typography(design_path)
     seen: list[str] = []
-    for group in _css_entrypoint_orders(files, text_by_path):
+    for group in live_groups:
         for hit in _group_weight_findings(
             design_rel,
             design_weights,
             design_role_fams,
             [text_by_path[path] for path in group],
+            pkg_faces,
         ):
             if hit not in seen:
                 seen.append(hit)
