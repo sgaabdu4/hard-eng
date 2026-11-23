@@ -105,7 +105,7 @@ def host_for(host: str | None) -> str:
 
 
 def reviewers_for(host: str | None, root: Path | None = None) -> tuple[str, ...]:
-    """Ordered fallback reviewers: the other agents, never the running host."""
+    """Ordered other agents to try first; `challenge` ends with a fresh host session."""
     return challenge_order_for(host_for(host), root, trusted_ref=trusted_base_ref(root))
 
 
@@ -393,8 +393,10 @@ def unavailable(outcome: str, reviewer: str) -> bool:
 
 
 def challenge(root: Path, base: str | None, host: str | None) -> int:
-    candidates = reviewers_for(host, root)
+    current = host_for(host)
+    candidates = (*reviewers_for(current, root), current)
     reviewer = candidates[0]
+    fresh = ""
     revision = git_text(root, "rev-parse", "HEAD")
     start, covers = covered_point(root, base)
     if base is not None and covers is None:
@@ -409,6 +411,8 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
             reviewer = candidate
             outcome, output = review(root, candidate, start, revision)
             if not unavailable(outcome, candidate):
+                if candidate == current:
+                    fresh = "; ".join(reasons)
                 break
             reasons.append(outcome.removeprefix("not done: "))
         else:
@@ -427,18 +431,19 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
             print(f"Kept the earlier completed review for this revision: {earlier}")
             return 0
     path.with_suffix(".txt").write_text(output)
-    path.with_suffix(".json").write_text(
-        json.dumps(
-            {
-                "reviewer": reviewer,
-                "revision": revision,
-                "outcome": outcome,
-                "covers": covers,
-                "output": str(path.with_suffix(".txt")),
-            }
-        )
-    )
+    record = {
+        "reviewer": reviewer,
+        "revision": revision,
+        "outcome": outcome,
+        "covers": covers,
+        "output": str(path.with_suffix(".txt")),
+    }
+    if fresh:
+        record["fresh"] = fresh
+    path.with_suffix(".json").write_text(json.dumps(record))
     print(f"Independent review by {reviewer} at {revision}: {outcome}")
+    if fresh:
+        print(f"Fresh {reviewer} session reviewed, because: {fresh}")
     print(f"Reviewer output: {path.with_suffix('.txt')}")
     if outcome == "findings":
         print(
@@ -469,4 +474,6 @@ def shipping_note(root: Path, revision: str) -> str | None:
         )
     if record["outcome"].startswith("not done"):
         return f"independent review {record['outcome']}"
+    if fresh := record.get("fresh"):
+        return f"Review by a fresh {record['reviewer']} session (other agents failed: {fresh}): {record['outcome']}"
     return f"Independent review by {record['reviewer']}: {record['outcome']}"
