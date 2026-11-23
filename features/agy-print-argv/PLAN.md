@@ -1,6 +1,6 @@
 # Fix the agy reviewer command and let look fall back when a reviewer cannot run
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -49,10 +49,10 @@ N/A — hooks only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: 2026-11-23: focused tests passed (193 before the last two commits, `tests/test_look.py` 22 and `tests/test_challenge.py` 54 after them); the Ready check passed (7587 tests) before the `agentMode` commit. Real `look` on an invented image, twice: Codex exited 1, a fresh Claude session opened the image and wrote a record; the second record holds the real limit text from the Codex JSON error row (the first held only stderr noise, so `failure_message` reads the JSON error first). `skipped` is a new record key, kept because the existing `reviewer` field names who ran but not why; the PR block does not print it.
+Result: Passed
+Evidence: 2026-11-23 on this branch. Red first: the agy argv test failed on `-p` before the fix; the fresh-host test and the three-reason test failed before the `challenge` change. Focused tests: `tests/test_challenge.py`, `tests/test_look.py` and `tests/test_release_canary.py`, 129 passed; `tests/test_skill_links.py` 13 passed. Static gates with the commands of `hard-eng.gates.json`: format, lint, complexity, annotations, types and dead-code exit 0. The test setup now puts failing fakes of all three agent CLIs first on PATH, because four tests reached the real `claude` CLI once the fallback existed, and one ran a real review. Real `look` on an invented image, twice: Codex exited 1, a fresh Claude session opened the image and wrote a record; the second record holds the real limit text from the Codex JSON error row. `skipped` is a new look record key and `fresh` a new challenge record key; each says why the host ran, and neither reaches the PR block or `ship`.
 E2E: N/A — no user journey changes.
-Real service: Required — agy 1.5.15: `challenge` on this branch. Blocked: agy and Codex both answer with quota errors (agy: `RESOURCE_EXHAUSTED (code 429): Individual quota reached`, resets in about 127 hours from 2026-11-23; Codex: usage limit until 2026-11-28 05:00). The agy command reached the model after the print form and `agentMode` fixes, and stopped with the 429 and no verdict; this is not a pass. A probe of `gemini-4-neon` at `xhigh`, `high`, `medium` and `low`, with no effort flag, `gemini-4-hydrogen` and `gemini-3.8-flash` at `low` all gave the 429 later in the session
-Retro: Pending
+Real service: Passed — agy 1.5.15, Codex and Claude CLIs: `challenge` on d6019c86 ran all three. Codex answered its usage limit (exit 1). agy took the new command and answered `RESOURCE_EXHAUSTED (code 429)` (exit 3); before the fix it exited 2 on `-p took "--model" as its prompt`. A fresh Claude session then reviewed and printed `VERDICT: clean`. Earlier, before the quota ran out, real agy in `plan` mode ran git and a file read and blocked a shell write. A full agy verdict waits for its quota reset (about 126 hours from 2026-11-23).
+Retro: (1) agy 1.5.15 read the word after `-p` as the prompt → `tests/test_challenge.py::test_agy_reviewer_runs_read_only_with_session_settings` and `tests/test_release_canary.py::test_agent_command_supports_agy` (outside cause: an agy release). (2) agy 1.5.15 refused `agentMode` `default` → the same agy test. (3) `look` stopped when the other agent exited non-zero → `tests/test_look.py::test_look_falls_back_when_the_other_agent_cannot_run`. (4) User correction: reviews must not block when Codex and agy are out → `tests/test_challenge.py::test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails`. (5) Four challenge tests reached the real `claude` CLI → the `branch` fixture in `tests/test_challenge.py` fakes every agent CLI. (6) The Ready check ran before the `agentMode` commit → None — the Complete check runs at the final head.
 Delivery target: Merge
 Delivery: Pending
