@@ -3,6 +3,7 @@
 import hashlib
 import json
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 LIMITS = {
@@ -14,6 +15,7 @@ LIMITS = {
     "frame_ratio": 1.1,
     "cls": 0.1,
     "fetch_waves": 3,
+    "action_quiet_ms": 500,
 }
 PROOF_KINDS = {
     "Mistake-proof": ("judgement",),
@@ -116,6 +118,8 @@ for (const el of controls.filter((c) => (c.tagName === "BUTTON" || c.getAttribut
   groups.set(el.parentElement, [...(groups.get(el.parentElement) || []), el]);
 }
 const colourOf = (el, s) => [ownText(el) ? s.color : "", s.backgroundColor, s.borderTopWidth !== "0px" ? s.borderTopColor : ""];
+const pageHeading = document.querySelector("h1");
+const pageLevel = (el) => ["BODY", "MAIN"].includes(el.tagName) || Boolean(pageHeading && el.contains(pageHeading));
 for (const [parent, members] of groups) {
   if (members.length > 1) {
     const behind = getComputedStyle(parent).backgroundColor;
@@ -131,7 +135,7 @@ for (const [parent, members] of groups) {
     }
   }
   if (members.length > 1) {
-  const block = parent.parentElement;
+  const block = pageLevel(parent.parentElement) ? parent : parent.parentElement;
   const colours = new Set();
   for (const el of [block, ...block.querySelectorAll("*")]) {
     if (!visible(el)) continue;
@@ -305,17 +309,27 @@ for (const el of document.body.querySelectorAll("*")) {
 const fetches = performance.getEntriesByType("resource")
   .filter((e) => (e.initiatorType === "fetch" || e.initiatorType === "xmlhttprequest") && e.responseEnd > 0)
   .sort((a, b) => a.startTime - b.startTime);
-let waves = 0, waveEnd = -1;
-for (const entry of fetches) {
-  if (waves === 0 || entry.startTime >= waveEnd) {
-    waves += 1;
-    waveEnd = entry.responseEnd;
-  } else if (entry.responseEnd > waveEnd) {
-    waveEnd = entry.responseEnd;
+const wavesOf = (list) => {
+  let waves = 0, waveEnd = -1;
+  for (const entry of list) {
+    if (waves === 0 || entry.startTime >= waveEnd) {
+      waves += 1;
+      waveEnd = entry.responseEnd;
+    } else if (entry.responseEnd > waveEnd) {
+      waveEnd = entry.responseEnd;
+    }
   }
-}
-if (waves > LIMITS.fetch_waves) {
-  found.push({ rule: "fetch-waterfall", at: "page", waves });
+  return waves;
+};
+const quiet = (t) => !fetches.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
+const cuts = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin, verb }))
+  .filter((c) => c.t > 0 && quiet(c.t))
+  .sort((a, b) => a.t - b.t);
+const parts = [{ at: "load", entries: [] }, ...cuts.map((c, i) => ({ at: `${c.verb} ${i + 1}`, entries: [] }))];
+for (const entry of fetches) parts[cuts.filter((c) => c.t <= entry.startTime).length].entries.push(entry);
+for (const part of parts) {
+  const waves = wavesOf(part.entries);
+  if (waves > LIMITS.fetch_waves) found.push({ rule: "fetch-waterfall", at: part.at, waves });
 }
 const shifts = [];
 if (typeof PerformanceObserver !== "undefined" && (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift")) {
@@ -353,8 +367,9 @@ return JSON.stringify(found);
 })()"""
 
 
-def measure_script() -> str:
+def measure_script(actions: Sequence[tuple[int, str]] = ()) -> str:
     script = MEASURE_SCRIPT.replace("LIMITS_JSON", json.dumps(LIMITS))
+    script = script.replace("ACTIONS_JSON", json.dumps(list(actions)))
     script = script.replace("COLOUR_JSFN", COLOUR_JS)
     script = script.replace("DECORATED_JSFN", DECORATED_JS)
     return script.replace("DECORATION_JSON", json.dumps(DECORATION))
