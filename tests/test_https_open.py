@@ -19,9 +19,10 @@ def test_the_opener_loads_https_through_the_proxy_settings_and_no_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.test:3128")
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.example.test:3128")
     schemes = set(vars(https_open.https_opener())["handle_open"])
     assert {"https", "unknown"} <= schemes
-    assert not {"file", "ftp", "data"} & schemes
+    assert not {"http", "file", "ftp", "data"} & schemes
 
 
 @pytest.mark.parametrize("url", ["http://example.test/", "file:///etc/hosts"])
