@@ -6,10 +6,10 @@ from pathlib import Path
 CSS_IMPORT = re.compile(r"""@import\s+(?:url\(\s*)?["']([^"']+)["']""")
 
 
-def local_imports(text: str) -> list[tuple[int, str, list[Path]]]:
-    """Each non-URL @import as (offset, target, file names to try)."""
+def local_imports(text: str) -> list[tuple[int, str]]:
+    """Each non-URL @import as (offset, target)."""
     return [
-        (match.start(), match[1], [Path(match[1]), Path(match[1] + ".css")])
+        (match.start(), match[1])
         for match in CSS_IMPORT.finditer(text)
         if not match[1].startswith(("http://", "https://", "//"))
     ]
@@ -19,9 +19,9 @@ def css_import_targets(
     path: Path, text: str, by_resolved: dict[Path, Path]
 ) -> list[Path]:
     found: list[Path] = []
-    for _, _, names in local_imports(text):
-        for name in names:
-            candidate = (path.parent / name).resolve()
+    for _, target in local_imports(text):
+        for suffix in ("", ".css"):
+            candidate = (path.parent / (target + suffix)).resolve()
             if candidate in by_resolved:
                 found.append(by_resolved[candidate])
                 break
