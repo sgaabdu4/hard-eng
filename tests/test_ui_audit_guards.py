@@ -91,7 +91,7 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
         "<body><main><h1 style='font-size:24px;font-weight:700'>Board</h1><p id='out'>Loading</p></main>"
         "<script>(async () => {"
         "for (let i = 0; i < 4; i++) {"
-        "await fetch('/step.json?w=' + i);"
+        "await (await fetch('/step.json?w=' + i)).text();"
         "}"
         "document.getElementById('out').textContent = 'Ready';"
         "})();</script></body>"
