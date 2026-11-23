@@ -866,6 +866,50 @@ def test_an_outside_import_replaces_the_design_weight_finding_it_causes(
     assert "fontWeight" not in message
 
 
+@pytest.mark.parametrize(
+    ("globals_css", "files"),
+    [
+        (
+            '@import "../../../../styles/tokens.css";\n',
+            {"styles/tokens.css": OUTSIDE_TOKENS},
+        ),
+        (
+            '@import "../../../../styles/tokens.css";\n@theme {\n  --color-local: #111;\n}\n',
+            {
+                "styles/tokens.css": OUTSIDE_TOKENS,
+                "apps/web/tailwind.config.ts": "export default {};\n",
+            },
+        ),
+        (
+            '@import "../../../../styles/base";\n',
+            {"styles/base.css": "body {\n  margin: 0;\n}\n"},
+        ),
+    ],
+    ids=["no local @theme", "tailwind config", "outside file without tokens"],
+)
+def test_an_outside_import_is_a_finding_whatever_the_app_theme_holds(
+    tmp_path: Path, globals_css: str, files: dict[str, str]
+) -> None:
+    """HE-UI-SOURCE: the import is refused with no @theme in the app, with an external theme and when the outside file holds no token."""
+    message = refused(outside_repo(tmp_path, globals_css, files))
+    assert f"{APP_GLOBALS}:1: imports ../../../../styles/" in message
+
+
+def test_a_relative_import_into_node_modules_is_not_outside_the_app(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: a package folder inside the app's own node_modules is not another app."""
+    root = outside_repo(
+        tmp_path,
+        '@import "../../node_modules/ui/theme.css";\n',
+        {
+            "apps/web/node_modules/ui/package.json": '{"name":"ui"}\n',
+            "apps/web/node_modules/ui/theme.css": OUTSIDE_TOKENS,
+        },
+    )
+    validate_suppressions(root, "HEAD")
+
+
 def test_the_same_tokens_inside_the_app_pass(tmp_path: Path) -> None:
     """HE-UI-SOURCE: tokens in the app's own folder, and package imports, give no finding."""
     root = outside_repo(

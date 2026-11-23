@@ -377,29 +377,42 @@ def _has_external_theme(package: Path, css_texts: list[str]) -> bool:
     return False
 
 
-def _outside_target(root: Path, package: Path, path: Path, names: list[Path]) -> bool:
-    for name in names:
-        candidate = (path.parent / name).resolve()
+def _outside_target(root: Path, package: Path, path: Path, target: str) -> bool:
+    for suffix in ("", ".css"):
+        candidate = (path.parent / (target + suffix)).resolve()
         if candidate.suffix == ".css" and candidate.is_file():
             base = root.resolve()
-            return not candidate.is_relative_to(base) or (
-                _package_dir(root, candidate.relative_to(base).as_posix()) != package
+            if not candidate.is_relative_to(base):
+                return True
+            rel = candidate.relative_to(base)
+            return (
+                not BUILD_FOLDERS.intersection(rel.parts)
+                and _package_dir(root, rel.as_posix()) != package
             )
     return False
 
 
-def _outside_imports(root: Path, package: Path, entries: list[str]) -> list[str]:
+def _in_comment(text: str, offset: int) -> bool:
+    return any(hit.start() <= offset < hit.end() for hit in CSS_COMMENT.finditer(text))
+
+
+def _outside_imports(root: Path, package: Path, texts: dict[Path, str]) -> list[str]:
     """One finding for each @import in the app's CSS that names an existing CSS file outside the app."""
     found: list[str] = []
-    for path in _css_files(root, package, entries):
-        text = path.read_text(errors="replace")
-        blanked = CSS_COMMENT.sub(lambda hit: re.sub(r"[^\n]", " ", hit[0]), text)
+    for path, text in texts.items():
+        if "@import" not in text:
+            continue
         rel = path.relative_to(root).as_posix()
-        found.extend(
-            f"{rel}:{blanked.count(chr(10), 0, offset) + 1}: imports {target} from outside this app. {OUTSIDE_STEP}"
-            for offset, target, names in local_imports(blanked)
-            if _outside_target(root, package, path, names)
-        )
+        for offset, target in local_imports(text):
+            if (
+                (".." in target or target.startswith("/"))
+                and _outside_target(root, package, path, target)
+                and not _in_comment(text, offset)
+            ):
+                line = text.count("\n", 0, offset) + 1
+                found.append(
+                    f"{rel}:{line}: imports {target} from outside this app. {OUTSIDE_STEP}"
+                )
     return found
 
 
@@ -483,15 +496,11 @@ def _theme_for_group(texts: list[str]) -> tuple[ThemeTokens, bool]:
     )
 
 
-def _load_theme(
-    root: Path, package: Path, entries: list[str] | None = None
-) -> ThemeTokens | None:
-    files = _css_files(root, package, entries)
+def _load_theme(package: Path, texts: dict[Path, str]) -> ThemeTokens | None:
+    files = list(texts)
     if not files:
         return None
-    raw = {
-        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
-    }
+    raw = {path: CSS_COMMENT.sub("", text) for path, text in texts.items()}
     all_texts = list(raw.values())
     if not any(THEME_BLOCK.search(text) for text in all_texts) or _has_external_theme(
         package, all_texts
@@ -941,11 +950,13 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
                 css_entries = _all_css_entries(root)
             package = _package_dir(root, name)
             if package not in themes:
-                outside[package] = _outside_imports(root, package, css_entries)
+                texts = {
+                    path: path.read_text(errors="replace")
+                    for path in _css_files(root, package, css_entries)
+                }
+                outside[package] = _outside_imports(root, package, texts)
                 themes[package] = (
-                    None
-                    if outside[package]
-                    else _load_theme(root, package, css_entries)
+                    None if outside[package] else _load_theme(package, texts)
                 )
             theme = themes[package]
             if (theme is not None or name.endswith(JSX_SUFFIXES)) and (

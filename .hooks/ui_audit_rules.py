@@ -557,11 +557,10 @@ def design_weight_findings(
     css_rels = {path.relative_to(root).as_posix() for path in files}
     if design_rel not in changed and not (css_rels & changed):
         return []
-    if outside := _outside_imports(root, package, css_entries):
+    texts = {path: path.read_text(errors="replace") for path in files}
+    if outside := _outside_imports(root, package, texts):
         return outside
-    text_by_path = {
-        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
-    }
+    text_by_path = {path: CSS_COMMENT.sub("", text) for path, text in texts.items()}
     live_groups = _live_css_groups(
         root, css_entrypoint_orders(files, text_by_path), changed
     )
