@@ -1,10 +1,14 @@
 """Runtime browser audit guards: competing same-colour CTAs, duplicates, hierarchy, clipping, waterfalls, and CLS."""
 
+import json
+import threading
+import time
 from collections import Counter
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from test_browser import Site, plain_step, session
 from test_ui_quality import pair
 from ui_capture import WIDTHS, capture
 
@@ -122,6 +126,283 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
             width,
             found_cls[width],
         )
+
+
+QUIET_SECONDS = 0.8
+LOAD_WAVE = "Promise.all([0,1].map((i) => fetch('/step.json?l=' + i)));"
+PRESS = (
+    "(async () => { await fetch('/session', { method: 'POST' }); "
+    "await fetch('/step.json?p=' + Date.now()); })()"
+)
+CHAIN = (
+    "(async () => { for (let i = 0; i < 4; i++) "
+    "await (await fetch('/step.json?w=' + i + Date.now())).text(); })()"
+)
+HELD_CHAIN = (
+    "(async () => { await fetch('/step.json?a'); await fetch('/step.json?b'); "
+    "await fetch('/gate'); await fetch('/step.json?d'); })();"
+)
+GAP_CHAIN = (
+    "(async () => { await fetch('/step.json?a'); await fetch('/step.json?b'); "
+    "await new Promise((done) => setTimeout(done, 1500)); "
+    "await fetch('/step.json?c'); await fetch('/step.json?d'); })();"
+)
+
+
+class Gate:
+    def __init__(self) -> None:
+        self.arrived = threading.Event()
+        self.release = threading.Event()
+
+
+@pytest.fixture
+def gate(monkeypatch: pytest.MonkeyPatch) -> Gate:
+    held = Gate()
+    original = Site.do_GET
+
+    def do_get(handler: Site) -> None:
+        if handler.path.startswith("/gate"):
+            held.arrived.set()
+            held.release.wait(30)
+            handler.reply(200, "{}")
+        else:
+            original(handler)
+
+    monkeypatch.setattr(Site, "do_GET", do_get)
+    return held
+
+
+def board(tmp_path: Path, name: str, script: str, buttons: str = "") -> None:
+    (tmp_path / "pages/step.json").write_text('{"ok":true}')
+    (tmp_path / f"pages/{name}.html").write_text(
+        "<!doctype html><html lang=en><title>Board</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style>"
+        "<body><main><h1 style='font-size:24px;font-weight:700'>Board</h1>"
+        f"{buttons}<p>Ready</p></main><script>{script}</script></body>"
+    )
+
+
+def press_button(name: str, script: str = PRESS) -> str:
+    return (
+        f"<button id={name} style='min-height:44px;min-width:120px;font-size:16px' "
+        f'onclick="{script}">Press {name}</button>'
+    )
+
+
+def open_board(tmp_path: Path, site: str, name: str, page_name: str) -> None:
+    plain_step(tmp_path, name, "set", "viewport", "768", "900")
+    plain_step(tmp_path, name, "open", f"{site}/{page_name}.html")
+
+
+def measured(
+    tmp_path: Path, browser: ModuleType, name: str
+) -> list[tuple[object, object]]:
+    code = browser.browser_command(
+        tmp_path, ["measure", "--session", name, "--name", "state"]
+    )
+    assert code == 0
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    return [(item["rule"], item.get("at")) for item in record["findings"]]
+
+
+def test_each_press_is_measured_apart_from_the_load(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    buttons = "".join(press_button(name) for name in "abc")
+    board(tmp_path, "presses", LOAD_WAVE, buttons)
+    name = session()
+    open_board(tmp_path, site, name, "presses")
+    try:
+        for button in "abc":
+            time.sleep(QUIET_SECONDS)
+            plain_step(tmp_path, name, "click", f"#{button}")
+        time.sleep(QUIET_SECONDS)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_four_wave_load_still_fails_after_an_older_action_in_the_session(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "waterfall", CHAIN)
+    name = session()
+    browser.actions_file(browser.output_folder(tmp_path), name).write_text(
+        "1000 click\n"
+    )
+    open_board(tmp_path, site, name, "waterfall")
+    try:
+        time.sleep(QUIET_SECONDS)
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "chain", LOAD_WAVE, press_button("go", CHAIN))
+    name = session()
+    open_board(tmp_path, site, name, "chain")
+    try:
+        time.sleep(QUIET_SECONDS)
+        plain_step(tmp_path, name, "click", "#go")
+        time.sleep(QUIET_SECONDS)
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 1")]
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_hover_in_a_quiet_gap_does_not_split_a_load_waterfall(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "gap", GAP_CHAIN)
+    name = session()
+    open_board(tmp_path, site, name, "gap")
+    try:
+        plain_step(tmp_path, name, "hover", "body")
+        time.sleep(2.5)
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_click_while_a_fetch_is_in_flight_does_not_split_a_load_waterfall(
+    tmp_path: Path, site: str, browser: ModuleType, gate: Gate
+) -> None:
+    board(tmp_path, "held", HELD_CHAIN)
+    name = session()
+    open_board(tmp_path, site, name, "held")
+    try:
+        assert gate.arrived.wait(20)
+        plain_step(tmp_path, name, "click", "body")
+        gate.release.set()
+        time.sleep(QUIET_SECONDS)
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
+    finally:
+        gate.release.set()
+        plain_step(tmp_path, name, "close")
+
+
+def test_an_eval_step_and_the_page_cannot_add_an_action(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "plain", "")
+    name = session()
+    open_board(tmp_path, site, name, "plain")
+    marks = browser.actions_file(browser.output_folder(tmp_path), name)
+    try:
+        plain_step(
+            tmp_path,
+            name,
+            "eval",
+            "document.body.click(); localStorage.setItem('click', '1'); 'click'",
+        )
+        assert not marks.exists()
+        plain_step(tmp_path, name, "click", "body")
+        stamp, verb = marks.read_text().strip().split(" ", 1)
+        assert stamp.isdigit()
+        assert verb == "click"
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+ARGUMENTS = {
+    "click": (["click", "#a"], "click"),
+    "dblclick": (["dblclick", "#a"], "dblclick"),
+    "type": (["type", "#q", "click"], "type"),
+    "fill": (["fill", "#q", "press"], "fill"),
+    "press": (["press", "Enter"], "press"),
+    "keyboard-type": (["keyboard", "type", "hello"], "keyboard type"),
+    "keyboard-insert": (["keyboard", "inserttext", "hello"], "keyboard inserttext"),
+    "check": (["check", "#c"], "check"),
+    "uncheck": (["uncheck", "#c"], "uncheck"),
+    "select": (["select", "#s", "one"], "select"),
+    "drag": (["drag", "#a", "#b"], "drag"),
+    "upload": (["upload", "#f", "a.txt"], "upload"),
+    "download": (["download", "#a", "out.pdf"], "download"),
+    "mouse-down": (["mouse", "down"], "mouse down"),
+    "mouse-up": (["mouse", "up"], "mouse up"),
+    "find-role": (["find", "role", "button", "click", "--name", "Go"], "find click"),
+    "find-label": (["find", "label", "Email", "fill", "a@b.c"], "find fill"),
+    "find-first": (["find", "first", ".row", "click"], "find click"),
+}
+NO_MARK = {
+    "hover": ["hover", "#a"],
+    "focus": ["focus", "#a"],
+    "scroll": ["scroll", "down"],
+    "eval-click": ["eval", "document.body.click()"],
+    "eval-word": ["eval", "click"],
+    "wait-text": ["wait", "--text", "click"],
+    "open-url": ["open", "http://x/click"],
+    "get-text": ["get", "text", "click"],
+    "snapshot": ["snapshot", "-i"],
+    "find-hover": ["find", "text", "click", "hover"],
+    "find-word": ["find", "text", "press", "hover"],
+    "find-flag-first": ["find", "role", "button", "--name", "Go", "click"],
+    "find-short": ["find", "text", "click"],
+    "keyboard-other": ["keyboard", "press", "Enter"],
+    "mouse-move": ["mouse", "move", "1", "2"],
+    "mouse-wheel": ["mouse", "wheel", "5"],
+    "unknown": ["tap", "#a"],
+    "upper": ["CLICK", "#a"],
+    "empty": [],
+}
+
+
+@pytest.mark.parametrize(("steps", "label"), ARGUMENTS.values(), ids=ARGUMENTS)
+def test_a_step_that_commits_input_is_marked(
+    browser: ModuleType, steps: list[str], label: str
+) -> None:
+    assert browser.action_mark(["--session", "s", *steps]) == ("s", label)
+    assert browser.action_mark(["--session=s", *steps]) == ("s", label)
+
+
+@pytest.mark.parametrize("steps", NO_MARK.values(), ids=NO_MARK)
+def test_any_other_step_is_not_marked(browser: ModuleType, steps: list[str]) -> None:
+    assert browser.action_mark(["--session", "s", *steps]) is None
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["click", "#a"],
+        ["--session"],
+        ["--session", "s"],
+        ["--json", "--session", "s", "click", "#a"],
+        ["--session", "s", "--headed", "click", "#a"],
+        ["--session", "bad name!", "click", "#a"],
+        ["--session", "../x", "click", "#a"],
+    ],
+    ids=["no-session", "no-name", "no-verb", "flag-first", "flag-after", "spaces", "path"],
+)
+def test_a_misread_step_is_not_marked(browser: ModuleType, argv: list[str]) -> None:
+    assert browser.action_mark(argv) is None
+
+
+def test_recording_an_action_never_fails_the_step_or_prints(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    folder = browser.output_folder(tmp_path)
+    browser.actions_file(folder, "s").mkdir()
+    browser.record_action(folder, ["--session", "s", "click", "#a"])
+    browser.record_action(folder, ["--session", "t", "click", "#a"])
+    seen = capfd.readouterr()
+    assert (seen.out, seen.err) == ("", "")
+    browser.actions_file(folder, "t").write_text("junk\n12 click\n-3 click\n9 \nx y\n")
+    assert browser.session_actions(folder, "t") == [(12, "click")]
+
+    board(tmp_path, "plain", "")
+    name = session()
+    open_board(tmp_path, site, name, "plain")
+    browser.actions_file(folder, name).mkdir()
+    try:
+        plain_step(tmp_path, name, "click", "body")
+    finally:
+        plain_step(tmp_path, name, "close")
 
 
 def test_display_heading_custom_select_sticky_sidebar_and_parallel_fetches_pass(
