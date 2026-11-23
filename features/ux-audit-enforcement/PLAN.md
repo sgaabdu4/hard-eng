@@ -38,6 +38,8 @@ Blockers: None
 Handoff: None
 Authority: User directly authorized implementing all six UX audit guards and active-step ordering in chat on 2026-11-22 with the requirement not to slow Hard Eng down.
 Review declined: an unrelated non-mono `@font-face` satisfying a heading weight check when neither `DESIGN.md` nor `--text-<role>--font-family` names a font family for that role :: static CSS token scanning cannot resolve full DOM/CSS selector inheritance across components without causing false positives on valid secondary heading fonts (such as Merriweather headings paired with Inter body text); whenever a role explicitly declares `fontFamily` in `DESIGN.md` or `--text-<role>--font-family`, `_weight_covered` checks only that family's `@font-face` ranges.
+Review declined: cross-bundle `@font-face` fallback when a storefront theme imports fonts via a separate JS/TS import alongside another bundle (such as `admin.css`) in the same package :: static CSS scanning does not parse JS/HTML bundler entrypoints to map non-`@import`ed stylesheets to separate runtime bundles; bundle-local `@font-face` entries override package fallback per family (`{**pkg_faces, **group_faces}`), which isolates bundles that declare their own faces while still catching separately imported `fonts.css` sheets.
+Review declined: distinguishing a generated preview stylesheet from a generated production wrapper when both `@import` a shared hand-written `tokens.css` :: static CSS scanning reads `.gitattributes` `linguist-generated` marks and CSS `@import` graphs only, without bundler metadata distinguishing generated previews from generated production bundles; keeping generated groups whose hand-written imports changed avoids hiding edits to hand-written tokens.
 
 ## Acceptance + steps
 

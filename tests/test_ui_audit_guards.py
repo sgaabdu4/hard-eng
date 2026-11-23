@@ -264,3 +264,9 @@ def test_bundle_font_isolation_generated_wrapper_and_text_initial_reset(
         (reset / "src/app.css").read_text() + "/* touch */\n"
     )
     validate_suppressions(reset, "HEAD")
+
+    (reset / "src/app.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 500;\n}\n"
+        "@theme {\n  --text-heading: initial;\n}\n"
+    )
+    assert "--text-heading--font-weight: 500" in refused(reset)

@@ -400,10 +400,6 @@ def _clear_text_token(
         explicit_w.discard(role)
     elif "--" not in token:
         roles.discard(token)
-        weights.pop(token, None)
-        families.pop(token, None)
-        explicit_w.discard(token)
-        explicit_f.discard(token)
 
 
 def _set_role_prop[T](
@@ -507,7 +503,8 @@ def _group_weight_findings(
         design_rel, design_weights, defined_roles, defined_weights
     )
     group_faces = _font_face_ranges(css_texts)
-    by_family, mono_only = group_faces if group_faces[0] else pkg_faces
+    by_family = {**pkg_faces[0], **group_faces[0]}
+    mono_only = group_faces[1] if group_faces[0] else pkg_faces[1]
     role_families = {**design_role_fams, **theme_role_fams}
     for role, weight in sorted(defined_weights.items()):
         if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
