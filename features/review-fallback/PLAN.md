@@ -1,6 +1,6 @@
 # Let reviews fall back to a fresh host session when no other agent can run
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -29,6 +29,7 @@ Authority: Autonomous — the user's message of 2026-11-23 quoted above, and the
 ## Acceptance + steps
 
 - [x] `challenge` falls back to a fresh host session when every other agent fails, records why, and prints it → `tests/test_challenge.py::test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails`
+- [x] `ship` names a fresh host review as such, never as independent → `tests/test_challenge.py::test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails`
 - [x] `challenge` does not call the host when another agent completes → `tests/test_challenge.py::test_challenge_falls_back_to_second_reviewer_when_first_fails`
 - [x] `challenge` records `not done` with every reason when all three fail → `tests/test_challenge.py::test_unavailable_reviewer_records_not_done`
 - [x] `look` falls back to a fresh same-agent session when the other agent exits non-zero → `tests/test_look.py::test_look_falls_back_when_the_other_agent_cannot_run`
@@ -51,10 +52,10 @@ N/A — hooks only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: 2026-11-23 on this branch. Red first: the fresh-host test and the three-reason test failed before the `challenge` change; the look fallback test failed before the `look` change. Focused tests: `tests/test_challenge.py`, `tests/test_look.py`, `tests/test_release_canary.py` and `tests/test_skill_links.py`, 142 passed. The `branch` fixture in `tests/test_challenge.py` puts failing fakes of all three agent CLIs first on PATH, because four tests reached the real `claude` CLI once the fallback existed.
+Result: Passed
+Evidence: 2026-11-23 on this branch. Red first: the fresh-host test and the three-reason test failed before the `challenge` change; the look fallback test failed before the `look` change. Focused tests: `tests/test_challenge.py`, `tests/test_look.py`, `tests/test_release_canary.py` and `tests/test_skill_links.py`, 142 passed. The `branch` fixture in `tests/test_challenge.py` puts failing fakes of all three agent CLIs first on PATH, because four tests reached the real `claude` CLI once the fallback existed. After the review fix: `tests/test_challenge.py`, `tests/test_look.py` and `tests/test_skill_links.py`, 90 passed; the label test failed first on `Independent review by claude: clean`.
 E2E: N/A — no user journey changes.
-Real service: Required — Codex, agy and Claude CLIs: `challenge` and one `look` at the final head; compare each refusal and the fresh Claude verdict with the fakes.
-Retro: Pending
+Real service: Passed — Codex, agy and Claude CLIs, `challenge` and `look` at 3d970a2c. Codex exited 1 with its usage limit on the last stderr line, as the fake's exit 1 and error line. agy exited 2 on the old `-p` form with its message on the last stderr line, the same shape. A fresh Claude session then exited 0 and its last line was the exact `VERDICT: findings`, as the fake's last line. `look`: Codex failed and `skipped` holds its real limit text, read from the JSON error row the fake `turn.failed` row copies; a fresh Claude session opened the invented image and wrote a record with `fresh_same_agent` true and one line per rule. No refusal was caused on purpose; the quota refusals came from the services.
+Retro: (1) User correction: reviews must not block when Codex and agy are out → `tests/test_challenge.py::test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails`. (2) `look` stopped when the other agent exited non-zero → `tests/test_look.py::test_look_falls_back_when_the_other_agent_cannot_run`. (3) Four challenge tests reached the real `claude` CLI → the `branch` fixture in `tests/test_challenge.py` fakes every agent CLI. (4) Review: a fresh host review showed in `ship` as independent → the same fresh-host test checks the `ship` line. (5) Review: the first plan wrote `Real service: Passed` for agy with no agy verdict → None — the agy fix moved to its own branch, held as Draft until a real agy verdict.
 Delivery target: Merge
 Delivery: Pending

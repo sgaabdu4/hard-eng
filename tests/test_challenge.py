@@ -400,6 +400,11 @@ def test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fai
     out = capsys.readouterr().out
     assert f"Independent review by claude at {head}: clean" in out
     assert "Fresh claude session reviewed, because: codex exited 1" in out
+    note = challenge.shipping_note(branch, head)
+    assert note is not None
+    assert note.startswith("Review by a fresh claude session (other agents failed: ")
+    assert "usage limit" in note and "quota reached" in note
+    assert note.endswith("): clean")
 
 
 def test_agy_reviewer_runs_read_only_with_session_settings(

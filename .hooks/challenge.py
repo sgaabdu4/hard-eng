@@ -474,4 +474,6 @@ def shipping_note(root: Path, revision: str) -> str | None:
         )
     if record["outcome"].startswith("not done"):
         return f"independent review {record['outcome']}"
+    if fresh := record.get("fresh"):
+        return f"Review by a fresh {record['reviewer']} session (other agents failed: {fresh}): {record['outcome']}"
     return f"Independent review by {record['reviewer']}: {record['outcome']}"
