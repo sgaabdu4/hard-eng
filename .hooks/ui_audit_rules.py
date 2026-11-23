@@ -30,6 +30,7 @@ YAML_WEIGHT_KEY = re.compile(
     r"""^(?:fontWeight|font_weight|weight)\s*:\s*["']?(\d{3})["']?"""
 )
 YAML_FAMILY_KEY = re.compile(r"""^(?:fontFamily|font_family|family)\s*:\s*(.+)$""")
+THEME_DEFAULT_FLAG = re.compile(r"\bdefault\b", re.IGNORECASE)
 
 
 @dataclass
@@ -375,8 +376,8 @@ def _theme_blocks(css: str) -> list[tuple[str, bool]]:
         while index < len(css) and depth:
             depth += (css[index] == "{") - (css[index] == "}")
             index += 1
-        is_default = bool(re.search(r"\bdefault\b", match.group(0), re.IGNORECASE))
-        blocks.append((css[match.end() : max(match.end(), index - 1)], is_default))
+        body = css[match.end() : max(match.end(), index - 1)]
+        blocks.append((body, bool(THEME_DEFAULT_FLAG.search(match[0]))))
     return blocks
 
 
