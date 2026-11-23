@@ -3,6 +3,8 @@
 import re
 from pathlib import Path, PurePosixPath
 
+from generated_marks import generated_sources
+
 OUTSIDE_STEP = "Keep the app's design tokens inside the app's folder"
 BUILD_FOLDERS = frozenset(("dist", "build", ".next", "out", "coverage", "node_modules"))
 CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
@@ -116,4 +118,9 @@ def outside_imports(
                 and not in_comment(text, offset)
             ):
                 found.append((rel, text.count("\n", 0, offset) + 1, target))
-    return found
+    gone = (
+        generated_sources(root, sorted({rel for rel, _, _ in found}))
+        if found
+        else set()
+    )
+    return [item for item in found if item[0] not in gone]

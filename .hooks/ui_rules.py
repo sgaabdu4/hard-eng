@@ -898,7 +898,6 @@ def _app_state(
 
 
 def _outside_findings(
-    root: Path,
     outside: dict[Path, list[tuple[str, int, str]]],
     caused: dict[Path, set[str]],
     candidates: dict[str, list[tuple[int, str]]],
@@ -907,20 +906,13 @@ def _outside_findings(
     """The import finding of each app whose undefined-token findings it caused, or whose import line was added."""
     found: list[str] = []
     for package, imports in outside.items():
-        added = {
-            (rel, line)
-            for rel, line, _ in imports
-            if any(number == line for number, _ in candidates.get(rel, []))
-        }
-        if caused.get(package, set()) - skipped:
-            added = {(rel, line) for rel, line, _ in imports}
-        listed = [item for item in imports if (item[0], item[1]) in added]
-        gone = (
-            generated_sources(root, sorted({rel for rel, _, _ in listed}))
-            if listed
-            else set()
+        every = bool(caused.get(package, set()) - skipped)
+        found.extend(
+            outside_text(*item)
+            for item in imports
+            if every
+            or any(number == item[1] for number, _ in candidates.get(item[0], []))
         )
-        found.extend(outside_text(*item) for item in listed if item[0] not in gone)
     return found
 
 
@@ -940,7 +932,6 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
         if (
             not name.startswith(UNOWNED)
             and not is_test_path(PurePosixPath(name))
-            and not is_theme_path(name)
             and name.endswith(
                 (*MARKUP_TOKEN_SUFFIXES, *SCRIPT_TOKEN_SUFFIXES, *STYLE_TOKEN_SUFFIXES)
             )
@@ -953,9 +944,11 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
                     root, package, css_entries
                 )
             theme = themes[package]
-            if (theme is not None or name.endswith(JSX_SUFFIXES)) and (
-                root / name
-            ).is_file():
+            if (
+                not is_theme_path(name)
+                and (theme is not None or name.endswith(JSX_SUFFIXES))
+                and (root / name).is_file()
+            ):
                 file_text = (root / name).read_text(errors="replace")
         items = line_findings(name, lines, theme, file_text)
         if (
@@ -970,10 +963,12 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
                 duplicate_sibling_keys(name, file_text, {num for num, _ in lines})
             )
         found[name] = items
-    named = sorted(name for name, items in found.items() if items)
-    skipped = generated_sources(root, named) if named else set()
-    hits = [item for name in named if name not in skipped for item in found[name]]
-    imports = _outside_findings(root, outside, caused, candidates, skipped)
+    looked = {name for name, items in found.items() if items}.union(*caused.values())
+    skipped = generated_sources(root, sorted(looked)) if looked else set()
+    hits = [
+        item for name in sorted(found) if name not in skipped for item in found[name]
+    ]
+    imports = _outside_findings(outside, caused, candidates, skipped)
     return list(
         dict.fromkeys([*imports, *hits, *audit_findings(root, candidates, css_entries)])
     )
