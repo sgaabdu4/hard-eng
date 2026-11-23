@@ -74,7 +74,11 @@ def looked_hashes(root: Path) -> set[str]:
 
 def mockup_problem(entry: str, mockup: str, root: Path) -> str | None:
     image = root / mockup
-    if mockup.startswith(("http://", "https://")) or not image.is_file():
+    if (
+        mockup.startswith(("http://", "https://"))
+        or not image.is_file()
+        or not image.resolve().is_relative_to(root.resolve())
+    ):
         return f"Controls: the mockup in `{entry}` must be an image file in the repository, and `{mockup}` is not"
     import hashlib
 
