@@ -542,6 +542,7 @@ def design_weight_findings(
     """Verify DESIGN.md YAML fontWeight declarations match @theme --text-*--font-weight and loaded @font-face weights."""
     from ui_css_imports import (
         CSS_COMMENT,
+        authored_imports,
         css_entrypoint_orders,
         outside_imports,
         outside_text,
@@ -581,7 +582,9 @@ def design_weight_findings(
         ):
             if hit not in seen:
                 seen.append(hit)
-    if seen and (outside := outside_imports(root, package, texts)):
+    if seen and (
+        outside := authored_imports(root, outside_imports(root, package, texts))
+    ):
         return [outside_text(*item) for item in outside]
     return seen
 

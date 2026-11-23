@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import pytest
+import ui_css_imports
+import ui_rules
 from comments import validate_suppressions
 from test_ui_rules import refused, theme_repo
 
@@ -234,6 +236,55 @@ def test_a_generated_import_does_not_hide_a_design_weight_mismatch(
     message = refused(root)
     assert "fontWeight 700" in message
     assert "from outside" not in message
+
+
+def test_an_unchanged_outside_import_starts_no_generated_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-UI-SOURCE: a valid class beside an old outside import starts no Git process for the import."""
+    looked: list[list[str]] = []
+
+    def lookup(_root: Path, names: list[str]) -> set[str]:
+        looked.append(names)
+        return set()
+
+    monkeypatch.setattr(ui_css_imports, "generated_sources", lookup)
+    root = theme_repo(
+        tmp_path,
+        "",
+        "apps/web/src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="bg-local" />\n',
+        extra={
+            "apps/web/package.json": '{"name":"web"}\n',
+            APP_GLOBALS: '@import "../../../../styles/reset.css";\n@theme {\n  --color-local: #111;\n}\n',
+            "styles/reset.css": "body {\n  margin: 0;\n}\n",
+        },
+    )
+    validate_suppressions(root, "HEAD")
+    assert looked == []
+
+
+def test_a_token_script_change_lists_no_stylesheets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HE-UI-SOURCE: an exempt token file that adds no import starts no stylesheet listing."""
+    listed: list[Path] = []
+
+    def listing(root: Path) -> list[str]:
+        listed.append(root)
+        return []
+
+    monkeypatch.setattr(ui_rules, "_all_css_entries", listing)
+    root = theme_repo(
+        tmp_path,
+        "",
+        "src/tokens.ts",
+        "// base\n",
+        "// base\nexport const a = 'bg-[#FAFAFA]';\n",
+    )
+    validate_suppressions(root, "HEAD")
+    assert listed == []
 
 
 def test_the_same_tokens_inside_the_app_pass(tmp_path: Path) -> None:

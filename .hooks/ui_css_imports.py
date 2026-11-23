@@ -118,9 +118,14 @@ def outside_imports(
                 and not in_comment(text, offset)
             ):
                 found.append((rel, text.count("\n", 0, offset) + 1, target))
-    gone = (
-        generated_sources(root, sorted({rel for rel, _, _ in found}))
-        if found
-        else set()
-    )
-    return [item for item in found if item[0] not in gone]
+    return found
+
+
+def authored_imports(
+    root: Path, imports: list[tuple[str, int, str]]
+) -> list[tuple[str, int, str]]:
+    """The imports of stylesheets that are not generated; the lookup starts a process, so ask only about imports that would be reported."""
+    if not imports:
+        return []
+    gone = generated_sources(root, sorted({rel for rel, _, _ in imports}))
+    return [item for item in imports if item[0] not in gone]
