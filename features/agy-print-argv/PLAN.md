@@ -51,7 +51,7 @@ N/A — hooks only; no visible UI.
 Result: Pending
 Evidence: Pending
 E2E: N/A — no user journey changes.
-Real service: Pending
+Real service: Required — agy 1.5.15: `challenge` on this branch, and one `look` run on an invented image while Codex is out of quota
 Retro: Pending
 Delivery target: Merge
 Delivery: Pending
