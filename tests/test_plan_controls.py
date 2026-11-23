@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import commit, init
+from conftest import commit, git, init
 from plans import validate_plan
 
 MOCKUP = b"mockup-image-bytes"
@@ -150,3 +150,18 @@ def test_a_mockup_nobody_looked_at_is_still_refused_in_the_push_snapshot(
     committed_plan(project, visual_plan)
     with pytest.raises(ValueError, match="no `look` record"):
         plan_in_push_snapshot(project)
+
+
+def test_a_look_record_of_a_linked_worktree_counts_in_the_push_snapshot(
+    project: Path, visual_plan: str
+) -> None:
+    committed_plan(project, visual_plan)
+    linked = project.parent / "linked"
+    git(project, "worktree", "add", "-q", "--detach", str(linked))
+    folder = linked / git(linked, "rev-parse", "--git-path", "hard-eng/look").strip()
+    folder.mkdir(parents=True)
+    digest = hashlib.sha256(MOCKUP).hexdigest()
+    (folder / "abc.json").write_text(
+        json.dumps({"images": [{"sha256": digest, "read": True}]})
+    )
+    assert plan_in_push_snapshot(project) == "Complete"
