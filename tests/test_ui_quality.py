@@ -824,6 +824,7 @@ UI_MODULES = (
     "plan_controls",
     "ui_whole",
     "ui_library",
+    "ui_css_imports",
     "ui_raw",
     "ui_exempt",
     "ui_tokens",

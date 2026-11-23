@@ -540,7 +540,8 @@ def design_weight_findings(
     root: Path, package: Path, css_entries: list[str], changed: set[str]
 ) -> list[str]:
     """Verify DESIGN.md YAML fontWeight declarations match @theme --text-*--font-weight and loaded @font-face weights."""
-    from ui_rules import CSS_COMMENT, _css_entrypoint_orders, _css_files
+    from ui_css_imports import css_entrypoint_orders
+    from ui_rules import CSS_COMMENT, _css_files, _outside_imports
 
     design_path = (
         package / "DESIGN.md"
@@ -556,11 +557,13 @@ def design_weight_findings(
     css_rels = {path.relative_to(root).as_posix() for path in files}
     if design_rel not in changed and not (css_rels & changed):
         return []
+    if outside := _outside_imports(root, package, css_entries):
+        return outside
     text_by_path = {
         path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
     }
     live_groups = _live_css_groups(
-        root, _css_entrypoint_orders(files, text_by_path), changed
+        root, css_entrypoint_orders(files, text_by_path), changed
     )
     live_paths = list(dict.fromkeys(path for group in live_groups for path in group))
     pkg_faces = _font_face_ranges([text_by_path[path] for path in live_paths])
