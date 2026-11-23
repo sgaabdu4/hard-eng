@@ -11,6 +11,7 @@ from project_files import GIT_LISTING
 from ui_css_imports import (
     BUILD_FOLDERS,
     CSS_COMMENT,
+    authored_imports,
     css_entrypoint_orders,
     outside_imports,
     outside_text,
@@ -897,8 +898,16 @@ def _app_state(
     return _load_theme(package, texts), outside_imports(root, package, texts)
 
 
+def _adds_import(name: str, lines: list[tuple[int, str]]) -> bool:
+    return name.endswith(STYLE_TOKEN_SUFFIXES) and any(
+        "@import" in text for _, text in lines
+    )
+
+
 def _outside_findings(
+    root: Path,
     outside: dict[Path, list[tuple[str, int, str]]],
+    live: dict[Path, list[tuple[str, int, str]]],
     caused: dict[Path, set[str]],
     candidates: dict[str, list[tuple[int, str]]],
     skipped: set[str],
@@ -907,12 +916,17 @@ def _outside_findings(
     found: list[str] = []
     for package, imports in outside.items():
         every = bool(caused.get(package, set()) - skipped)
-        found.extend(
-            outside_text(*item)
+        reported = [
+            item
             for item in imports
             if every
             or any(number == item[1] for number, _ in candidates.get(item[0], []))
-        )
+        ]
+        if package in live:
+            reported = [item for item in reported if item in live[package]]
+        else:
+            reported = authored_imports(root, reported)
+        found.extend(outside_text(*item) for item in reported)
     return found
 
 
@@ -923,6 +937,7 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
     css_entries: list[str] | None = None
     themes: dict[Path, ThemeTokens | None] = {}
     outside: dict[Path, list[tuple[str, int, str]]] = {}
+    live: dict[Path, list[tuple[str, int, str]]] = {}
     caused: dict[Path, set[str]] = {}
     found: dict[str, list[str]] = {}
     for name, lines in candidates.items():
@@ -935,6 +950,7 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
             and name.endswith(
                 (*MARKUP_TOKEN_SUFFIXES, *SCRIPT_TOKEN_SUFFIXES, *STYLE_TOKEN_SUFFIXES)
             )
+            and (not is_theme_path(name) or _adds_import(name, lines))
         ):
             package = package_dir(root, name)
             if css_entries is None:
@@ -956,8 +972,11 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
             and outside[package]
             and any(UNDEFINED_TOKEN in item for item in items)
         ):
-            items = [item for item in items if UNDEFINED_TOKEN not in item]
-            caused.setdefault(package, set()).add(name)
+            if package not in live:
+                live[package] = authored_imports(root, outside[package])
+            if live[package]:
+                items = [item for item in items if UNDEFINED_TOKEN not in item]
+                caused.setdefault(package, set()).add(name)
         if file_text is not None and name.endswith(JSX_SUFFIXES):
             items.extend(
                 duplicate_sibling_keys(name, file_text, {num for num, _ in lines})
@@ -968,7 +987,7 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
     hits = [
         item for name in sorted(found) if name not in skipped for item in found[name]
     ]
-    imports = _outside_findings(outside, caused, candidates, skipped)
+    imports = _outside_findings(root, outside, live, caused, candidates, skipped)
     return list(
         dict.fromkeys([*imports, *hits, *audit_findings(root, candidates, css_entries)])
     )
