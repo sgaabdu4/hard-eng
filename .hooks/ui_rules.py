@@ -8,7 +8,14 @@ from pathlib import Path, PurePosixPath
 from generated_marks import generated_sources
 from plans import _is_test as is_test_path
 from project_files import GIT_LISTING
-from ui_css_imports import css_entrypoint_orders, local_imports
+from ui_css_imports import (
+    BUILD_FOLDERS,
+    CSS_COMMENT,
+    css_entrypoint_orders,
+    outside_imports,
+    outside_text,
+    package_dir,
+)
 
 UNOWNED = (".hooks/", ".agents/", ".claude/")
 THEME_WORDS = frozenset(
@@ -42,11 +49,9 @@ COLOUR_STEP = (
 TOKEN_STEP = (
     "Use an existing @theme colour token or define --color-<name> in a CSS @theme block"
 )
-OUTSIDE_STEP = "Keep the app's design tokens inside the app's folder"
 MARKUP_TOKEN_SUFFIXES = (".tsx", ".jsx", ".html", ".vue", ".svelte", ".astro")
 SCRIPT_TOKEN_SUFFIXES = (".ts", ".js")
 STYLE_TOKEN_SUFFIXES = (".css", ".scss", ".less")
-BUILD_FOLDERS = frozenset(("dist", "build", ".next", "out", "coverage", "node_modules"))
 SAFE_PLUGINS = frozenset(
     (
         "@tailwindcss/typography",
@@ -238,7 +243,6 @@ BUILTIN_STROKE = frozenset(
         "opacity",
     )
 )
-CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 THEME_BLOCK = re.compile(r"@theme\b[^{]*\{")
 PLUGIN_CALL = re.compile(r"""@plugin\s+["']([^"']+)["']""")
 CONFIG_CALL = re.compile(r"@config\b")
@@ -317,14 +321,6 @@ def _theme_bodies(css: str) -> list[str]:
     return [body for body, _ in _theme_blocks(css)]
 
 
-def _package_dir(root: Path, name: str) -> Path:
-    for parent in PurePosixPath(name).parents:
-        candidate = root / parent
-        if (candidate / "package.json").is_file():
-            return candidate
-    return root
-
-
 def _all_css_entries(root: Path) -> list[str]:
     done = subprocess.run(
         [
@@ -357,7 +353,7 @@ def _css_files(
             entry.startswith(UNOWNED)
             or is_test_path(PurePosixPath(entry))
             or BUILD_FOLDERS.intersection(parts)
-            or _package_dir(root, entry) != package
+            or package_dir(root, entry) != package
         ):
             continue
         path = root / entry
@@ -375,45 +371,6 @@ def _has_external_theme(package: Path, css_texts: list[str]) -> bool:
         if any(plugin not in SAFE_PLUGINS for plugin in PLUGIN_CALL.findall(text)):
             return True
     return False
-
-
-def _outside_target(root: Path, package: Path, path: Path, target: str) -> bool:
-    for suffix in ("", ".css"):
-        candidate = (path.parent / (target + suffix)).resolve()
-        if candidate.suffix == ".css" and candidate.is_file():
-            base = root.resolve()
-            if not candidate.is_relative_to(base):
-                return True
-            rel = candidate.relative_to(base)
-            return (
-                not BUILD_FOLDERS.intersection(rel.parts)
-                and _package_dir(root, rel.as_posix()) != package
-            )
-    return False
-
-
-def _in_comment(text: str, offset: int) -> bool:
-    return any(hit.start() <= offset < hit.end() for hit in CSS_COMMENT.finditer(text))
-
-
-def _outside_imports(root: Path, package: Path, texts: dict[Path, str]) -> list[str]:
-    """One finding for each @import in the app's CSS that names an existing CSS file outside the app."""
-    found: list[str] = []
-    for path, text in texts.items():
-        if "@import" not in text:
-            continue
-        rel = path.relative_to(root).as_posix()
-        for offset, target in local_imports(text):
-            if (
-                (".." in target or target.startswith("/"))
-                and _outside_target(root, package, path, target)
-                and not _in_comment(text, offset)
-            ):
-                line = text.count("\n", 0, offset) + 1
-                found.append(
-                    f"{rel}:{line}: imports {target} from outside this app. {OUTSIDE_STEP}"
-                )
-    return found
 
 
 def _collect_theme_vars(
@@ -927,17 +884,59 @@ def line_findings(
     return found
 
 
+UNDEFINED_TOKEN = "undefined Tailwind theme token"
+
+
+def _app_state(
+    root: Path, package: Path, css_entries: list[str]
+) -> tuple[ThemeTokens | None, list[tuple[str, int, str]]]:
+    texts = {
+        path: path.read_text(errors="replace")
+        for path in _css_files(root, package, css_entries)
+    }
+    return _load_theme(package, texts), outside_imports(root, package, texts)
+
+
+def _outside_findings(
+    root: Path,
+    outside: dict[Path, list[tuple[str, int, str]]],
+    caused: dict[Path, set[str]],
+    candidates: dict[str, list[tuple[int, str]]],
+    skipped: set[str],
+) -> list[str]:
+    """The import finding of each app whose undefined-token findings it caused, or whose import line was added."""
+    found: list[str] = []
+    for package, imports in outside.items():
+        added = {
+            (rel, line)
+            for rel, line, _ in imports
+            if any(number == line for number, _ in candidates.get(rel, []))
+        }
+        if caused.get(package, set()) - skipped:
+            added = {(rel, line) for rel, line, _ in imports}
+        listed = [item for item in imports if (item[0], item[1]) in added]
+        gone = (
+            generated_sources(root, sorted({rel for rel, _, _ in listed}))
+            if listed
+            else set()
+        )
+        found.extend(outside_text(*item) for item in listed if item[0] not in gone)
+    return found
+
+
 def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> list[str]:
     """Findings for the marked lines of each UI file; only a file with a finding is looked up as generated."""
     from ui_audit_rules import JSX_SUFFIXES, audit_findings, duplicate_sibling_keys
 
     css_entries: list[str] | None = None
     themes: dict[Path, ThemeTokens | None] = {}
-    outside: dict[Path, list[str]] = {}
+    outside: dict[Path, list[tuple[str, int, str]]] = {}
+    caused: dict[Path, set[str]] = {}
     found: dict[str, list[str]] = {}
     for name, lines in candidates.items():
         theme: ThemeTokens | None = None
         file_text: str | None = None
+        package: Path | None = None
         if (
             not name.startswith(UNOWNED)
             and not is_test_path(PurePosixPath(name))
@@ -946,17 +945,12 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
                 (*MARKUP_TOKEN_SUFFIXES, *SCRIPT_TOKEN_SUFFIXES, *STYLE_TOKEN_SUFFIXES)
             )
         ):
+            package = package_dir(root, name)
             if css_entries is None:
                 css_entries = _all_css_entries(root)
-            package = _package_dir(root, name)
             if package not in themes:
-                texts = {
-                    path: path.read_text(errors="replace")
-                    for path in _css_files(root, package, css_entries)
-                }
-                outside[package] = _outside_imports(root, package, texts)
-                themes[package] = (
-                    None if outside[package] else _load_theme(package, texts)
+                themes[package], outside[package] = _app_state(
+                    root, package, css_entries
                 )
             theme = themes[package]
             if (theme is not None or name.endswith(JSX_SUFFIXES)) and (
@@ -964,6 +958,13 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
             ).is_file():
                 file_text = (root / name).read_text(errors="replace")
         items = line_findings(name, lines, theme, file_text)
+        if (
+            package in outside
+            and outside[package]
+            and any(UNDEFINED_TOKEN in item for item in items)
+        ):
+            items = [item for item in items if UNDEFINED_TOKEN not in item]
+            caused.setdefault(package, set()).add(name)
         if file_text is not None and name.endswith(JSX_SUFFIXES):
             items.extend(
                 duplicate_sibling_keys(name, file_text, {num for num, _ in lines})
@@ -972,7 +973,7 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
     named = sorted(name for name, items in found.items() if items)
     skipped = generated_sources(root, named) if named else set()
     hits = [item for name in named if name not in skipped for item in found[name]]
-    imports = [item for items in outside.values() for item in items]
+    imports = _outside_findings(root, outside, caused, candidates, skipped)
     return list(
         dict.fromkeys([*imports, *hits, *audit_findings(root, candidates, css_entries)])
     )

@@ -25,6 +25,20 @@ def outside_repo(tmp_path: Path, globals_css: str, tokens: dict[str, str]) -> Pa
     )
 
 
+def import_added_repo(
+    tmp_path: Path, globals_css: str, files: dict[str, str] | None = None
+) -> Path:
+    """An app whose stylesheet gains the import line and nothing else."""
+    return theme_repo(
+        tmp_path,
+        "",
+        APP_GLOBALS,
+        '@import "tailwindcss";\n',
+        globals_css,
+        extra={"apps/web/package.json": '{"name":"web"}\n', **(files or {})},
+    )
+
+
 def test_a_token_file_outside_the_app_is_one_finding_at_its_import(
     tmp_path: Path,
 ) -> None:
@@ -108,8 +122,8 @@ def test_an_outside_import_replaces_the_design_weight_finding_it_causes(
 def test_an_outside_import_is_a_finding_whatever_the_app_theme_holds(
     tmp_path: Path, globals_css: str, files: dict[str, str]
 ) -> None:
-    """HE-UI-SOURCE: the import is refused with no @theme in the app, with an external theme and when the outside file holds no token."""
-    message = refused(outside_repo(tmp_path, globals_css, files))
+    """HE-UI-SOURCE: an added import is refused with no @theme in the app, with an external theme and when the outside file holds no token."""
+    message = refused(import_added_repo(tmp_path, globals_css, files))
     assert f"{APP_GLOBALS}:1: imports ../../../../styles/" in message
 
 
@@ -117,12 +131,44 @@ def test_a_relative_import_into_node_modules_is_not_outside_the_app(
     tmp_path: Path,
 ) -> None:
     """HE-UI-SOURCE: a package folder inside the app's own node_modules is not another app."""
-    root = outside_repo(
+    root = import_added_repo(
         tmp_path,
         '@import "../../node_modules/ui/theme.css";\n',
         {
             "apps/web/node_modules/ui/package.json": '{"name":"ui"}\n',
             "apps/web/node_modules/ui/theme.css": OUTSIDE_TOKENS,
+        },
+    )
+    validate_suppressions(root, "HEAD")
+
+
+def test_an_old_outside_import_does_not_fail_a_class_the_app_defines(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: a line that existed before the change is not flagged when the added class is valid."""
+    root = theme_repo(
+        tmp_path,
+        "",
+        "apps/web/src/Card.tsx",
+        "// base\n",
+        '// base\n<p className="bg-local" />\n',
+        extra={
+            "apps/web/package.json": '{"name":"web"}\n',
+            APP_GLOBALS: '@import "../../../../styles/tokens.css";\n@theme {\n  --color-local: #111;\n}\n',
+            "styles/tokens.css": OUTSIDE_TOKENS,
+        },
+    )
+    validate_suppressions(root, "HEAD")
+
+
+def test_a_generated_stylesheet_is_not_judged_for_its_import(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: generated files are exempt, as for every other finding."""
+    root = import_added_repo(
+        tmp_path,
+        '@import "../../../../styles/tokens.css";\n',
+        {
+            "styles/tokens.css": OUTSIDE_TOKENS,
+            ".gitattributes": f"{APP_GLOBALS} linguist-generated=true\n",
         },
     )
     validate_suppressions(root, "HEAD")

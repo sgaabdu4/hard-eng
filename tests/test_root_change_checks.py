@@ -30,6 +30,7 @@ def project(repository: Path) -> list[Group]:
         ("AGENTS.md", [SECRETS, BUDGET], "false"),
         (".agents/models.json", [SECRETS, BUDGET], "false"),
         ("README.md", [SECRETS], "true"),
+        (".agents/skills/x/SKILL.md", [SECRETS], "true"),
         ("CLAUDE.md", [SECRETS], "true"),
         ("docs/notes.md", [SECRETS], "true"),
     ],

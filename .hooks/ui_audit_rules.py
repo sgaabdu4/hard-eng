@@ -540,8 +540,13 @@ def design_weight_findings(
     root: Path, package: Path, css_entries: list[str], changed: set[str]
 ) -> list[str]:
     """Verify DESIGN.md YAML fontWeight declarations match @theme --text-*--font-weight and loaded @font-face weights."""
-    from ui_css_imports import css_entrypoint_orders
-    from ui_rules import CSS_COMMENT, _css_files, _outside_imports
+    from ui_css_imports import (
+        CSS_COMMENT,
+        css_entrypoint_orders,
+        outside_imports,
+        outside_text,
+    )
+    from ui_rules import _css_files
 
     design_path = (
         package / "DESIGN.md"
@@ -558,8 +563,6 @@ def design_weight_findings(
     if design_rel not in changed and not (css_rels & changed):
         return []
     texts = {path: path.read_text(errors="replace") for path in files}
-    if outside := _outside_imports(root, package, texts):
-        return outside
     text_by_path = {path: CSS_COMMENT.sub("", text) for path, text in texts.items()}
     live_groups = _live_css_groups(
         root, css_entrypoint_orders(files, text_by_path), changed
@@ -578,6 +581,8 @@ def design_weight_findings(
         ):
             if hit not in seen:
                 seen.append(hit)
+    if seen and (outside := outside_imports(root, package, texts)):
+        return [outside_text(*item) for item in outside]
     return seen
 
 
@@ -586,7 +591,8 @@ def audit_findings(
     candidates: dict[str, list[tuple[int, str]]],
     css_entries: list[str] | None,
 ) -> list[str]:
-    from ui_rules import STYLE_TOKEN_SUFFIXES, UNOWNED, _all_css_entries, _package_dir
+    from ui_css_imports import package_dir
+    from ui_rules import STYLE_TOKEN_SUFFIXES, UNOWNED, _all_css_entries
 
     relevant = [
         name
@@ -609,10 +615,10 @@ def audit_findings(
         css_entries = _all_css_entries(root)
     packages: set[Path] = set()
     for name in live:
-        pkg = _package_dir(root, name)
+        pkg = package_dir(root, name)
         packages.add(pkg)
         if name == "DESIGN.md":
-            packages.update(_package_dir(root, entry) for entry in css_entries)
+            packages.update(package_dir(root, entry) for entry in css_entries)
     return [
         hit
         for package in sorted(packages)
