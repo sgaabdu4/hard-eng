@@ -26,6 +26,12 @@ from gate_config import (
 from project_setup import adapt_package, dependency_command
 from test_setup import repository, run_setup, write_fixture_pubspec
 
+PROFILE = (
+    Path(__file__).parents[1]
+    / ".agents/skills/building-flutter-apps/references/analysis_options.yaml"
+)
+CURRENT_LINTS = yaml.safe_load(PROFILE.read_text())["plugins"]["flutter_skill_lints"]
+
 
 def dart_format_command(installer: ModuleType) -> list[str]:
     return json.loads(
@@ -142,7 +148,10 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
     options["linter"]["rules"].update({"no_dynamic_casts": True, "no_raw_types": True})
     options["analyzer"]["exclude"] = excludes
     options["linter"]["rules"] = ["avoid_print", *options["linter"]["rules"]]
-    options["plugins"] = {"riverpod_lint": "3.1.9", "flutter_skill_lints": "^0.15.0"}
+    options["plugins"] = {
+        "riverpod_lint": "3.1.9",
+        "flutter_skill_lints": CURRENT_LINTS,
+    }
     path = tmp_path / "analysis_options.yaml"
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
@@ -201,7 +210,7 @@ def test_dart_setup_preserves_generated_excludes_and_native_yaml_list(
         ("flutter_skill_lints", "0.13.0", True),
         ("flutter_skill_lints", "^0.13.4", True),
         ("flutter_skill_lints", "^0.14.0", True),
-        ("flutter_skill_lints", "^0.15.0", False),
+        ("flutter_skill_lints", CURRENT_LINTS, False),
         ("flutter_skill_lints", ">=0.11.0 <0.12.0", False),
         ("flutter_skill_lints", {"path": "../custom-plugin"}, False),
         (
@@ -799,7 +808,7 @@ def test_a_flutter_package_without_flutter_skill_lints_is_refused(
     with pytest.raises(ValueError, match=r"flutter_skill_lints"):
         runner.validate_typing(tmp_path, "dart", ["lib"])
 
-    options["plugins"] = {"flutter_skill_lints": "^0.15.0"}
+    options["plugins"] = {"flutter_skill_lints": CURRENT_LINTS}
     path.write_text(yaml.safe_dump(options, sort_keys=False))
     runner.validate_typing(tmp_path, "dart", ["lib"])
 
@@ -847,6 +856,6 @@ def test_dart_setup_migrates_locally_included_plugin_profile(
         (tmp_path / name).write_text(content)
     assert (
         yaml.safe_load(shared.read_text())["plugins"]["flutter_skill_lints"]
-        == "^0.15.0"
+        == CURRENT_LINTS
     )
     runner.validate_typing(package, "dart", ["lib"])

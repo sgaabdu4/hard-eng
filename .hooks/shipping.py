@@ -33,6 +33,7 @@ ShippingPolicy = TypedDict(
         "base": str,
         "checks": list[str],
         "ui_paths": list[str],
+        "ui_library": list[str],
         "ci_seconds": float,
         "pre_push_seconds": float,
         "pre_push_mutation_seconds": float,
@@ -79,6 +80,7 @@ _CONFIG_KEYS = {
 _OPTIONAL_KEYS = {
     "pre_push_mutation_seconds",
     "pre_push_checks",
+    "ui_library",
 }  # older policies lack them
 _DELIVERY_KEYS = {"name", "command"}
 _BRANCH_PARTS = re.compile(r"^[A-Za-z0-9._/-]+$")
@@ -303,6 +305,7 @@ def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
         "base": base,
         "checks": _check_names(raw["checks"]),
         "ui_paths": _strings(raw["ui_paths"], "shipping ui_paths"),
+        "ui_library": _strings(raw.get("ui_library", []), "shipping ui_library"),
         "ci_seconds": _number(raw["ci_seconds"], "shipping ci_seconds"),
         "pre_push_seconds": _number(
             raw["pre_push_seconds"], "shipping pre_push_seconds"

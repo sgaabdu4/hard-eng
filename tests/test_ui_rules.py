@@ -3,7 +3,7 @@
 import json
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 import ui_rules
@@ -166,56 +166,63 @@ def test_an_added_swift_colour_literal_is_refused(tmp_path: Path, line: str) -> 
     assert "Sources/App/Card.swift:2:" in message
 
 
-@pytest.mark.parametrize(
-    ("name", "line"),
-    [
-        ("lib/core/theme/app_colors.dart", "const c = Color(0xFF112233);"),
-        ("lib/core/theme/app_theme.dart", "final c = Colors.red;"),
-        ("src/tokens.ts", "export const a = 'bg-[#FAFAFA]';"),
-        ("tailwind.config.ts", "export const a = 'bg-[#FAFAFA]';"),
-        ("Sources/App/Palette.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
-        ("src/Colour/page.css", "a { color: #fff; } .x { @apply bg-[#fff]; }"),
-        ("Sources/App/AppTheme.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
-        ("src/colorPalette.ts", "export const a = 'bg-[#FAFAFA]';"),
-        ("lib/app_colors.dart", "const c = Color(0xFF112233);"),
-        ("Sources/App/Color+Brand.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
-        (
-            "Sources/App/UIColor+App.swift",
-            "let c = UIColor(red: 1, green: 0, blue: 0, alpha: 1)",
-        ),
-        ("Sources/App/View+Theme.swift", "let c = Color(red: 1, green: 0, blue: 0)"),
-        (
-            "Sources/App/Color+Extensions.swift",
-            "let c = Color(red: 1, green: 0, blue: 0)",
-        ),
-        ("src/design/themes/dark.css", "a { color: #fff; } .x { @apply bg-[#fff]; }"),
-    ],
+THEME_CASES = (
+    Path(__file__).parents[1]
+    / ".agents/skill-sources/building-flutter-apps/tool/test_fixtures/theme_paths.json"
 )
-def test_a_colour_in_a_theme_or_token_file_passes(
-    tmp_path: Path, name: str, line: str
-) -> None:
-    root = change(tmp_path, name, "// base\n", f"// base\n{line}\n")
-    validate_suppressions(root, "HEAD")
+COLOUR_LINES = {
+    ".dart": "const c = Color(0xFF112233);",
+    ".swift": "let c = Color(red: 1, green: 0, blue: 0)",
+}
+CLASS_COLOUR = '<i className="bg-[#fff]" />'
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "src/auth/TokenInput.tsx",
-        "src/components/ThemeToggle.tsx",
-        "src/colorful/Hero.tsx",
-        "Sources/App/ColorPicker.swift",
-        "Sources/App/View+Helpers.swift",
-        "Sources/App/ColorPicker+Layout.swift",
-    ],
-)
-def test_a_name_that_only_holds_a_theme_word_is_still_judged(
-    tmp_path: Path, name: str
-) -> None:
-    """HE-UI-SOURCE: the theme path rule matches whole words, so a word inside a longer name gains no pass."""
-    line = '<i className="bg-[#fff]" /> Color(red: 1, green: 0, blue: 0)'
-    root = change(tmp_path, name, "// base\n", f"// base\n{line}\n")
-    assert f"{name}:2:" in refused(root)
+def theme_cases() -> list[dict[str, object]]:
+    assert THEME_CASES.is_file(), (
+        f"the Flutter skill submodule holds no case file at {THEME_CASES}; "
+        "run `git submodule update --init`"
+    )
+    return json.loads(THEME_CASES.read_text())["cases"]
+
+
+def judged_paths(theme: bool) -> list[str]:
+    return [
+        str(case["path"])
+        for case in theme_cases()
+        if case["theme"] is theme and str(case["path"]).endswith(UI_SUFFIXES)
+    ]
+
+
+def test_theme_path_cases_from_the_flutter_skill() -> None:
+    """HE-UI-SOURCE: is_theme_path answers each row of the Flutter skill's case file, which the lint plugin's theme-file rule also reads."""
+    cases = theme_cases()
+    assert cases
+    wrong = [
+        str(case["path"])
+        for case in cases
+        if ui_rules.is_theme_path(str(case["path"])) is not case["theme"]
+    ]
+    assert wrong == []
+
+
+def test_a_colour_in_a_theme_or_token_file_passes(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: a colour typed in a file that the case file marks as theme or token is not refused."""
+    names = judged_paths(True)
+    assert names
+    for number, name in enumerate(names):
+        line = COLOUR_LINES.get(PurePosixPath(name).suffix, CLASS_COLOUR)
+        root = change(tmp_path / str(number), name, "// base\n", f"// base\n{line}\n")
+        validate_suppressions(root, "HEAD")
+
+
+def test_a_name_that_only_holds_a_theme_word_is_still_judged(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: a UI file that the case file marks as no theme file is judged, so a word inside a longer name gains no pass."""
+    names = judged_paths(False)
+    assert names
+    for number, name in enumerate(names):
+        line = COLOUR_LINES.get(PurePosixPath(name).suffix, CLASS_COLOUR)
+        root = change(tmp_path / str(number), name, "// base\n", f"// base\n{line}\n")
+        assert f"{name}:2:" in refused(root), name
 
 
 def test_the_colour_step_names_the_paths_that_pass_as_the_code_does(

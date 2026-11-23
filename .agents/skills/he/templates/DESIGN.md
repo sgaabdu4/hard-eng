@@ -1,6 +1,6 @@
 <!-- Use only when DESIGN.md is missing. Study the running interface and its code.
 Fill the relevant prompts; omit visual sections for a CLI/backend-only repository.
-Add YAML tokens only when actual token values are established in the project. -->
+Add YAML tokens only when actual token values are established in the project. Front matter groups: colors:, spacing:, rounded: and typography: (each role with fontFamily and fontSize). The token files must hold the same values. -->
 
 # [TODO: Product name] Design
 
@@ -38,6 +38,7 @@ Add YAML tokens only when actual token values are established in the project. --
 product, replace this list with its actual interface and state that visual
 Atomic Design does not apply. Do not create components just to fill a level.]
 
+- Library index: `UI-LIBRARY.md` lists each shared part and its use.
 - Atoms: [TODO: Basic elements and their existing implementations.]
 - Molecules: [TODO: Small combinations of elements.]
 - Organisms: [TODO: Larger interface sections.]

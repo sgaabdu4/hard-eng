@@ -61,13 +61,16 @@ def add_shard_option(parser: ArgumentParser) -> ArgumentParser:
     return parser
 
 
-def add_walls_command(add_parser: Callable[..., ArgumentParser]) -> None:
+def add_text_commands(add_parser: Callable[..., ArgumentParser]) -> None:
     walls = add_parser(
         "text-walls",
         help="List screen text blocks over the caps, or judge server strings with --stdin",
     )
     walls.add_argument("paths", nargs="*")
     walls.add_argument("--stdin", action="store_true")
+    add_parser(
+        "ui-library", help="Write UI-LIBRARY.md from the ui_library folders"
+    ).add_argument("--write", action="store_true", required=True)
 
 
 def add_scope_options(checks: ArgumentParser) -> None:

@@ -90,6 +90,9 @@ SHORT_DURATION = re.compile(
 CLOSERS = {"(": ")", "[": "]", "{": "}"}
 CONTEXT_LINES = 3
 
+# A per-rule wall clock fails a slow or loaded machine; the whole-scan limit still ends a runaway scan.
+RULE_CLOCK = "0"
+
 
 def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, object]]:
     command = managed_command(
@@ -97,7 +100,7 @@ def findings(root: Path, targets: list[str], timeout: float) -> list[dict[str, o
     )
     try:
         result = subprocess.run(
-            [*command, "--quiet", "--json", "--timeout", "60", *targets],
+            [*command, "--quiet", "--json", "--timeout", RULE_CLOCK, *targets],
             cwd=root,
             capture_output=True,
             text=True,
@@ -357,7 +360,7 @@ def installed_paths(root: Path) -> list[str]:
 def semgrep_options(
     root: Path, group: Group, gate: Gate, command: list[str]
 ) -> list[str]:
-    """Add Hard Eng's rules to security scans, skip generated files, limit each rule to 60 s."""
+    """Add Hard Eng's rules to security scans, skip generated files, give each rule no clock of its own."""
     directory = root / group["path"]
     if gate.get("role") == "security" and "p/python" in command:
         index = command.index("p/python") + 1
@@ -388,6 +391,10 @@ def semgrep_options(
         rest = [part for part in command[index + 1 :] if part != "--strict"]
         command = [*command[: index + 1], *rules, *rest]
     if "--timeout" not in command:
-        # Semgrep's 5 s per-rule limit times out under parallel load, and the report check then fails the gate.
-        command = [*command[: index + 1], "--timeout", "60", *command[index + 1 :]]
+        command = [
+            *command[: index + 1],
+            "--timeout",
+            RULE_CLOCK,
+            *command[index + 1 :],
+        ]
     return command

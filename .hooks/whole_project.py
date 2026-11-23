@@ -23,14 +23,17 @@ from comments import (
     security_hits,
 )
 from fallow_settings import SETTINGS_FILES, settings_switch_offs
+from flutter_screens import flutter_packages
 from generated_marks import copy_findings, generated_sources
 from gitleaks_rules import DEFAULT_RULE_IDS
 from gitleaks_scan import config_variable_hits
+from plans import _is_test as is_test_path
 from project_files import GIT_LISTING
 from ruff_settings import SETTINGS_FILES as RUFF_FILES
 from ruff_settings import settings_switch_offs as ruff_switch_offs
 from rust_settings import CLIPPY_FILES, rust_file_hits
 from shellcheck_rc import rc_hits
+from shipping import ShippingError, load_policy
 from workflow_blocking import hard_eng_workflow, workflow_hits
 
 LINE_IGNORES = {".gitleaksignore", ".semgrepignore"}
@@ -64,6 +67,10 @@ MARKER_HEADER = (
 MARKDOWN_HEADER = (
     "HE-NAMED-MARKDOWN: A markdown file that no other tracked file names has no reader: "
     "fix it at the cause, so name it where a reader opens it or delete it; never suppress it."
+)
+UI_HEADER = (
+    "HE-UI-SOURCE: A screen takes its colours, sizes and base elements from the token files "
+    "and the shared library: use a token or a library part, never a typed value; never suppress it."
 )
 MARKDOWN_NAME = re.compile(r"[\w.+-]+\.md\b")
 NEEDS_NO_LINK = {
@@ -328,6 +335,81 @@ def text_files(root: Path, names: list[str] | None = None) -> dict[str, str]:
     return texts
 
 
+UI_FILE_SUFFIXES = (".tsx", ".jsx", ".vue", ".svelte", ".astro") + (
+    ".css",
+    ".scss",
+    ".less",
+    ".html",
+)
+JSX_OPEN = re.compile(
+    r"(?:^|[=(?:]|return|=>|&&|\|\|)\s*<[A-Za-z][\w.]*\b[^<>]*>", re.MULTILINE
+)
+JSX_CLOSE = re.compile(r"</[A-Za-z][\w.]*>|/>")
+WIDGET_WORD = re.compile(r"Widget\b")
+HTML_TEMPLATE = re.compile(r"\b(?:html|svg)\s*`\s*<")
+SWIFT_UI = re.compile(r"^import\s+(?:SwiftUI|UIKit)\b", re.MULTILINE)
+COMPOSE = re.compile(r"@Composable\b|\bandroidx\.compose\b")
+ANDROID_LAYOUT = re.compile(r"(?:^|/)res/layout[\w-]*/[^/]+\.xml$")
+FLUTTER_SDK = re.compile(r"^\s*sdk:\s*flutter\b", re.MULTILINE)
+
+
+def holds_ui(name: str, text: str, flutter_bases: set[str]) -> bool:
+    if name.endswith(UI_FILE_SUFFIXES) or ANDROID_LAYOUT.search(name):
+        return True
+    if name.endswith((".js", ".ts")):
+        return bool(
+            (JSX_OPEN.search(text) and JSX_CLOSE.search(text))
+            or HTML_TEMPLATE.search(text)
+        )
+    if name.endswith(".swift"):
+        return bool(SWIFT_UI.search(text))
+    if name.endswith(".kt"):
+        return bool(COMPOSE.search(text))
+    return (
+        name.endswith(".dart")
+        and bool(WIDGET_WORD.search(text))
+        and any(name.startswith(f"{base}lib/") for base in flutter_bases)
+    )
+
+
+def first_ui_file(root: Path, texts: dict[str, str]) -> str | None:
+    """The first UI source file of a project with no ui_paths that the exemption reader does not exempt, read from the file list the pass already holds."""
+    bases = set(flutter_packages(root)) | {
+        name.removesuffix("pubspec.yaml")
+        for name, text in texts.items()
+        if name.endswith("pubspec.yaml") and FLUTTER_SDK.search(text)
+    }
+    names = [
+        name
+        for name, text in texts.items()
+        if not name.startswith(UNOWNED)
+        and not is_test_path(PurePosixPath(name))
+        and holds_ui(name, text, bases)
+    ]
+    if not names:
+        return None
+    from ui_exempt import exemption
+
+    names = [name for name in names if not exemption(name, texts[name])]
+    skipped = generated_sources(root, names)
+    return next((name for name in names if name not in skipped), None)
+
+
+def ui_hits(root: Path, texts: dict[str, str]) -> list[str]:
+    try:
+        policy = load_policy(root, required=False)
+    except ShippingError:
+        return []
+    if policy is None:
+        return []
+    if not policy["ui_paths"]:
+        found = first_ui_file(root, texts)
+        return [f"UI files found at {found}; add them to ui_paths."] if found else []
+    from ui_whole import ui_findings_whole
+
+    return ui_findings_whole(root, texts, policy["ui_paths"], policy["ui_library"])
+
+
 def validate_whole_project(root: Path) -> None:
     names = listed_names(root)
     texts = text_files(root, names)
@@ -356,7 +438,13 @@ def validate_whole_project(root: Path) -> None:
     blocks = [
         "\n".join([header, *(f"  {hit}" for hit in found)])
         for header, found in kinds
-        if found
+        if found and header != UI_HEADER
     ]
+    if ui := ui_hits(root, texts):
+        blocks.append(
+            ui[0]
+            if ui[0].startswith("UI files found")
+            else "\n".join([UI_HEADER, *(f"  {hit}" for hit in ui)])
+        )
     if blocks:
         raise ValueError("\n".join(blocks))

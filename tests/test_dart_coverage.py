@@ -19,6 +19,9 @@ FLUTTER_PUBSPEC = (
     "name: app\ndependencies:\n  flutter:\n    sdk: flutter\ndev_dependencies:\n"
 )
 
+# A real Dart run takes 3 to 60 s depending on machine load; this only ends a hang, at the 15 minute floor of the project's rule.
+DART_SECONDS = 900
+
 
 def test_native_dart_declarations_and_runtime_controls(tmp_path: Path) -> None:
     sources = {
@@ -203,14 +206,14 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         cwd=tmp_path,
         capture_output=True,
         check=True,
-        timeout=90,
+        timeout=DART_SECONDS,
     )
     subprocess.run(
         ["dart", "test", "--coverage=coverage"],
         cwd=tmp_path,
         capture_output=True,
         check=True,
-        timeout=90,
+        timeout=DART_SECONDS,
     )
     report = tmp_path / "lcov.info"
     subprocess.run(
@@ -227,7 +230,7 @@ def test_native_dart_lcov_omits_declaration_only_libraries(tmp_path: Path) -> No
         cwd=tmp_path,
         capture_output=True,
         check=True,
-        timeout=90,
+        timeout=DART_SECONDS,
     )
     expected = {
         library / name

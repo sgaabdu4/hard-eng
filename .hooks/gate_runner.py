@@ -23,7 +23,7 @@ from ci_jobs import (
     add_language_filters,
     add_scope_options,
     add_shard_option,
-    add_walls_command,
+    add_text_commands,
     language_filter,
     language_groups,
 )
@@ -778,35 +778,9 @@ def pre_push() -> int:
 
 
 def deliver(args: "Namespace") -> int:
-    if args.command == "adopt":
-        return adopt()
-    if args.command == "ci-usage":
-        from ci_usage import ci_usage
+    from deliver import deliver as run_command
 
-        return ci_usage(ROOT, args.repo, args.days, args.runs)
-    if args.command == "hot-paths":
-        from hot_paths import scan_all
-
-        return scan_all(ROOT, paths=args.paths)
-    if args.command == "text-walls":
-        from text_walls import walls_command
-
-        return walls_command(ROOT, args.paths, args.stdin)
-    if args.command == "pr-text":
-        from pr_text import pr_text_command
-
-        return pr_text_command(ROOT, args.pr)
-    if args.command == "gap-issue":
-        from gap_issue import file_gap
-
-        return file_gap(ROOT, args.text)
-    if args.command == "challenge":
-        from challenge import challenge
-
-        return challenge(ROOT, args.base, args.host)
-    from ship_actions import run
-
-    return run(ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method)
+    return run_command(ROOT, args, adopt)
 
 
 def adopt() -> int:
@@ -894,7 +868,7 @@ def main() -> int:
         "hot-paths",
         help="List known slow patterns in the named files, else the whole repository",
     ).add_argument("paths", nargs="*")
-    add_walls_command(commands.add_parser)
+    add_text_commands(commands.add_parser)
     add_browser_command(commands.add_parser)
     mutating = commands.add_parser(
         "mutation",
@@ -973,6 +947,7 @@ def main() -> int:
         "hot-paths",
         "pr-text",
         "text-walls",
+        "ui-library",
     }:
         return deliver(args)
     from agent_hooks import handle_event

@@ -1,0 +1,10 @@
+@import "./base.css";
+
+:root {
+  --brand: #123456;
+  --surface: white;
+  --space-3: 12px;
+  --card-width: 240px;
+  --radius: 7px;
+  --text-size: 15px;
+}
