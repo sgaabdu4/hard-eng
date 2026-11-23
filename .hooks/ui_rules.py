@@ -311,14 +311,9 @@ def colour_pattern(name: str) -> re.Pattern[str]:
 
 
 def _theme_bodies(css: str) -> list[str]:
-    bodies: list[str] = []
-    for match in THEME_BLOCK.finditer(css):
-        depth, index = 1, match.end()
-        while index < len(css) and depth:
-            depth += (css[index] == "{") - (css[index] == "}")
-            index += 1
-        bodies.append(css[match.end() : max(match.end(), index - 1)])
-    return bodies
+    from ui_audit_rules import _theme_blocks
+
+    return [body for body, _ in _theme_blocks(css)]
 
 
 def _package_dir(root: Path, name: str) -> Path:
