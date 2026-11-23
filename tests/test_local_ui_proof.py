@@ -33,6 +33,24 @@ def clear_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CI", raising=False)
 
 
+def _seed_ui_source(root: Path, design: str) -> None:
+    gates = json.loads((root / "hard-eng.gates.json").read_text())
+    gates["shipping"]["ui_library"] = ["src/ui/**"]
+    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
+    (root / "src/ui").mkdir(parents=True, exist_ok=True)
+    (root / "src/ui/Button.tsx").write_text(
+        "export const Button = () => <button>Go</button>;\n"
+    )
+    (root / "src/theme").mkdir(parents=True, exist_ok=True)
+    (root / "src/theme/tokens.css").write_text(":root {\n  --color-ink: #111111;\n}\n")
+    (root / "UI-LIBRARY.md").write_text(
+        "# UI library\n\n## `src/ui/**`\n\n- `Button` — shared button\n"
+    )
+    front = '---\ncolors:\n  ink: "#111111"\n---\n'
+    body = design if design.startswith("---\n") else f"{front}{design}"
+    (root / "DESIGN.md").write_text(f"{body.rstrip()}\n\nParts: UI-LIBRARY.md\n")
+
+
 def web_change_repo(
     tmp_path: Path,
     *,
@@ -44,9 +62,9 @@ def web_change_repo(
     fixture = _fixture(tmp_path, ui_paths=["src/**", "app/**"])
     root = fixture.root
     if design:
-        (root / "DESIGN.md").write_text(design)
+        _seed_ui_source(root, design)
     (root / ".git/info/exclude").write_text(".hard-eng/\n")
-    (root / "src").mkdir()
+    (root / "src").mkdir(exist_ok=True)
     (root / "src/App.tsx").write_text("export const App = () => <p>Old</p>;\n")
     commit(root, "base")
     git(root, "branch", "-f", "main", "HEAD")
@@ -421,7 +439,8 @@ def test_local_complete_check_detects_quoted_binary_ui_asset_diff(
     clear_ci(monkeypatch)
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     root = fixture.root
-    (root / "src").mkdir()
+    _seed_ui_source(root, "# Design\n")
+    (root / "src").mkdir(exist_ok=True)
     asset = root / 'src/logo"1.png'
     asset.write_bytes(b"\x89PNG\r\n\x1a\nold")
     commit(root, "base")
