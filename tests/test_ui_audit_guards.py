@@ -270,3 +270,24 @@ def test_bundle_font_isolation_generated_wrapper_and_text_initial_reset(
         "@theme {\n  --text-heading: initial;\n}\n"
     )
     assert "--text-heading--font-weight: 500" in refused(reset)
+
+    mono_sep = tmp_path / "mono_sep"
+    init(mono_sep)
+    (mono_sep / "src").mkdir()
+    (mono_sep / "src/mono.css").write_text(
+        '@font-face {\n  font-family: "JetBrains Mono";\n  font-weight: 400 700;\n}\n'
+        '@theme {\n  --font-mono: "JetBrains Mono", monospace;\n}\n'
+    )
+    (mono_sep / "src/app.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 600;\n}\n'
+    )
+    (mono_sep / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 700\n---\n# App\n"
+    )
+    commit(mono_sep, "base")
+    (mono_sep / "src/app.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n'
+    )
+    assert "outside loaded @font-face font-weight ranges" in refused(mono_sep)

@@ -504,7 +504,9 @@ def _group_weight_findings(
     )
     group_faces = _font_face_ranges(css_texts)
     by_family = {**pkg_faces[0], **group_faces[0]}
-    mono_only = group_faces[1] if group_faces[0] else pkg_faces[1]
+    mono_only = group_faces[1] | {
+        fam for fam in pkg_faces[1] if fam not in group_faces[0]
+    }
     role_families = {**design_role_fams, **theme_role_fams}
     for role, weight in sorted(defined_weights.items()):
         if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
