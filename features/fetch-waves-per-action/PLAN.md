@@ -45,8 +45,8 @@ Authority: Autonomous — the user's standing rule: merge each task PR once its 
 - [x] Each verb of the request is marked, each other or misread step is not, and `--session=S` reads like `--session S` → `tests/test_ui_audit_guards.py::test_a_step_that_commits_input_is_marked`, `tests/test_ui_audit_guards.py::test_any_other_step_is_not_marked`, `tests/test_ui_audit_guards.py::test_a_misread_step_is_not_marked`
 - [x] A file that cannot be written leaves the step running and prints nothing; unreadable lines are skipped → `tests/test_ui_audit_guards.py::test_recording_an_action_never_fails_the_step_or_prints`
 - [x] `plain_step` runs the real command path: a `click` through it leaves a line in the session's file → `tests/test_ui_audit_guards.py::test_an_eval_step_and_the_page_cannot_add_an_action`
-- [x] The issue's tab bar page has no finding at any width, `shared-edge` included → `tests/test_ui_quality.py::test_a_tab_bar_in_the_page_container_does_not_count_the_whole_page`
-- [x] A card with a button pair and 3 accents, a tab bar with 3 accents of its own, and many colours inside a `div` or `section` wrapper still fail with `accent-colours` → `tests/test_ui_quality.py::test_accent_colours_around_a_button_group_still_count`
+- [x] The issue's tab bar page has no finding at any width, `shared-edge` included → `tests/test_ui_accent_block.py::test_a_tab_bar_in_the_page_container_does_not_count_the_whole_page`
+- [x] A card with a button pair and 3 accents, a tab bar with 3 accents of its own, and many colours inside a `div` or `section` wrapper still fail with `accent-colours` → `tests/test_ui_accent_block.py::test_accent_colours_around_a_button_group_still_count`
 - [x] The `checks.md` bullet and the `browser.md` lines say that each input step has its own fetch limit and that a button group in the page container counts its own row → N/A — prose; `tests/test_skill_links.py` checks the links and the file size
 - [x] A plain step costs no more than a fraction of a millisecond, and the measure script runs as fast as before → N/A — a timing result, recorded in Verification
 
