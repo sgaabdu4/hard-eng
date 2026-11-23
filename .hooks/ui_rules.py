@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from generated_marks import generated_sources
 from plans import _is_test as is_test_path
 from project_files import GIT_LISTING
+from ui_css_imports import css_entrypoint_orders, local_imports
 
 UNOWNED = (".hooks/", ".agents/", ".claude/")
 THEME_WORDS = frozenset(
@@ -41,6 +42,7 @@ COLOUR_STEP = (
 TOKEN_STEP = (
     "Use an existing @theme colour token or define --color-<name> in a CSS @theme block"
 )
+OUTSIDE_STEP = "Keep the app's design tokens inside the app's folder"
 MARKUP_TOKEN_SUFFIXES = (".tsx", ".jsx", ".html", ".vue", ".svelte", ".astro")
 SCRIPT_TOKEN_SUFFIXES = (".ts", ".js")
 STYLE_TOKEN_SUFFIXES = (".css", ".scss", ".less")
@@ -237,7 +239,6 @@ BUILTIN_STROKE = frozenset(
     )
 )
 CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-CSS_IMPORT = re.compile(r"""@import\s+(?:url\(\s*)?["']([^"']+)["']""")
 THEME_BLOCK = re.compile(r"@theme\b[^{]*\{")
 PLUGIN_CALL = re.compile(r"""@plugin\s+["']([^"']+)["']""")
 CONFIG_CALL = re.compile(r"@config\b")
@@ -376,59 +377,30 @@ def _has_external_theme(package: Path, css_texts: list[str]) -> bool:
     return False
 
 
-def _css_import_targets(
-    path: Path, text: str, by_resolved: dict[Path, Path]
-) -> list[Path]:
-    found: list[Path] = []
-    for target in CSS_IMPORT.findall(text):
-        if target.startswith(("http://", "https://", "//")):
-            continue
-        for suffix in ("", ".css"):
-            candidate = (path.parent / (target + suffix)).resolve()
-            if candidate in by_resolved:
-                found.append(by_resolved[candidate])
-                break
+def _outside_target(root: Path, package: Path, path: Path, names: list[Path]) -> bool:
+    for name in names:
+        candidate = (path.parent / name).resolve()
+        if candidate.suffix == ".css" and candidate.is_file():
+            base = root.resolve()
+            return not candidate.is_relative_to(base) or (
+                _package_dir(root, candidate.relative_to(base).as_posix()) != package
+            )
+    return False
+
+
+def _outside_imports(root: Path, package: Path, entries: list[str]) -> list[str]:
+    """One finding for each @import in the app's CSS that names an existing CSS file outside the app."""
+    found: list[str] = []
+    for path in _css_files(root, package, entries):
+        text = path.read_text(errors="replace")
+        blanked = CSS_COMMENT.sub(lambda hit: re.sub(r"[^\n]", " ", hit[0]), text)
+        rel = path.relative_to(root).as_posix()
+        found.extend(
+            f"{rel}:{blanked.count(chr(10), 0, offset) + 1}: imports {target} from outside this app. {OUTSIDE_STEP}"
+            for offset, target, names in local_imports(blanked)
+            if _outside_target(root, package, path, names)
+        )
     return found
-
-
-def _css_entrypoint_orders(
-    files: list[Path], texts: dict[Path, str]
-) -> list[list[Path]]:
-    """Expand each CSS entrypoint independently in exact @import order so separate builds do not reset one another."""
-    by_resolved = {path.resolve(): path for path in files}
-    edges = {
-        path: _css_import_targets(path, texts[path], by_resolved) for path in files
-    }
-    imported = {target.resolve() for targets in edges.values() for target in targets}
-    reached: set[Path] = set()
-    groups: list[list[Path]] = []
-    limit = max(64, len(files) * 8)
-
-    def collect(root_path: Path) -> list[Path]:
-        ordered: list[Path] = []
-        visiting: set[Path] = set()
-
-        def visit(path: Path) -> None:
-            resolved = path.resolve()
-            if resolved in visiting or len(ordered) >= limit:
-                return
-            visiting.add(resolved)
-            for target in edges[path]:
-                visit(target)
-            visiting.remove(resolved)
-            reached.add(resolved)
-            ordered.append(path)
-
-        visit(root_path)
-        return ordered
-
-    for path in files:
-        if path.resolve() not in imported:
-            groups.append(collect(path))
-    for path in files:
-        if path.resolve() not in reached:
-            groups.append(collect(path))
-    return groups
 
 
 def _collect_theme_vars(
@@ -527,7 +499,7 @@ def _load_theme(
         return None
     evaluated = [
         _theme_for_group([raw[path] for path in group])
-        for group in _css_entrypoint_orders(files, raw)
+        for group in css_entrypoint_orders(files, raw)
     ]
     all_tokens = [tokens for tokens, _ in evaluated]
     themed = [tokens for tokens, has_theme in evaluated if has_theme]
@@ -952,6 +924,7 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
 
     css_entries: list[str] | None = None
     themes: dict[Path, ThemeTokens | None] = {}
+    outside: dict[Path, list[str]] = {}
     found: dict[str, list[str]] = {}
     for name, lines in candidates.items():
         theme: ThemeTokens | None = None
@@ -968,7 +941,12 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
                 css_entries = _all_css_entries(root)
             package = _package_dir(root, name)
             if package not in themes:
-                themes[package] = _load_theme(root, package, css_entries)
+                outside[package] = _outside_imports(root, package, css_entries)
+                themes[package] = (
+                    None
+                    if outside[package]
+                    else _load_theme(root, package, css_entries)
+                )
             theme = themes[package]
             if (theme is not None or name.endswith(JSX_SUFFIXES)) and (
                 root / name
@@ -983,4 +961,7 @@ def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> lis
     named = sorted(name for name, items in found.items() if items)
     skipped = generated_sources(root, named) if named else set()
     hits = [item for name in named if name not in skipped for item in found[name]]
-    return [*hits, *audit_findings(root, candidates, css_entries)]
+    imports = [item for items in outside.values() for item in items]
+    return list(
+        dict.fromkeys([*imports, *hits, *audit_findings(root, candidates, css_entries)])
+    )
