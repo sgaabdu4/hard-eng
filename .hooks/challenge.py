@@ -441,7 +441,12 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
     if fresh:
         record["fresh"] = fresh
     path.with_suffix(".json").write_text(json.dumps(record))
-    print(f"Independent review by {reviewer} at {revision}: {outcome}")
+    label = (
+        f"Review by a fresh {reviewer} session"
+        if fresh
+        else f"Independent review by {reviewer}"
+    )
+    print(f"{label} at {revision}: {outcome}")
     if fresh:
         print(f"Fresh {reviewer} session reviewed, because: {fresh}")
     print(f"Reviewer output: {path.with_suffix('.txt')}")
