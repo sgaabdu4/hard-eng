@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import commit, init
+from conftest import commit, git, init
 from plans import validate_plan
 
 MOCKUP = b"mockup-image-bytes"
@@ -121,3 +121,57 @@ def test_the_full_gate_refuses_a_reused_part_that_git_does_not_track(
     kept = "Controls: Password box — reuses `src/ui/PasswordField.tsx`\n"
     assert tracked_problem(kept, project) is None
     assert tracked_problem("no controls here\n", project) is None
+
+
+def committed_plan(project: Path, visual_plan: str) -> None:
+    (project / "PLAN.md").write_text(with_controls(visual_plan, NEW_PART))
+    commit(project, "plan with a new part")
+
+
+def plan_in_push_snapshot(project: Path) -> str:
+    """The plan check as pre-push runs it: in a fresh worktree of the pushing checkout."""
+    from ship_actions import snapshot, snapshot_environment
+
+    with snapshot(project, "HEAD", snapshot_environment(project), False) as checkout:
+        return validate_plan(checkout / "PLAN.md")
+
+
+def test_a_look_record_of_the_pushing_checkout_counts_in_the_push_snapshot(
+    project: Path, visual_plan: str
+) -> None:
+    committed_plan(project, visual_plan)
+    record_look(project)
+    assert plan_in_push_snapshot(project) == "Complete"
+
+
+def test_a_mockup_nobody_looked_at_is_still_refused_in_the_push_snapshot(
+    project: Path, visual_plan: str
+) -> None:
+    committed_plan(project, visual_plan)
+    with pytest.raises(ValueError, match="no `look` record"):
+        plan_in_push_snapshot(project)
+
+
+def test_a_look_record_of_a_linked_worktree_counts_in_the_push_snapshot(
+    project: Path, visual_plan: str
+) -> None:
+    committed_plan(project, visual_plan)
+    linked = project.parent / "linked"
+    git(project, "worktree", "add", "-q", "--detach", str(linked))
+    folder = linked / git(linked, "rev-parse", "--git-path", "hard-eng/look").strip()
+    folder.mkdir(parents=True)
+    digest = hashlib.sha256(MOCKUP).hexdigest()
+    (folder / "abc.json").write_text(
+        json.dumps({"images": [{"sha256": digest, "read": True}]})
+    )
+    assert plan_in_push_snapshot(project) == "Complete"
+
+
+def test_a_mockup_outside_the_repository_is_refused_even_with_a_look_record(
+    project: Path, visual_plan: str
+) -> None:
+    outside = project.parent / "outside.png"
+    outside.write_bytes(MOCKUP)
+    record_look(project)
+    line = f"Search box — new `src/ui/SearchField.tsx` — mockup ![M]({outside})"
+    assert "image file in the repository" in refusal(project, visual_plan, line)

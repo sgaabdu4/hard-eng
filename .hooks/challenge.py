@@ -381,6 +381,10 @@ def covered_point(root: Path, base: str | None) -> tuple[str | None, str | None]
     return start, (point if complete and earlier.get("covers") == point else None)
 
 
+def fresh_review(reviewer: str) -> str:
+    return f"review by a fresh {reviewer} session"
+
+
 def unavailable(outcome: str, reviewer: str) -> bool:
     return outcome.startswith(
         (
@@ -427,8 +431,9 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
         if not earlier.startswith("not done") and (
             point is None or record.get("covers") == point
         ):
+            kept = fresh_review(record["reviewer"]) if record.get("fresh") else "review"
             print(f"Independent review by {reviewer} at {revision}: {outcome}")
-            print(f"Kept the earlier completed review for this revision: {earlier}")
+            print(f"Kept the earlier completed {kept} for this revision: {earlier}")
             return 0
     path.with_suffix(".txt").write_text(output)
     record = {
@@ -441,7 +446,12 @@ def challenge(root: Path, base: str | None, host: str | None) -> int:
     if fresh:
         record["fresh"] = fresh
     path.with_suffix(".json").write_text(json.dumps(record))
-    print(f"Independent review by {reviewer} at {revision}: {outcome}")
+    label = (
+        fresh_review(reviewer).capitalize()
+        if fresh
+        else f"Independent review by {reviewer}"
+    )
+    print(f"{label} at {revision}: {outcome}")
     if fresh:
         print(f"Fresh {reviewer} session reviewed, because: {fresh}")
     print(f"Reviewer output: {path.with_suffix('.txt')}")
@@ -475,5 +485,5 @@ def shipping_note(root: Path, revision: str) -> str | None:
     if record["outcome"].startswith("not done"):
         return f"independent review {record['outcome']}"
     if fresh := record.get("fresh"):
-        return f"Review by a fresh {record['reviewer']} session (other agents failed: {fresh}): {record['outcome']}"
+        return f"{fresh_review(record['reviewer']).capitalize()} (other agents failed: {fresh}): {record['outcome']}"
     return f"Independent review by {record['reviewer']}: {record['outcome']}"

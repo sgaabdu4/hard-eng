@@ -40,31 +40,45 @@ def plan_root(plan: Path) -> Path | None:
     return None
 
 
-def looked_hashes(root: Path) -> set[str]:
-    import json
+def look_folders(root: Path) -> list[Path]:
+    """The `look` record folder of every worktree of the repository: a pre-push check runs in a fresh worktree of the pushing checkout."""
     import subprocess
 
-    """The hashes of the images that a `look` record of this checkout says were opened."""
     done = subprocess.run(
-        ["git", "rev-parse", "--git-path", "hard-eng/look"],
+        ["git", "rev-parse", "--git-common-dir"],
         cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
+    if not done.stdout.strip():
+        return []
+    common = root / done.stdout.strip()
+    return [common / "hard-eng/look", *common.glob("worktrees/*/hard-eng/look")]
+
+
+def looked_hashes(root: Path) -> set[str]:
+    """The hashes of the images that a `look` record of any worktree of this repository says were opened."""
+    import json
+
     found: set[str] = set()
-    for record in (root / done.stdout.strip()).glob("*.json") if done.stdout else []:
-        try:
-            images = json.loads(record.read_text())["images"]
-            found.update(i["sha256"] for i in images if i["read"] is True)
-        except (OSError, ValueError, KeyError, TypeError):
-            continue
+    for folder in look_folders(root):
+        for record in folder.glob("*.json"):
+            try:
+                images = json.loads(record.read_text())["images"]
+                found.update(i["sha256"] for i in images if i["read"] is True)
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
     return found
 
 
 def mockup_problem(entry: str, mockup: str, root: Path) -> str | None:
     image = root / mockup
-    if mockup.startswith(("http://", "https://")) or not image.is_file():
+    if (
+        mockup.startswith(("http://", "https://"))
+        or not image.is_file()
+        or not image.resolve().is_relative_to(root.resolve())
+    ):
         return f"Controls: the mockup in `{entry}` must be an image file in the repository, and `{mockup}` is not"
     import hashlib
 
