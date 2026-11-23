@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
+import https_open
 from gate_config import LANGUAGES, GateConfig, Group, JsonObject
 
 JOB_BOUNDARY = re.compile(r"(?m)^(?=  [A-Za-z0-9_-]+:\n)")
@@ -148,7 +149,7 @@ def bun_releases() -> list[JsonObject]:
     if token := os.environ.get("GH_TOKEN"):
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(BUN_RELEASES, headers=headers)
-    with urllib.request.urlopen(request, timeout=10) as response:
+    with https_open.open_https(request, timeout=10) as response:
         releases = json.load(response)
     return [item for item in releases if isinstance(item, dict)]
 

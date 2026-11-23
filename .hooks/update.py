@@ -60,11 +60,13 @@ def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
     import urllib.error
     import urllib.request
 
+    import https_open
+
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
     url = f"https://api.github.com/{endpoint}"
     request = urllib.request.Request(url, headers={**headers, **auth})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with https_open.open_https(request, timeout=30) as response:
             return response.read()
     except http.client.HTTPException as error:
         raise OSError(f"GitHub response for {endpoint} was cut short") from error
