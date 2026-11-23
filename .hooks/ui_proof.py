@@ -568,13 +568,16 @@ def ship_problem(
     note = bool(UI_APPEARANCE_UNCHANGED.search(body))
     if problem := reference_problem(plan_text, visible, body, note):
         return problem
-    if visible and UNCHANGED_LINE.match(reference_section(plan_text)):
-        return unchanged_problem(
+    unchanged = visible and UNCHANGED_LINE.match(reference_section(plan_text))
+    if unchanged and (
+        problem := unchanged_problem(
             root,
             reference_section(plan_text),
             head,
             merge_base(root, base_ref, head=head, base_sha=base_sha),
         )
+    ):
+        return problem
     if problem := guideline_problem(
         root, [name for name in visible if (root / name).is_file()]
     ):

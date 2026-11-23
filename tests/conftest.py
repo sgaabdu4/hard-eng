@@ -358,6 +358,7 @@ def default_policy() -> "ShippingPolicy":
         "base": "main",
         "checks": ["hard-eng"],
         "ui_paths": [],
+        "ui_library": [],
         "ci_seconds": 180.0,
         "pre_push_seconds": 180.0,
         "pre_push_mutation_seconds": 120.0,

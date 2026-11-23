@@ -432,7 +432,7 @@ def test_package_script_scanner_executes_provisioned_native_executable(
     [
         (
             ["semgrep", "scan", "--config", "p/default", "."],
-            ["--timeout", "60", "--config", "RULES", "--config", "p/default", "."],
+            ["--timeout", "0", "--config", "RULES", "--config", "p/default", "."],
         ),
         (
             ["semgrep", "scan", "--timeout", "9", "."],

@@ -1,0 +1,20 @@
+@theme {
+  --palette-blue: #123456;
+  --color-brand: #123456;
+  --color-accent: rgb(171, 205, 239);
+  --color-danger: #f00;
+  --color-pct: rgb(10% 20% 30%);
+  --color-wash: oklch(0.6 0.15 250);
+  --color-slate: hsl(210, 50%, 40%, 0.3);
+  --font-mono: initial;
+  --spacing-md: 12px;
+  --radius-sm: 8px;
+  --radius-md: 6px;
+  --radius-lg: 9px;
+  --spacing-lg: 20px;
+  --text-body: 16px;
+  --text-display: 24px;
+  --font-sans: "Inter", sans-serif;
+  --font-weight-bold: 700;
+  --font-heavy: var(--weight-900);
+}
