@@ -26,6 +26,7 @@ Single source: `.hooks/ui_proof.py` owns `guideline_problem()` and `unchanged_pr
 Blockers: None
 Handoff: None
 Authority: Autonomous. Bugfix discovered during maintainer-authorized rollout verification.
+Review declined: Keep `meetsGuideline` on `N/A — unchanged:` Flutter branches because `kIsWeb` mobile branches are not rendered in browser captures :: `.hooks/ui_proof.py:571-581` (`ship_problem`) already returns early after `unchanged_problem` before `guideline_problem`, so local Complete-stage proof must match `ship_problem`'s `N/A — unchanged:` contract rather than blocking unchanged refactors on barrel and widget files; tightening `N/A — unchanged:` for `kIsWeb`-branched Flutter code is outside this parity fix.
 
 ## Acceptance + steps
 
@@ -52,6 +53,6 @@ Result: Passed
 Evidence: `uv run pytest tests/test_local_ui_proof.py tests/test_ui_quality.py` passed, and full `python3 .hooks/hard-eng.py check --base origin/develop --plan-stage Complete` plus `challenge --host agy` ran on the committed branch.
 E2E: N/A — CLI/hook proof check has no interactive user journey; the regression test exercises real git commits and browser records in a temporary Flutter repo fixture.
 Real service: N/A — local Python hook logic makes no network or external service calls.
-Retro: Escaped bug on base branch (`local_ui_proof_problem` called `guideline_problem` ahead of the `unchanged` return, diverging from `ship_problem`) → captured by `tests/test_local_ui_proof.py::test_local_complete_check_skips_flutter_guideline_for_unchanged_pair` and fixed in `.hooks/local_ui_proof.py`.
+Retro: Escaped bug on base branch (`local_ui_proof_problem` called `guideline_problem` ahead of the `unchanged` return, diverging from `ship_problem`) → captured by `tests/test_local_ui_proof.py::test_local_complete_check_skips_flutter_guideline_for_unchanged_pair` and fixed in `.hooks/local_ui_proof.py`; challenge caught duplicate Flutter fixture setup in `tests/test_local_ui_proof.py` → deduplicated into `_flutter_change_repo`.
 Delivery target: PR
 Delivery: Pending — checks, challenge, PR to `develop`, CI, and merge.

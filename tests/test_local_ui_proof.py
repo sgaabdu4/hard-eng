@@ -436,50 +436,7 @@ def test_local_complete_check_detects_quoted_binary_ui_asset_diff(
         validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
 
 
-def test_local_complete_check_validates_native_flutter_guideline_and_look(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    clear_ci(monkeypatch)
-    fixture = _fixture(tmp_path, ui_paths=["app/**"])
-    root = fixture.root
-    gates = json.loads((root / "hard-eng.gates.json").read_text())
-    gates["packages"] = [
-        {"name": "shop", "path": "app", "language": "dart", "checks": []}
-    ]
-    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
-    (root / "app/lib/ui").mkdir(parents=True)
-    (root / "app/test").mkdir(parents=True)
-    (root / "app/pubspec.yaml").write_text(
-        "name: shop\ndependencies:\n  flutter:\n    sdk: flutter\n"
-    )
-    (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('Old');\n")
-    commit(root, "base")
-    git(root, "branch", "-f", "main", "HEAD")
-    git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
-    (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('New');\n")
-    (root / "PLAN.md").write_text(
-        (root / "PLAN.md").read_text().replace(NO_UX, REAL_UX)
-    )
-    commit(root, "native change")
-    head = git(root, "rev-parse", "HEAD").strip()
-
-    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
-    assert problem is not None and "meetsGuideline" in problem
-
-    (root / "app/test/card_test.dart").write_text(GUIDELINE_TEST)
-    commit(root, "guideline test")
-    head = git(root, "rev-parse", "HEAD").strip()
-    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
-    assert problem is not None and "Look review" in problem
-
-    write_look(root, head, b"native-shot")
-    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
-
-
-def test_local_complete_check_skips_flutter_guideline_for_unchanged_pair(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    clear_ci(monkeypatch)
+def _flutter_change_repo(tmp_path: Path, *, ux: str = REAL_UX) -> Path:
     fixture = _fixture(tmp_path, ui_paths=["app/**"])
     root = fixture.root
     gates = json.loads((root / "hard-eng.gates.json").read_text())
@@ -498,10 +455,35 @@ def test_local_complete_check_skips_flutter_guideline_for_unchanged_pair(
     git(root, "branch", "-f", "main", "HEAD")
     git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
     (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('New');\n")
-    (root / "PLAN.md").write_text(
-        (root / "PLAN.md").read_text().replace(NO_UX, UNCHANGED_UX)
-    )
-    commit(root, "unchanged flutter refactor")
+    (root / "PLAN.md").write_text((root / "PLAN.md").read_text().replace(NO_UX, ux))
+    commit(root, "native change")
+    return root
+
+
+def test_local_complete_check_validates_native_flutter_guideline_and_look(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = _flutter_change_repo(tmp_path, ux=REAL_UX)
+
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "meetsGuideline" in problem
+
+    (root / "app/test/card_test.dart").write_text(GUIDELINE_TEST)
+    commit(root, "guideline test")
+    head = git(root, "rev-parse", "HEAD").strip()
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "Look review" in problem
+
+    write_look(root, head, b"native-shot")
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
+def test_local_complete_check_skips_flutter_guideline_for_unchanged_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = _flutter_change_repo(tmp_path, ux=UNCHANGED_UX)
     base = git(root, "rev-parse", "origin/main").strip()
     head = git(root, "rev-parse", "HEAD").strip()
     write_pair(root, base, head)
