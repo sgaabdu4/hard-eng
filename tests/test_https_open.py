@@ -1,5 +1,6 @@
 """Hard Eng opens only https URLs, so no fetch can read a local file."""
 
+import urllib.error
 import urllib.request
 
 import https_open
@@ -14,16 +15,16 @@ def test_a_url_that_is_not_https_is_refused_before_any_connection(url: str) -> N
         https_open.open_https(urllib.request.Request(url), timeout=1)
 
 
-def test_the_opener_can_load_nothing_but_https(
+def test_the_opener_loads_https_through_the_proxy_settings_and_no_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    schemes: list[set[str]] = []
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.test:3128")
+    schemes = set(vars(https_open.https_opener())["handle_open"])
+    assert {"https", "unknown"} <= schemes
+    assert not {"file", "ftp", "data"} & schemes
 
-    def open_url(
-        self: urllib.request.OpenerDirector, *_arguments: object, **_options: object
-    ) -> None:
-        schemes.append(set(vars(self)["handle_open"]))
 
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", open_url)
-    https_open.open_https(urllib.request.Request("https://example.test/"), timeout=1)
-    assert schemes == [{"https"}]
+@pytest.mark.parametrize("url", ["http://example.test/", "file:///etc/hosts"])
+def test_a_redirect_to_another_scheme_ends_as_a_network_error(url: str) -> None:
+    with pytest.raises(urllib.error.URLError):
+        https_open.https_opener().open(url, timeout=1)
