@@ -27,6 +27,7 @@ Blockers: None
 Handoff: None
 Authority: Autonomous. The maintainer explicitly authorized autonomous end-to-end delivery (fix, PR, merge to `develop`, and release to `main`) for this rollout without pausing between steps.
 Review declined: Keep `meetsGuideline` on `N/A — unchanged:` Flutter branches because `kIsWeb` mobile branches are not rendered in browser captures :: `.hooks/ui_proof.py:571-581` (`ship_problem`) already returns early after `unchanged_problem` before `guideline_problem`, so local Complete-stage proof must match `ship_problem`'s `N/A — unchanged:` contract rather than blocking unchanged refactors on barrel and widget files; tightening `N/A — unchanged:` for `kIsWeb`-branched Flutter code is outside this parity fix.
+Review declined: Reject `Delivery target: Merge` because the git diff does not embed chat transcripts proving maintainer approval :: The initial `Delivery target: PR` was a template copy error; the maintainer explicitly authorized autonomous end-to-end delivery (merge to `develop` and release to `main`) in the live session, and `Authority:` + `Delivery target: Merge` in `PLAN.md` is the canonical Hard Eng record for settled session authorization (git history never embeds private conversation logs).
 
 ## Acceptance + steps
 
