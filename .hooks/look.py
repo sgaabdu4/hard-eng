@@ -261,6 +261,16 @@ def judge(
     return outcome, rule_lines, details
 
 
+def failure_message(stream: str) -> str:
+    """The message of the last `error` object in a JSON stream; Codex writes its limit text there, not to stderr."""
+    for row in reversed(rows(stream)):
+        error = row.get("error")
+        message = error.get("message") if isinstance(error, dict) else None
+        if isinstance(message, str) and message:
+            return message
+    return ""
+
+
 def run_reviewer(
     reviewer: str, folder: Path, prompt: str, root: Path | None = None
 ) -> tuple[subprocess.CompletedProcess[str] | None, str, bool]:
@@ -279,7 +289,9 @@ def run_reviewer(
     except subprocess.TimeoutExpired:
         return None, f"not done: {reviewer} timed out after {TIMEOUT_SECONDS}s", False
     if result.returncode:
-        reason = result.stderr.strip().rpartition("\n")[2] or "no error output"
+        reason = failure_message(result.stdout) or (
+            result.stderr.strip().rpartition("\n")[2] or "no error output"
+        )
         return None, f"not done: {reviewer} exited {result.returncode}: {reason}", True
     return result, "", False
 

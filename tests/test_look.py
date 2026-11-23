@@ -197,7 +197,11 @@ def test_look_falls_back_to_a_fresh_same_agent_session(
 
 def install_failing_agent(tmp_path: Path, name: str, message: str) -> None:
     path = tmp_path / "bin" / name
-    path.write_text(f"#!/bin/sh\necho {message!r} >&2\nexit 1\n")
+    failed = json.dumps({"type": "turn.failed", "error": {"message": message}})
+    path.write_text(
+        "#!/bin/sh\necho 'Reading additional input from stdin...' >&2\n"
+        f"echo '{{\"type\":\"turn.started\"}}'\necho '{failed}'\nexit 1\n"
+    )
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
 
 
