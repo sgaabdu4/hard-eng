@@ -7,6 +7,7 @@ from email.message import Message
 from pathlib import Path
 from unittest.mock import Mock
 
+import https_open
 import pytest
 import source_trees
 import update
@@ -101,7 +102,7 @@ def test_freshness_walks_commits_only_after_upstream_moves(
         return io.BytesIO(str(answer).encode())
 
     walk = Mock(return_value=[{"sha": "a" * 40}])
-    monkeypatch.setattr(urllib.request, "urlopen", respond)
+    monkeypatch.setattr(https_open, "open_https", respond)
     monkeypatch.setattr(update, "github_json", walk)
     assert update.latest_verified("a" * 40) is None
     assert walk.called is walks

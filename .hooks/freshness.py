@@ -29,8 +29,10 @@ Stale = tuple[str, str, str]
 def fetch_json(url: str) -> object:
     import urllib.request
 
+    import https_open
+
     request = urllib.request.Request(url, headers={"User-Agent": "hard-eng-freshness"})
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with https_open.open_https(request, timeout=60) as response:
         return json.load(response)
 
 
