@@ -8,7 +8,7 @@ Status: Ready
 
 ## Sources + coverage
 
-Sources: the maintainer's request of 2026-11-23 for per-step fetch waves and its five holes, read in full; `sgaabdu4/hard-eng#705` and the maintainer's added scope for it, read in full.
+Sources: the maintainer's request of 2026-11-23, with its five holes and its added scope for the issue `sgaabdu4/hard-eng#705` (the issue text was read too), read in full.
 Reviewer: N/A — two small faults, each with a stated fix and a stated set of cases that must keep failing.
 Deliverables: None
 
