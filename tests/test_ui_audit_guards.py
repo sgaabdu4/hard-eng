@@ -146,3 +146,58 @@ def test_display_heading_custom_select_sticky_sidebar_and_parallel_fetches_pass(
     found = capture(browser, tmp_path, site, "clean")
     for width in WIDTHS:
         assert found[width] == Counter(), (width, found[width])
+
+
+def test_parenthesized_ternaries_generated_siblings_separate_fonts_and_theme_default(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: parenthesized ternaries pass, unrelated generated CSS is ignored, sibling font sheets count, and @theme default yields to explicit tokens."""
+    from comments import validate_suppressions
+    from conftest import change, commit, init
+    from test_ui_rules import refused
+
+    paren = change(
+        tmp_path / "paren",
+        "src/Status.tsx",
+        "export const Status = () => <div />;\n",
+        "export const Status = ({ ready, ro }: { ready: boolean; ro: boolean }) => (\n"
+        '  <div>{ready && (ro ? <span key="status" /> : <em key="status" />)}</div>\n'
+        ");\n"
+        'export const list = (ready: boolean, ro: boolean) => [ready && (ro ? <span key="st" /> : <em key="st" />)];\n',
+    )
+    validate_suppressions(paren, "HEAD")
+
+    sep = tmp_path / "sep"
+    init(sep)
+    (sep / ".gitattributes").write_text("src/preview.css linguist-generated=true\n")
+    (sep / "src").mkdir()
+    (sep / "src/fonts.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+    )
+    (sep / "src/preview.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 500;\n}\n"
+    )
+    (sep / "src/brand.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 600;\n}\n"
+    )
+    (sep / "src/defaults.css").write_text(
+        "@theme default {\n  --text-heading--font-weight: 500;\n}\n"
+    )
+    (sep / "src/app.css").write_text(
+        '@import "./brand.css";\n@import "./defaults.css";\n'
+    )
+    (sep / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 600\n---\n# App\n"
+    )
+    commit(sep, "base")
+    (sep / "src/app.css").write_text(
+        '@import "./brand.css";\n@import "./defaults.css";\n/* touch */\n'
+    )
+    validate_suppressions(sep, "HEAD")
+    (sep / "src/app.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n"
+    )
+    (sep / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 700\n---\n# App\n"
+    )
+    assert "outside loaded @font-face font-weight ranges" in refused(sep)
