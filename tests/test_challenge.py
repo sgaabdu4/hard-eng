@@ -51,6 +51,8 @@ def branch(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     (repository / "app.py").write_text("value = 1\n")
     commit(repository, "base")
     git(repository, "checkout", "-qb", "feature")
+    for name in ("codex", "agy", "claude"):
+        fake_cli(tmp_path / "bin", name, "", 1, f"{name} not faked by this test")
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}")
     return repository
 
@@ -228,7 +230,6 @@ def test_a_commit_during_the_review_voids_it(
 ) -> None:
     big(branch)
     reviewed = git(branch, "rev-parse", "HEAD")
-    (tmp_path / "bin").mkdir()
     script = tmp_path / "bin" / "codex"
     script.write_text(
         f"#!{sys.executable}\nimport subprocess\n"
@@ -324,19 +325,20 @@ def test_unavailable_reviewer_records_not_done(
     reason: str,
 ) -> None:
     big(branch)
-    (tmp_path / "bin").mkdir(exist_ok=True)
     if code is None:
-        (tmp_path / "bin" / "git").symlink_to(
+        (tmp_path / "git-only").mkdir()
+        (tmp_path / "git-only" / "git").symlink_to(
             next(
                 Path(p) / "git"
                 for p in os.environ["PATH"].split(os.pathsep)
                 if (Path(p) / "git").exists()
             )
         )
-        monkeypatch.setenv("PATH", str(tmp_path / "bin"))
+        monkeypatch.setenv("PATH", str(tmp_path / "git-only"))
     else:
         fake_cli(tmp_path / "bin", "codex", "", code, error)
         fake_cli(tmp_path / "bin", "agy", "", code, "agy unavailable")
+        fake_cli(tmp_path / "bin", "claude", "", code, "claude limit")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 1
     record = json.loads(
@@ -346,6 +348,9 @@ def test_unavailable_reviewer_records_not_done(
     )
     assert record["outcome"].startswith("not done: ")
     assert reason in record["outcome"]
+    if code is not None:
+        assert "agy unavailable" in record["outcome"]
+        assert "claude limit" in record["outcome"]
 
 
 @pytest.mark.parametrize(
@@ -363,11 +368,38 @@ def test_challenge_falls_back_to_second_reviewer_when_first_fails(
     big(branch)
     fake_cli(tmp_path / "bin", "codex", output, code, error)
     agy_log = fake_cli(tmp_path / "bin", "agy", "Looks solid.\nVERDICT: clean")
+    host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 0
     assert agy_log.is_file()
+    assert not host_log.exists()
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "clean")
+    assert "fresh" not in record
+
+
+def test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails(
+    branch: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "", 1, "usage limit")
+    fake_cli(tmp_path / "bin", "agy", "", 1, "quota reached")
+    host_log = fake_cli(tmp_path / "bin", "claude", "Looks solid.\nVERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    ran = json.loads(host_log.read_text())
+    assert "--no-session-persistence" in ran["argv"]
+    assert ran["markers"] == []
+    record = record_of(branch)
+    assert (record["reviewer"], record["outcome"]) == ("claude", "clean")
+    assert "usage limit" in record["fresh"] and "quota reached" in record["fresh"]
+    head = git(branch, "rev-parse", "HEAD")
+    out = capsys.readouterr().out
+    assert f"Independent review by claude at {head}: clean" in out
+    assert "Fresh claude session reviewed, because: codex exited 1" in out
 
 
 def test_agy_reviewer_runs_read_only_with_session_settings(
