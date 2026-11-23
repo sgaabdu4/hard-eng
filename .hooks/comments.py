@@ -63,7 +63,7 @@ UI_MARKS = (
     "colorLiteral",
 )
 UI_TOKEN_MARK = re.compile(
-    r"text-|bg-|border-|ring-|fill-|stroke-|@theme|@font-face|--text-|font-weight"
+    r"text-|bg-|border-|ring-|fill-|stroke-|@theme|@font-face|--text-|font-weight|@import"
 )
 UI_TOKEN_SUFFIXES = UI_SUFFIXES[:-2]
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
