@@ -50,9 +50,9 @@ N/A — hooks only; no visible UI.
 ## Verification
 
 Result: Pending
-Evidence: Pending
+Evidence: 2026-11-23: focused tests passed (193 before the last two commits, `tests/test_look.py` 22 and `tests/test_challenge.py` 54 after them); the Ready check passed (7587 tests) before the `agentMode` commit. Real `look` on an invented image, twice: Codex exited 1, a fresh Claude session opened the image and wrote a record; the second record holds the real limit text from the Codex JSON error row (the first held only stderr noise, so `failure_message` reads the JSON error first). `skipped` is a new record key, kept because the existing `reviewer` field names who ran but not why; the PR block does not print it.
 E2E: N/A — no user journey changes.
-Real service: Required — agy 1.5.15: `challenge` on this branch, and one `look` run on an invented image while Codex is out of quota
+Real service: Required — agy 1.5.15: `challenge` on this branch. Blocked: agy and Codex both answer with quota errors (agy: `RESOURCE_EXHAUSTED (code 429): Individual quota reached`, resets in about 127 hours from 2026-11-23; Codex: usage limit until 2026-11-28 05:00). The agy command reached the model after the print form and `agentMode` fixes, and stopped with the 429 and no verdict; this is not a pass. A probe of `gemini-4-neon` at `xhigh`, `high`, `medium` and `low`, with no effort flag, `gemini-4-hydrogen` and `gemini-3.8-flash` at `low` all gave the 429 later in the session
 Retro: Pending
 Delivery target: Merge
 Delivery: Pending
