@@ -261,9 +261,19 @@ def judge(
     return outcome, rule_lines, details
 
 
+def failure_message(stream: str) -> str:
+    """The message of the last `error` object in a JSON stream; Codex writes its limit text there, not to stderr."""
+    for row in reversed(rows(stream)):
+        error = row.get("error")
+        message = error.get("message") if isinstance(error, dict) else None
+        if isinstance(message, str) and message:
+            return message
+    return ""
+
+
 def run_reviewer(
     reviewer: str, folder: Path, prompt: str, root: Path | None = None
-) -> tuple[subprocess.CompletedProcess[str] | None, str]:
+) -> tuple[subprocess.CompletedProcess[str] | None, str, bool]:
     try:
         result = run_in_group(
             command(reviewer, prompt, folder, root),
@@ -275,13 +285,15 @@ def run_reviewer(
             timeout=TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
-        return None, f"not done: {reviewer} is not installed"
+        return None, f"not done: {reviewer} is not installed", False
     except subprocess.TimeoutExpired:
-        return None, f"not done: {reviewer} timed out after {TIMEOUT_SECONDS}s"
+        return None, f"not done: {reviewer} timed out after {TIMEOUT_SECONDS}s", False
     if result.returncode:
-        reason = result.stderr.strip().rpartition("\n")[2] or "no error output"
-        return None, f"not done: {reviewer} exited {result.returncode}: {reason}"
-    return result, ""
+        reason = failure_message(result.stdout) or (
+            result.stderr.strip().rpartition("\n")[2] or "no error output"
+        )
+        return None, f"not done: {reviewer} exited {result.returncode}: {reason}", True
+    return result, "", False
 
 
 def bound_utf8(text: str, limit: int) -> str:
@@ -519,18 +531,34 @@ def prompt_for(
     return text
 
 
-def choose_reviewer(host: str | None, root: Path | None = None) -> tuple[str, bool]:
-    """The first installed supported other agent from challenge_order; else a fresh same-agent session when supported."""
+def reviewer_attempts(
+    host: str | None, root: Path | None = None
+) -> list[tuple[str, bool]]:
+    """The installed supported other agents in challenge_order, then a fresh same-agent session when supported."""
     current = host_for(host)
     candidates = [
         name for name in reviewers_for(current, root) if name in LOOK_REVIEWERS
     ]
-    for candidate in candidates:
-        if shutil.which(candidate):
-            return candidate, False
+    attempts = [(name, False) for name in candidates if shutil.which(name)]
     if current in LOOK_REVIEWERS:
-        return current, True
-    return candidates[0], False
+        attempts.append((current, True))
+    return attempts or [(candidates[0], False)]
+
+
+def run_first_reviewer(
+    host: str | None, folder: Path, prompt: str, root: Path | None
+) -> tuple[str, bool, subprocess.CompletedProcess[str] | None, str, list[str]]:
+    """Move to the next reviewer only when one exits non-zero; a review that ran is never retried."""
+    skipped: list[str] = []
+    attempts = reviewer_attempts(host, root)
+    for reviewer, fresh in attempts[:-1]:
+        result, problem, exited = run_reviewer(reviewer, folder, prompt, root)
+        if not exited:
+            return reviewer, fresh, result, problem, skipped
+        skipped.append(problem)
+    reviewer, fresh = attempts[-1]
+    result, problem, _ = run_reviewer(reviewer, folder, prompt, root)
+    return reviewer, fresh, result, problem, skipped
 
 
 def review(
@@ -542,9 +570,8 @@ def review(
     design: str = "",
     design_digest: str = "",
 ) -> dict[str, object]:
-    reviewer, fresh = choose_reviewer(host, root)
     names = [f"image-{number}.png" for number in range(1, len(images) + 1)]
-    record: dict[str, object] = {"reviewer": reviewer, "fresh_same_agent": fresh}
+    record: dict[str, object] = {}
     digest = design_digest or (sha256(design.encode()) if design else "")
     if digest:
         record["design_doc"] = digest
@@ -566,12 +593,15 @@ def review(
                     "read_at": "",
                 }
             )
-        result, problem = run_reviewer(
-            reviewer,
+        reviewer, fresh, result, problem, skipped = run_first_reviewer(
+            host,
             folder,
             prompt_for(names, design, scope=scope, ringed=ringed),
             root,
         )
+        record = {"reviewer": reviewer, "fresh_same_agent": fresh, **record}
+        if skipped:
+            record["skipped"] = skipped
         if result is None:
             record["outcome"] = problem
             return record

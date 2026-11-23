@@ -195,6 +195,42 @@ def test_look_falls_back_to_a_fresh_same_agent_session(
     assert json.loads(log.read_text())["argv"]
 
 
+def install_failing_agent(tmp_path: Path, name: str, message: str) -> None:
+    path = tmp_path / "bin" / name
+    failed = json.dumps({"type": "turn.failed", "error": {"message": message}})
+    path.write_text(
+        "#!/bin/sh\necho 'Reading additional input from stdin...' >&2\n"
+        f"echo '{{\"type\":\"turn.started\"}}'\necho '{failed}'\nexit 1\n"
+    )
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+def test_look_falls_back_when_the_other_agent_cannot_run(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    install_failing_agent(tmp_path, "codex", "usage limit reached")
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "claude", images)
+    assert record["outcome"] == "clean"
+    assert record["reviewer"] == "claude"
+    assert record["fresh_same_agent"] is True
+    assert record["skipped"] == ["not done: codex exited 1: usage limit reached"]
+    assert json.loads(log.read_text())["argv"]
+
+
+def test_look_does_not_replace_a_bad_review_with_a_retry(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    install_agent(tmp_path, "codex", 1, good_answer(1).rpartition("\n")[0])
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "claude", images)
+    assert record["reviewer"] == "codex"
+    assert "no exact VERDICT line" in str(record["outcome"])
+    assert not log.exists()
+
+
 def test_look_block_holds_no_session_id_and_no_local_path(
     tmp_path: Path, project: Path
 ) -> None:
@@ -300,8 +336,8 @@ def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
     (tmp_path / "bin/claude").unlink()
     import look
 
-    assert look.choose_reviewer("agy", project) == ("codex", False)
-    assert look.choose_reviewer("codex", project) == ("codex", True)
+    assert look.reviewer_attempts("agy", project) == [("codex", False)]
+    assert look.reviewer_attempts("codex", project) == [("codex", True)]
 
 
 def test_look_ignores_uncommitted_shipping_base_edit(
