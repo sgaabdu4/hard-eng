@@ -62,6 +62,10 @@ UI_MARKS = (
     "Color(.displayP3",
     "colorLiteral",
 )
+UI_TOKEN_MARK = re.compile(
+    r"text-|bg-|border-|ring-|fill-|stroke-|@theme|@font-face|--text-|font-weight"
+)
+UI_TOKEN_SUFFIXES = UI_SUFFIXES[:-2]
 TEST_ATTRIBUTE = re.compile(r"@(?:Test|Suite)\s*\(")
 DIFF_HUNK_HEADER = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,(\d+))?")
 WALL_SUFFIXES = (".tsx", ".jsx", "hard-eng.gates.json")
@@ -486,8 +490,32 @@ DIFF = (
 )
 
 
+QUOTED_DIFF = re.compile(r'^diff --git ("a/(?:\\.|[^"\\])*") ("b/(?:\\.|[^"\\])*")$')
+
+
+def _unquote_path(token: str) -> str:
+    if len(token) > 1 and token[0] == token[-1] == '"':
+        return codecs.escape_decode(token[1:-1].encode())[0].decode(errors="replace")
+    return token
+
+
+def _diff_header_paths(line: str) -> tuple[str, ...]:
+    if line.startswith(("rename from ", "rename to ")):
+        return (_unquote_path(line.split(" ", 2)[2]),)
+    if quoted := QUOTED_DIFF.match(line):
+        return (header_path(quoted[1]), header_path(quoted[2]))
+    if not line.startswith("diff --git a/"):
+        return ()
+    rest = line.removeprefix("diff --git a/")
+    half = (len(rest) - 3) // 2
+    same = len(rest) >= 5 and len(rest) % 2 == 1 and rest[half : half + 3] == " b/"
+    return (rest[:half],) if same and rest[:half] == rest[half + 3 :] else ()
+
+
 def changed_lines(
-    diff: str, joins: dict[str, list[int]] | None = None
+    diff: str,
+    joins: dict[str, list[int]] | None = None,
+    files: set[str] | None = None,
 ) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
     """Added and removed (line number, text) pairs per file of a zero-context diff."""
     added: dict[str, list[tuple[int, str]]] = {}
@@ -513,23 +541,30 @@ def changed_lines(
             and line[4:] != "/dev/null"
         ):
             name = header_path(line[4:])
+        if files is not None and not in_hunk:
+            files.update(_diff_header_paths(line))
     return added, removed
 
 
 def diff_lines(
-    root: Path, base: str, joins: dict[str, list[int]] | None = None
+    root: Path,
+    base: str,
+    joins: dict[str, list[int]] | None = None,
+    files: set[str] | None = None,
 ) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[tuple[int, str]]]]:
     """Added and removed (line number, text) pairs per file; untracked files count as added."""
     diff = subprocess.check_output(
         [*DIFF, base, "--"], cwd=root, text=True, errors="replace"
     )
-    added, removed = changed_lines(diff, joins)
+    added, removed = changed_lines(diff, joins, files)
     untracked = subprocess.check_output(
         [*GIT_LISTING, "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,
         text=True,
     )
     for other in filter(None, untracked.split("\0")):
+        if files is not None:
+            files.add(other)
         if (root / other).is_symlink():
             added[other] = [(1, os.readlink(root / other))]
         elif (root / other).is_file():
@@ -774,25 +809,30 @@ def security_switch_offs(
     return found
 
 
-def ui_candidate(text: str) -> bool:
-    return ("transition" in text and "all" in text) or any(
-        mark in text for mark in UI_MARKS
+def ui_candidate(name: str, text: str) -> bool:
+    if PurePosixPath(name).name == "DESIGN.md":
+        return any(m in text for m in ("Weight", "weight", "--text-"))
+    return (
+        ("transition" in text and "all" in text)
+        or any(mark in text for mark in UI_MARKS)
+        or (name.endswith((".tsx", ".jsx")) and "key" in text)
+        or (name.endswith(UI_TOKEN_SUFFIXES) and bool(UI_TOKEN_MARK.search(text)))
     )
 
 
 def ui_source_check(root: Path, added: dict[str, list[tuple[int, str]]]) -> None:
     marked = {
-        name: [(n, t) for n, t in lines if ui_candidate(t)]
+        name: [(n, t) for n, t in lines if ui_candidate(name, t)]
         for name, lines in added.items()
-        if name.endswith(UI_SUFFIXES)
+        if name.endswith(UI_SUFFIXES) or PurePosixPath(name).name == "DESIGN.md"
     }
     if candidates := {name: lines for name, lines in marked.items() if lines}:
         from ui_rules import ui_findings
 
         if found := ui_findings(root, candidates):
             raise ValueError(
-                "HE-UI-SOURCE: Added UI lines must hold no transition on every property "
-                "and no colour literal outside a theme or token file. "
+                "HE-UI-SOURCE: Added UI lines must hold no transition on every property, "
+                "no colour literal outside a theme or token file and no undefined Tailwind theme token. "
                 + "; ".join(found)
             )
 
@@ -896,21 +936,37 @@ def whole_refusals(root: Path) -> list[str]:
 
 
 def validate_rules(
-    root: Path, base: str | None, screens: bool = True, full: bool = False
-) -> None:
+    root: Path,
+    base: str | None,
+    screens: bool = True,
+    full: bool = False,
+    stage: str | None = None,
+) -> set[str]:
     """The full check leaves changed-line findings to the whole-project pass, which holds them all, so one run lists everything."""
     if not full:
         validate_comments(root, base)
-    validate_suppressions(root, base, screens, full)
+    changed_names = validate_suppressions(root, base, screens, full)
+    if (
+        full
+        and screens
+        and stage == "Complete"
+        and not os.environ.get("GITHUB_ACTIONS")
+        and not os.environ.get("CI")
+    ):
+        from local_ui_proof import validate_local_ui_proof
+
+        validate_local_ui_proof(root, base, changed_names)
+    return changed_names
 
 
 def validate_suppressions(
     root: Path, base: str | None, screens: bool = True, full: bool = False
-) -> None:
+) -> set[str]:
     joins: dict[str, list[int]] = {}
+    files: set[str] = set()
     try:
         point, empty = diff_base(root, base or default_branch_point(root) or "HEAD")
-        added, removed = diff_lines(root, point, joins)
+        added, removed = diff_lines(root, point, joins, files)
     except subprocess.CalledProcessError as error:
         raise ValueError(
             "Cannot verify suppression scope; fetch or supply a valid Git --base"
@@ -940,3 +996,4 @@ def validate_suppressions(
         ui_source_check(root, added)
         if screens:
             text_walls_check(root, point, joins, added, removed)
+    return files | added.keys() | removed.keys()

@@ -12,6 +12,8 @@ LIMITS = {
     "accent_colours": 2,
     "secondary_words": 20,
     "frame_ratio": 1.1,
+    "cls": 0.1,
+    "fetch_waves": 3,
 }
 PROOF_KINDS = {
     "Mistake-proof": ("judgement",),
@@ -59,7 +61,7 @@ AXE_NAMES = {
     "select-name": "label",
     "image-alt": "label",
 }
-MEASURE_SCRIPT = """(() => {
+MEASURE_SCRIPT = """(async () => {
 const LIMITS = LIMITS_JSON;
 const found = [];
 const shown = (el) => {
@@ -118,8 +120,15 @@ for (const [parent, members] of groups) {
   if (members.length > 1) {
     const behind = getComputedStyle(parent).backgroundColor;
     const filled = members.filter((m) => { const c = getComputedStyle(m).backgroundColor; return opaque(c) && c !== behind && hue(rgb(c)) !== null; });
-    const fills = new Set(filled.map((m) => getComputedStyle(m).backgroundColor));
-    if (fills.size > 1) found.push({ rule: "competing-buttons", at: filled.map(name).join(" + "), fills: fills.size });
+    if (filled.length > 1) found.push({ rule: "competing-buttons", at: filled.map(name).join(" + "), count: filled.length });
+    const seenLabels = new Map();
+    for (const m of members) {
+      const label = textOf(m).replace(/\\s+/g, " ").trim().toLowerCase();
+      if (label) seenLabels.set(label, (seenLabels.get(label) || 0) + 1);
+    }
+    for (const [label, count] of seenLabels) {
+      if (count > 1) found.push({ rule: "duplicate-buttons", at: label.slice(0, 30), count });
+    }
   }
   if (members.length > 1) {
   const block = parent.parentElement;
@@ -218,6 +227,127 @@ for (const heading of document.querySelectorAll(HEADINGS)) {
 }
 if (document.documentElement.scrollWidth > innerWidth + 1) {
   found.push({ rule: "overflow", at: "page", scrollWidth: document.documentElement.scrollWidth, width: innerWidth });
+}
+const bodyWeight = parseFloat(getComputedStyle(document.body).fontWeight) || 400;
+const visibleHeadings = [...document.querySelectorAll(HEADINGS)].filter(visible);
+const h1s = visibleHeadings.filter((h) => h.tagName === "H1");
+const h2s = visibleHeadings.filter((h) => h.tagName === "H2");
+const maxH1Px = h1s.length ? Math.max(...h1s.map((h) => parseFloat(getComputedStyle(h).fontSize))) : 0;
+const heavyBody = texts.some((el) => {
+  if (el.closest(HEADINGS + ",button,a,th,strong,b")) return false;
+  const s = getComputedStyle(el);
+  return parseFloat(s.fontSize) <= bodyPx * 1.15 && (parseFloat(s.fontWeight) || 400) >= 500;
+});
+for (const h of h1s) {
+  const s = getComputedStyle(h);
+  const px = parseFloat(s.fontSize), wt = parseFloat(s.fontWeight) || 400;
+  if (px < bodyPx - 0.5 || (px <= bodyPx * 1.5 && (wt < bodyWeight || (heavyBody && wt <= 400)))) {
+    found.push({ rule: "heading-hierarchy", at: name(h), px, weight: wt });
+  }
+}
+for (const h of h2s) {
+  const s = getComputedStyle(h);
+  const px = parseFloat(s.fontSize), wt = parseFloat(s.fontWeight) || 400;
+  if ((maxH1Px && px > maxH1Px + 0.5) || (px <= bodyPx * 1.35 && (wt < bodyWeight || (heavyBody && wt <= 400)))) {
+    found.push({ rule: "heading-hierarchy", at: name(h), px, weight: wt });
+  }
+}
+const measureCtx = document.createElement("canvas").getContext("2d");
+for (const el of controls) {
+  const s = getComputedStyle(el);
+  if (el.tagName === "SELECT") {
+    const opt = el.options[el.selectedIndex];
+    const label = (opt ? opt.text : "").trim();
+    if (label && measureCtx) {
+      measureCtx.font = s.font || `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+      const pad = (parseFloat(s.paddingLeft) || 0) + (parseFloat(s.paddingRight) || 0);
+      const arrow = (s.appearance === "none" || s.webkitAppearance === "none") ? 0 : 18;
+      const avail = el.clientWidth - pad - arrow;
+      if (avail <= 8 || measureCtx.measureText(label).width > avail + 4) {
+        found.push({ rule: "clipped-control", at: name(el), why: "select clips selected option" });
+      }
+    }
+  } else if (
+    (el.tagName === "BUTTON" || el.getAttribute("role") === "button") &&
+    (s.overflowX === "hidden" || s.overflowX === "clip") &&
+    s.whiteSpace === "nowrap" &&
+    s.textOverflow !== "ellipsis" &&
+    el.scrollWidth > el.clientWidth + 2
+  ) {
+    found.push({ rule: "clipped-control", at: name(el), why: "button text clipped" });
+  }
+}
+const inScroller = (node, stop) => {
+  for (let p = node.parentElement; p && p !== stop; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if (oy === "auto" || oy === "scroll") return true;
+  }
+  return false;
+};
+const reportedChrome = new Set();
+for (const el of document.body.querySelectorAll("*")) {
+  if (!visible(el)) continue;
+  const s = getComputedStyle(el);
+  if (s.position !== "fixed" && s.position !== "sticky") continue;
+  const b = el.getBoundingClientRect();
+  if (b.height < innerHeight * 0.5 || s.overflowY === "auto" || s.overflowY === "scroll") continue;
+  const clipsY = s.overflowY === "hidden" || s.overflowY === "clip";
+  if (s.position === "sticky" && !clipsY) continue;
+  const limitY = s.position === "fixed" ? (clipsY ? Math.min(b.bottom, innerHeight) : innerHeight) : b.bottom;
+  for (const ctrl of el.querySelectorAll("a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link]")) {
+    if (!visible(ctrl) || reportedChrome.has(ctrl) || inScroller(ctrl, el)) continue;
+    if (ctrl.getBoundingClientRect().bottom > limitY + 2) {
+      reportedChrome.add(ctrl);
+      found.push({ rule: "clipped-chrome", at: name(ctrl), why: "control pushed past viewport bottom inside fixed or sticky chrome" });
+    }
+  }
+}
+const fetches = performance.getEntriesByType("resource")
+  .filter((e) => (e.initiatorType === "fetch" || e.initiatorType === "xmlhttprequest") && e.responseEnd > 0)
+  .sort((a, b) => a.startTime - b.startTime);
+let waves = 0, waveEnd = -1;
+for (const entry of fetches) {
+  if (waves === 0 || entry.startTime >= waveEnd) {
+    waves += 1;
+    waveEnd = entry.responseEnd;
+  } else if (entry.responseEnd > waveEnd) {
+    waveEnd = entry.responseEnd;
+  }
+}
+if (waves > LIMITS.fetch_waves) {
+  found.push({ rule: "fetch-waterfall", at: "page", waves });
+}
+const shifts = [];
+if (typeof PerformanceObserver !== "undefined" && (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift")) {
+  await new Promise((resolve) => {
+    try {
+      const obs = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (!entry.hadRecentInput) shifts.push(entry);
+        }
+      });
+      obs.observe({ type: "layout-shift", buffered: true });
+      setTimeout(() => {
+        for (const entry of obs.takeRecords()) {
+          if (!entry.hadRecentInput) shifts.push(entry);
+        }
+        obs.disconnect();
+        resolve();
+      }, 0);
+    } catch { resolve(); }
+  });
+}
+shifts.sort((a, b) => a.startTime - b.startTime);
+let cls = 0, winVal = 0, winStart = 0, prevShift = 0;
+for (const entry of shifts) {
+  if (winVal && (entry.startTime - prevShift > 1000 || entry.startTime - winStart > 5000)) winVal = 0;
+  if (!winVal) winStart = entry.startTime;
+  winVal += entry.value;
+  prevShift = entry.startTime;
+  if (winVal > cls) cls = winVal;
+}
+if (cls > LIMITS.cls) {
+  found.push({ rule: "layout-shift", at: "page", cls: +cls.toFixed(3) });
 }
 return JSON.stringify(found);
 })()"""
