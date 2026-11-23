@@ -12,14 +12,14 @@ Sources: the maintainer's request of 2026-11-23, with its five holes and its add
 Reviewer: N/A — two small faults, each with a stated fix and a stated set of cases that must keep failing.
 Deliverables: None
 
-- Per-step fetch waves, the load and each input step measured apart: In scope — a page with one load wave and three presses that each post then load passes, and a 4-wave load fails at `load`
-- A step that changes nothing must not split a waterfall: In scope — a part starts only after 500 ms with no fetch in flight and none ended, and only for a verb that commits input
-- The page must not fake action times: In scope — the times live in a file that `browser.py` writes outside the page, and an `eval` step adds none
-- Verb parsing fails closed: In scope — every verb of the request, `find <locator> <value> <action>`, and no match inside text arguments
-- Recording an action never fails or changes the step and prints nothing: In scope — a step still runs when the file cannot be written
-- The test helper `plain_step` must go through `browser.dispatch`: In scope — it calls `browser_command`, which calls `dispatch`, and a press leaves a line in the file
-- Issue 705, the tab bar in the page container: In scope — the block of a button group in `body`, `main` or an element that holds the page's `h1` is the group's own row
-- Issue 705, a wrapper must not hide colours: In scope — a card, a tab bar row and a section inside either still count every colour
+- Per-step fetch waves, the load and each input step measured apart: In scope — A page with one parallel load wave and three presses that each post then load has no finding
+- A step that changes nothing must not split a waterfall: In scope — A `hover` in a quiet gap, and a `click body` while a fetch is in flight, do not split a 4-wave load
+- The page must not fake action times: In scope — An `eval` step, and the page itself, add no action; a real press adds one line
+- Verb parsing fails closed: In scope — Each verb of the request is marked, each other or misread step is not
+- Recording an action never fails or changes the step and prints nothing: In scope — A file that cannot be written leaves the step running and prints nothing
+- The test helper `plain_step` must go through `browser.dispatch`: In scope — `plain_step` runs the real command path: a `click` through it leaves a line in the session's file
+- Issue 705, the tab bar in the page container: In scope — The issue's tab bar page has no finding at any width, `shared-edge` included
+- Issue 705, a wrapper must not hide colours: In scope — A card with a button pair and 3 accents, a tab bar with 3 accents of its own, and many colours inside a `div` or `section` wrapper still fail with `accent-colours`
 - Issue 705, status words, dot size and a project list of status tokens: Later — user, the added scope for `sgaabdu4/hard-eng#705` rejects them; the list is an allowlist
 - Page-level container reading for the accent block: Proposal — `body`, `main` and an element that holds the page's first `h1` count as the page, so the block shrinks to the group's own row; the limit of 2 stays, and the base text colour still counts; yes — user, AGENTS.md ("This codebase is yours: what it's for and how it's built are your call") and the Hierarchy line of `features/ui-quality-enforcement/PLAN.md` ("at most 2 accent colours per block")
 
