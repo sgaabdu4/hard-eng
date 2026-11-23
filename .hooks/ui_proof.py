@@ -41,7 +41,7 @@ UNCHANGED_LINE = re.compile(
     r"N/A — unchanged: !\[[^\]]*\]\(([^)\s]+)\) !\[[^\]]*\]\(([^)\s]+)\) — \S"
 )
 CAPTURE_NAME = re.compile(r"(.+)-(\d+)\.png")
-NATIVE = (".dart", ".swift")
+NATIVE = (".dart", ".swift", ".arb")
 
 
 @dataclass(frozen=True)
