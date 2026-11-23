@@ -121,3 +121,32 @@ def test_the_full_gate_refuses_a_reused_part_that_git_does_not_track(
     kept = "Controls: Password box — reuses `src/ui/PasswordField.tsx`\n"
     assert tracked_problem(kept, project) is None
     assert tracked_problem("no controls here\n", project) is None
+
+
+def committed_plan(project: Path, visual_plan: str) -> None:
+    (project / "PLAN.md").write_text(with_controls(visual_plan, NEW_PART))
+    commit(project, "plan with a new part")
+
+
+def plan_in_push_snapshot(project: Path) -> str:
+    """The plan check as pre-push runs it: in a fresh worktree of the pushing checkout."""
+    from ship_actions import snapshot, snapshot_environment
+
+    with snapshot(project, "HEAD", snapshot_environment(project), False) as checkout:
+        return validate_plan(checkout / "PLAN.md")
+
+
+def test_a_look_record_of_the_pushing_checkout_counts_in_the_push_snapshot(
+    project: Path, visual_plan: str
+) -> None:
+    committed_plan(project, visual_plan)
+    record_look(project)
+    assert plan_in_push_snapshot(project) == "Complete"
+
+
+def test_a_mockup_nobody_looked_at_is_still_refused_in_the_push_snapshot(
+    project: Path, visual_plan: str
+) -> None:
+    committed_plan(project, visual_plan)
+    with pytest.raises(ValueError, match="no `look` record"):
+        plan_in_push_snapshot(project)
