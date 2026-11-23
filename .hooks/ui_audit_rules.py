@@ -380,32 +380,78 @@ def _theme_blocks(css: str) -> list[tuple[str, bool]]:
     return blocks
 
 
+def _clear_text_token(
+    token: str,
+    roles: set[str],
+    weights: dict[str, int],
+    families: dict[str, str],
+    explicit_w: set[str],
+    explicit_f: set[str],
+) -> None:
+    if token == "*":
+        roles.clear()
+        weights.clear()
+        families.clear()
+        explicit_w.clear()
+        explicit_f.clear()
+    elif token.endswith("--font-weight"):
+        role = token[: -len("--font-weight")]
+        weights.pop(role, None)
+        explicit_w.discard(role)
+    elif "--" not in token:
+        roles.discard(token)
+        weights.pop(token, None)
+        families.pop(token, None)
+        explicit_w.discard(token)
+        explicit_f.discard(token)
+
+
+def _set_role_prop[T](
+    table: dict[str, T], explicit: set[str], role: str, value: T, is_default: bool
+) -> None:
+    if not is_default or role not in explicit:
+        table[role] = value
+    if not is_default:
+        explicit.add(role)
+
+
+def _apply_theme_block(
+    body: str,
+    is_default: bool,
+    roles: set[str],
+    weights: dict[str, int],
+    families: dict[str, str],
+    explicit_w: set[str],
+    explicit_f: set[str],
+) -> None:
+    from ui_rules import THEME_VAR
+
+    for kind, token, raw_value in THEME_VAR.findall(body):
+        if kind != "text":
+            continue
+        if raw_value.strip() == "initial":
+            _clear_text_token(token, roles, weights, families, explicit_w, explicit_f)
+        elif "--" not in token:
+            roles.add(token)
+    for role, wt in TEXT_WEIGHT_VAR.findall(body):
+        _set_role_prop(weights, explicit_w, role, int(wt), is_default)
+    for role, raw in TEXT_FAMILY_VAR.findall(body):
+        if fam := _first_family(raw):
+            _set_role_prop(families, explicit_f, role, fam, is_default)
+
+
 def _theme_text_tokens(
     theme_blocks: list[tuple[str, bool]],
 ) -> tuple[set[str], dict[str, int], dict[str, str]]:
-    from ui_rules import THEME_VAR
-
     roles: set[str] = set()
     weights: dict[str, int] = {}
     families: dict[str, str] = {}
     explicit_w: set[str] = set()
     explicit_f: set[str] = set()
     for body, is_default in theme_blocks:
-        for kind, token, _ in THEME_VAR.findall(body):
-            if kind == "text" and "--" not in token:
-                roles.add(token)
-        for role, wt in TEXT_WEIGHT_VAR.findall(body):
-            if not is_default or role not in explicit_w:
-                weights[role] = int(wt)
-            if not is_default:
-                explicit_w.add(role)
-        for role, raw in TEXT_FAMILY_VAR.findall(body):
-            if (fam := _first_family(raw)) and (
-                not is_default or role not in explicit_f
-            ):
-                families[role] = fam
-            if not is_default and _first_family(raw):
-                explicit_f.add(role)
+        _apply_theme_block(
+            body, is_default, roles, weights, families, explicit_w, explicit_f
+        )
     return roles, weights, families
 
 
@@ -460,7 +506,8 @@ def _group_weight_findings(
     findings = _design_weight_mismatches(
         design_rel, design_weights, defined_roles, defined_weights
     )
-    by_family, mono_only = pkg_faces
+    group_faces = _font_face_ranges(css_texts)
+    by_family, mono_only = group_faces if group_faces[0] else pkg_faces
     role_families = {**design_role_fams, **theme_role_fams}
     for role, weight in sorted(defined_weights.items()):
         if not _weight_covered(weight, role_families.get(role), by_family, mono_only):
@@ -468,6 +515,25 @@ def _group_weight_findings(
                 f"{design_rel}: --text-{role}--font-weight ({weight}) is outside loaded @font-face font-weight ranges"
             )
     return findings
+
+
+def _live_css_groups(
+    root: Path, groups: list[list[Path]], changed: set[str]
+) -> list[list[Path]]:
+    all_rels = sorted(
+        {path.relative_to(root).as_posix() for group in groups for path in group}
+    )
+    skipped = generated_sources(root, all_rels) if all_rels else set()
+    live: list[list[Path]] = []
+    for group in groups:
+        if not group:
+            continue
+        rels = [path.relative_to(root).as_posix() for path in group]
+        if rels[-1] not in skipped or any(
+            rel in changed and rel not in skipped for rel in rels
+        ):
+            live.append(group)
+    return live
 
 
 def design_weight_findings(
@@ -493,15 +559,9 @@ def design_weight_findings(
     text_by_path = {
         path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
     }
-    groups = _css_entrypoint_orders(files, text_by_path)
-    skipped_roots = generated_sources(
-        root, [group[-1].relative_to(root).as_posix() for group in groups if group]
+    live_groups = _live_css_groups(
+        root, _css_entrypoint_orders(files, text_by_path), changed
     )
-    live_groups = [
-        group
-        for group in groups
-        if group and group[-1].relative_to(root).as_posix() not in skipped_roots
-    ]
     live_paths = list(dict.fromkeys(path for group in live_groups for path in group))
     pkg_faces = _font_face_ranges([text_by_path[path] for path in live_paths])
     design_weights, design_role_fams = _design_yaml_typography(design_path)
