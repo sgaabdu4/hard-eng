@@ -1,6 +1,5 @@
 """A Flutter localization file is a native change: it needs a native pair, never a browser capture."""
 
-import json
 from pathlib import Path
 
 import local_ui_proof
@@ -8,8 +7,7 @@ import pytest
 import shipping
 import ui_proof
 from conftest import commit, git
-from test_local_ui_proof import clear_ci
-from test_shipping import _fixture
+from test_local_ui_proof import clear_ci, flutter_app_root
 from test_ui_quality import (
     GUIDELINE_TEST,
     NO_UX,
@@ -55,21 +53,9 @@ def test_the_local_complete_check_takes_a_localization_file_as_native(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clear_ci(monkeypatch)
-    fixture = _fixture(tmp_path, ui_paths=["app/**"])
-    root = fixture.root
-    gates = json.loads((root / "hard-eng.gates.json").read_text())
-    gates["packages"] = [
-        {"name": "shop", "path": "app", "language": "dart", "checks": []}
-    ]
-    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
-    (root / "app/lib/ui").mkdir(parents=True)
+    root = flutter_app_root(tmp_path)
     (root / "app/lib/l10n").mkdir(parents=True)
-    (root / "app/test").mkdir(parents=True)
-    (root / "app/pubspec.yaml").write_text(
-        "name: shop\ndependencies:\n  flutter:\n    sdk: flutter\n"
-    )
     (root / "app/test/card_test.dart").write_text(GUIDELINE_TEST)
-    (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('Old');\n")
     (root / "app/lib/l10n/app_en.arb").write_text('{\n  "title": "Old"\n}\n')
     commit(root, "base")
     git(root, "branch", "-f", "main", "HEAD")

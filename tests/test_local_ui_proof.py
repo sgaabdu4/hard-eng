@@ -455,12 +455,9 @@ def test_local_complete_check_detects_quoted_binary_ui_asset_diff(
         validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
 
 
-def test_local_complete_check_validates_native_flutter_guideline_and_look(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    clear_ci(monkeypatch)
-    fixture = _fixture(tmp_path, ui_paths=["app/**"])
-    root = fixture.root
+def flutter_app_root(tmp_path: Path) -> Path:
+    """A repository with one Flutter package whose screen file is not yet committed."""
+    root = _fixture(tmp_path, ui_paths=["app/**"]).root
     gates = json.loads((root / "hard-eng.gates.json").read_text())
     gates["packages"] = [
         {"name": "shop", "path": "app", "language": "dart", "checks": []}
@@ -472,6 +469,14 @@ def test_local_complete_check_validates_native_flutter_guideline_and_look(
         "name: shop\ndependencies:\n  flutter:\n    sdk: flutter\n"
     )
     (root / "app/lib/ui/card.dart").write_text("Widget card() => Text('Old');\n")
+    return root
+
+
+def test_local_complete_check_validates_native_flutter_guideline_and_look(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = flutter_app_root(tmp_path)
     commit(root, "base")
     git(root, "branch", "-f", "main", "HEAD")
     git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
