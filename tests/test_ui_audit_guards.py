@@ -136,16 +136,18 @@ PRESS = (
 )
 CHAIN = (
     "(async () => { for (let i = 0; i < 4; i++) "
-    "await (await fetch('/step.json?w=' + i + Date.now())).text(); })()"
+    "await (await fetch('/step.json?w=' + i + Date.now())).text(); "
+    "window.done = true; })()"
 )
+GET = "const get = (url) => fetch(url).then((reply) => reply.text()); "
 HELD_CHAIN = (
-    "(async () => { await fetch('/step.json?a'); await fetch('/step.json?b'); "
-    "await fetch('/gate'); await fetch('/step.json?d'); })();"
+    f"(async () => {{ {GET}await get('/step.json?a'); await get('/step.json?b'); "
+    "await get('/gate'); await get('/step.json?d'); window.done = true; })();"
 )
 GAP_CHAIN = (
-    "(async () => { await fetch('/step.json?a'); await fetch('/step.json?b'); "
+    f"(async () => {{ {GET}await get('/step.json?a'); await get('/step.json?b'); "
     "await new Promise((done) => setTimeout(done, 5000)); "
-    "await fetch('/step.json?c'); await fetch('/step.json?d'); })();"
+    "await get('/step.json?c'); await get('/step.json?d'); window.done = true; })();"
 )
 
 
@@ -194,6 +196,14 @@ def open_board(tmp_path: Path, site: str, name: str, page_name: str) -> None:
     plain_step(tmp_path, name, "open", f"{site}/{page_name}.html")
 
 
+def finished(tmp_path: Path, name: str) -> None:
+    for _ in range(120):
+        if plain_step(tmp_path, name, "eval", "window.done === true").strip() == "true":
+            return
+        time.sleep(0.5)
+    raise AssertionError("the page chain did not finish")
+
+
 def measured(
     tmp_path: Path, browser: ModuleType, name: str
 ) -> list[tuple[object, object]]:
@@ -229,7 +239,7 @@ def test_a_four_wave_load_still_fails_after_an_older_action_in_the_session(
     name = session()
     open_board(tmp_path, site, name, "waterfall")
     try:
-        time.sleep(QUIET_SECONDS)
+        finished(tmp_path, name)
         origin = float(plain_step(tmp_path, name, "eval", "performance.timeOrigin"))
         browser.actions_file(browser.output_folder(tmp_path), name).write_text(
             f"{int(origin) - 100} click\n"
@@ -250,7 +260,7 @@ def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
         plain_step(tmp_path, name, "click", "body")
         time.sleep(2)
         plain_step(tmp_path, name, "click", "#go")
-        time.sleep(QUIET_SECONDS)
+        finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 2")]
     finally:
         plain_step(tmp_path, name, "close")
@@ -266,7 +276,7 @@ def test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterf
     try:
         time.sleep(QUIET_SECONDS)
         plain_step(tmp_path, name, verb, "body")
-        time.sleep(5)
+        finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
     finally:
         plain_step(tmp_path, name, "close")
@@ -282,7 +292,7 @@ def test_a_click_while_a_fetch_is_in_flight_does_not_split_a_load_waterfall(
         assert gate.arrived.wait(20)
         plain_step(tmp_path, name, "click", "body")
         gate.release.set()
-        time.sleep(QUIET_SECONDS)
+        finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
     finally:
         gate.release.set()
