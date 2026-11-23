@@ -311,3 +311,18 @@ def test_an_update_that_adds_codex_rules_stays_a_verified_scaffold_update(
     commit(target, "symlinked codex rules")
     with pytest.raises(ValueError, match=r"\.codex/rules/hard-eng\.rules is a symlink"):
         update.check_scaffold_update(target, base)
+
+
+def test_update_that_changes_the_project_rules_file_is_not_scaffold_only(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Escaped bug: a root AGENTS.md change in a verified update skipped every project check that reads that file."""
+    source, target, _ = release
+    base = git(target, "rev-parse", "HEAD")
+    with (source / "AGENTS.md").open("a") as rules:
+        rules.write("- A new shared rule.\n")
+    release_now(source, monkeypatch, "release with a rule")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert "AGENTS.md" in git(target, "diff", "--name-only", base).splitlines()
+    assert not update.check_scaffold_update(target, base)
