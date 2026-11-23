@@ -22,6 +22,6 @@
 - Reuse settled approvals; ask only if missing info changes the result or a consequential action lacks approval.
 - HE-OUTPUT-PLAIN: ~80% ASD-STE100, ≤20 words/sentence, no jargon/idioms.
 - Setup prints `Gap:` → run its `gap-issue` command without asking.
-- Failing check → fix the project, never offer to weaken it. Broken Hard Eng `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, if approved, file: Problem, Reproduction, revision, Suggestion; apply publication privacy.
+- Failing check → Hard Eng is strict: fix the project, never offer to weaken it. Broken only if no project change passes (minimal repro) → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, if approved, file: Problem, Reproduction, revision, Suggestion; apply publication privacy.
 - Models/efforts → `.agents/models.json` + `.claude/rules/model-roles.md` (same host default; overflow on quota).
 - Follow `.agents/skills/he/SKILL.md`; commands: `python3 .hooks/hard-eng.py --help`.
