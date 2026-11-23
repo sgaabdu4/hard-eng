@@ -201,3 +201,66 @@ def test_parenthesized_ternaries_generated_siblings_separate_fonts_and_theme_def
         "---\ntypography:\n  heading:\n    fontWeight: 700\n---\n# App\n"
     )
     assert "outside loaded @font-face font-weight ranges" in refused(sep)
+
+
+def test_bundle_font_isolation_generated_wrapper_and_text_initial_reset(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: bundle font faces stay isolated, generated wrappers still check edited imports, and --text-*: initial clears explicit weights."""
+    from comments import validate_suppressions
+    from conftest import commit, init
+    from test_ui_rules import refused
+
+    bundles = tmp_path / "bundles"
+    init(bundles)
+    (bundles / "src").mkdir()
+    (bundles / "src/storefront.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 600;\n}\n"
+    )
+    (bundles / "src/admin.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 700;\n}\n'
+    )
+    (bundles / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontFamily: Inter\n    fontWeight: 700\n---\n# App\n"
+    )
+    commit(bundles, "base")
+    (bundles / "src/storefront.css").write_text(
+        '@font-face {\n  font-family: "Inter";\n  font-weight: 400 600;\n}\n'
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n"
+    )
+    assert "outside loaded @font-face font-weight ranges" in refused(bundles)
+
+    wrap = tmp_path / "wrap"
+    init(wrap)
+    (wrap / ".gitattributes").write_text("src/bundle.css linguist-generated=true\n")
+    (wrap / "src").mkdir()
+    (wrap / "src/tokens.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n"
+    )
+    (wrap / "src/bundle.css").write_text('@import "./tokens.css";\n')
+    (wrap / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 700\n---\n# App\n"
+    )
+    commit(wrap, "base")
+    (wrap / "src/tokens.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 500;\n}\n"
+    )
+    assert "--text-heading--font-weight: 500" in refused(wrap)
+
+    reset = tmp_path / "reset"
+    init(reset)
+    (reset / "src").mkdir()
+    (reset / "src/app.css").write_text(
+        "@theme {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 500;\n}\n"
+        "@theme {\n  --text-*: initial;\n}\n"
+        "@theme default {\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n"
+    )
+    (reset / "DESIGN.md").write_text(
+        "---\ntypography:\n  heading:\n    fontWeight: 700\n---\n# App\n"
+    )
+    commit(reset, "base")
+    (reset / "src/app.css").write_text(
+        (reset / "src/app.css").read_text() + "/* touch */\n"
+    )
+    validate_suppressions(reset, "HEAD")
