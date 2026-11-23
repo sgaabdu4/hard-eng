@@ -16,6 +16,7 @@ LIMITS = {
     "cls": 0.1,
     "fetch_waves": 3,
     "action_quiet_ms": 500,
+    "action_reaction_ms": 1000,
 }
 PROOF_KINDS = {
     "Mistake-proof": ("judgement",),
@@ -322,8 +323,9 @@ const wavesOf = (list) => {
   return waves;
 };
 const quiet = (t) => !fetches.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
+const reacts = (t) => fetches.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
 const cuts = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin, verb }))
-  .filter((c) => c.t > 0 && quiet(c.t))
+  .filter((c) => c.t > 0 && quiet(c.t) && reacts(c.t))
   .sort((a, b) => a.t - b.t);
 const parts = [{ at: "load", entries: [] }, ...cuts.map((c, i) => ({ at: `${c.verb} ${i + 1}`, entries: [] }))];
 for (const entry of fetches) parts[cuts.filter((c) => c.t <= entry.startTime).length].entries.push(entry);
