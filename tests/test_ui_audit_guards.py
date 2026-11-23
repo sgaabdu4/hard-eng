@@ -326,6 +326,7 @@ ARGUMENTS = {
     "find-role": (["find", "role", "button", "click", "--name", "Go"], "find click"),
     "find-label": (["find", "label", "Email", "fill", "a@b.c"], "find fill"),
     "find-first": (["find", "first", ".row", "click"], "find click"),
+    "find-nth": (["find", "nth", "1", "button", "click"], "find click"),
 }
 NO_MARK = {
     "hover": ["hover", "#a"],
@@ -346,7 +347,7 @@ NO_MARK = {
     "mouse-wheel": ["mouse", "wheel", "5"],
     "unknown": ["tap", "#a"],
     "upper": ["CLICK", "#a"],
-    "empty": [],
+    "no-step": [""],
 }
 
 
@@ -374,7 +375,15 @@ def test_any_other_step_is_not_marked(browser: ModuleType, steps: list[str]) -> 
         ["--session", "bad name!", "click", "#a"],
         ["--session", "../x", "click", "#a"],
     ],
-    ids=["no-session", "no-name", "no-verb", "flag-first", "flag-after", "spaces", "path"],
+    ids=[
+        "no-session",
+        "no-name",
+        "no-verb",
+        "flag-first",
+        "flag-after",
+        "spaces",
+        "path",
+    ],
 )
 def test_a_misread_step_is_not_marked(browser: ModuleType, argv: list[str]) -> None:
     assert browser.action_mark(argv) is None
