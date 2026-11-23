@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-`challenge` reaches `agy` again: its command attaches the prompt to the print flag. `look` tries the next supported reviewer when one exits non-zero, then a fresh session of the host agent. The canary command for `agy` gets the same print form. Non-goals: adding `agy` to `look`, retrying a review that ran but gave a bad answer, changing the proof rules of `look`.
+`challenge` reaches `agy` again: its command attaches the prompt to the print flag, and its session settings use `agentMode` `plan`, because agy 1.5.15 refuses `default` (valid: `accept-edits`, `auto`, `plan`). `look` tries the next supported reviewer when one exits non-zero, then a fresh session of the host agent. The canary command for `agy` gets the same print form. Non-goals: adding `agy` to `look`, retrying a review that ran but gave a bad answer, changing the proof rules of `look`.
 
 ## Sources + coverage
 
@@ -26,6 +26,7 @@ Authority: Autonomous — the user's standing rule: merge each task PR once its 
 ## Acceptance + steps
 
 - [x] The `agy` reviewer command attaches the prompt to the print flag and has no bare `-p` → `tests/test_challenge.py::test_agy_reviewer_runs_read_only_with_session_settings`
+- [x] The session settings use `agentMode` `plan` → `tests/test_challenge.py::test_agy_reviewer_runs_read_only_with_session_settings`. Real agy with the pinned model and the same other keys: `plan` ran git and a file read and blocked a shell write outside the repo; `auto` allowed that write. `accept-edits` was not compared. A second fault, found by the first real `challenge` run: `agentMode: unrecognized value "default"`.
 - [x] The models overlay still sets the `agy` model flags in front → `tests/test_challenge.py::test_challenge_honors_local_models_overlay_for_order_and_flags`
 - [x] The canary command for `agy` attaches the prompt; the `claude` command is unchanged → `tests/test_release_canary.py::test_agent_command_supports_agy`
 - [x] `look` falls back to a fresh same-agent session when the other agent exits non-zero → `tests/test_look.py::test_look_falls_back_when_the_other_agent_cannot_run`

@@ -64,7 +64,7 @@ def agy_read_only_paths(root: Path) -> list[Path]:
 def agy_read_only_settings(root: Path) -> str:
     return json.dumps(
         {
-            "agentMode": "default",
+            "agentMode": "plan",
             "toolPermission": "proceed-in-sandbox",
             "enableTerminalSandbox": True,
             "permissions": {

@@ -438,6 +438,7 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     assert len(argv) == 9
     assert argv[8].startswith("--print=")
     settings = json.loads(argv[7])
+    assert settings["agentMode"] == "plan"
     assert settings["toolPermission"] == "proceed-in-sandbox"
     assert settings["enableTerminalSandbox"] is True
     assert "write_file(*)" in settings["permissions"]["deny"]
