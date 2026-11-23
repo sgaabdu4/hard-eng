@@ -398,13 +398,19 @@ def test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fai
     assert "usage limit" in record["fresh"] and "quota reached" in record["fresh"]
     head = git(branch, "rev-parse", "HEAD")
     out = capsys.readouterr().out
-    assert f"Independent review by claude at {head}: clean" in out
+    assert f"Review by a fresh claude session at {head}: clean" in out
+    assert "Independent review" not in out
     assert "Fresh claude session reviewed, because: codex exited 1" in out
     note = challenge.shipping_note(branch, head)
     assert note is not None
     assert note.startswith("Review by a fresh claude session (other agents failed: ")
     assert "usage limit" in note and "quota reached" in note
     assert note.endswith("): clean")
+    fake_cli(tmp_path / "bin", "claude", "", 1, "claude limit")
+    assert challenge.challenge(branch, None, None) == 0
+    rerun = capsys.readouterr().out
+    assert "Kept the earlier completed review by a fresh claude session" in rerun
+    assert "Independent review by claude" not in rerun
 
 
 def test_agy_reviewer_runs_read_only_with_session_settings(
