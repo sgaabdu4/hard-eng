@@ -92,6 +92,35 @@ def test_a_look_record_does_not_carry_when_one_reviewer_input_changed(
     assert look_records.records_for(project, new) == []
 
 
+def test_an_old_format_record_never_covers_and_a_new_format_record_still_does(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+
+    images, old, _ = clean_look_then_new_head(tmp_path, project)
+    new_format = json.loads(
+        look.record_path(
+            project, old, [hashlib.sha256(images[0].read_bytes()).hexdigest()]
+        ).read_text()
+    )
+    foreign = [hashlib.sha256(bytes([n])).hexdigest() for n in range(3)]
+    old_format = {
+        **new_format,
+        "head": "1" * 40,
+        "images": [
+            {"name": f"image-{n}.png", "sha256": digest, "read": True, "read_at": "t"}
+            for n, digest in enumerate(foreign)
+        ],
+    }
+    path = look.record_path(project, "1" * 40, foreign)
+    path.write_text(json.dumps(old_format))
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    log.unlink()
+    record = run_look(project, "claude", images)
+    assert not log.exists()
+    assert [item.get("carried_from") for item in listed(record, "images")] == [old]
+
+
 def test_a_carried_record_backs_the_new_head_in_ship_and_in_the_local_proof(
     tmp_path: Path, project: Path
 ) -> None:
@@ -226,6 +255,26 @@ def test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed(
     tmp_path: Path, project: Path
 ) -> None:
     images = a_look_that_found_the_badge_fault(tmp_path, project)
+    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
+    commit(project, "unrelated change")
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    assert "fixed at" not in " ".join(json.loads(log.read_text())["argv"])
+
+
+def test_a_finding_without_a_digest_is_not_called_fixed(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+
+    images = a_look_that_found_the_badge_fault(tmp_path, project)
+    head = git(project, "rev-parse", "HEAD").strip()
+    path = look.record_path(
+        project, head, [hashlib.sha256(images[0].read_bytes()).hexdigest()]
+    )
+    record = json.loads(path.read_text())
+    del record["images"][0]["sha256"]
+    path.write_text(json.dumps(record))
     (project / "notes.txt").write_text("a change that the reviewer never reads\n")
     commit(project, "unrelated change")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
