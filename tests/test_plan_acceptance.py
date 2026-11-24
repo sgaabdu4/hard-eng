@@ -129,6 +129,31 @@ def test_complete_plan_resolves_a_requirement_id_to_its_tests(
             validate_plans(root, base="0" * 40, stage="Complete")
 
 
+@pytest.mark.parametrize(
+    ("line", "accepted"),
+    [
+        ("- [x] Exit → `tests/test_app.py::test_exit` (HE-YAGNI).", True),
+        ("- [x] HE-YAGNI: exit → `tests/test_app.py::test_exit`.", True),
+        (f"- [x] Exit → `tests/test_app.py::test_exit` ({EXIT_ID}).", False),
+        ("- [x] Exit → HE-YAGNI.", False),
+    ],
+    ids=["rule-beside-test", "rule-first", "project-id-beside-test", "rule-alone"],
+)
+def test_a_rule_id_beside_the_named_test_is_a_citation_not_a_claim_of_coverage(
+    runner: ModuleType, line: str, accepted: bool
+) -> None:
+    root = runner.ROOT
+    (root / "tests").mkdir()
+    (root / "tests/test_app.py").write_text("def test_exit() -> None: ...\n")
+    plan = root / "PLAN.md"
+    plan.write_text(plan.read_text().replace(UNPROVED, line))
+    if accepted:
+        assert validate_plans(root, base="0" * 40, stage="Complete") == "Complete"
+    else:
+        with pytest.raises(ValueError, match="untested requirements"):
+            validate_plans(root, base="0" * 40, stage="Complete")
+
+
 @pytest.mark.parametrize("by_id", [False, True], ids=["path", "id"])
 @pytest.mark.parametrize("skipped", [False, True])
 def test_check_fails_when_an_acceptance_test_was_skipped(
