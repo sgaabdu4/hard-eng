@@ -643,13 +643,21 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     return status
 
 
+def acceptance_references(sections: dict[str, str]) -> list[tuple[str, str]]:
+    """The `path::test` names of every acceptance line, whatever the form of the other lines."""
+    return [
+        (path, name.split("[", 1)[0])
+        for line in CHECKBOX_REST.findall(sections["Acceptance + steps"])
+        for path, name in TEST_REFERENCE.findall(line)
+    ]
+
+
 def acceptance_tests(
     sections: dict[str, str],
 ) -> tuple[list[tuple[str, str]], set[str]]:
     """Each acceptance checkbox names its `path::test` or requirement ID, or N/A — reason."""
     from requirement_registry import REQUIREMENT_ID
 
-    references: list[tuple[str, str]] = []
     requirements: set[str] = set()
     for line in CHECKBOX_REST.findall(sections["Acceptance + steps"]):
         found = TEST_REFERENCE.findall(line)
@@ -661,9 +669,8 @@ def acceptance_tests(
                 "Acceptance + steps line needs a `path::test name` reference, "
                 f"a requirement ID or N/A — reason:{line[:80]}"
             )
-        references.extend((path, name.split("[", 1)[0]) for path, name in found)
         requirements |= named
-    return references, requirements
+    return acceptance_references(sections), requirements
 
 
 def untested_requirements(root: Path, requirements: set[str]) -> list[str]:
