@@ -313,7 +313,7 @@ const labelLines = (el) => {
   const boxes = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (!n.nodeValue.trim()) continue;
+    if (!n.nodeValue.trim() || !visible(n.parentElement)) continue;
     const range = document.createRange();
     range.selectNodeContents(n);
     for (const b of range.getClientRects()) if (b.width > 1 && b.height > 1) boxes.push({ mid: (b.top + b.bottom) / 2, h: b.height });

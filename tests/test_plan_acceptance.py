@@ -865,11 +865,12 @@ def test_a_comment_mark_inside_a_nested_string_hides_no_later_test(
     assert missing_tests(tmp_path, [(path, name)]) == []
 
 
+@pytest.mark.parametrize("extra", ["", "\n- [x] An old line with no named proof."])
 @pytest.mark.parametrize(
     ("removed", "refused"), [("test_named", True), ("test_unnamed", False)]
 )
 def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_with_no_plan_edit(
-    repository: Path, completed_plan: str, removed: str, refused: bool
+    repository: Path, completed_plan: str, removed: str, refused: bool, extra: str
 ) -> None:
     (repository / "tests").mkdir()
     source = repository / "tests/test_one.py"
@@ -877,7 +878,7 @@ def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_wit
     source.write_text(both)
     old = repository / "features/old/PLAN.md"
     old.parent.mkdir(parents=True)
-    named = "- [x] Observe it → `tests/test_one.py::test_named`."
+    named = "- [x] Observe it → `tests/test_one.py::test_named`." + extra
     old.write_text(completed_plan.replace(UNPROVED, named))
     base = commit(repository, "plans and tests")
     source.write_text(both.replace(f"def {removed}():\n    pass\n", ""))
@@ -885,35 +886,6 @@ def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_wit
         mine = repository / "features/mine/PLAN.md"
         mine.parent.mkdir()
         mine.write_text(completed_plan)
-        assert validate_plans(repository, base, "Complete") == "Complete"
-        return
-    with pytest.raises(
-        ValueError,
-        match="features/old/PLAN.md: acceptance names tests that do not exist: tests/test_one.py::test_named",
-    ):
-        validate_plans(repository, base, "Complete")
-
-
-@pytest.mark.parametrize(
-    ("removed", "refused"), [("test_named", True), ("test_unnamed", False)]
-)
-def test_an_old_plan_with_one_bad_form_line_still_names_its_tests_to_a_renamed_test(
-    repository: Path, completed_plan: str, removed: str, refused: bool
-) -> None:
-    (repository / "tests").mkdir()
-    source = repository / "tests/test_one.py"
-    both = "def test_named():\n    pass\n\n\ndef test_unnamed():\n    pass\n"
-    source.write_text(both)
-    old = repository / "features/old/PLAN.md"
-    old.parent.mkdir(parents=True)
-    named = "- [x] Observe it → `tests/test_one.py::test_named`.\n- [x] An old line with no named proof."
-    old.write_text(completed_plan.replace(UNPROVED, named))
-    base = commit(repository, "plans and tests")
-    source.write_text(both.replace(f"def {removed}():\n    pass\n", ""))
-    mine = repository / "features/mine/PLAN.md"
-    mine.parent.mkdir()
-    mine.write_text(completed_plan)
-    if not refused:
         assert validate_plans(repository, base, "Complete") == "Complete"
         return
     with pytest.raises(

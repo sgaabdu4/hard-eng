@@ -57,6 +57,7 @@ def web_change_repo(
     ux: str = REAL_UX,
     design: str = "",
     commit_work: bool = True,
+    sentence: str = "one screen edit",
 ) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     fixture = _fixture(tmp_path, ui_paths=["src/**", "app/**"])
@@ -74,7 +75,7 @@ def web_change_repo(
         (root / "PLAN.md")
         .read_text()
         .replace(NO_UX, ux)
-        .replace("no product release", "one screen edit")
+        .replace("no product release", sentence)
     )
     (root / "PLAN.md").write_text(plan_text)
     if commit_work:

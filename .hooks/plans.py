@@ -782,7 +782,7 @@ def validate_plans(
         judged_plans,
         judged_point,
         plan_not_needed,
-        update_only,
+        update_needs_no_plan,
     )
     from plan_parent import may_ride_along
     from plan_tests import unchanged_plan_test_problem
@@ -796,13 +796,7 @@ def validate_plans(
     if stage is None:
         stage = "Draft" if planning_only(root, changed) else "Complete"
     # Unrelated open plans must not block a verified Hard Eng update branch.
-    if (
-        base is not None
-        and not explicit_stage
-        and changed
-        and update_only(root, base, changed)
-    ):
-        print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
+    if update_needs_no_plan(root, base, changed, explicit_stage):
         return stage
     changed, paths, applicable = judged_plans(root, base, changed)
     unchanged_plan_test_problem(

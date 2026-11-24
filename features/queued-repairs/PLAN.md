@@ -70,7 +70,7 @@ Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fau
 - [ ] A plan line that starts with the words Delivery target and holds more than the target fails the plan check as it fails the merge → `tests/test_shipping_plan.py::test_a_delivery_target_with_more_words_fails_the_plan_check`
 - [ ] A rule ID beside the named test is a citation, and the screen part of the PR text check and the quick check of a plan line judge as the full runs do → `tests/test_plan_acceptance.py::test_a_rule_id_beside_the_named_test_is_a_citation_not_a_claim_of_coverage`, `tests/test_pr_text.py::test_ship_reads_the_screen_part_of_the_pr_text_check_as_ci_does` and `tests/test_quick_check.py::test_a_quick_check_refuses_a_bad_plan_line_as_the_full_check_does`
 - [ ] The review reference tells the reviewer to report a second answer to one domain question → N/A — the choice is one sentence of review guidance; no check can prove it, and the research that rules a check out is recorded in Verification
-- [ ] An old Complete plan with one bad-form acceptance line still names its tests to the check of a renamed test, and the same plan with the test kept passes → `tests/test_plan_acceptance.py::test_an_old_plan_with_one_bad_form_line_still_names_its_tests_to_a_renamed_test` (both rows)
+- [ ] An old Complete plan with one bad-form acceptance line still names its tests to the check of a renamed test, and the same plan with the test kept passes → `tests/test_plan_acceptance.py::test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_with_no_plan_edit` (the rows with the bad-form line)
 
 ## Baseline + execution
 

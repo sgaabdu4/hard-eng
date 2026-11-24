@@ -5,37 +5,16 @@ from pathlib import Path
 import local_ui_proof
 import pytest
 from change_size import plan_words
-from conftest import commit, git
-from test_local_ui_proof import clear_ci
-from test_shipping import _fixture
+from test_local_ui_proof import NO_UX, clear_ci, web_change_repo
 
 FIXTURES = Path(__file__).parent / "fixtures/plan-format"
-SENTENCE = "Verify fixture command exits; no product release."
-
-
-def old_plan_branch(tmp_path: Path, rewrite: str) -> Path:
-    """A base with an old Complete plan that says N/A for its screen, and a branch that edits a screen and rewrites that plan."""
-    root = _fixture(tmp_path, ui_paths=["src/**"]).root
-    (root / ".git/info/exclude").write_text(".hard-eng/\n")
-    (root / "src").mkdir()
-    (root / "src/App.tsx").write_text("export const App = () => <p>Old</p>;\n")
-    commit(root, "base")
-    git(root, "branch", "-f", "main", "HEAD")
-    git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
-    (root / "src/App.tsx").write_text("export const App = () => <p>New</p>;\n")
-    plan = root / "PLAN.md"
-    assert SENTENCE in plan.read_text()
-    plan.write_text(plan.read_text().replace(SENTENCE, rewrite))
-    commit(root, "edit a screen and rewrite the old plan")
-    return root
 
 
 def test_a_formatter_rewrite_of_an_old_complete_plan_does_not_reopen_its_ux_gate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clear_ci(monkeypatch)
-    wrapped = SENTENCE.replace("command exits", "command\n  exits")
-    root = old_plan_branch(tmp_path, wrapped)
+    root = web_change_repo(tmp_path, ux=NO_UX, sentence="no product\n  release")
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert "ux_reference" not in (problem or "")
 
@@ -44,7 +23,7 @@ def test_a_real_text_change_to_an_old_complete_plan_still_reopens_its_ux_gate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clear_ci(monkeypatch)
-    root = old_plan_branch(tmp_path, SENTENCE.replace("no product", "one product"))
+    root = web_change_repo(tmp_path, ux=NO_UX, sentence="one product release")
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "ux_reference says N/A" in problem
 
