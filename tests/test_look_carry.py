@@ -286,12 +286,27 @@ def test_each_earlier_fail_is_listed_for_a_recheck_and_never_called_fixed(
     ("lines", "alignment", "outcome", "reason"),
     [
         ([], "Pass", "not done", "skipped Recheck R1"),
-        (["Recheck R1: gone. image-1.png: the badge sits in the title"], "Pass", "clean", ""),
+        (
+            ["Recheck R1: gone. image-1.png: the badge sits in the title"],
+            "Pass",
+            "clean",
+            "",
+        ),
         (["Recheck R1: gone."], "Pass", "not done", "names no frame"),
         (["Recheck R1: gone. image-7.png: x"], "Pass", "not done", "names no frame"),
-        (["Recheck R1: still shown. image-1.png: badge"], "Pass", "not done", "not a Fail"),
+        (
+            ["Recheck R1: still shown. image-1.png: badge"],
+            "Pass",
+            "not done",
+            "not a Fail",
+        ),
         (["Recheck R1: still shown. image-1.png: badge"], "Fail", "findings", ""),
-        (["Recheck R1: maybe. image-1.png: badge"], "Pass", "not done", "skipped Recheck R1"),
+        (
+            ["Recheck R1: maybe. image-1.png: badge"],
+            "Pass",
+            "not done",
+            "skipped Recheck R1",
+        ),
     ],
 )
 def test_each_earlier_fail_is_rechecked_one_by_one(
@@ -305,7 +320,11 @@ def test_each_earlier_fail_is_rechecked_one_by_one(
     images = a_look_that_found_the_badge_fault(tmp_path, project)
     (project / "notes.txt").write_text("a change\n")
     commit(project, "a change")
-    fails = {"Alignment": "image-1.png: badge and meta apart"} if alignment == "Fail" else {}
+    fails = (
+        {"Alignment": "image-1.png: badge and meta apart"}
+        if alignment == "Fail"
+        else {}
+    )
     install_agent(tmp_path, "claude", 1, answer_with_rechecks(fails, lines))
     record = run_look(project, "claude", images)
     assert str(record["outcome"]).startswith(outcome)
@@ -327,7 +346,10 @@ def test_a_later_clean_verdict_ends_the_recheck_list(
     commit(project, "design again")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    assert "earlier look findings" not in " ".join(json.loads(log.read_text())["argv"]).lower()
+    assert (
+        "earlier look findings"
+        not in " ".join(json.loads(log.read_text())["argv"]).lower()
+    )
 
 
 def test_a_run_that_holds_back_images_tells_the_reviewer_and_all_forces_a_full_review(
