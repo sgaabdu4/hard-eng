@@ -37,7 +37,7 @@ Execution: One pattern and one function in `.hooks/look.py`, the test rows.
 ## Risks + recovery
 
 A line with a count form that the pattern does not read, such as words instead of digits or a comma list (`removed 0, 0, 5`), is not read as a list and a lone first 0 can refuse it. Recovery: revert the commit.
-Review declined: comma lists of per-screen counts. The comma already separates `kept` from `removed` and a clause such as `removed 0, 3 badges repeat` follows it, so a comma list cannot be told from those. The prompt form `(count: kept, removed)` and the reported line use `/` between screens.
+Review declined: A Fail line with comma-separated removed counts per screen, such as `removed 0, 0, 5`, is still refused because only the first 0 is read :: The comma already separates `kept` from `removed` and a clause such as `removed 0, 3 badges repeat` follows it, so a comma list cannot be told from those; a first attempt to read comma lists made `kept 34, 0 removed` stand. The line that was reported used `/` between screens, which is read.
 
 ## ux_reference
 
