@@ -320,6 +320,41 @@ def test_look_reads_the_rule_lines_and_image_lines_a_reviewer_actually_writes(
     assert "image-1.png" in cast(dict[str, str], record["details"])
 
 
+@pytest.mark.parametrize("separator", [". ", " - ", " — "])
+def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
+    separator: str,
+) -> None:
+    import look
+
+    names = [name for name, _ in usability_rules()]
+    image = ["Image image-1.png: a card with a title", "VERDICT: clean"]
+    read = {"image-1.png": True}
+
+    def rule_lines(answer: list[str]) -> tuple[str, list[str]]:
+        outcome, rules, _ = look.judge("\n".join(answer), ["image-1.png"], read)
+        return outcome, rules
+
+    given = [f"- {name}: Pass{separator}looked at it" for name in names]
+    assert rule_lines([*given, *image]) == (
+        "clean",
+        [f"{name}: Pass — looked at it" for name in names],
+    )
+    for broken in (f"- {names[0]}: looked at it", f"- {names[0]}: Pass."):
+        outcome, rules = rule_lines([broken, *given[1:], *image])
+        assert outcome.startswith("not done"), broken
+        assert rules == []
+
+
+def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None:
+    images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    form = prompt.partition("\n\nRules:")[0]
+    assert "`- <rule>: Pass|Fail|N/A. <what you saw>`" in form
+    assert "—" not in form
+
+
 def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
     tmp_path: Path, project: Path
 ) -> None:
