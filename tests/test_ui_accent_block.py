@@ -160,33 +160,24 @@ def with_tint(tint: str) -> str:
     )
 
 
+COUNTED = Counter({"accent-colours": 1})
 TINTS = {
-    "rgba-ten-percent": "rgba(0, 130, 60, 0.1)",
-    "oklab-ten-percent": "oklab(0.6 -0.15 0.1 / 0.1)",
-    "srgb-ten-percent": "color(srgb 0 0.5 0.25 / 0.1)",
+    "rgba-ten-percent": ("rgba(0, 130, 60, 0.1)", COUNTED),
+    "oklab-ten-percent": ("oklab(0.6 -0.15 0.1 / 0.1)", COUNTED),
+    "srgb-ten-percent": ("color(srgb 0 0.5 0.25 / 0.1)", COUNTED),
+    "rgba-nine-percent": ("rgba(0, 130, 60, 0.09)", Counter()),
+    "oklab-nine-percent": ("oklab(0.6 -0.15 0.1 / 0.09)", Counter()),
 }
 
 
-@pytest.mark.parametrize("tint", TINTS.values(), ids=TINTS)
-def test_a_ten_percent_tint_of_a_third_hue_still_counts(
-    tmp_path: Path, site: str, browser: ModuleType, tint: str
+@pytest.mark.parametrize(("tint", "expected"), TINTS.values(), ids=TINTS)
+def test_a_tint_of_a_third_hue_counts_from_ten_percent_up(
+    tmp_path: Path, site: str, browser: ModuleType, tint: str, expected: Counter[str]
 ) -> None:
     page(tmp_path, with_tint(tint))
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
-        assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
-
-
-@pytest.mark.parametrize(
-    "tint", ["rgba(0, 130, 60, 0.09)", "oklab(0.6 -0.15 0.1 / 0.09)"]
-)
-def test_a_tint_under_ten_percent_stays_skipped(
-    tmp_path: Path, site: str, browser: ModuleType, tint: str
-) -> None:
-    page(tmp_path, with_tint(tint))
-    found = capture(browser, tmp_path, site, "block")
-    for width in WIDTHS:
-        assert found[width] == Counter(), (width, found[width])
+        assert found[width] == expected, (width, found[width])
 
 
 def test_a_channel_outside_the_colour_range_reads_as_the_nearest_inside_it(

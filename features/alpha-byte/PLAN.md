@@ -30,8 +30,8 @@ Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fau
 
 ## Acceptance + steps
 
-- [x] A 10 % tint of a third hue counts as an accent colour in `rgba()`, `oklab()` and `color(srgb)` forms → `tests/test_ui_accent_block.py::test_a_ten_percent_tint_of_a_third_hue_still_counts`
-- [x] A tint under 10 % stays skipped → `tests/test_ui_accent_block.py::test_a_tint_under_ten_percent_stays_skipped`
+- [x] A 10 % tint of a third hue counts as an accent colour in `rgba()`, `oklab()` and `color(srgb)` forms → `tests/test_ui_accent_block.py::test_a_tint_of_a_third_hue_counts_from_ten_percent_up`
+- [x] A tint under 10 % stays skipped → `tests/test_ui_accent_block.py::test_a_tint_of_a_third_hue_counts_from_ten_percent_up`
 - [x] A channel outside the colour range reads inside it → `tests/test_ui_accent_block.py::test_a_channel_outside_the_colour_range_reads_as_the_nearest_inside_it`
 
 ## Baseline + execution
@@ -55,7 +55,7 @@ Result: Passed
 Evidence: Red first: the three 10 % rows and the clamp row failed on `main` code at `e357b800`, then passed with the fix at `99e41790`; all 19 accent block tests pass in a real browser. The Ready check, the review and the Complete check run on the final head; the CI runs of the PR follow.
 E2E: N/A — the proof is the real-browser capture tests above; no journey of an app is changed.
 Real service: N/A — no outside service is called.
-Retro: (1) Fault on the base branch, found by the review of the join of the first hotfix: a colour at exactly 10 % opacity stopped counting, because alpha was taken from the string and the canvas rounded it up to a byte before → `tests/test_ui_accent_block.py::test_a_ten_percent_tint_of_a_third_hue_still_counts`. (2) The first hotfix read out-of-range channels without the clamp that the canvas applied → `tests/test_ui_accent_block.py::test_a_channel_outside_the_colour_range_reads_as_the_nearest_inside_it`. (3) The first hotfix tested only the case it fixed; this fix adds the boundary rows on both sides of 10 % → `tests/test_ui_accent_block.py::test_a_tint_under_ten_percent_stays_skipped`.
+Retro: (1) Fault on the base branch, found by the review of the join of the first hotfix: a colour at exactly 10 % opacity stopped counting, because alpha was taken from the string and the canvas rounded it up to a byte before → `tests/test_ui_accent_block.py::test_a_tint_of_a_third_hue_counts_from_ten_percent_up`. (2) The first hotfix read out-of-range channels without the clamp that the canvas applied → `tests/test_ui_accent_block.py::test_a_channel_outside_the_colour_range_reads_as_the_nearest_inside_it`. (3) The first hotfix tested only the case it fixed; this fix adds the boundary rows on both sides of 10 % → `tests/test_ui_accent_block.py::test_a_tint_of_a_third_hue_counts_from_ten_percent_up`.
 
 Delivery target: Merge
 Delivery: Pending — CI, the merge into `main`, then the update of the join of `main` into `develop`.
