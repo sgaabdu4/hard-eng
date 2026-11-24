@@ -538,6 +538,20 @@ def design_hash(root: Path) -> str:
     return sha256(full.encode())
 
 
+def image_inputs(
+    root: Path | None, names: list[str], digests: list[str]
+) -> tuple[dict[str, list[dict[str, int]]], dict[str, str]]:
+    """The ring boxes and the measured values that the reviewer reads for each image."""
+    ringed: dict[str, list[dict[str, int]]] = {}
+    values: dict[str, str] = {}
+    for name, digest in zip(names, digests, strict=True):
+        if boxes := confirmed_ring_boxes(root, digest):
+            ringed[name] = boxes
+        if line := recorded_values(root, digest):
+            values[name] = line
+    return ringed, values
+
+
 def prompt_for(
     names: list[str],
     design: str = "",
@@ -611,17 +625,11 @@ def review(
         record["design_doc"] = digest
     listed: list[dict[str, object]] = []
     record["images"] = listed
-    ringed: dict[str, list[dict[str, int]]] = {}
-    values: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="hard-eng-look-") as temporary:
         folder = Path(temporary).resolve()
         for name, image in zip(names, images, strict=True):
             shutil.copyfile(image, folder / name)
             digest = sha256((folder / name).read_bytes())
-            if boxes := confirmed_ring_boxes(root, digest):
-                ringed[name] = boxes
-            if line := recorded_values(root, digest):
-                values[name] = line
             listed.append(
                 {
                     "name": name,
@@ -630,13 +638,19 @@ def review(
                     "read_at": "",
                 }
             )
-        reviewer, fresh, result, problem, skipped = run_first_reviewer(
-            host,
-            folder,
-            prompt_for(names, design, scope=scope, ringed=ringed, values=values),
-            root,
+        ringed, values = image_inputs(
+            root, names, [str(item["sha256"]) for item in listed]
         )
-        record = {"reviewer": reviewer, "fresh_same_agent": fresh, **record}
+        prompt = prompt_for(names, design, scope=scope, ringed=ringed, values=values)
+        reviewer, fresh, result, problem, skipped = run_first_reviewer(
+            host, folder, prompt, root
+        )
+        record = {
+            "reviewer": reviewer,
+            "fresh_same_agent": fresh,
+            "prompt_sha256": sha256(prompt.encode()),
+            **record,
+        }
         if skipped:
             record["skipped"] = skipped
         if result is None:
@@ -675,17 +689,80 @@ def record_path(root: Path, head: str, hashes: list[str]) -> Path:
     return store(root, f"{head}-{key}", STORE).with_suffix(".json")
 
 
-def records_for(root: Path, head: str) -> list[dict[str, object]]:
-    folder = store(root, head, STORE).parent
-    found: list[dict[str, object]] = []
-    for path in sorted(folder.glob(f"{head}-*.json")) if folder.is_dir() else []:
-        try:
-            record = json.loads(path.read_text())
-        except ValueError:
+def _read_record(path: Path) -> dict[str, object] | None:
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def carried_record(
+    root: Path, head: str, record: dict[str, object]
+) -> dict[str, object] | None:
+    """A clean record of another head, set to this head, when the prompt, the design documents and the plan scope are the same; else None."""
+    images = record.get("images")
+    prompt = record.get("prompt_sha256")
+    if (
+        record.get("outcome") != "clean"
+        or not isinstance(prompt, str)
+        or not isinstance(images, list)
+        or not all(isinstance(item, dict) and "sha256" in item for item in images)
+    ):
+        return None
+    plan = record.get("plan")
+    try:
+        rel, scope, digest = (
+            plan_scope(root, Path(plan), head)
+            if isinstance(plan, str) and plan
+            else ("", "", "")
+        )
+    except ValueError:
+        return None
+    digests = [str(item["sha256"]) for item in listed_images(record)]
+    names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
+    ringed, values = image_inputs(root, names, digests)
+    rebuilt = prompt_for(
+        names, design_text(root), scope=scope, ringed=ringed, values=values
+    )
+    if sha256(rebuilt.encode()) != prompt or record.get("design_doc", "") != (
+        design_hash(root)
+    ):
+        return None
+    carried = {**record, "carried_from": record.get("head"), "head": head}
+    if rel:
+        carried["plan_sha256"] = digest
+    return carried
+
+
+def record_files(
+    root: Path, head: str, evidence: Path | None = None
+) -> list[tuple[Path, dict[str, object]]]:
+    """The records that back this head: its own, and for each image set without one, the newest clean record of an earlier head whose reviewer inputs are all the same."""
+    folder = store(evidence or root, head, STORE).parent
+    paths = sorted(folder.glob("*-*.json")) if folder.is_dir() else []
+    found: list[tuple[Path, dict[str, object]]] = []
+    own_sets: set[str] = set()
+    earlier: dict[str, tuple[Path, dict[str, object]]] = {}
+    for path in sorted(paths, key=lambda item: item.stat().st_mtime_ns):
+        if (record := _read_record(path)) is None:
             continue
-        if isinstance(record, dict):
-            found.append(record)
+        owner, _, image_set = path.stem.rpartition("-")
+        if owner == head:
+            found.append((path, record))
+            own_sets.add(image_set)
+        elif record.get("head") == owner:
+            earlier[image_set] = (path, record)
+    for image_set, (path, record) in earlier.items():
+        if image_set not in own_sets and (
+            carried := carried_record(root, head, record)
+        ):
+            found.append((path, carried))
     return found
+
+
+def records_for(root: Path, head: str) -> list[dict[str, object]]:
+    return [record for _, record in record_files(root, head)]
 
 
 def look_command(root: Path, argv: list[str]) -> int:

@@ -483,7 +483,18 @@ const sizes = {
   controls: controls.slice(0, 20).map((el) => { const b = el.getBoundingClientRect(); return { at: name(el), w: Math.round(b.width), h: Math.round(b.height) }; }),
   text_px: [...new Set(texts.map((el) => Math.round(parseFloat(getComputedStyle(el).fontSize))))].sort((a, b) => a - b),
 };
-const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes };
+const radiusOf = (el) => {
+  const value = getComputedStyle(el).borderTopLeftRadius, b = el.getBoundingClientRect();
+  return value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value));
+};
+const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter((el) => visible(el) && ownText(el) && !el.closest("a,button,[role=button]") && chip(el))];
+const radii = [];
+const seenRadii = new Set();
+for (const el of rounded) {
+  const px = radiusOf(el), key = name(el) + px;
+  if (px > 0 && radii.length < 20 && !seenRadii.has(key)) { seenRadii.add(key); radii.push({ at: name(el), px }); }
+}
+const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes, radii };
 return JSON.stringify({ found, measured });
 })()"""
 
@@ -582,6 +593,8 @@ def measured_text(measured: dict[str, object]) -> str:
     sizes = cast(dict[str, object], measured.get("sizes", {}))
     controls = cast(list[dict[str, object]], sizes.get("controls", []))
     parts += [f"control {item['at']} {item['w']}x{item['h']} px" for item in controls]
+    radii = cast(list[dict[str, object]], measured.get("radii", []))
+    parts += [f"corner radius {item['px']} px ({item['at']})" for item in radii]
     if text_px := cast(list[int], sizes.get("text_px", [])):
         parts.append("text sizes " + ", ".join(str(px) for px in text_px) + " px")
     return "; ".join(parts)

@@ -905,7 +905,8 @@ def test_a_look_record_does_not_carry_when_one_reviewer_input_changed(
         plan_file = project / "features/kpi-board/PLAN.md"
         plan_file.write_text(full_plan("A KPI board with two cards."))
     elif change == "ring boxes":
-        ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[])
+        box = {"x": 1, "y": 2, "w": 30, "h": 40}
+        ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[box])
     else:
         hashes = [hashlib.sha256(image.read_bytes()).hexdigest() for image in images]
         path = look.record_path(project, old, hashes)
@@ -915,4 +916,4 @@ def test_a_look_record_does_not_carry_when_one_reviewer_input_changed(
     (project / "notes.txt").write_text(f"{change}\n")
     commit(project, f"change: {change}")
     new = git(project, "rev-parse", "HEAD").strip()
-    assert [r for r in look.records_for(project, new) if r["head"] != new] == []
+    assert look.records_for(project, new) == []
