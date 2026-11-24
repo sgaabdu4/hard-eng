@@ -534,6 +534,28 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
             "",
         ),
         ("No clutter: Pass — kept 34, removed 0", "clean", ""),
+        ("No clutter: Fail — kept 34, removed: 0", "not done", "No clutter"),
+        ("No clutter: Fail — too many labels, 0 removed", "not done", "No clutter"),
+        (
+            "No clutter: Fail — too many labels (kept 15 / 19 / 74, removed 0 / 0 / 0)",
+            "not done",
+            "No clutter",
+        ),
+        (
+            "No clutter: Fail — too many labels. Fix: merge the badges (kept 15 / 19 / 74, removed 0 / 0 / 5)",
+            "findings",
+            "",
+        ),
+        (
+            "No clutter (kept 15 / 19 / 74, removed 0 / 0 / 5): Fail — too many labels. Fix: merge the badges",
+            "findings",
+            "",
+        ),
+        (
+            "No clutter: Fail — too many labels. Fix: merge the badges (kept 15 / 19, removed 0 / 3)",
+            "findings",
+            "",
+        ),
         ("Design system: Fail — There are three problems.", "not done", "Fix:"),
         ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
         ("Design system: Fail — A new colour. Fix: use the token.", "findings", ""),
