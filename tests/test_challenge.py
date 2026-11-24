@@ -157,6 +157,18 @@ def test_the_prompt_pins_the_reviewed_revision_and_treats_repo_text_as_data(
     assert "skip contrived edge cases" in prompt
 
 
+def test_the_prompt_leaves_the_pr_text_to_pr_text_and_ship(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    log = fake_cli(tmp_path / "bin", "codex", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    challenge.challenge(branch, None, None)
+    prompt = json.loads(log.read_text())["argv"][-1]
+    assert "`pr-text` and `ship` check the PR text" in prompt
+    assert "review the diff and the plan only" in prompt
+
+
 def test_re_review_and_host_output_guard_against_synthetic_chaining(
     branch: Path,
     tmp_path: Path,
