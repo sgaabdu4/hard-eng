@@ -4,11 +4,12 @@ Status: Ready
 
 ## Outcome + scope
 
-Fix three faults found on real runs after the merged work on the carry and the px guard:
+Fix four faults found on real runs after the merged work on the carry and the px guard:
 1. An old-format clean record covered a new head. `covering_record` compared a missing `inputs` field with a missing key, and a record image that is not in the run matched too. A record that lacks a compared field must never cover or count as changed. Every copy of this compare goes through one helper in `.hooks/look_records.py`.
 2. A fresh Claude reviewer wrote every rule line as `Rule: Pass. text` with no dash, and `look` refused the whole run. Make the reviewer form need no dash character: the prompt states `- <rule>: <verdict>. <what you saw>` with a period after the verdict word, and `look` accepts `Rule: Pass. text`, `Rule: Pass - text` and `Rule: Pass — text`. Every other form check stays.
 
 3. Browser sessions pile up. One agent job opened a new `browser --session` name on each pass and never closed it: 23 headless Chrome browsers and about 30 GB of memory in 14 minutes. `browser capture` closes its session, but plain steps and `measure` leave it open, and the tool's own idle shutdown is 1 hour. Fix in `.hooks/browser.py`: (a) `checkout_space` sets `AGENT_BROWSER_IDLE_TIMEOUT_MS` to one fixed 300000 ms (5 minutes), whatever the environment holds; (b) a step that opens a session name not yet open is refused when this checkout's namespace already holds 4 open sessions, and the refusal names each open session and its exact `close` command. A step on an open session is never refused.
+4. A Fail line can name nothing. A real reviewer wrote a Fail line that said there were three problems and named none of them, and `judge` counted the run as findings that no one could act on. The prompt now asks a Fail line to name the element and end with `Fix: <the change>`, and `rule_refusal` in `.hooks/look.py` refuses a Fail line with no `Fix:` text as `not done`, so the run is redone. The real-answer fixture, written for the old prompt, gains its two fix parts.
 
 Non-goals: changing `split_rule_line` or the PR block form, any other look check, and any other browser behavior.
 
@@ -20,6 +21,7 @@ Deliverables: None
 
 - Fault 1, empty fields match: In scope — An old-format clean record (no `inputs`, no per-image `file`) never covers a new head
 - Fault 2, rule line form: In scope — Each of the three line forms parses, and a line with no verdict word is still refused
+- Fault 4, a Fail line that names nothing: In scope — A Fail line with no `Fix:` text is refused as not done
 - Fault 3, browser sessions pile up: In scope — The environment of every step carries one fixed idle limit that the caller's environment cannot raise
 
 ## Repository context
@@ -32,7 +34,7 @@ Owners:
 
 Same cause: each fault is one unchecked assumption at one owner. (1) Three places compared a record field with a wanted value without checking that the field exists: `covering_record` (`inputs`), `carried_record` (`inputs` through a guard) and `earlier_fixes` (`file`, and `sha256`, where a missing digest counts as changed); the compare moves to one helper. (2) The reviewer form was one character the reviewer may not write. Proof of cause: in the failing run, all 16 rule lines have the form `Rule: Pass. text` (a period, no dash), and the parser needs a dash after the verdict. The two other runs used the em dash and parsed. The user rule against em dashes is the likely reason the reviewer left it out; the logs cannot prove that part. (3) Hard Eng relied on the agent to close each plain session, and left the tool's 1 hour idle default in place; both limits now sit in `checkout_space` and the one place that opens a session.
 
-Single source: `look_records.py` owns the record field compare, `look.py` owns the reviewer line form, and `browser.py` owns the idle limit and the session cap.
+Single source: `look_records.py` owns the record field compare, `look.py` owns the reviewer line form and the refusal of a Fail line with no fix, and `browser.py` owns the idle limit and the session cap.
 
 ## Decisions + authorization
 
@@ -48,6 +50,7 @@ Review declined: A fresh run of the old prompt to prove the cause again :: the s
 - [ ] Each of the three line forms parses, and a line with no verdict word is still refused → `tests/test_look.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`.
 - [ ] The prompt states the dash-free form and holds no em dash → `tests/test_look.py::test_the_prompt_form_needs_no_em_dash`.
 - [ ] The plan scope guard follows the same forms, so `Rule: Pass. text` in `## Outcome + scope` is refused as a verdict leak → `tests/test_look.py::test_the_plan_scope_refuses_a_verdict_in_the_plain_form_too`.
+- [ ] A Fail line with no `Fix:` text is refused as not done, and a Fail line with its item and fix stands → `tests/test_look.py::test_a_fail_line_that_names_no_fix_is_refused`.
 - [ ] The environment of every step carries one fixed idle limit that the caller's environment cannot raise → `tests/test_browser.py::test_the_idle_limit_is_fixed_and_the_environment_cannot_raise_it`.
 - [ ] A new session past the cap is refused with the open names and their close commands → `tests/test_browser.py::test_a_new_session_past_the_cap_is_refused_with_the_open_names`.
 - [ ] A step on an open session passes at the cap, and the sessions of another checkout do not count → `tests/test_browser.py::test_a_step_on_an_open_session_passes_and_another_checkouts_sessions_do_not_count`.
