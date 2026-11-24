@@ -75,7 +75,10 @@ def emit_dart_test_failure(
 
 
 def quick_groups(
-    groups: list[Group], quick: bool = True, installed: frozenset[str] = frozenset()
+    groups: list[Group],
+    quick: bool = True,
+    installed: frozenset[str] = frozenset(),
+    roles: frozenset[str] = QUICK_ROLES,
 ) -> list[Group]:
     if not quick:
         return groups
@@ -87,7 +90,7 @@ def quick_groups(
             "checks": [
                 gate
                 for gate in group["checks"]
-                if gate.get("role") in QUICK_ROLES
+                if gate.get("role") in roles
                 or (
                     gate.get("role") in INSTALL_ROLES
                     and install_key(group) not in installed

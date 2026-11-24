@@ -91,6 +91,11 @@ def add_scope_options(checks: ArgumentParser) -> None:
         help="Run only format, lint, types and the file secret scan; the Stop hook uses it",
     )
     checks.add_argument(
+        "--static",
+        action="store_true",
+        help="Run only the read-only analyzer checks (complexity, dead code, duplicates, dependencies, React, security) of the changed packages, with no tests",
+    )
+    checks.add_argument(
         "--commit-secrets",
         action="store_true",
         help="Run only the secret scan of the commits since --base, the plan checks and the changed-line text rules; pre-push uses it when CI runs the full check",
