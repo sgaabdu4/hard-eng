@@ -32,9 +32,9 @@ Authority: Autonomous. The user asked on 2026-11-24 to make Hard Eng correct bef
 
 ## Acceptance + steps
 
-- [ ] A Fail whose `Fix:` is on an indented continuation line, a sub-bullet or after a blank line is read as having a fix; a Fail with no `Fix:` in its block, or whose only `Fix:` belongs to the next rule, is still refused → `tests/test_look.py::test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole`.
+- [ ] A Fail whose `Fix:` is on an indented continuation line, a sub-bullet or after a blank line is read as having a fix; a Fail with no `Fix:` in its block, or whose only `Fix:` belongs to the next rule, is still refused → `tests/test_look_answer.py::test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole`.
 - [ ] A Fail that persists across two heads is listed as an earlier finding, never as fixed → `tests/test_look_carry.py::test_the_prompt_lists_an_earlier_fail_without_calling_it_fixed`.
-- [ ] A Fail line must name a frame of the run (`image-N.png`) and its element; an answer that names none is refused → `tests/test_look.py::test_a_fail_line_must_name_the_frame_it_shows`.
+- [ ] A Fail line must name a frame of the run (`image-N.png`) and its element; an answer that names none is refused → `tests/test_look_answer.py::test_a_fail_line_must_name_the_frame_it_shows`.
 - [ ] The next run holds each earlier Fail as a numbered item, also when the image bytes did not change; the answer must say "still shown" or "gone" for each item with a frame, and "still shown" needs a Fail line for the rule → `tests/test_look_carry.py::test_each_earlier_fail_is_rechecked_one_by_one`.
 - [ ] A second run at the same head and inputs keeps the first clean or findings record, prints it again and starts no reviewer; a run that ended `not done`, and a run with other inputs, still run → `tests/test_look.py::test_a_second_run_at_the_same_head_keeps_the_first_verdict`.
 - [ ] A measure finding of a mapped rule (accent count, button groups, edges, secondary text) is a code Fail that the reviewer's Pass cannot overrule; a code Pass never replaces a reviewer Fail → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_its_judged_rule_in_code`.
