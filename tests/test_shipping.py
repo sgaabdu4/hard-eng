@@ -663,6 +663,22 @@ def _delivery_refusal(tmp_path: Path, command: list[str], match: str) -> None:
         shipping._delivery(fixture.root, policy, "1" * 40, _PR_URL)
 
 
+def test_a_delivery_check_that_runs_too_long_says_it_timed_out_and_after_how_many_seconds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(shipping, "_DELIVERY_TIMEOUT", 0.5)
+    command = [sys.executable, "-c", "import time; time.sleep(30)"]
+    _delivery_refusal(tmp_path, command, r"live: .*timed out after 0\.5 seconds")
+
+
+def test_a_program_that_cannot_start_still_says_the_query_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    _delivery_refusal(
+        tmp_path, [str(tmp_path / "missing-program")], "query unavailable"
+    )
+
+
 def test_a_failed_delivery_check_keeps_its_reason(tmp_path: Path) -> None:
     command = [sys.executable, "-c", "import sys; sys.exit('deploy not found')"]
     _delivery_refusal(tmp_path, command, "live.*deploy not found")
