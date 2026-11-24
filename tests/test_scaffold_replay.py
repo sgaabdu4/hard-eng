@@ -3,6 +3,7 @@
 import json
 import subprocess
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import Mock
 
 import change_size
@@ -321,23 +322,35 @@ def web_project(target: Path, **extra: object) -> str:
     return commit(target, "a web project with no ui_library")
 
 
-def test_an_update_adds_the_ui_library_key_in_the_same_commit(
+def test_an_update_leaves_the_ui_library_key_to_the_project(
     release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A release that does not read the key refuses a pushed policy that holds it, and a replay of the update must plan no change."""
     source, target, _ = release
     base = web_project(target)
     release_now(source, monkeypatch, "release one")
     update.update(target)
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
     saved = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
-    assert saved["ui_library"] == ["src/ui/*"]
+    assert "ui_library" not in saved
     assert git(target, "rev-list", "--count", f"{base}..HEAD") == "1"
     changed = set(git(target, "show", "--name-only", "--format=", "HEAD").splitlines())
-    assert {"hard-eng.gates.json", ".hooks/hard-eng-source.json"} <= changed
+    assert "hard-eng.gates.json" not in changed
     assert change_size.update_only(target, base, changed)
+    assert update.check_scaffold_update(target, base)
     policy = shipping.load_policy(target)
-    assert policy is not None and policy["ui_library"] == ["src/ui/*"]
+    assert policy is not None and policy["ui_library"] == []
     assert gate_config.load_groups(target)
+
+
+def test_a_first_install_writes_the_ui_library_default(
+    release: tuple[Path, Path, str], installer: ModuleType
+) -> None:
+    _, target, _ = release
+    web_project(target)
+    config = json.loads((target / "hard-eng.gates.json").read_text())
+    installer.add_ui_library(target, config)
+    assert config["shipping"]["ui_library"] == ["src/ui/*"]
 
 
 def test_an_update_leaves_an_existing_ui_library_key_alone(
@@ -350,6 +363,23 @@ def test_an_update_leaves_an_existing_ui_library_key_alone(
     saved = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
     assert saved["ui_library"] == ["src/shared/*"]
     assert "hard-eng.gates.json" not in git(target, "diff", "--name-only", base)
+
+
+def test_setup_writes_no_library_for_a_components_folder(
+    release: tuple[Path, Path, str], installer: ModuleType
+) -> None:
+    """A folder named `components` holds screens too; a guessed library there hides every base element inside it."""
+    _, target, _ = release
+    web_project(target)
+    (target / "src/ui/Button.tsx").rename(target / "src/Button.tsx")
+    (target / "src/components").mkdir()
+    (target / "src/components/Card.tsx").write_text(
+        "export const Card = () => <button>Go</button>;\n"
+    )
+    commit(target, "a components folder")
+    config = json.loads((target / "hard-eng.gates.json").read_text())
+    installer.add_ui_library(target, config)
+    assert "ui_library" not in config["shipping"]
 
 
 @pytest.mark.parametrize(

@@ -96,8 +96,10 @@ def add_package_groups(root: Path, config: GateConfig) -> None:
         ]
 
 
-def add_ui_library(root: Path, config: GateConfig) -> None:
-    """A project with UI paths and no library setting gets the shared `ui` folders that pass the library rules, in the same step as the hooks that need it."""
+def add_ui_library(
+    root: Path, config: GateConfig, previous: Path | None = None
+) -> None:
+    """A first install gives a project with UI paths and no library setting the shared `ui` folders that pass the library rules; an update leaves the key to the project, because a release that does not read it refuses the pushed policy."""
     from gate_config import repository_files
     from ui_whole import default_library
 
@@ -108,6 +110,7 @@ def add_ui_library(root: Path, config: GateConfig) -> None:
         or shipping.get("ui_library")
         or not isinstance(paths, list)
         or not paths
+        or previous is not None
     ):
         return
     ui_paths = [path for path in paths if isinstance(path, str)]
@@ -829,7 +832,7 @@ def plan_install(
 
     add_swift_groups(root, config)
     add_package_groups(root, config)
-    add_ui_library(root, config)
+    add_ui_library(root, config, previous)
     from project_setup import (
         adapt_boundaries,
         add_freshness,
