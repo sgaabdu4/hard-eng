@@ -594,16 +594,58 @@ def look_with_line(
     tmp_path: Path, project: Path, line: str, outcome: str
 ) -> dict[str, object]:
     """A run whose reviewer gives `line` for its rule and Pass for every other rule."""
-    images = make_images(project, 1)
     rule = line.partition(":")[0].partition(" (")[0]
+    return look_with_lines(tmp_path, project, {rule: line}, outcome)
+
+
+def look_with_lines(
+    tmp_path: Path, project: Path, given: dict[str, str], outcome: str
+) -> dict[str, object]:
+    """A run whose reviewer gives each text of `given` for its rule, which may span lines, and Pass for every other rule."""
+    images = make_images(project, 1)
     rules = [
-        line if name == rule else f"- {name}: Pass — looked at it"
+        given.get(name, f"- {name}: Pass — looked at it")
         for name, _ in usability_rules()
     ]
     verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
     answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
     install_agent(tmp_path, "claude", 1, answer)
     return run_look(project, "codex", images)
+
+
+BADGE = "- No clutter: Fail — image-1.png: the badge repeats the title."
+
+
+@pytest.mark.parametrize(
+    ("block", "outcome"),
+    [
+        (f"{BADGE}\n  Fix: merge the badge into the title", "findings"),
+        (f"{BADGE}\n  - the card shows it twice\n  - Fix: merge the badge", "findings"),
+        (f"{BADGE}\n  - the card shows it twice\n\n  Fix: merge the badge", "findings"),
+        (f"{BADGE}\n  - the card shows it twice\n\n  Check it again.", "not done"),
+        (f"{BADGE}\n  - a sub-bullet without any change", "not done"),
+    ],
+)
+def test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole(
+    tmp_path: Path, project: Path, block: str, outcome: str
+) -> None:
+    record = look_with_lines(tmp_path, project, {"No clutter": block}, outcome)
+    assert str(record["outcome"]).startswith(outcome)
+    if outcome == "findings":
+        text = " ".join(str(line) for line in listed(record, "rules"))
+        assert "Fix: merge the badge" in text
+
+
+def test_the_fix_of_the_next_rule_does_not_belong_to_a_fail_without_one(
+    tmp_path: Path, project: Path
+) -> None:
+    given = {
+        "No clutter": f"{BADGE}\n  - the card shows it twice",
+        "Hierarchy": "- Hierarchy: Fail — image-1.png: two filled buttons. Fix: outline one.",
+    }
+    record = look_with_lines(tmp_path, project, given, "findings")
+    assert str(record["outcome"]).startswith("not done: a Fail line names no `Fix:")
+    assert "No clutter" in str(record["outcome"])
 
 
 def full_plan(
