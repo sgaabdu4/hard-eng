@@ -9,7 +9,7 @@ import change_size
 import pytest
 import tool_setup
 import update
-from conftest import SOURCE, commit, git, load_module
+from conftest import SOURCE, commit, default_policy, git, load_module
 from coverage_sources import require_listed_sources
 from gate_config import parse_config, repository_files
 from test_update_pr_refusal import loading_project
@@ -255,6 +255,50 @@ def test_an_update_adds_the_biome_entry_and_stays_an_update(
     changed = set(git(target, "diff", "--name-only", base).splitlines())
     assert "biome.json" in changed
     assert change_size.update_only(target, base, changed)
+
+
+def web_project(target: Path, **extra: object) -> str:
+    """A project with screens in `src` and a shared folder `src/ui`, whose shipping policy has no `ui_library`."""
+    gates = target / "hard-eng.gates.json"
+    config = json.loads(gates.read_text())
+    config["shipping"] = {
+        key: value for key, value in default_policy().items() if key != "ui_library"
+    } | {"ui_paths": ["src/**"], **extra}
+    gates.write_text(json.dumps(config))
+    (target / "src/ui").mkdir(parents=True)
+    (target / "src/ui/Button.tsx").write_text(
+        "export const Button = () => <button>Go</button>;\n"
+    )
+    (target / "src/App.tsx").write_text("export const App = () => <p>Hi</p>;\n")
+    return commit(target, "a web project with no ui_library")
+
+
+def test_an_update_adds_the_ui_library_key_in_the_same_commit(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    base = web_project(target)
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    shipping = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
+    assert shipping["ui_library"] == ["src/ui/*"]
+    changed = set(git(target, "diff", "--name-only", base).splitlines())
+    assert {"hard-eng.gates.json", ".hooks/hard-eng.py"} <= changed
+    assert change_size.update_only(target, base, changed)
+    assert update.check_scaffold_update(target, base)
+
+
+def test_an_update_leaves_an_existing_ui_library_key_alone(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    base = web_project(target, ui_library=["src/shared/*"])
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    shipping = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
+    assert shipping["ui_library"] == ["src/shared/*"]
+    assert "hard-eng.gates.json" not in git(target, "diff", "--name-only", base)
 
 
 @pytest.mark.parametrize(
