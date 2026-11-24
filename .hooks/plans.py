@@ -7,7 +7,6 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from gate_config import (
-    ALL_ZERO_OBJECT_ID,
     SOURCE_FILE,
     TEST_FOLDERS,
     changed_files,
@@ -815,7 +814,10 @@ def validate_plans(
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
         )
-    statuses = {path: plan_stage(root, path, changed) for path in applicable}
+    try:
+        statuses = {path: plan_stage(root, path, changed) for path in applicable}
+    except ValueError as error:
+        raise ValueError(f"{error}{OTHER_PLAN * asks_size}") from error
     reached = any(
         STAGES.index(status) >= STAGES.index(stage) for status in statuses.values()
     )
@@ -915,40 +917,10 @@ def validate_decisions(root: Path, base: str | None = None) -> None:
         )
 
 
-def validate_attribution(root: Path, base: str | None = None) -> None:
-    from agent_hooks import attribution_off, reject_attribution
-
-    if (
-        not attribution_off(root, "commit")
-        or subprocess.run(
-            ["git", "rev-parse", "--verify", "--quiet", "HEAD"],
-            cwd=root,
-            stdout=subprocess.DEVNULL,
-            check=False,
-        ).returncode
-    ):
-        return
-    point = base or default_branch_point(root) or "HEAD"
-    span = "HEAD" if ALL_ZERO_OBJECT_ID.fullmatch(point) else f"{point}..HEAD"
-    try:
-        log = _git_output(root, "log", "--format=%x1e%h%x1f%ae%x1f%ce%n%B", span)
-    except subprocess.CalledProcessError as error:
-        raise ValueError(
-            "Cannot verify commit attribution; fetch or supply a valid Git --base"
-        ) from error
-    for entry in filter(None, log.split("\x1e")):
-        header, _, text = entry.partition("\n")
-        revision, *emails = header.split("\x1f")
-        if any(CLAUDE_EMAIL.fullmatch(email) for email in emails):
-            raise ValueError(f"Commit {revision} has a Claude author or committer")
-        reject_attribution(root, "commit", text, f"Commit {revision}")
-
-
-CLAUDE_EMAIL = re.compile(r"noreply@anthropic\.com", re.IGNORECASE)
-
-
 def validate_records(root: Path, base: str | None) -> None:
     validate_decisions(root, base)
+    from commit_attribution import validate_attribution
+
     validate_attribution(root, base)
     from requirement_registry import validate_requirements
 
