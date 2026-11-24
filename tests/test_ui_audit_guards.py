@@ -418,7 +418,8 @@ def test_the_record_holds_the_corner_radius_of_every_rounded_element(
         "<h1 style='font-size:24px;margin:0 0 14px'>Radii</h1>"
         "<button style='min-height:44px;min-width:120px;font-size:16px;border-radius:6px'>Go</button>"
         "<p style='margin:14px 0'><span style='display:inline-block;padding:2px 8px;background:#dde;border-radius:4px;font-size:14px'>New</span></p>"
-        "<div style='height:30px;border-radius:12px;background:#eee'></div></main></body>"
+        "<div style='height:30px;border-radius:12px;background:#eee'></div>"
+        "<p style='margin:14px 0'><span style='display:inline-block;padding:2px 12px;background:#cde;border-radius:9999px;font-size:14px'>Pill</span></p></main></body>"
     )
     name = session()
     open_board(tmp_path, site, name, "radii")
@@ -429,7 +430,8 @@ def test_the_record_holds_the_corner_radius_of_every_rounded_element(
     record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
     radii = {(item["at"], item["px"]) for item in record["measured"]["radii"]}
     assert {("Go", 6), ("New", 4)} <= radii
-    assert {px for _, px in radii} == {6, 4, 12}
+    assert {6, 4, 12} <= {px for _, px in radii}
+    assert max(px for _, px in radii) < 100
 
 
 def test_each_press_is_measured_apart_from_the_load(

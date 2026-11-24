@@ -18,7 +18,9 @@ RADIUS = re.compile(
 REQUIRED_BEFORE = re.compile(
     r"(?i)\b(?:sets?|requires?|required|minimum|maximum|min|max|at least|at most|under|below|above|over|should|must|expects?|token|guideline|target|not|instead|rather|versus|vs|DESIGN)\b"
 )
-REQUIRED_AFTER = re.compile(r"(?i)^\W*(?:minimum|maximum|min|max|token)\b")
+REQUIRED_AFTER = re.compile(
+    r"(?i)^\W*(?:minimum|maximum|min|max|token|off|apart|away|high|wide|tall|higher|lower|offset)\b"
+)
 TOLERANCE = 0.5
 
 

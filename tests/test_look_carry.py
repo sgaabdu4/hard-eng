@@ -191,9 +191,8 @@ def test_a_run_whose_images_are_all_unchanged_does_not_start_the_reviewer(
     assert [item.get("carried_from") for item in listed(record, "images")] == [middle]
 
 
-def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
-    tmp_path: Path, project: Path
-) -> None:
+def a_look_that_found_the_badge_fault(tmp_path: Path, project: Path) -> list[Path]:
+    """One image that a first look run failed on Alignment."""
     (project / ".gitignore").write_text(".hard-eng/\n")
     commit(project, "inputs")
     images = make_images(project, 1)
@@ -204,6 +203,13 @@ def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
         findings_answer(1, "Alignment", "merge badge and meta into one line"),
     )
     run_look(project, "claude", images)
+    return images
+
+
+def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
+    tmp_path: Path, project: Path
+) -> None:
+    images = a_look_that_found_the_badge_fault(tmp_path, project)
     images[0].write_bytes(PNG + b"badge and meta on one line")
     (project / "notes.txt").write_text("the badge is fixed\n")
     commit(project, "fix the badge")
@@ -219,16 +225,7 @@ def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
 def test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed(
     tmp_path: Path, project: Path
 ) -> None:
-    (project / ".gitignore").write_text(".hard-eng/\n")
-    commit(project, "inputs")
-    images = make_images(project, 1)
-    install_agent(
-        tmp_path,
-        "claude",
-        1,
-        findings_answer(1, "Alignment", "merge badge and meta into one line"),
-    )
-    run_look(project, "claude", images)
+    images = a_look_that_found_the_badge_fault(tmp_path, project)
     (project / "notes.txt").write_text("a change that the reviewer never reads\n")
     commit(project, "unrelated change")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))

@@ -488,7 +488,8 @@ const sizes = {
 };
 const radiusOf = (el) => {
   const value = getComputedStyle(el).borderTopLeftRadius, b = el.getBoundingClientRect();
-  return value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value));
+  const half = Math.round(Math.min(b.width, b.height) / 2);
+  return value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.min(Math.round(parseFloat(value)), half);
 };
 const drawn = (el) => { const s = getComputedStyle(el); return ownText(el) || s.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(s.borderTopWidth) > 0; };
 const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter((el) => visible(el) && drawn(el))];

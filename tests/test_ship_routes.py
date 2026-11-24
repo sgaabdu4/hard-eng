@@ -189,11 +189,8 @@ class JoinPull:
     merge_commit_sha: str | None = None
 
 
-def test_a_merged_join_keeps_its_route_when_the_base_already_holds_the_default_tip(
-    tmp_path: Path,
-) -> None:
-    from ship_record import base_before_merge, route
-
+def join_graph(tmp_path: Path) -> tuple[Path, str, str, str, str]:
+    """A develop tip, the main tip that develop lacks, and a join head that holds both."""
     fixture = develop_policy(tmp_path, "chore/join-main-hotfix")
     root = fixture.root
     develop = git(root, "rev-parse", "HEAD")
@@ -201,6 +198,15 @@ def test_a_merged_join_keeps_its_route_when_the_base_already_holds_the_default_t
     tree = git(root, "rev-parse", "HEAD^{tree}")
     main = git(root, "commit-tree", tree, "-p", first, "-m", "main tip")
     join = git(root, "commit-tree", tree, "-p", develop, "-p", main, "-m", "join")
+    return root, develop, tree, main, join
+
+
+def test_a_merged_join_keeps_its_route_when_the_base_already_holds_the_default_tip(
+    tmp_path: Path,
+) -> None:
+    from ship_record import base_before_merge, route
+
+    root, develop, tree, main, join = join_graph(tmp_path)
     merged = git(root, "commit-tree", tree, "-p", develop, "-p", join, "-m", "merge")
     git(root, "update-ref", "refs/remotes/origin/main", main)
     git(root, "update-ref", "refs/remotes/origin/develop", merged)
@@ -225,13 +231,7 @@ def test_the_delivered_stage_needs_no_plan_for_a_merged_join_but_asks_for_one_ot
     import ship_scope
     import ui_proof
 
-    fixture = develop_policy(tmp_path, "chore/join-main-hotfix")
-    root = fixture.root
-    develop = git(root, "rev-parse", "HEAD")
-    first = git(root, "rev-list", "--max-parents=0", "HEAD")
-    tree = git(root, "rev-parse", "HEAD^{tree}")
-    main = git(root, "commit-tree", tree, "-p", first, "-m", "main tip")
-    join = git(root, "commit-tree", tree, "-p", develop, "-p", main, "-m", "join")
+    root, develop, tree, main, join = join_graph(tmp_path)
     work = git(root, "commit-tree", tree, "-p", develop, "-m", "own work")
     own = git(root, "commit-tree", tree, "-p", work, "-p", main, "-m", "main in")
     git(root, "update-ref", "refs/remotes/origin/main", main)
