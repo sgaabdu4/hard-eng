@@ -520,21 +520,31 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
 
 
 @pytest.mark.parametrize(
-    ("line", "outcome"),
+    ("line", "outcome", "reason"),
     [
-        ("No clutter: Fail — kept 34, removed 0", "not done"),
-        ("No clutter (kept 34, removed 0): Fail — too many labels", "not done"),
-        ("No clutter: Fail — kept 34, removed 2. Fix: merge the badges", "findings"),
-        ("No clutter: Pass — kept 34, removed 0", "clean"),
+        ("No clutter: Fail — kept 34, removed 0", "not done", "No clutter"),
+        (
+            "No clutter (kept 34, removed 0): Fail — too many labels",
+            "not done",
+            "No clutter",
+        ),
+        (
+            "No clutter: Fail — kept 34, removed 2. Fix: merge the badges",
+            "findings",
+            "",
+        ),
+        ("No clutter: Pass — kept 34, removed 0", "clean", ""),
+        ("Design system: Fail — There are three problems.", "not done", "Fix:"),
+        ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
+        ("Design system: Fail — A new colour. Fix: use the token.", "findings", ""),
     ],
 )
-def test_a_fail_line_that_contradicts_its_own_count_is_refused(
-    tmp_path: Path, project: Path, line: str, outcome: str
+def test_a_fail_line_that_cannot_stand_is_refused(
+    tmp_path: Path, project: Path, line: str, outcome: str, reason: str
 ) -> None:
     record = look_with_line(tmp_path, project, line, outcome)
     assert str(record["outcome"]).startswith(outcome)
-    if outcome == "not done":
-        assert "No clutter" in str(record["outcome"])
+    assert reason in str(record["outcome"])
 
 
 def look_with_line(
@@ -551,26 +561,6 @@ def look_with_line(
     answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
     install_agent(tmp_path, "claude", 1, answer)
     return run_look(project, "codex", images)
-
-
-@pytest.mark.parametrize(
-    ("line", "outcome"),
-    [
-        ("Design system: Fail — There are three problems.", "not done"),
-        ("Design system: Fail — The badge is a new colour. Fix:", "not done"),
-        (
-            "Design system: Fail — The badge is a new colour. Fix: use the badge token.",
-            "findings",
-        ),
-    ],
-)
-def test_a_fail_line_that_names_no_fix_is_refused(
-    tmp_path: Path, project: Path, line: str, outcome: str
-) -> None:
-    record = look_with_line(tmp_path, project, line, outcome)
-    assert str(record["outcome"]).startswith(outcome)
-    if outcome == "not done":
-        assert "Fix:" in str(record["outcome"])
 
 
 def full_plan(
