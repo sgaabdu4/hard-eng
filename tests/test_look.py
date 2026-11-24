@@ -184,6 +184,16 @@ def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) 
     assert project.name not in seen["cwd"]
 
 
+def test_the_prompt_tells_the_reviewer_a_field_action_is_an_icon_inside_its_field(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "icon inside that field, not a button beside it" in prompt
+
+
 def test_look_falls_back_to_a_fresh_same_agent_session(
     tmp_path: Path, project: Path
 ) -> None:
