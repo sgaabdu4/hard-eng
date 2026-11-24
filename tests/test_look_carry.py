@@ -251,30 +251,21 @@ def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
     assert "never ask to undo an earlier fix" in prompt.lower()
 
 
+@pytest.mark.parametrize("digest_kept", [True, False])
 def test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed(
-    tmp_path: Path, project: Path
-) -> None:
-    images = a_look_that_found_the_badge_fault(tmp_path, project)
-    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
-    commit(project, "unrelated change")
-    log = install_agent(tmp_path, "claude", 1, good_answer(1))
-    run_look(project, "claude", images)
-    assert "fixed at" not in " ".join(json.loads(log.read_text())["argv"])
-
-
-def test_a_finding_without_a_digest_is_not_called_fixed(
-    tmp_path: Path, project: Path
+    tmp_path: Path, project: Path, *, digest_kept: bool
 ) -> None:
     import look
 
     images = a_look_that_found_the_badge_fault(tmp_path, project)
-    head = git(project, "rev-parse", "HEAD").strip()
-    path = look.record_path(
-        project, head, [hashlib.sha256(images[0].read_bytes()).hexdigest()]
-    )
-    record = json.loads(path.read_text())
-    del record["images"][0]["sha256"]
-    path.write_text(json.dumps(record))
+    if not digest_kept:
+        head = git(project, "rev-parse", "HEAD").strip()
+        path = look.record_path(
+            project, head, [hashlib.sha256(images[0].read_bytes()).hexdigest()]
+        )
+        record = json.loads(path.read_text())
+        del record["images"][0]["sha256"]
+        path.write_text(json.dumps(record))
     (project / "notes.txt").write_text("a change that the reviewer never reads\n")
     commit(project, "unrelated change")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))

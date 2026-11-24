@@ -346,10 +346,7 @@ def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
 
 
 def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None:
-    images = make_images(project, 1)
-    log = install_agent(tmp_path, "claude", 1, good_answer(1))
-    run_look(project, "codex", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    _, _, prompt = first_prompt(tmp_path, project)
     form = prompt.partition("\n\nRules:")[0]
     assert "`- <rule>: Pass|Fail|N/A. <what you saw>`" in form
     assert "—" not in form
