@@ -50,6 +50,15 @@ def image_keys(
     ]
 
 
+def _same(recorded: object, wanted: object) -> bool:
+    """A recorded field that is missing never equals anything, so an old-format record cannot match by lacking the field."""
+    return recorded is not None and recorded == wanted
+
+
+def _changed(recorded: object, wanted: object) -> bool:
+    return recorded is not None and not _same(recorded, wanted)
+
+
 def carried_record(
     root: Path, head: str, record: dict[str, object], evidence: Path | None = None
 ) -> dict[str, object] | None:
@@ -145,7 +154,7 @@ def covering_record(
             str(item["sha256"])
             for item in cast(list[dict[str, object]], record.get("images", []))
             if item.get("read") is True
-            and wanted.get(str(item["sha256"])) == item.get("inputs")
+            and _same(item.get("inputs"), wanted.get(str(item.get("sha256"))))
         }
         rank = (len(covered), path.stat().st_mtime_ns)
         if covered and (best is None or rank > best[0]):
@@ -203,7 +212,7 @@ def earlier_fixes(
             name
             for name, file, digest in pairs
             for item in entries
-            if item.get("file") == file and item.get("sha256") != digest
+            if _same(item.get("file"), file) and _changed(item.get("sha256"), digest)
         ]
         for line in cast(list[str], record.get("rules", [])):
             if names and split_rule_line(line)[1] == "Fail":
