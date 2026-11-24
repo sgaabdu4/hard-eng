@@ -309,8 +309,23 @@ for (const h of h2s) {
   }
 }
 const measureCtx = document.createElement("canvas").getContext("2d");
+const labelLines = (el) => {
+  const boxes = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!n.nodeValue.trim()) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    for (const b of range.getClientRects()) if (b.width > 1 && b.height > 1) boxes.push({ mid: (b.top + b.bottom) / 2, h: b.height });
+  }
+  boxes.sort((a, b) => a.mid - b.mid);
+  return boxes.filter((b, i) => i === 0 || b.mid - boxes[i - 1].mid > Math.min(b.h, boxes[i - 1].h) / 2).length;
+};
 for (const el of controls) {
   const s = getComputedStyle(el);
+  if ((el.tagName === "BUTTON" || el.getAttribute("role") === "button" || (el.tagName === "A" && chip(el))) && labelLines(el) > 1) {
+    found.push({ rule: "wrapped-label", at: name(el), lines: labelLines(el) });
+  }
   if (el.tagName === "SELECT") {
     const opt = el.options[el.selectedIndex];
     const label = (opt ? opt.text : "").trim();
