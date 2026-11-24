@@ -30,7 +30,7 @@ Authority: Autonomous: the user asked on 2026-11-24 to release Hard Eng with eve
 - [ ] A stylesheet or component file outside `ui_paths` names both fixes: add its folder to `ui_paths` when users receive it, or remove a preview from git → `tests/test_ui_library_refusals.py::test_a_file_outside_ui_paths_names_both_fixes`.
 - [ ] A library of 2,000 parts passes the index check, and the look excerpt keeps `DESIGN.md` within its byte limit; no refusal and no limit change is needed → `tests/test_ui_library_refusals.py::test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bounded`.
 - [ ] The text of a failed update push says the rule is intended, has no waiver, and is fixed in the project → `tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step`.
-- [ ] A real update on a project that sits on the old release pushes past the old pre-push check and reports the true list → Evidence in Verification (real run).
+- [ ] A real update on a project that sits on the old release pushes past the old pre-push check and reports the true list → `tests/test_scaffold_replay.py::test_an_update_leaves_the_ui_library_key_to_the_project` for the update and its replay; the run on the old release's own hooks is in Verification Evidence.
 
 ## Baseline + execution
 
