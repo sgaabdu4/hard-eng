@@ -30,7 +30,7 @@ Authority: Autonomous. Baseline repair: the gate blocks the delivery check of a 
 ## Baseline + execution
 
 Result: Passed
-Evidence: 2026-11-15, the Complete check of another branch on develop 33e40da3 failed `freshness` for this release: `types-pyyaml 6.0.12.20261111 → 6.0.12.20261122`, with the command above. That branch waits for this repair.
+Evidence: 2026-11-24, the Ready check of a hotfix branch on main 7e366949 failed `freshness` for this release: `types-pyyaml 6.0.12.20261113 → 6.0.12.20261122`, with the command above. That branch waits for this repair.
 Execution: One builder, this session.
 
 ## Risks + recovery
