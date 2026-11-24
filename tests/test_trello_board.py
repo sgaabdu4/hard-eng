@@ -196,6 +196,27 @@ def test_waits_on_us_ignores_conditional_live(
     assert (refs(project.report()["waitsOnUs"]) == {"1"}) == listed
 
 
+@pytest.mark.parametrize(
+    "role,text,listed",
+    [
+        ("l-doing", "The fix is in an open PR and waits for review.", True),
+        ("l-doing", "Waiting for the pull request to merge.", True),
+        ("l-doing", "The fix is in an open PR. It went live today.", False),
+        ("l-doing", "Should the fix wait in an open PR?", False),
+        ("l-doing", "I am fixing the button colour.", False),
+        ("l-todo", "The fix is in an open PR and waits for review.", False),
+        ("l-testing", "The fix is in an open PR and waits for review.", True),
+    ],
+)
+def test_a_card_whose_fix_waits_in_an_open_pr_is_listed_in_doing_and_testing(
+    project: Project, role: str, text: str, listed: bool
+) -> None:
+    project.fake.cards = [make_card(1, "#1 Card", role)]
+    project.fake.actions = [comment("ours-1", 1, "m-owner", text, 2)]
+    project.mods.state.log_posted(project.state, "ours-1")
+    assert (refs(project.report()["waitsOnUs"]) == {"1"}) == listed
+
+
 def test_owner_comment_stays_listed_until_we_reply(
     project: Project, tmp_path: Path
 ) -> None:
