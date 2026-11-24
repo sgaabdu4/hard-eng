@@ -14,7 +14,6 @@ Deliverables: None
 
 - One ink at full and at 70 % strength counts as one colour: In scope — One ink at full and at 70 % strength counts as one colour
 - Two truly different inks still count as two colours: In scope — Two truly different inks still count as two colours
-- Contrast, fills and the opacity test read colours through the same owner: In scope — Contrast, fills and the opacity test read colours through the same owner
 
 ## Repository context
 
