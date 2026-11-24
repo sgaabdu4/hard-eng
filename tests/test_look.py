@@ -550,15 +550,11 @@ ZERO = "its own count says 0 removed"
             "not done",
             ZERO,
         ),
+        ("No clutter: Fail — kept 34, 0 removed. Fix: merge", "not done", ZERO),
         (
-            "No clutter: Fail — too many labels. Fix: merge (kept 15, 19; removed 0, 0)",
+            "No clutter: Fail — kept 34, removed 0, 3 badges repeat the title. Fix: merge",
             "not done",
             ZERO,
-        ),
-        (
-            "No clutter: Fail — too many labels. Fix: merge (kept 15, 19, 74; removed 0, 0, 5)",
-            "findings",
-            "",
         ),
         (
             "No clutter: Fail — too many labels. Fix: merge the badges (kept 15 / 19 / 74, removed 0 / 0 / 5)",
