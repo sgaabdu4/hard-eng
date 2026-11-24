@@ -104,6 +104,7 @@ DESIGN_ADDENDUM = (
     "and do not mark `Design system: N/A` for an app screen.\n\n{design}"
 )
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
+VERDICT_OUTCOMES = frozenset(VERDICTS.values())
 BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "design", "image", "verdict", "record")
 BULLET = re.compile(r"^[-*•]\s+")
@@ -900,6 +901,26 @@ def record_path(root: Path, head: str, hashes: list[str]) -> Path:
     return store(root, f"{head}-{key}", STORE).with_suffix(".json")
 
 
+def kept_verdict(
+    root: Path, head: str, digests: list[str], keys: list[str]
+) -> dict[str, object] | None:
+    """The first clean or findings record of this head for these images, when each of its images has the key of this run; a run that ended `not done` never holds a head."""
+    path = record_path(root, head, digests)
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict) or record.get("outcome") not in VERDICT_OUTCOMES:
+        return None
+    wanted = dict(zip(digests, keys, strict=True))
+    entries = record.get("images")
+    same = isinstance(entries, list) and all(
+        isinstance(item, dict) and item.get("inputs") == wanted.get(item.get("sha256"))
+        for item in entries
+    )
+    return record if same and len(entries) == len(digests) else None
+
+
 def look_command(root: Path, argv: list[str]) -> int:
     from look_records import (
         combined,
@@ -933,6 +954,15 @@ def look_command(root: Path, argv: list[str]) -> int:
     digests = [sha256(image.read_bytes()) for image in images]
     lacking = lacks_record(root, digests)
     keys = image_keys(root, scope, design, design_digest, digests, lacking)
+    if kept := kept_verdict(root, head, digests, keys):
+        print(
+            f"Hard Eng: look: this head already has a {kept['outcome']} verdict for "
+            "these images and inputs; a rerun cannot pick another result. Commit a "
+            "change to an image or an input first."
+        )
+        if kept["outcome"] == "clean":
+            print(f"Paste this into the PR body:\n{block_text(kept)}")
+        return 0 if kept["outcome"] == "clean" else 1
     found = (
         None
         if args.all
