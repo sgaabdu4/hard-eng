@@ -34,6 +34,8 @@ Blockers: None.
 Handoff: Approval
 Authority: Autonomous: the user asked on 2026-11-23 to fix every Hard Eng fault found in the rollout; the client coordinator who asked for the hold on main asked for this hotfix; the hotfix merges only after the proof step.
 
+Review declined: `earlier_fixes` can pass an earlier finding of a merged feature to the reviewer when a new feature reuses the same capture file name :: this is the merged behavior of PR 713 on develop, ported unchanged; the hotfix takes merged develop changes by hand and adds no new design, so a branch limit for the records is a develop change; the only effect is a wrong earlier-fix note in the prompt, and every verdict gate stays as it is
+
 ## Acceptance + steps
 
 - [ ] The attribution check moves to its own module with no change in behavior, and every handwritten file stays at or under 1000 lines → `tests/test_agent_hooks.py::test_check_rejects_claude_attribution_when_settings_turn_it_off`
