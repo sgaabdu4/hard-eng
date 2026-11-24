@@ -1,6 +1,6 @@
 # Count one ink at two opacities as one accent colour
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -53,11 +53,11 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending the Ready check and the review.
+Result: Passed
+Evidence: Red first: the strength test failed on `origin/main` code at the red commit `1edc88d3` (exit 1, one `accent-colours` finding at each width), then passed with the fix. The colour form rows failed at `02469eee` (4 of 5 rows) and passed with the second fix; the `color(srgb ...)` and `oklab(...)` forms of one ink give the same key. All 13 accent block tests pass in a real browser. The Ready check on 65413aab passed: 7660 tests and every static and native check. `challenge` printed `Review by a fresh claude session at 65413aab5d25: clean` (Codex was over its usage limit; agy refused its argument form). The page script measured about 4.6 to 4.7 ms per run after the fix against 4.9 to 5.5 ms before (50 runs each, two rounds). Full check: the `check --plan-stage Complete` run on the final head and the CI runs of the PR.
 E2E: N/A — the proof is the real-browser capture tests above; no journey of an app is changed.
 Real service: N/A — no outside service is called.
-Retro: Pending
+Retro: (1) Fault on the base branch, one ink drawn at two strengths counted as two accent colours because the canvas lost a channel value on a see-through colour → `tests/test_ui_accent_block.py::test_one_ink_at_two_strengths_counts_as_one_colour`. (2) The first fix read only `rgb()`, `rgba()` and `color(srgb ...)` from the string; `oklab` and `oklch` still lost a value, found by a client page, so the canvas read now strips the alpha and takes it from the string → `tests/test_ui_accent_block.py::test_one_ink_in_two_colour_forms_counts_as_one_colour`. (3) The first Ready run failed the format gate on a long test row; the row is now formatted.
 
 Delivery target: Merge
 Delivery: Pending — CI, the merge into `main`, then the join of `main` into `develop`.
