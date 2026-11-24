@@ -953,6 +953,10 @@ def test_skills_point_to_the_command() -> None:
         assert not re.search(r"\b(390|1280)\b", text), name
     assert "WIDTHS = (390, 768, 1280)" in command
     assert "3px solid red" in command
+    import browser
+
+    assert f"close after {int(browser.IDLE_MS) // 60000} minutes" in e2e
+    assert f"at most {browser.MAX_SESSIONS}" in e2e
 
 
 @pytest.mark.parametrize(
