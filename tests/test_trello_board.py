@@ -854,6 +854,37 @@ def test_duplicate_numbers_are_listed_and_refused_as_a_card_reference(
     assert project.run("comment", "3", str(note)).code == 0
 
 
+def test_a_second_open_card_for_the_same_client_is_listed_unless_it_is_marked_checked(
+    project: Project,
+) -> None:
+    config = CONFIG | {"clientPattern": r"\[(C-\d+)\]", "checkedLabel": "Checked"}
+    (project.main / "trello.json").write_text(json.dumps(config))
+    project.fake.labels.append({"id": "lb-checked", "name": "Checked"})
+    project.fake.cards = [
+        make_card(1, "#1 [C-7] Fix the login page", "l-doing"),
+        make_card(2, "#2 [C-7] Fix the login page again", "l-todo"),
+        make_card(3, "#3 [C-8] Change the invoice list", "l-doing"),
+        make_card(
+            4, "#4 [C-7] Export the member list", "l-todo", idLabels=["lb-checked"]
+        ),
+        make_card(5, "#5 [C-7] Old login fix", "l-done"),
+        make_card(6, "#6 Card for no client", "l-doing"),
+    ]
+    found = project.report()["unnumbered"]
+    assert [item["url"] for item in found] == ["https://trello.com/c/sl2"]
+    assert "C-7" in found[0]["excerpt"]
+
+
+def test_two_cards_with_no_client_setting_are_not_compared_by_client(
+    project: Project,
+) -> None:
+    project.fake.cards = [
+        make_card(1, "#1 [C-7] Fix the login page", "l-doing"),
+        make_card(2, "#2 [C-7] Fix the login page again", "l-todo"),
+    ]
+    assert project.report()["unnumbered"] == []
+
+
 def ours(project: Project, *rows: tuple[str, int, str, float]) -> None:
     for ident, card, text, hours in rows:
         project.fake.actions.append(comment(ident, card, "m-owner", text, hours))
