@@ -65,7 +65,7 @@ MEASURED_SECTION = (
 )
 FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
 NUMBER = re.compile(r"\d+")
-COUNT_LIST = r"\d+(?:\s*[/,]\s*\d+)*"
+COUNT_LIST = r"\d+(?:\s*/\s*\d+)*"
 REMOVED_AFTER = re.compile(rf"(?i)\bremoved\s*:?\s*({COUNT_LIST})")
 REMOVED_BEFORE = re.compile(rf"(?i)\b({COUNT_LIST})\s+removed\b")
 SCOPE_SECTION = (

@@ -24,9 +24,9 @@ Authority: Autonomous: the user asked on 2026-11-23 to fix every Hard Eng fault 
 
 ## Acceptance + steps
 
-- [x] A Fail line with removed counts `0 / 0 / 5` or `0, 0, 5`, in the note before or after the text, stands as a finding → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
+- [x] A Fail line with removed counts `0 / 0 / 5`, in the note before or after the text, stands as a finding → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
 - [x] A Fail line with removed counts `0 / 3` stands as a finding (a zero for one screen only) → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
-- [x] A Fail line with `removed 0`, `removed: 0`, `0 removed`, `kept 34 removed 0` or `removed 0 / 0 / 0` stays refused, and each row has a `Fix:` so only the count guard can refuse it → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
+- [x] A Fail line with `removed 0`, `removed: 0`, `0 removed`, `kept 34 removed 0`, `kept 34, 0 removed`, `removed 0, 3 badges repeat` or `removed 0 / 0 / 0` stays refused, and each row has a `Fix:` so only the count guard can refuse it → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
 
 ## Baseline + execution
 
@@ -36,7 +36,8 @@ Execution: One pattern and one function in `.hooks/look.py`, the test rows.
 
 ## Risks + recovery
 
-A line with a count form that the pattern does not read, such as words instead of digits, is not refused. Recovery: revert the commit.
+A line with a count form that the pattern does not read, such as words instead of digits or a comma list (`removed 0, 0, 5`), is not read as a list and a lone first 0 can refuse it. Recovery: revert the commit.
+Review declined: comma lists of per-screen counts. The comma already separates `kept` from `removed` and a clause such as `removed 0, 3 badges repeat` follows it, so a comma list cannot be told from those. The prompt form `(count: kept, removed)` and the reported line use `/` between screens.
 
 ## ux_reference
 
