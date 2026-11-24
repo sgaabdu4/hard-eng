@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 import change_size
 import gate_config
+import plans
 import pytest
 import shipping
 import tool_setup
@@ -257,6 +258,51 @@ def test_an_update_adds_the_biome_entry_and_stays_an_update(
     changed = set(git(target, "diff", "--name-only", base).splitlines())
     assert "biome.json" in changed
     assert change_size.update_only(target, base, changed)
+
+
+def test_an_update_branch_with_no_plan_of_its_own_names_no_unrelated_draft_plan(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    source, target, _ = release
+    other = target / "features/other-work/PLAN.md"
+    other.parent.mkdir(parents=True)
+    other.write_text("# Other work\nStatus: Draft\n")
+    base = commit(target, "an unrelated Draft plan")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    changed = set(git(target, "diff", "--name-only", base).splitlines())
+    assert change_size.update_only(target, base, changed)
+    capfd.readouterr()
+    assert plans.validate_plans(target, base, "Complete") == "Complete"
+    assert "other-work" not in capfd.readouterr().out
+
+
+def test_an_update_branch_with_a_repair_commit_names_the_plan_it_read_and_why(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    other = target / "features/other-work/PLAN.md"
+    other.parent.mkdir(parents=True)
+    other.write_text("# Other work\nStatus: Draft\n")
+    base = commit(target, "an unrelated Draft plan")
+    git(target, "switch", "-qc", "hard-eng/update")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    (target / "repair.py").write_text(
+        "".join(f"def repaired_{n}() -> int:\n    return {n}\n" for n in range(15))
+    )
+    commit(target, "repair the project for the new release")
+    with pytest.raises(ValueError) as refusal:
+        plans.validate_plans(target, base, "Complete")
+    message = str(refusal.value)
+    assert message.startswith("features/other-work/PLAN.md: ")
+    assert message.endswith(
+        "If that plan is for another task, add a plan for this change."
+    )
 
 
 def web_project(target: Path, **extra: object) -> str:
