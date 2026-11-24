@@ -309,6 +309,7 @@ for (const h of h2s) {
   }
 }
 const measureCtx = document.createElement("canvas").getContext("2d");
+const stackedBlocks = (el) => [...el.querySelectorAll("*")].some((c) => ownText(c) && !getComputedStyle(c).display.startsWith("inline"));
 const labelLines = (el) => {
   const boxes = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -323,7 +324,7 @@ const labelLines = (el) => {
 };
 for (const el of controls) {
   const s = getComputedStyle(el);
-  if ((el.tagName === "BUTTON" || el.getAttribute("role") === "button" || (el.tagName === "A" && chip(el))) && labelLines(el) > 1) {
+  if ((el.tagName === "BUTTON" || el.getAttribute("role") === "button" || (el.tagName === "A" && chip(el))) && !stackedBlocks(el) && labelLines(el) > 1) {
     found.push({ rule: "wrapped-label", at: name(el), lines: labelLines(el) });
   }
   if (el.tagName === "SELECT") {

@@ -358,9 +358,8 @@ def client_duplicates(ctx: Context) -> dict[str, str]:
         found = pattern.search(text(card.get("name")))
         if found and snapshot.lists.get(text(card.get("idList"))) not in finished:
             by_client.setdefault(found.group(1), []).append(card)
-    checked = {
-        i for i, name in snapshot.labels.items() if name == ctx.config.checked_label
-    }
+    mark = ctx.config.checked_label
+    checked = {i for i, name in snapshot.labels.items() if mark and name == mark}
     duplicates: dict[str, str] = {}
     for client, same in by_client.items():
         older = min(

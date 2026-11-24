@@ -113,6 +113,25 @@ def test_a_one_line_button_and_a_wrapped_text_link_pass_the_label_rule(
         assert found[width]["wrapped-label"] == 0, (width, found[width])
 
 
+def test_a_bordered_card_link_and_a_button_with_stacked_blocks_pass_the_label_rule(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/audit.html").write_text(
+        "<!doctype html><html lang=en><title>Audit</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style><body>"
+        "<a href='/unit' style='display:block;width:200px;border:1px solid #333;padding:8px;color:#111'>"
+        "<span style='display:block'>Unit 4B</span>"
+        "<span style='display:block'>Two rooms, second floor</span></a>"
+        "<button style='display:block;width:200px;min-height:44px;font-size:16px'>"
+        "<span style='display:block'>Premium</span>"
+        "<span style='display:block'>12 per month</span></button>"
+        "</body>"
+    )
+    found = capture(browser, tmp_path, site, "audit")
+    for width in WIDTHS:
+        assert found[width]["wrapped-label"] == 0, (width, found[width])
+
+
 def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
@@ -375,6 +394,28 @@ def test_the_record_holds_the_measured_contrast_gaps_and_sizes(
         {"w": item["w"], "h": item["h"]} for item in values["sizes"]["controls"]
     ]
     assert {16, 24} <= set(values["sizes"]["text_px"])
+
+
+def test_the_record_holds_the_corner_radius_of_controls_and_badges(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/radii.html").write_text(
+        "<!doctype html><html lang=en><title>Radii</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style><body><main>"
+        "<h1 style='font-size:24px;margin:0 0 14px'>Radii</h1>"
+        "<button style='min-height:44px;min-width:120px;font-size:16px;border-radius:6px'>Go</button>"
+        "<p style='margin:14px 0'><span style='display:inline-block;padding:2px 8px;background:#dde;border-radius:4px;font-size:14px'>New</span></p>"
+        "<div style='height:30px;border-radius:12px;background:#eee'></div></main></body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "radii")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    radii = {(item["at"], item["px"]) for item in record["measured"]["radii"]}
+    assert radii == {("Go", 6), ("New", 4)}
 
 
 def test_each_press_is_measured_apart_from_the_load(

@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import cast
 
 from gate_config import JsonValue
-from shipping import Delivery, ShippingError, ShippingPolicy, _pull, load_policy
+from shipping import (
+    Delivery,
+    ShippingError,
+    ShippingPolicy,
+    _pull,
+    _PullRequest,
+    load_policy,
+)
 
 DELIVERY_TARGET_LINE = re.compile(
     r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*(PR|Merge|Deploy)\s*$"
@@ -111,15 +118,21 @@ def plan_in(files: list[dict[str, JsonValue]]) -> str | None:
 
 def delivered_files(
     root: Path,
+    pull: _PullRequest,
     identity: tuple[str, str, int],
     policy: ShippingPolicy,
     plan: Path | None,
     stage: str,
 ) -> list[dict[str, JsonValue]]:
-    """The files of the PR when screens need them or the delivered stage has no plan; a delivered stage with no `--plan` for a PR that changed a plan is refused."""
+    """The files of the PR when screens need them or the delivered stage has no plan; a delivered stage with no `--plan` for an ordinary PR that changed a plan is refused."""
+    from ship_record import route
     from ui_proof import changed_files
 
-    unplanned = stage == "delivered" and plan is None
+    unplanned = (
+        stage == "delivered"
+        and plan is None
+        and route(root, pull, policy["base"]) is None
+    )
     if not (policy["ui_paths"] or unplanned):
         return []
     files = changed_files(root, *identity)
