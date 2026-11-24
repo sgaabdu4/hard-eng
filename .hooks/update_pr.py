@@ -427,6 +427,28 @@ def push_lines(root: Path, expected: str) -> tuple[bool, bool]:
     return push.wait() == 0, stopped
 
 
+def failed_push(stopped: bool) -> int:
+    """Say what a failed push of the update branch means; a stop by a signal is no fault."""
+    if stopped:
+        print(
+            f"The push of {UPDATE_BRANCH} was stopped by a signal, so no check "
+            f"failed. Run `{UPDATE_COMMAND}` again."
+        )
+        return 1
+    print(
+        f"The push of {UPDATE_BRANCH} failed; the lines above give the reason. "
+        "If the output says the check was stopped before it finished, the stop is "
+        "not a fault, and neither is a gate that the stop ended: fix any other "
+        f"failure printed above, then run `{UPDATE_COMMAND}` again. If a failing "
+        "check is printed above with no stop line, the new release found a fault "
+        f"in this project: fix it on the branch {UPDATE_BRANCH} in its own "
+        f"worktree, as its own commit, then run `{UPDATE_COMMAND}` again. If no "
+        "failing check is printed, the project is not at fault: run "
+        f"`{UPDATE_COMMAND}` again."
+    )
+    return 1
+
+
 def publish(root: Path, merge: bool = True) -> int:
     wait_for_running_update(root)
     base = update_base(root)
@@ -476,24 +498,7 @@ def publish(root: Path, merge: bool = True) -> int:
     expected = f"--force-with-lease=refs/heads/{UPDATE_BRANCH}:{lease}"
     pushed_ok, stopped = push_lines(root, expected)
     if not pushed_ok:
-        if stopped:
-            print(
-                f"The push of {UPDATE_BRANCH} was stopped by a signal, so no check "
-                f"failed. Run `{UPDATE_COMMAND}` again."
-            )
-            return 1
-        print(
-            f"The push of {UPDATE_BRANCH} failed; the lines above give the reason. "
-            "If the output says the check was stopped before it finished, the stop is "
-            "not a fault, and neither is a gate that the stop ended: fix any other "
-            f"failure printed above, then run `{UPDATE_COMMAND}` again. If a failing "
-            "check is printed above with no stop line, the new release found a fault "
-            f"in this project: fix it on the branch {UPDATE_BRANCH} in its own "
-            f"worktree, as its own commit, then run `{UPDATE_COMMAND}` again. If no "
-            "failing check is printed, the project is not at fault: run "
-            f"`{UPDATE_COMMAND}` again."
-        )
-        return 1
+        return failed_push(stopped)
     title = REPAIR_TITLE if repair else f"Update Hard Eng to {revision[:12]}"
     pull = open_pull(root)
     if pull is None:
