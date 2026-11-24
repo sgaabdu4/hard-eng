@@ -79,7 +79,7 @@ def test_a_px_guess_is_not_refused_for_an_image_with_no_measured_values(
     assert record["outcome"] == "findings"
 
 
-def test_the_prompt_lists_an_earlier_fixed_finding_of_another_rule_and_asks_to_keep_it_true(
+def test_the_prompt_lists_an_earlier_finding_of_another_rule_and_asks_not_to_bring_it_back(
     tmp_path: Path, project: Path
 ) -> None:
     import json
@@ -103,5 +103,5 @@ def test_the_prompt_lists_an_earlier_fixed_finding_of_another_rule_and_asks_to_k
     run_look(project, "claude", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
     assert "image-1.png: Design system: Fail — use the badge token" in prompt
-    assert "must keep every earlier fixed finding true" in prompt
-    assert git(project, "rev-parse", "HEAD").strip()[:7] in prompt
+    assert "must not bring back another earlier finding" in prompt
+    assert git(project, "rev-parse", "HEAD").strip()[:7] not in prompt

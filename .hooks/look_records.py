@@ -196,10 +196,10 @@ def combined(
     return record
 
 
-def earlier_fixes(
+def earlier_findings(
     root: Path, head: str, pairs: list[tuple[str, str, str]]
 ) -> list[str]:
-    """The Fail lines of earlier findings on this branch for the same file names, when the image has changed since; each is marked as fixed at this head. `pairs` holds (prompt name, file name, digest)."""
+    """The Fail lines of earlier findings on this branch for the same file names, when the image has changed since; no line claims that a finding is fixed. `pairs` holds (prompt name, file name, digest)."""
     prefixes = owner_prefixes()
     lines: dict[str, list[str]] = {}
     fresh = sorted(
@@ -228,7 +228,7 @@ def earlier_fixes(
                 lines.setdefault(line, [])
                 lines[line] += [name for name in names if name not in lines[line]]
     return [
-        f"{', '.join(names)}: {line} (fixed at {head[:7]})"
+        f"{', '.join(names)}: {line}"
         for line, names in list(lines.items())[:MAX_FIXED_LINES]
     ]
 

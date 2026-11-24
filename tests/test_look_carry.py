@@ -237,19 +237,19 @@ def a_look_that_found_the_badge_fault(tmp_path: Path, project: Path) -> list[Pat
     return images
 
 
-def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
+def test_the_prompt_lists_an_earlier_fail_without_calling_it_fixed(
     tmp_path: Path, project: Path
 ) -> None:
     images = a_look_that_found_the_badge_fault(tmp_path, project)
     images[0].write_bytes(PNG + b"badge and meta on one line")
-    (project / "notes.txt").write_text("the badge is fixed\n")
-    commit(project, "fix the badge")
-    head = git(project, "rev-parse", "HEAD").strip()
+    (project / "notes.txt").write_text("the image changed\n")
+    commit(project, "change the image")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
     assert "image-1.png: Alignment: Fail — merge badge and meta into one line" in prompt
-    assert f"fixed at {head[:7]}" in prompt
+    assert "earlier look findings" in prompt.lower()
+    assert "fixed" not in prompt.lower()
     assert "never ask to undo an earlier fix" in prompt.lower()
 
 
