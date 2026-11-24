@@ -92,7 +92,8 @@ def test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_review
     assert not set(sent) & set(TEST_ONLY)
     next_head(project)
     answer = good_answer(1).replace(
-        "- Widths: Pass — looked at it", "- Widths: Fail — image-1.png: too narrow Fix: widen it"
+        "- Widths: Pass — looked at it",
+        "- Widths: Fail — image-1.png: too narrow Fix: widen it",
     )
     install_agent(tmp_path, "claude", 1, answer)
     record = run_look(project, "codex", images, extra=["--all"])
@@ -105,7 +106,8 @@ def test_a_reviewer_line_for_a_rule_without_judgement_is_ignored(
 ) -> None:
     images = captures(project)
     answer = good_answer(3).replace(
-        "- Widths: Pass — looked at it", "- Widths: Fail — image-1.png: too narrow Fix: widen it"
+        "- Widths: Pass — looked at it",
+        "- Widths: Fail — image-1.png: too narrow Fix: widen it",
     )
     answer = answer.replace(
         "- States: Pass — looked at it", "- States: Fail — empty Fix: say what next"
@@ -409,7 +411,13 @@ def test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code(
 
 @pytest.mark.parametrize(
     "case",
-    ["all held", "no token group", "no measured values", "old record only", "no PyYAML"],
+    [
+        "all held",
+        "no token group",
+        "no measured values",
+        "old record only",
+        "no PyYAML",
+    ],
 )
 def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_reviewer(
     tmp_path: Path, project: Path, case: str, monkeypatch: pytest.MonkeyPatch
@@ -420,12 +428,17 @@ def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_
         "radii": [{"at": "card", "px": 8, "clamped": False}],
     }
     if case == "no token group":
-        design = "---\ncolors:\n  ink: '#111111'\n---\n# Design\n\n## Overview\nPlain.\n"
+        design = (
+            "---\ncolors:\n  ink: '#111111'\n---\n# Design\n\n## Overview\nPlain.\n"
+        )
         values = {"sizes": SIZES, "radii": RADII}
     if case == "no measured values":
         values = {"contrast": []}
     if case == "old record only":
-        values = {"sizes": {"controls": [], "text_px": [14]}, "radii": [{"at": "x", "px": 7}]}
+        values = {
+            "sizes": {"controls": [], "text_px": [14]},
+            "radii": [{"at": "x", "px": 7}],
+        }
     if case == "no PyYAML":
         monkeypatch.setitem(sys.modules, "yaml", None)
         values = {"sizes": SIZES, "radii": RADII}
@@ -441,7 +454,12 @@ def test_the_prompt_says_that_code_decides_the_measured_rules(
 
     images = make_images(project, 1)
     ui_measure.write_record(
-        project, images[0], 1280, [], "/kpi", measured={"radii": [{"at": "Go", "px": 6}]}
+        project,
+        images[0],
+        1280,
+        [],
+        "/kpi",
+        measured={"radii": [{"at": "Go", "px": 6}]},
     )
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)

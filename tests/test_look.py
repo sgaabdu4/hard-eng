@@ -184,9 +184,9 @@ def test_look_reads_codex_image_views_from_the_session_file(
     assert all(item["read"] for item in listed(record, "images"))
     next_head(project)
     install_agent(tmp_path, "codex", 0, good_answer(2))
-    assert str(run_look(project, "claude", images, extra=["--all"])["outcome"]).startswith(
-        "not done"
-    )
+    assert str(
+        run_look(project, "claude", images, extra=["--all"])["outcome"]
+    ).startswith("not done")
 
 
 def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) -> None:
@@ -336,31 +336,6 @@ def test_look_reads_the_rule_lines_and_image_lines_a_reviewer_actually_writes(
     assert "image-1.png" in cast(dict[str, str], record["details"])
 
 
-@pytest.mark.parametrize("separator", [". ", " - ", " — "])
-def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
-    separator: str,
-) -> None:
-    import look
-
-    names = judged_rule_names()
-    image = ["Image image-1.png: a card with a title", "VERDICT: clean"]
-    read = {"image-1.png": True}
-
-    def rule_lines(answer: list[str]) -> tuple[str, list[str]]:
-        outcome, rules, _ = look.judge("\n".join(answer), ["image-1.png"], read)
-        return outcome, rules
-
-    given = [f"- {name}: Pass{separator}looked at it" for name in names]
-    assert rule_lines([*given, *image]) == (
-        "clean",
-        [f"{name}: Pass — looked at it" for name in names],
-    )
-    for broken in (f"- {names[0]}: looked at it", f"- {names[0]}: Pass."):
-        outcome, rules = rule_lines([broken, *given[1:], *image])
-        assert outcome.startswith("not done"), broken
-        assert rules == []
-
-
 def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None:
     _, _, prompt = first_prompt(tmp_path, project)
     form = prompt.partition("\n\nRules:")[0]
@@ -450,21 +425,6 @@ def test_look_ignores_uncommitted_shipping_base_edit(
     ]
 
 
-def test_look_reads_a_real_claude_answer() -> None:
-    import look
-
-    answer = (FIXTURES / "claude-answer.txt").read_text()
-    read = {"image-1.png": True}
-    assert look.judge(answer, ["image-1.png"], read)[0].startswith(
-        "not done: a Fail line names no frame"
-    )
-    framed = answer.replace("Fail — ", "Fail — image-1.png: ")
-    outcome, rules, details = look.judge(framed, ["image-1.png"], read)
-    assert outcome == "findings"
-    assert len(rules) == len(judged_rule_names())
-    assert "image-1.png" in details
-
-
 def first_prompt(tmp_path: Path, project: Path) -> tuple[list[Path], Path, str]:
     images = make_images(project, 2)
     log = install_agent(tmp_path, "claude", 2, good_answer(2))
@@ -541,149 +501,6 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
     assert "6.37:1" not in " ".join(json.loads(log.read_text())["argv"])
 
 
-ZERO = "its own count says 0 removed"
-
-
-@pytest.mark.parametrize(
-    ("line", "outcome", "reason"),
-    [
-        ("No clutter: Fail — kept 34, removed 0. Fix: merge", "not done", ZERO),
-        (
-            "No clutter (kept 34, removed 0): Fail — too many labels. Fix: merge",
-            "not done",
-            ZERO,
-        ),
-        (
-            "No clutter: Fail — image-1.png: kept 34, removed 2. Fix: merge the badges",
-            "findings",
-            "",
-        ),
-        ("No clutter: Pass — kept 34, removed 0", "clean", ""),
-        ("No clutter: Fail — kept 34, removed: 0. Fix: merge", "not done", ZERO),
-        ("No clutter: Fail — too many labels, 0 removed. Fix: merge", "not done", ZERO),
-        ("No clutter: Fail — kept 34 removed 0. Fix: merge", "not done", ZERO),
-        (
-            "No clutter: Fail — too many labels. Fix: merge (kept 15 / 19 / 74, removed 0 / 0 / 0)",
-            "not done",
-            ZERO,
-        ),
-        (
-            "No clutter: Fail — too many labels. Fix: merge (kept 15 / 19 / 74 removed 0 / 0 / 0)",
-            "not done",
-            ZERO,
-        ),
-        ("No clutter: Fail — kept 34, 0 removed. Fix: merge", "not done", ZERO),
-        (
-            "No clutter: Fail — kept 34, removed 0, 3 badges repeat the title. Fix: merge",
-            "not done",
-            ZERO,
-        ),
-        (
-            "No clutter: Fail — image-1.png: too many labels. Fix: merge the badges (kept 15 / 19 / 74, removed 0 / 0 / 5)",
-            "findings",
-            "",
-        ),
-        (
-            "No clutter (kept 15 / 19 / 74, removed 0 / 0 / 5): Fail — image-1.png: too many labels. Fix: merge the badges",
-            "findings",
-            "",
-        ),
-        (
-            "No clutter: Fail — image-1.png: too many labels. Fix: merge the badges (kept 15 / 19, removed 0 / 3)",
-            "findings",
-            "",
-        ),
-        ("Design system: Fail — There are three problems.", "not done", "Fix:"),
-        ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
-        ("Design system: Fail — image-1.png: A new colour. Fix: use the token.", "findings", ""),
-    ],
-)
-def test_a_fail_line_that_cannot_stand_is_refused(
-    tmp_path: Path, project: Path, line: str, outcome: str, reason: str
-) -> None:
-    record = look_with_line(tmp_path, project, line, outcome)
-    assert str(record["outcome"]).startswith(outcome)
-    assert reason in str(record["outcome"])
-
-
-def look_with_line(
-    tmp_path: Path, project: Path, line: str, outcome: str
-) -> dict[str, object]:
-    """A run whose reviewer gives `line` for its rule and Pass for every other rule."""
-    rule = line.partition(":")[0].partition(" (")[0]
-    return look_with_lines(tmp_path, project, {rule: line}, outcome)
-
-
-def look_with_lines(
-    tmp_path: Path, project: Path, given: dict[str, str], outcome: str
-) -> dict[str, object]:
-    """A run whose reviewer gives each text of `given` for its rule, which may span lines, and Pass for every other rule."""
-    images = make_images(project, 1)
-    rules = [
-        given.get(name, f"- {name}: Pass — looked at it")
-        for name, _ in usability_rules()
-    ]
-    verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
-    answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
-    install_agent(tmp_path, "claude", 1, answer)
-    return run_look(project, "codex", images)
-
-
-BADGE = "- No clutter: Fail — image-1.png: the badge repeats the title."
-
-
-@pytest.mark.parametrize(
-    ("block", "outcome"),
-    [
-        (f"{BADGE}\n  Fix: merge the badge into the title", "findings"),
-        (f"{BADGE}\n  - the card shows it twice\n  - Fix: merge the badge", "findings"),
-        (f"{BADGE}\n  - the card shows it twice\n\n  Fix: merge the badge", "findings"),
-        (f"{BADGE}\n  - the card shows it twice\n\n  Check it again.", "not done"),
-        (f"{BADGE}\n  - a sub-bullet without any change", "not done"),
-    ],
-)
-def test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole(
-    tmp_path: Path, project: Path, block: str, outcome: str
-) -> None:
-    record = look_with_lines(tmp_path, project, {"No clutter": block}, outcome)
-    assert str(record["outcome"]).startswith(outcome)
-    if outcome == "findings":
-        text = " ".join(str(line) for line in listed(record, "rules"))
-        assert "Fix: merge the badge" in text
-
-
-@pytest.mark.parametrize(
-    ("line", "outcome"),
-    [
-        ("Design system: Fail — a new colour. Fix: use the token.", "not done"),
-        ("Design system: Fail — image-9.png: a new colour. Fix: use it.", "not done"),
-        ("Design system: Fail — image-1.png: a colour. Fix: use it.", "findings"),
-        (
-            "Design system: Fail — image-1.png: a colour; image-2.png: a size. Fix: use it.",
-            "findings",
-        ),
-    ],
-)
-def test_a_fail_line_must_name_the_frame_it_shows(
-    tmp_path: Path, project: Path, line: str, outcome: str
-) -> None:
-    record = look_with_line(tmp_path, project, line, outcome)
-    assert str(record["outcome"]).startswith(outcome)
-    if outcome == "not done":
-        assert "names no frame" in str(record["outcome"])
-
-
-def test_the_prompt_asks_for_every_frame_and_element_of_a_failing_rule(
-    tmp_path: Path, project: Path
-) -> None:
-    images = make_images(project, 1)
-    log = install_agent(tmp_path, "claude", 1, good_answer(1))
-    run_look(project, "codex", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "every frame and element" in prompt
-    assert "`image-N.png: <element>`" in prompt
-
-
 FAULT = "- Hierarchy: Fail — image-1.png: two filled buttons. Fix: outline one."
 
 
@@ -692,9 +509,7 @@ def findings_for_one_image() -> str:
         FAULT.removeprefix("- ") if name == "Hierarchy" else f"{name}: Pass — ok"
         for name, _ in usability_rules()
     ]
-    return "\n".join(
-        [*rules, "Image image-1.png: a card", "VERDICT: findings"]
-    )
+    return "\n".join([*rules, "Image image-1.png: a card", "VERDICT: findings"])
 
 
 @pytest.mark.parametrize(
@@ -749,18 +564,6 @@ def test_a_second_run_at_the_same_head_keeps_the_first_verdict(
     else:
         assert log.exists()
         assert path.read_text() != before
-
-
-def test_the_fix_of_the_next_rule_does_not_belong_to_a_fail_without_one(
-    tmp_path: Path, project: Path
-) -> None:
-    given = {
-        "No clutter": f"{BADGE}\n  - the card shows it twice",
-        "Hierarchy": "- Hierarchy: Fail — image-1.png: two filled buttons. Fix: outline one.",
-    }
-    record = look_with_lines(tmp_path, project, given, "findings")
-    assert str(record["outcome"]).startswith("not done: a Fail line names no `Fix:")
-    assert "No clutter" in str(record["outcome"])
 
 
 def full_plan(

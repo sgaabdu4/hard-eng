@@ -217,9 +217,7 @@ def earlier_findings(
         entries = cast(list[dict[str, object]], record.get("images", []))
         then = {str(item.get("name")): str(item.get("file")) for item in entries}
         files = [
-            file
-            for file in current
-            if file not in claimed and file in then.values()
+            file for file in current if file not in claimed and file in then.values()
         ]
         claimed.update(files)
         if not files or record.get("outcome") != "findings":
