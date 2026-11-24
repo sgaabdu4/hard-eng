@@ -852,3 +852,67 @@ def test_look_truncates_large_design_docs_in_utf8_bytes_and_preserves_ui_library
         "# Design\n" + ("é" * look.DESIGN_BYTE_LIMIT) + "\nTAIL_B\n"
     )
     assert look.design_hash(project) != first_hash
+
+
+def clean_look_then_new_head(
+    tmp_path: Path, project: Path, *, plan: bool = False
+) -> tuple[list[Path], str, str]:
+    """A clean look record at one head, then a commit that changes no input of the reviewer; returns the images, the old head and the new head."""
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    if plan:
+        plan_file = project / "features/kpi-board/PLAN.md"
+        plan_file.parent.mkdir(parents=True)
+        plan_file.write_text(full_plan("A KPI board with one card."))
+    commit(project, "inputs")
+    images = make_images(project, 1)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    extra = ["--plan", "features/kpi-board/PLAN.md"] if plan else None
+    run_look(project, "claude", images, extra=extra)
+    old = git(project, "rev-parse", "HEAD").strip()
+    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
+    commit(project, "unrelated change")
+    return images, old, git(project, "rev-parse", "HEAD").strip()
+
+
+def test_a_clean_look_record_carries_to_a_new_head_with_the_same_reviewer_inputs(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+
+    _, old, new = clean_look_then_new_head(tmp_path, project, plan=True)
+    plan_file = project / "features/kpi-board/PLAN.md"
+    plan_file.write_text(full_plan("A KPI board with one card.", ux="Surface: New — x"))
+    commit(project, "the plan changes outside its scope")
+    new = git(project, "rev-parse", "HEAD").strip()
+    found = look.records_for(project, new)
+    assert [record["outcome"] for record in found] == ["clean"]
+    assert found[0]["carried_from"] == old
+    digest = hashlib.sha256(plan_file.read_bytes()).hexdigest()
+    assert found[0]["plan_sha256"] == digest
+
+
+@pytest.mark.parametrize("change", ["design", "plan scope", "ring boxes", "findings"])
+def test_a_look_record_does_not_carry_when_one_reviewer_input_changed(
+    tmp_path: Path, project: Path, change: str
+) -> None:
+    import look
+    import ui_measure
+
+    images, old, _ = clean_look_then_new_head(tmp_path, project, plan=True)
+    if change == "design":
+        (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    elif change == "plan scope":
+        plan_file = project / "features/kpi-board/PLAN.md"
+        plan_file.write_text(full_plan("A KPI board with two cards."))
+    elif change == "ring boxes":
+        ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[])
+    else:
+        hashes = [hashlib.sha256(image.read_bytes()).hexdigest() for image in images]
+        path = look.record_path(project, old, hashes)
+        record = json.loads(path.read_text())
+        record["outcome"] = "findings"
+        path.write_text(json.dumps(record))
+    (project / "notes.txt").write_text(f"{change}\n")
+    commit(project, f"change: {change}")
+    new = git(project, "rev-parse", "HEAD").strip()
+    assert [r for r in look.records_for(project, new) if r["head"] != new] == []
