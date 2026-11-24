@@ -53,7 +53,7 @@ N/A — no visible UI; hook code and a reference line only.
 Result: Pending
 Evidence: Pending
 E2E: N/A — no user journey of an installed app changes; the focused tests run `look` with a fake reviewer.
-Real service: N/A — the change calls no outside service; the reviewer is faked in tests.
+Real service: N/A — the change calls no outside service; it reads local browser records and the committed plan.
 Retro: Pending
 
 Delivery target: Merge
