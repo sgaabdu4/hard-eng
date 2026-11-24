@@ -20,6 +20,7 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 tmp_path_retention_policy = "failed"
+filterwarnings = ["error::pytest.PytestReturnNotNoneWarning"]
 markers = ["scan: a long Semgrep scan that the test workers must not queue behind each other"]
 
 [tool.coverage.run]
