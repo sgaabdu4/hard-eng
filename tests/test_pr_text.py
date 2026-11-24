@@ -10,7 +10,7 @@ import pytest
 import shipping
 import yaml
 from conftest import SOURCE
-from pr_text import body_problem, event_problem, pr_text_command
+from pr_text import body_problem, event_problem, pr_text_command, ready_problem
 from test_shipping import (
     _DIAGRAM,
     _UI_BODY,
@@ -551,6 +551,22 @@ def _ui_problem(
     fake = FakeGitHub(_pull(_fixture(tmp_path / "pull")), [], files)
     _patch_gh(monkeypatch, fake)
     return event_problem(_event(tmp_path, body), root), fake.calls
+
+
+def test_ship_reads_the_screen_part_of_the_pr_text_check_as_ci_does(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _project(tmp_path, ui_paths=["src/**"])
+    (tmp_path / "pull").mkdir()
+    changed = {"filename": "src/App.tsx", "status": "modified"}
+    fixture = _fixture(tmp_path / "pull")
+    fake = FakeGitHub(_pull(fixture, body=_VALID), [], [changed])
+    _patch_gh(monkeypatch, fake)
+    from_ci = event_problem(_event(tmp_path, _VALID), root)
+    assert from_ci is not None
+    assert from_ci.startswith("UI changes require distinct Before and After")
+    pull = shipping._pull(root, "acme", "widget", 1)
+    assert ready_problem(pull, root, 1) == from_ci
 
 
 def test_remote_check_reads_the_old_name_of_a_file_moved_out_of_ui_paths(
