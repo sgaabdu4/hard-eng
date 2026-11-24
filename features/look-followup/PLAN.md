@@ -46,11 +46,11 @@ Review declined: A fresh run of the old prompt to prove the cause again :: the s
 ## Acceptance + steps
 
 - [x] An old-format clean record (no `inputs`, no per-image `file`) never covers a new head, and a new-format record with equal inputs still covers → `tests/test_look_carry.py::test_an_old_format_record_never_covers_and_a_new_format_record_still_does`.
-- [x] A missing `file` or `sha256` in an earlier finding is not read as a changed image → `tests/test_look_carry.py::test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed`.
-- [x] Each of the three line forms parses, and a line with no verdict word is still refused → `tests/test_look.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`.
+- [x] A missing `file` or `sha256` in an earlier finding is not read as a changed image → `tests/test_look_carry.py::test_each_earlier_fail_is_listed_for_a_recheck_and_never_called_fixed`.
+- [x] Each of the three line forms parses, and a line with no verdict word is still refused → `tests/test_look_answer.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`.
 - [x] The prompt states the dash-free form and holds no em dash → `tests/test_look.py::test_the_prompt_form_needs_no_em_dash`.
 - [x] The plan scope guard follows the same forms, so `Rule: Pass. text` in `## Outcome + scope` is refused as a verdict leak → `tests/test_look.py::test_the_plan_scope_refuses_a_verdict_in_the_plain_form_too`.
-- [x] A Fail line with no `Fix:` text is refused as not done, and a Fail line with its item and fix stands → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`.
+- [x] A Fail line with no `Fix:` text is refused as not done, and a Fail line with its item and fix stands → `tests/test_look_answer.py::test_a_fail_line_that_cannot_stand_is_refused`.
 - [x] The environment of every step carries one fixed idle limit that the caller's environment cannot raise → `tests/test_browser.py::test_the_idle_limit_is_fixed_and_the_environment_cannot_raise_it`.
 - [x] A new session past the cap is refused with the open names and their close commands → `tests/test_browser.py::test_a_new_session_past_the_cap_is_refused_with_the_open_names`.
 - [x] A step on an open session passes at the cap, and the sessions of another checkout do not count → `tests/test_browser.py::test_a_step_on_an_open_session_passes_and_another_checkouts_sessions_do_not_count`.
@@ -77,7 +77,7 @@ Result: Passed
 Evidence: Focused tests of every acceptance line fail on `origin/develop` before each fix and pass after; static gates, `check --plan-stage Ready` and two independent reviews (findings on the first head, clean on the second) pass. Real tool, agent-browser 0.43.0: `session list --json` printed `{"success":true,"data":{"sessions":["name",...]}}` with two and with four sessions open and `{"sessions":[]}` for another checkout's namespace, which is the shape that `limit_sessions` reads. With 4 sessions open, a fifth new name was refused with the four names and their close commands, and a step on an open name ran. All four sessions were gone between 5 and 6 minutes after the last step, with the 5 minute limit. A step took 119 to 153 ms with the change and 187 to 260 ms on the base copy, which had no compiled modules.
 E2E: N/A — a CLI and hook fix, verified by fixture tests.
 Real service: N/A — no deployed service is involved.
-Retro: Escaped base-branch bugs: `look` tests never held an old-format record, a reviewer line without a dash, a Fail line with no fix, or a job that never closes its browsers → `tests/test_look_carry.py::test_an_old_format_record_never_covers_and_a_new_format_record_still_does`, `tests/test_look.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`, `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused` and `tests/test_browser.py::test_a_new_session_past_the_cap_is_refused_with_the_open_names`.
+Retro: Escaped base-branch bugs: `look` tests never held an old-format record, a reviewer line without a dash, a Fail line with no fix, or a job that never closes its browsers → `tests/test_look_carry.py::test_an_old_format_record_never_covers_and_a_new_format_record_still_does`, `tests/test_look_answer.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`, `tests/test_look_answer.py::test_a_fail_line_that_cannot_stand_is_refused` and `tests/test_browser.py::test_a_new_session_past_the_cap_is_refused_with_the_open_names`.
 
 Delivery target: Merge
 Delivery: Pending — check, challenge, PR to `develop`, CI, merge.
