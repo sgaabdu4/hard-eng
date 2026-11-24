@@ -32,6 +32,20 @@ def test_a_second_open_card_for_the_same_client_is_listed_unless_it_is_marked_ch
     assert "C-7" in found[0]["excerpt"]
 
 
+def test_a_card_with_an_unnamed_label_is_not_checked_when_no_checked_label_is_set(
+    project: Project,
+) -> None:
+    config = CONFIG | {"clientPattern": r"\[(C-\d+)\]"}
+    (project.main / "trello.json").write_text(json.dumps(config))
+    project.fake.labels.append({"id": "lb-green", "name": ""})
+    project.fake.cards = [
+        make_card(1, "#1 [C-7] Fix the login page", "l-doing"),
+        make_card(2, "#2 [C-7] Fix it again", "l-todo", idLabels=["lb-green"]),
+    ]
+    found = project.report()["unnumbered"]
+    assert [item["url"] for item in found] == ["https://trello.com/c/sl2"]
+
+
 def test_two_cards_with_no_client_setting_are_not_compared_by_client(
     project: Project,
 ) -> None:
