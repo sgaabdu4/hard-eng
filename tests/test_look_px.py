@@ -19,7 +19,7 @@ project = pytest.fixture(look_project)
 
 MEASURED: dict[str, object] = {
     "sizes": {"text_px": [12, 16]},
-    "radii": [{"at": "badge", "px": 6}],
+    "radii": [{"at": "badge", "px": 6}, {"at": "card", "px": 12}],
 }
 
 
@@ -61,6 +61,8 @@ def test_a_fail_line_with_a_px_size_that_the_measured_values_do_not_hold_is_refu
         "the badge corners are 6 px, not the 8 px radius in DESIGN.md",
         "the card has 12 px corners while the buttons have 6 px corners",
         "buttons use 4 px corners but cards use 12 px corners",
+        "buttons use 6 px corners but cards use about 12 px corners",
+        "the badge has 6 px corners but the card has about 12 px corners",
         "the badge has 4 px corners but the card has 12 px corners",
         "the badge has 6 px corners but the DESIGN.md radius is 8 px",
         "the button has 6 px corners instead of 8 px corners",

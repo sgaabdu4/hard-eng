@@ -409,7 +409,7 @@ def test_the_record_holds_the_measured_contrast_gaps_and_sizes(
     assert {16, 24} <= set(values["sizes"]["text_px"])
 
 
-def test_the_record_holds_the_corner_radius_of_controls_and_badges(
+def test_the_record_holds_the_corner_radius_of_every_rounded_element(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     (tmp_path / "pages/radii.html").write_text(
@@ -428,7 +428,8 @@ def test_the_record_holds_the_corner_radius_of_controls_and_badges(
         plain_step(tmp_path, name, "close")
     record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
     radii = {(item["at"], item["px"]) for item in record["measured"]["radii"]}
-    assert radii == {("Go", 6), ("New", 4)}
+    assert {("Go", 6), ("New", 4)} <= radii
+    assert {px for _, px in radii} == {6, 4, 12}
 
 
 def test_each_press_is_measured_apart_from_the_load(
