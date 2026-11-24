@@ -64,7 +64,7 @@ def test_quick_check_runs_only_the_fast_roles_and_plain_check_runs_all(
     assert ran == set(expected)
 
 
-STATIC_ROLES = ("complexity", "dead-code", "duplicates", "react", "security")
+STATIC_ROLES = ("complexity", "dead-code", "duplicates", "dependencies")
 TWISTY = "def f(a):\n" + "".join(
     f"    if a == {n}:\n        return {n}\n" for n in range(5)
 )
@@ -77,7 +77,7 @@ OVER_LIMIT = (
 def test_a_static_check_runs_the_analyzer_roles_and_no_tests(
     runner: ModuleType, tmp_path: Path
 ) -> None:
-    roles = QUICK_ROLES + STATIC_ROLES + ("tests", "performance", "custom")
+    roles = QUICK_ROLES + STATIC_ROLES + ("tests", "custom")
     configure(
         tmp_path,
         [

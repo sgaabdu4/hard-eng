@@ -657,6 +657,7 @@ def check(
     quick: bool = False,
     languages: LanguageFilter = NO_LANGUAGES,
     shard: str | None = None,
+    static: bool = False,
 ) -> int:
     import plans
     from ci_setup import push_base, require_ci_base
@@ -669,8 +670,11 @@ def check(
         record_pass,
         save_installed,
     )
+    from gate_schedule import QUICK_ROLES, STATIC_ROLES
     from reports import quick_groups
 
+    roles = STATIC_ROLES if static else QUICK_ROLES
+    quick = quick or static
     require_ci_base(base, ROOT)
     base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
@@ -702,7 +706,9 @@ def check(
             dependents=dependents,
             workflow_checked=merging_in_workflow(shard),
         )
-        groups = quick_groups(language_groups(every, languages), quick, installed)
+        groups = quick_groups(
+            language_groups(every, languages), quick, installed, roles
+        )
         if shard:
             from shards import shard_groups
 
@@ -825,6 +831,7 @@ def check_command(args: "Namespace") -> int:
         quick=args.quick,
         languages=language_filter(args),
         shard=args.shard,
+        static=args.static,
     )
 
 
