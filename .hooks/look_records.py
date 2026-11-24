@@ -202,7 +202,7 @@ def earlier_fixes(
     """The Fail lines of earlier findings on this branch for the same file names, when the image has changed since; each is marked as fixed at this head. `pairs` holds (prompt name, file name, digest)."""
     import look
 
-    judged = look.judged_names()
+    prefixes = look.owner_prefixes()
     lines: dict[str, list[str]] = {}
     fresh = sorted(
         _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
@@ -225,8 +225,8 @@ def earlier_fixes(
             if _same(item.get("file"), file) and _changed(item.get("sha256"), digest)
         ]
         for line in cast(list[str], record.get("rules", [])):
-            rule, verdict, _, _ = split_rule_line(line)
-            if names and verdict == "Fail" and rule in judged:
+            _, verdict, text, _ = split_rule_line(line)
+            if names and verdict == "Fail" and not text.startswith(prefixes):
                 lines.setdefault(line, [])
                 lines[line] += [name for name in names if name not in lines[line]]
     return [
