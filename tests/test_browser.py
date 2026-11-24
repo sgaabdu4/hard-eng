@@ -27,6 +27,17 @@ LOGIN = (
     "<input name=username type=text><input name=password type=password>"
     "<button type=submit>Sign in</button></form>"
 )
+INVOICE = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 200]/Contents 4 0 R"
+    b"/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+    b"4 0 obj<</Length 66>>stream\n"
+    b"BT /F1 14 Tf 20 100 Td (Mail bob@example.com or +44 7700 900123) Tj ET\n"
+    b"endstream endobj\n"
+    b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+    b"trailer<</Root 1 0 R/Size 6>>\n%%EOF\n"
+)
 PLAIN_STEP = (
     "import sys; from pathlib import Path; from browser import browser_command; "
     "raise SystemExit(browser_command(Path(sys.argv[1]), sys.argv[2:]))"
@@ -44,7 +55,12 @@ class Site(SimpleHTTPRequestHandler):
 
     @override
     def do_GET(self) -> None:
-        if self.path == "/login":
+        if self.path == "/invoice":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.end_headers()
+            self.wfile.write(INVOICE)
+        elif self.path == "/login":
             self.reply(200, LOGIN)
         elif self.path == "/home":
             signed = "sid=session-7741" in self.headers.get("Cookie", "")
@@ -740,6 +756,39 @@ def test_capture_fails_with_no_image_when_a_frame_slips_past(
     assert not list((tmp_path / ".hard-eng/browser").glob("*.png"))
 
 
+def test_capture_keeps_no_image_of_a_pdf_it_cannot_mask(
+    tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = browser.browser_command(
+        tmp_path, ["capture", f"{site}/invoice", "--session", session()]
+    )
+    assert code == 1
+    error = capsys.readouterr().err
+    assert "application/pdf" in error
+    assert "no image was kept" in error
+    folder = tmp_path / ".hard-eng/browser"
+    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
+
+
+def test_measure_keeps_no_image_of_a_pdf_in_an_open_session(
+    tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    name = session()
+    plain_step(tmp_path, name, "open", f"{site}/invoice")
+    try:
+        code = browser.browser_command(
+            tmp_path, ["measure", "--session", name, "--name", "invoice"]
+        )
+    finally:
+        plain_step(tmp_path, name, "close")
+    assert code == 1
+    error = capsys.readouterr().err
+    assert "application/pdf" in error
+    assert "no image was kept" in error
+    folder = tmp_path / ".hard-eng/browser"
+    assert not list(folder.glob("invoice-*"))
+
+
 @pytest.mark.parametrize("start_fails", [False, True])
 def test_capture_keeps_no_image_when_the_frame_check_fails(
     tmp_path: Path,
@@ -756,6 +805,8 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
         del name, session
         if arguments[:1] == ("screenshot",):
             (folder / arguments[-1]).write_bytes(b"image")
+        if arguments == ("eval", "document.contentType"):
+            return subprocess.CompletedProcess(arguments, 0, '"text/html"', "")
         if arguments[:2] == ("eval", browser.FRAME_CHECK):
             checks.append(arguments)
             if len(checks) == 2 and start_fails:
