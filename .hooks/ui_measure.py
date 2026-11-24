@@ -487,12 +487,13 @@ const sizes = {
   text_px: [...new Set(texts.map((el) => Math.round(parseFloat(getComputedStyle(el).fontSize))))].sort((a, b) => a - b),
 };
 const radiusOf = (el) => {
-  const value = getComputedStyle(el).borderTopLeftRadius, b = el.getBoundingClientRect();
+  const value = getComputedStyle(el).borderTopLeftRadius;
+  if (!parseFloat(value)) return 0;
+  const b = el.getBoundingClientRect();
   const half = Math.round(Math.min(b.width, b.height) / 2);
   return value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.min(Math.round(parseFloat(value)), half);
 };
-const drawn = (el) => { const s = getComputedStyle(el); return ownText(el) || s.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(s.borderTopWidth) > 0; };
-const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter((el) => visible(el) && drawn(el))];
+const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter(visible)];
 const radii = [];
 const seenRadii = new Set();
 for (const el of rounded) {
