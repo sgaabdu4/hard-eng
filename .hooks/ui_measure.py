@@ -5,6 +5,7 @@ import json
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 LIMITS = {
     "text_px": 11,
@@ -41,11 +42,11 @@ DECORATION = '[aria-hidden="true"],[role=img]'
 COLOUR_JS = (
     "const rgb = (() => { const cv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true }); "
     "return (c) => { cv.clearRect(0, 0, 1, 1); cv.fillStyle = 'rgba(0, 0, 0, 0)'; cv.fillStyle = c; cv.fillRect(0, 0, 1, 1); const d = cv.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; }; })(); "
+    "const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }; "
 )
 DECORATED_JS = (
     "((el) => { const root = el.closest(DECORATION_JSON); if (!root) return false; "
     "const fill = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); }; "
-    "const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }; "
     "const covers = (s, r) => { const q = s.getBoundingClientRect(); return q.left <= r.left + 1 && q.top <= r.top + 1 && q.right >= r.right - 1 && q.bottom >= r.bottom - 1; }; "
     "const behind = (e) => { const r = e.getBoundingClientRect(); for (let n = e; n.parentElement; n = n.parentElement) { for (let s = n.previousElementSibling; s; s = s.previousElementSibling) { const c = getComputedStyle(s).backgroundColor; if (fill(c) && covers(s, r)) return c; } const c = getComputedStyle(n.parentElement).backgroundColor; if (fill(c)) return c; } return 'rgb(255, 255, 255)'; }; "
     "const apart = (c, e) => { if (!fill(c)) return false; const a = lum(rgb(c)), b = lum(rgb(behind(e))); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= LIMITS.frame_ratio; }; "
@@ -116,7 +117,7 @@ AXE_NAMES = {
 MEASURE_SCRIPT = """(async () => {
 const LIMITS = LIMITS_JSON;
 const found = [];
-if (!window.__heHold) return JSON.stringify([{ rule: "request-delay-missing" }]);
+if (!window.__heHold) return JSON.stringify({ found: [{ rule: "request-delay-missing" }], measured: {} });
 const shown = (el) => {
   const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
@@ -417,7 +418,57 @@ for (const entry of shifts) {
 if (cls > LIMITS.cls) {
   found.push({ rule: "layout-shift", at: "page", cls: +cls.toFixed(3) });
 }
-return JSON.stringify(found);
+const hex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const solid = (el) => {
+  let bg = [255, 255, 255];
+  const chain = [];
+  for (let n = el; n; n = n.parentElement) chain.unshift(n);
+  for (const n of chain) {
+    const s = getComputedStyle(n);
+    if (s.backgroundImage !== "none") return null;
+    const c = rgb(s.backgroundColor);
+    bg = bg.map((v, i) => c[i] * c[3] + v * (1 - c[3]));
+  }
+  return bg;
+};
+const pairs = new Map();
+for (const el of texts) {
+  const bg = solid(el);
+  if (!bg) continue;
+  const s = getComputedStyle(el);
+  const c = rgb(s.color);
+  const fg = c.slice(0, 3).map((v, i) => v * c[3] + bg[i] * (1 - c[3]));
+  const ratio = Math.round(((Math.max(lum(fg), lum(bg)) + 0.05) / (Math.min(lum(fg), lum(bg)) + 0.05)) * 100) / 100;
+  const px = Math.round(parseFloat(s.fontSize));
+  const key = [hex(fg), hex(bg), px].join();
+  if (!pairs.has(key)) pairs.set(key, { at: name(el), ratio, fg: hex(fg), bg: hex(bg), px });
+}
+const label = (el) => el.tagName.toLowerCase() + (el.id ? "#" + el.id : "");
+const gaps = [];
+const seenGaps = new Set();
+for (const parent of document.body.querySelectorAll("*")) {
+  if (gaps.length >= 20) break;
+  const kids = [...parent.children].filter((c) => visible(c) && !["absolute", "fixed"].includes(getComputedStyle(c).position));
+  if (kids.length < 2) continue;
+  const boxes = kids.map((c) => c.getBoundingClientRect()).sort((a, b) => a.top - b.top || a.left - b.left);
+  const between = [];
+  for (let i = 1; i < boxes.length; i++) {
+    const below = boxes[i].top - boxes[i - 1].bottom, beside = boxes[i].left - boxes[i - 1].right;
+    if (below >= -1) between.push(Math.round(below));
+    else if (beside >= -1) between.push(Math.round(beside));
+  }
+  const key = JSON.stringify(between);
+  if (between.length && !seenGaps.has(key)) {
+    seenGaps.add(key);
+    gaps.push({ at: label(parent), gaps: between });
+  }
+}
+const sizes = {
+  controls: controls.slice(0, 20).map((el) => { const b = el.getBoundingClientRect(); return { at: name(el), w: Math.round(b.width), h: Math.round(b.height) }; }),
+  text_px: [...new Set(texts.map((el) => Math.round(parseFloat(getComputedStyle(el).fontSize))))].sort((a, b) => a - b),
+};
+const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes };
+return JSON.stringify({ found, measured });
 })()"""
 
 
@@ -480,6 +531,7 @@ def write_record(
     findings: list[dict[str, object]],
     route: str = "",
     ring_boxes: list[dict[str, int]] | None = None,
+    measured: dict[str, object] | None = None,
 ) -> Path:
     payload: dict[str, object] = {
         "image": image.name,
@@ -491,6 +543,29 @@ def write_record(
     }
     if ring_boxes:
         payload["ring_boxes"] = list(ring_boxes)
+    if measured:
+        payload["measured"] = measured
     record = image.with_suffix(".json")
     record.write_text(json.dumps(payload, indent=2) + "\n")
     return record
+
+
+def measured_text(measured: dict[str, object]) -> str:
+    """The measured values of one image as the one line that the `look` reviewer reads."""
+    parts = []
+    contrast = cast(list[dict[str, object]], measured.get("contrast", []))
+    parts += [
+        f"contrast {item['ratio']}:1 ({item['fg']} on {item['bg']}, {item['px']} px)"
+        for item in contrast
+    ]
+    gaps = cast(list[dict[str, object]], measured.get("gaps", []))
+    parts += [
+        f"gaps {', '.join(str(gap) for gap in cast(list[int], item['gaps']))} px in {item['at']}"
+        for item in gaps
+    ]
+    sizes = cast(dict[str, object], measured.get("sizes", {}))
+    controls = cast(list[dict[str, object]], sizes.get("controls", []))
+    parts += [f"control {item['at']} {item['w']}x{item['h']} px" for item in controls]
+    if text_px := cast(list[int], sizes.get("text_px", [])):
+        parts.append("text sizes " + ", ".join(str(px) for px in text_px) + " px")
+    return "; ".join(parts)
