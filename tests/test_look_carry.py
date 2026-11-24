@@ -137,7 +137,9 @@ def test_a_carried_record_backs_the_new_head_in_ship_and_in_the_local_proof(
     assert ui_proof.look_problem(project, new, block, after, plan_rel, digest) is None
     opened = [{hashlib.sha256(data).hexdigest() for data in after}]
     assert (
-        local_ui_proof._local_look_problem(project, project, new, opened, False, 0)
+        local_ui_proof._local_look_problem(
+            project, project, new, opened, False, 0, lambda _: None
+        )
         is None
     )
 

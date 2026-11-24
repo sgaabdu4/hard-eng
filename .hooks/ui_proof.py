@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol, cast
@@ -29,7 +29,10 @@ CATALOG_FOLDERS = frozenset(("l10n", "locales", "i18n", "messages"))
 PAGE_WRITE = re.compile(
     r"innerHTML|textContent|createElement|\.style\b|className|classList"
 )
-SURFACE_ROUTE = re.compile(r"(?m)^Surface: *\w+ — (/\S*?)[,\s]")
+SURFACE_ROUTES = re.compile(
+    r"(?m)^Surface: *\w+ — (/[^\s,]*(?:(?:,\s*(?:and\s+)?|\s+and\s+)/[^\s,]*)*)"
+)
+ROUTE_TOKEN = re.compile(r"/[^\s,]*")
 TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[a-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
@@ -272,7 +275,7 @@ def _unchanged_width_problem(
     head: str,
     base: str,
     *,
-    route: str,
+    routes: Sequence[str],
     allow_dirty_after: bool,
     min_mtime_ns: int,
 ) -> str | None:
@@ -283,10 +286,10 @@ def _unchanged_width_problem(
     _, before = before_entry
     after_path, after = after_entry
     for side, record in (("Before", before), ("After", after)):
-        if route and not on_route(str(record.get("route", "")), route):
+        if off_surface(str(record.get("route", "")), routes):
             return (
                 f"the unchanged {side} capture {record['image']} is of the page "
-                f"{record.get('route') or 'unknown'}, but the plan names {route}; capture the changed screen"
+                f"{record.get('route') or 'unknown'}, but the plan names {', '.join(routes)}; capture the changed screen"
             )
     if before["sha256"] != after["sha256"]:
         return f"the unchanged pair differs at {width} px; the screen changed, so write a real ux_reference"
@@ -308,7 +311,7 @@ def unchanged_problem(
     head: str,
     base: str,
     *,
-    route: str = "",
+    routes: Sequence[str] = (),
     allow_dirty_after: bool = False,
     min_mtime_ns: int = 0,
 ) -> str | None:
@@ -337,7 +340,7 @@ def unchanged_problem(
             width,
             head,
             base,
-            route=route,
+            routes=routes,
             allow_dirty_after=allow_dirty_after,
             min_mtime_ns=min_mtime_ns,
         ):
@@ -355,6 +358,11 @@ def on_route(captured: str, route: str) -> bool:
     )
 
 
+def off_surface(captured: str, routes: Sequence[str]) -> bool:
+    """Whether a plan names routes and the captured page is none of them."""
+    return bool(routes) and not any(on_route(captured, route) for route in routes)
+
+
 def _stem(record: dict[str, object]) -> str:
     name = CAPTURE_NAME.fullmatch(str(record["image"]))
     return name[1] if name else str(record["image"])
@@ -364,7 +372,7 @@ def capture_set_problem(
     by_image: Mapping[str, tuple[Path, dict[str, object]]],
     stem: str,
     head: str,
-    route: str,
+    routes: Sequence[str],
     *,
     allow_dirty: bool = False,
     min_mtime_ns: int = 0,
@@ -381,9 +389,9 @@ def capture_set_problem(
                 set(),
             )
         path, peer = entry
-        if route and not on_route(str(peer.get("route", "")), route):
+        if off_surface(str(peer.get("route", "")), routes):
             return (
-                f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {route}; capture the changed screen",
+                f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {', '.join(routes)}; capture the changed screen",
                 set(),
             )
         if peer.get("commit") != head or (not allow_dirty and peer.get("dirty")):
@@ -406,7 +414,7 @@ def capture_set_problem(
 
 
 def measured_problem(
-    root: Path, head: str, after: list[bytes], route: str = ""
+    root: Path, head: str, after: list[bytes], routes: Sequence[str] = ()
 ) -> str | None:
     """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width; of several sets with the same image, those taken at the head all count."""
     items = browser_record_files(root)
@@ -421,7 +429,7 @@ def measured_problem(
                 "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
             )
         for stem in stems:
-            problem, _ = capture_set_problem(by_image, stem, head, route)
+            problem, _ = capture_set_problem(by_image, stem, head, routes)
             if problem:
                 return problem
     return None
@@ -545,10 +553,10 @@ def is_native(visible: list[str]) -> bool:
     return bool(visible) and all(name.endswith(NATIVE) for name in visible)
 
 
-def surface_route(plan_text: str) -> str:
-    """The route that the plan's `Surface: Existing — /route, rendered by ...` line names, or an empty string."""
-    found = SURFACE_ROUTE.search(reference_section(plan_text))
-    return found[1] if found else ""
+def surface_routes(plan_text: str) -> list[str]:
+    """Every route that the plan's `Surface: Existing — /a, /b and /c, rendered by ...` line names, or an empty list."""
+    found = SURFACE_ROUTES.search(reference_section(plan_text))
+    return ROUTE_TOKEN.findall(found[1]) if found else []
 
 
 def evidence_problem(
@@ -557,12 +565,12 @@ def evidence_problem(
     body: str,
     after: list[bytes],
     visible: list[str],
-    route: str = "",
+    routes: Sequence[str] = (),
     plan_rel: str = "",
     plan_digest: str = "",
 ) -> str | None:
     if not is_native(visible) and (
-        problem := measured_problem(root, head, after, route)
+        problem := measured_problem(root, head, after, routes)
     ):
         return problem
     return look_problem(root, head, body, after, plan_rel, plan_digest)
@@ -624,7 +632,7 @@ def ship_problem(
         body,
         after,
         visible,
-        surface_route(plan_text),
+        surface_routes(plan_text),
         plan_rel,
         verified_digest,
     )
