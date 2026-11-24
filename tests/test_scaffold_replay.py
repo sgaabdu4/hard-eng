@@ -3,7 +3,6 @@
 import json
 import subprocess
 from pathlib import Path
-from types import ModuleType
 from unittest.mock import Mock
 
 import change_size
@@ -18,6 +17,7 @@ from coverage_sources import require_listed_sources
 from gate_config import parse_config, repository_files
 from test_update_pr_refusal import loading_project
 from test_updates import fixed_revision
+from ui_whole import add_ui_library
 
 SKILL_LOCK = ".agents/skills/marketing-video/bun.lock"
 WORKFLOW = ".github/workflows/hard-eng.yml"
@@ -344,12 +344,12 @@ def test_an_update_leaves_the_ui_library_key_to_the_project(
 
 
 def test_a_first_install_writes_the_ui_library_default(
-    release: tuple[Path, Path, str], installer: ModuleType
+    release: tuple[Path, Path, str],
 ) -> None:
     _, target, _ = release
     web_project(target)
     config = json.loads((target / "hard-eng.gates.json").read_text())
-    installer.add_ui_library(target, config)
+    add_ui_library(target, config)
     assert config["shipping"]["ui_library"] == ["src/ui/*"]
 
 
@@ -366,7 +366,7 @@ def test_an_update_leaves_an_existing_ui_library_key_alone(
 
 
 def test_setup_writes_no_library_for_a_components_folder(
-    release: tuple[Path, Path, str], installer: ModuleType
+    release: tuple[Path, Path, str],
 ) -> None:
     """A folder named `components` holds screens too; a guessed library there hides every base element inside it."""
     _, target, _ = release
@@ -378,7 +378,7 @@ def test_setup_writes_no_library_for_a_components_folder(
     )
     commit(target, "a components folder")
     config = json.loads((target / "hard-eng.gates.json").read_text())
-    installer.add_ui_library(target, config)
+    add_ui_library(target, config)
     assert "ui_library" not in config["shipping"]
 
 
