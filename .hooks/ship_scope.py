@@ -131,7 +131,7 @@ def delivered_files(
     unplanned = (
         stage == "delivered"
         and plan is None
-        and route(root, pull, policy["base"]) is None
+        and route(root, pull, policy["base"], merged=True) is None
     )
     if not (policy["ui_paths"] or unplanned):
         return []

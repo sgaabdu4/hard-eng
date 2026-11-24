@@ -54,6 +54,19 @@ AUDIT_FAULTS = {
         "wrapped-label",
         1,
     ),
+    "wrapped-block-label-button": (
+        "<button style='width:96px;min-height:44px;font-size:16px'><div>Save landlord record</div></button>",
+        "wrapped-label",
+        1,
+    ),
+    "wrapped-flex-button": (
+        (
+            "<button style='display:inline-flex;gap:8px;width:120px;min-height:44px;font-size:16px'>"
+            "<svg width='16' height='16' aria-hidden='true'></svg><span>Save landlord record</span></button>"
+        ),
+        "wrapped-label",
+        1,
+    ),
     "wrapped-link-button": (
         (
             "<a href='/rent' style='display:block;width:96px;min-height:44px;font-size:16px;"
