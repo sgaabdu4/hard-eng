@@ -196,3 +196,43 @@ def test_a_one_route_surface_still_refuses_another_route(
     fixture, _, _ = full_ship(tmp_path, monkeypatch, ux=surface_ux("/one"))
     with pytest.raises(shipping.ShippingError, match="names /one;"):
         ready(fixture.root, fixture)
+
+
+LONG_SURFACE = (
+    "Surface: Existing — /work/calls, /work/people, /work/items/[itemId]/preview, "
+    "/work/visits/[visitId], /work/leads/[leadId], /work/cases and /work/numbers, "
+    "rendered by `app/src/components/work/Form.tsx`, `Box.tsx` and `Parts.tsx` in "
+    "`app/src/components/work/`, `app/src/app/work/people/Row.tsx`."
+)
+
+
+def test_a_long_surface_line_returns_exactly_its_routes() -> None:
+    plan = f"## ux_reference\n\nResult: Passed\n{LONG_SURFACE}\nBefore: none\n"
+    assert ui_proof.surface_routes(plan) == [
+        "/work/calls",
+        "/work/people",
+        "/work/items/[itemId]/preview",
+        "/work/visits/[visitId]",
+        "/work/leads/[leadId]",
+        "/work/cases",
+        "/work/numbers",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("captured", "off"),
+    [
+        ("/work/items/abc/preview", False),
+        ("/work/numbers", False),
+        ("/work/visits/v-9?tab=notes", False),
+        ("/work", True),
+        ("/other", True),
+        ("/work/items/preview", True),
+        ("/work/items//preview", True),
+    ],
+)
+def test_a_capture_of_a_listed_bracket_route_passes_and_others_are_refused(
+    captured: str, off: bool
+) -> None:
+    plan = f"## ux_reference\n\n{LONG_SURFACE}\n"
+    assert ui_proof.off_surface(captured, ui_proof.surface_routes(plan)) is off
