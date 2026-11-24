@@ -450,6 +450,85 @@ def test_refuses_shared_sessions(
     assert name not in open_sessions(browser, tmp_path)
 
 
+def fake_open_sessions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    open_by_root: dict[Path, list[str]],
+) -> list[Mapping[str, str]]:
+    """A tool whose `session list --json` shows the sessions of the namespace that the step's environment names; each launched step is recorded and stopped."""
+    store = tmp_path / "open"
+    store.mkdir()
+    for root, names in open_by_root.items():
+        space = browser.checkout_space(browser.output_folder(root))
+        (store / space["AGENT_BROWSER_NAMESPACE"]).write_text(
+            json.dumps({"success": True, "data": {"sessions": names}})
+        )
+    tool = tmp_path / "agent-browser"
+    tool.write_text('#!/bin/sh\ncat "$FAKE_OPEN/$AGENT_BROWSER_NAMESPACE"\n')
+    tool.chmod(0o755)
+    monkeypatch.setenv("FAKE_OPEN", str(store))
+    monkeypatch.setattr(browser, "ensure_tool", lambda: str(tool))
+    monkeypatch.chdir(tmp_path)
+    launched: list[Mapping[str, str]] = []
+
+    def execve(path: str, argv: list[str], env: Mapping[str, str]) -> None:
+        del path, argv
+        launched.append(env)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(os, "execve", execve)
+    return launched
+
+
+def test_the_idle_limit_is_fixed_and_the_environment_cannot_raise_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    folder = browser.output_folder(tmp_path)
+    fixed = browser.checkout_space(folder)["AGENT_BROWSER_IDLE_TIMEOUT_MS"]
+    assert 0 < int(fixed) <= 600_000
+    for given in ("3600000", "0"):
+        monkeypatch.setenv("AGENT_BROWSER_IDLE_TIMEOUT_MS", given)
+        assert browser.checkout_space(folder)["AGENT_BROWSER_IDLE_TIMEOUT_MS"] == fixed
+
+
+def test_a_new_session_past_the_cap_is_refused_with_the_open_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    names = ["a", "b", "c", "d"]
+    launched = fake_open_sessions(tmp_path, monkeypatch, browser, {tmp_path: names})
+    for step in (
+        ["--session", "e", "open", "about:blank"],
+        ["measure", "--session", "e", "--name", "x"],
+        ["capture", "http://127.0.0.1/", "--session", "e"],
+    ):
+        assert browser.browser_command(tmp_path, step) == 1
+        err = capsys.readouterr().err
+        for name in names:
+            assert f"browser --session {name} close" in err
+    assert launched == []
+
+
+def test_a_step_on_an_open_session_passes_and_another_checkouts_sessions_do_not_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    full, other = tmp_path / "full", tmp_path / "other"
+    launched = fake_open_sessions(
+        tmp_path, monkeypatch, browser, {full: ["a", "b", "c", "d"], other: ["x"]}
+    )
+    for root, name in ((full, "a"), (other, "new")):
+        with pytest.raises(SystemExit):
+            browser.browser_command(root, ["--session", name, "open", "about:blank"])
+    assert [env["AGENT_BROWSER_IDLE_TIMEOUT_MS"] for env in launched] == [
+        browser.checkout_space(browser.output_folder(full))[
+            "AGENT_BROWSER_IDLE_TIMEOUT_MS"
+        ]
+    ] * 2
+
+
 def test_capture_draws_boxes_at_each_width(
     tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
 ) -> None:
