@@ -25,6 +25,7 @@ Authority: Autonomous: the user asked on 2026-11-23 to fix every Hard Eng fault 
 ## Acceptance + steps
 
 - [ ] Repointing an old plan that has a checkbox with no named proof counts as unchanged, and gives the result that the untouched plan gives at each stage → `tests/test_old_plan_test_ref_repair.py::test_repointing_an_old_plan_with_a_proofless_row_gives_the_untouched_result`
+- [ ] Repointing an old plan that lacks a section added later, or holds a not-applicable mark with no reason, gives the untouched result, so the refusal's own fix works → `tests/test_old_plan_test_ref_repair.py::test_repointing_an_old_plan_of_an_old_form_gives_the_untouched_result`
 - [ ] A repoint with any other change, or to a missing test, is still judged as a changed plan → `tests/test_old_plan_test_ref_repair.py::test_a_repoint_with_another_change_is_still_judged_as_a_changed_plan`
 - [ ] Removing a test that an unchanged old plan names is refused with the plan and its line, for each old form → `tests/test_plan_acceptance.py::test_removing_a_named_test_is_refused_whatever_the_form_of_the_old_plan`
 - [ ] One reader gives the same rows as the strict reader, and a plan with no acceptance heading names no rows → `tests/test_plan_acceptance.py::test_the_lenient_reader_gives_the_rows_of_the_strict_reader`

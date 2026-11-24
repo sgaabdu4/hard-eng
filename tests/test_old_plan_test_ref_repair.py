@@ -1,10 +1,11 @@
 """Repairing only acceptance test refs in an old Complete plan keeps it exempt from newer plan fields."""
 
+import re
 from pathlib import Path
 
 import change_size
 import pytest
-from conftest import git
+from conftest import commit, git
 from plans import validate_plan
 from test_planning_handoffs import (
     OLD_NAME,
@@ -232,3 +233,25 @@ def test_a_repoint_with_another_change_is_still_judged_as_a_changed_plan(
 
     with pytest.raises(ValueError, match=expected):
         change_size.judged_stage(root, base, None)
+
+
+@pytest.mark.parametrize("form", ["no ux_reference section", "a bare N/A"])
+def test_repointing_an_old_plan_of_an_old_form_gives_the_untouched_result(
+    tmp_path: Path, completed_plan: str, form: str
+) -> None:
+    root, old, base = old_plan_with_test_ref(tmp_path, completed_plan, KEPT_AND_OLD)
+    old = (
+        re.sub(r"(?ms)^## ux_reference\n.*?(?=^## )", "", old)
+        if form == "no ux_reference section"
+        else old.replace("Verify fixture", "Notes: N/A\nVerify fixture", 1)
+    )
+    (root / OLD_NAME).write_text(old)
+    base = commit(root, "old form")
+    mine = root / "features/mine/PLAN.md"
+    mine.parent.mkdir(parents=True)
+    mine.write_text(completed_plan)
+    untouched = change_size.judged_stage(root, base, None)
+
+    (root / OLD_NAME).write_text(old.replace(OLD_TARGET, KEPT_TARGET))
+
+    assert change_size.judged_stage(root, base, None) == untouched
