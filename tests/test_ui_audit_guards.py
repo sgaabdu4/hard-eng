@@ -215,6 +215,106 @@ def measured(
     return [(item["rule"], item.get("at")) for item in record["findings"]]
 
 
+STAGGERED = (
+    "(async () => { await Promise.all([0, 1, 2, 3, 4].map((i) => "
+    "new Promise((go) => setTimeout(go, i * 20)).then(() => fetch('/step.json?s=' + i)).then((reply) => reply.text()))); "
+    "window.done = true; })()"
+)
+XHR_CHAIN = (
+    "(async () => { const get = (url) => new Promise((done) => { "
+    "const request = new XMLHttpRequest(); request.open('GET', url); "
+    "request.onload = () => done(request.responseText); request.send(); }); "
+    "for (let i = 0; i < 4; i++) await get('/step.json?x=' + i + Date.now()); "
+    "window.done = true; })()"
+)
+
+
+def prefetching(headers: str) -> str:
+    return (
+        "(async () => { const get = (url, headers) => fetch(url, { headers }).then((reply) => reply.text()); "
+        "for (let i = 0; i < 3; i++) await get('/step.json?w=' + i + Date.now()); "
+        f"for (let i = 0; i < 2; i++) await get('/step.json?x=' + i + Date.now(), {headers}); "
+        "window.done = true; })()"
+    )
+
+
+def test_fetches_that_start_a_few_milliseconds_apart_count_as_one_wave(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "staggered", STAGGERED)
+    name = session()
+    open_board(tmp_path, site, name, "staggered")
+    try:
+        finished(tmp_path, name)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_four_xhr_chain_still_fails_with_the_request_delay(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "xhr", XHR_CHAIN)
+    name = session()
+    open_board(tmp_path, site, name, "xhr")
+    try:
+        finished(tmp_path, name)
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+@pytest.mark.parametrize(
+    ("headers", "findings"),
+    [
+        ("{ 'Next-Router-Prefetch': '1' }", []),
+        ("{ Purpose: 'prefetch' }", []),
+        ("{ 'Sec-Purpose': 'prefetch;anonymous' }", []),
+        ("{ Purpose: 'preview' }", [("fetch-waterfall", "load")]),
+        ("{}", [("fetch-waterfall", "load")]),
+    ],
+)
+def test_prefetch_requests_add_no_wave(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    headers: str,
+    findings: list[tuple[object, object]],
+) -> None:
+    board(tmp_path, "prefetch", prefetching(headers))
+    name = session()
+    open_board(tmp_path, site, name, "prefetch")
+    try:
+        finished(tmp_path, name)
+        assert measured(tmp_path, browser, name) == findings
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_session_without_the_request_delay_is_refused(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    board(tmp_path, "plain", "")
+    name = session()
+    monkeypatch.setattr(browser, "hold_script_file", lambda _folder: None)
+    tool, folder = browser.ensure_tool(), browser.output_folder(tmp_path)
+    try:
+        browser.require(
+            browser.run_tool(tool, folder, name, "open", f"{site}/plain.html")
+        )
+        code = browser.browser_command(
+            tmp_path, ["measure", "--session", name, "--name", "state"]
+        )
+        assert code == 1
+        assert "request delay" in capsys.readouterr().err
+    finally:
+        browser.run_tool(tool, folder, name, "close")
+
+
 def test_each_press_is_measured_apart_from_the_load(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
