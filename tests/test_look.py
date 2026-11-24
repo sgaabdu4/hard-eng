@@ -166,6 +166,13 @@ def test_look_refuses_an_unopened_image(
     ]
 
 
+def next_head(project: Path) -> None:
+    """A new commit that changes no input of the reviewer, so a rerun is not the same head."""
+    count = len(list(project.glob("head-*.txt")))
+    (project / f"head-{count}.txt").write_text("another head\n")
+    commit(project, f"head {count}")
+
+
 def test_look_reads_codex_image_views_from_the_session_file(
     tmp_path: Path, project: Path
 ) -> None:
@@ -175,8 +182,11 @@ def test_look_reads_codex_image_views_from_the_session_file(
     assert record["outcome"] == "clean"
     assert record["reviewer"] == "codex"
     assert all(item["read"] for item in listed(record, "images"))
+    next_head(project)
     install_agent(tmp_path, "codex", 0, good_answer(2))
-    assert str(run_look(project, "claude", images)["outcome"]).startswith("not done")
+    assert str(run_look(project, "claude", images, extra=["--all"])["outcome"]).startswith(
+        "not done"
+    )
 
 
 def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) -> None:
@@ -385,8 +395,9 @@ def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
         "service_tier=default",
     ]
     (tmp_path / "bin/codex").unlink()
+    next_head(project)
     claude_log = install_agent(tmp_path, "claude", 1, good_answer(1))
-    record = run_look(project, "agy", images)
+    record = run_look(project, "agy", images, extra=["--all"])
     assert record["reviewer"] == "claude"
     assert record["fresh_same_agent"] is False
     claude_argv = json.loads(claude_log.read_text())["argv"]
@@ -671,6 +682,73 @@ def test_the_prompt_asks_for_every_frame_and_element_of_a_failing_rule(
     prompt = " ".join(json.loads(log.read_text())["argv"])
     assert "every frame and element" in prompt
     assert "`image-N.png: <element>`" in prompt
+
+
+FAULT = "- Hierarchy: Fail — image-1.png: two filled buttons. Fix: outline one."
+
+
+def findings_for_one_image() -> str:
+    rules = [
+        FAULT.removeprefix("- ") if name == "Hierarchy" else f"{name}: Pass — ok"
+        for name, _ in usability_rules()
+    ]
+    return "\n".join(
+        [*rules, "Image image-1.png: a card", "VERDICT: findings"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("first", "second_flags", "kept"),
+    [
+        ("clean", [], True),
+        ("findings", [], True),
+        ("clean", ["--all"], True),
+        ("not done", [], False),
+        ("clean", ["--changed-design"], False),
+    ],
+)
+def test_a_second_run_at_the_same_head_keeps_the_first_verdict(
+    tmp_path: Path,
+    project: Path,
+    capsys: pytest.CaptureFixture[str],
+    first: str,
+    second_flags: list[str],
+    kept: bool,
+) -> None:
+    import look
+
+    images = make_images(project, 1)
+    answers = {
+        "clean": good_answer(1),
+        "findings": findings_for_one_image(),
+        "not done": "no verdict line",
+    }
+    install_agent(tmp_path, "claude", 1, answers[first])
+    record = run_look(project, "codex", images)
+    head = git(project, "rev-parse", "HEAD").strip()
+    hashes = [hashlib.sha256(image.read_bytes()).hexdigest() for image in images]
+    path = look.record_path(project, head, hashes)
+    before = path.read_text()
+    other = "findings" if first == "clean" else "clean"
+    log = install_agent(
+        tmp_path, "claude", 1, answers[other if other != "not done" else "clean"]
+    )
+    log.unlink()
+    flags = [flag for flag in second_flags if flag == "--all"]
+    if "--changed-design" in second_flags:
+        (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    capsys.readouterr()
+    code = look.look_command(project, ["--host", "codex", *flags, *map(str, images)])
+    out = capsys.readouterr().out
+    if kept:
+        assert path.read_text() == before
+        assert not log.exists()
+        assert f"already has a {record['outcome']} verdict" in out
+        assert code == (0 if record["outcome"] == "clean" else 1)
+        assert ("Look review:" in out) == (record["outcome"] == "clean")
+    else:
+        assert log.exists()
+        assert path.read_text() != before
 
 
 def test_the_fix_of_the_next_rule_does_not_belong_to_a_fail_without_one(

@@ -15,6 +15,7 @@ from test_look import (
     install_agent,
     look_project,
     make_images,
+    next_head,
     run_look,
 )
 from test_look_carry import findings_answer
@@ -88,11 +89,12 @@ def test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_review
     sent = prompt_rule_names(prompt_of(log))
     assert set(MEASURED_ONLY) <= set(sent)
     assert not set(sent) & set(TEST_ONLY)
+    next_head(project)
     answer = good_answer(1).replace(
         "- Widths: Pass — looked at it", "- Widths: Fail — image-1.png: too narrow Fix: widen it"
     )
     install_agent(tmp_path, "claude", 1, answer)
-    record = run_look(project, "codex", images)
+    record = run_look(project, "codex", images, extra=["--all"])
     assert record["outcome"] == "findings"
     assert stored(record)["Widths"].startswith("Widths: Fail — image-1.png: too narrow")
 
