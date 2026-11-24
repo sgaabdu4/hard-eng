@@ -55,6 +55,9 @@ def test_a_fail_line_with_a_px_size_that_the_measured_values_do_not_hold_is_refu
         "text 12 px is too small for a label",
         "the badge has corners 6 px, too sharp for the card",
         "the badge text is about 12 px and the button is 44 px high",
+        "the caption text is 12 px, under the 14 px text minimum",
+        "the badge has 6 px corners but DESIGN.md sets an 8 px radius",
+        "the card corners are 12 px, too round for a table row",
     ],
 )
 def test_a_fail_line_with_a_px_size_that_the_measured_values_hold_passes_the_guard(
