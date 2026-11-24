@@ -3,7 +3,7 @@
 import re
 from pathlib import Path, PurePosixPath
 
-from plans import _is_test, acceptance_tests, plan_sections, plan_status
+from plans import _is_test, acceptance_references, plan_sections, plan_status
 from source_scan import code_without_comments
 
 HASH_COMMENT_SUFFIXES = {".py", ".rb", ".sh", ".bash", ".zsh", ".pl", ".ex", ".exs"}
@@ -89,8 +89,9 @@ def unchanged_plan_test_problem(
         if plan_status(content) != "Complete":
             continue
         try:
-            sections = plan_sections(content)
-            found, _ = acceptance_tests(sections)
+            found = acceptance_references(
+                plan_sections(content, allow_placeholders=True)
+            )
         except ValueError:
             continue
         named = [reference for reference in found if reference[0] in changed]
