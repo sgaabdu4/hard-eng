@@ -32,6 +32,8 @@ Owners:
 
 Same cause: each fault is one unchecked assumption at one owner. (1) Three places compared a record field with a wanted value without checking that the field exists: `covering_record` (`inputs`), `carried_record` (`inputs` through a guard) and `earlier_fixes` (`file`, and `sha256`, where a missing digest counts as changed); the compare moves to one helper. (2) The reviewer form was one character the reviewer may not write. Proof of cause: in the failing run, all 16 rule lines have the form `Rule: Pass. text` (a period, no dash), and the parser needs a dash after the verdict. The two other runs used the em dash and parsed. The user rule against em dashes is the likely reason the reviewer left it out; the logs cannot prove that part. (3) Hard Eng relied on the agent to close each plain session, and left the tool's 1 hour idle default in place; both limits now sit in `checkout_space` and the one place that opens a session.
 
+Single source: `look_records.py` owns the record field compare, `look.py` owns the reviewer line form, and `browser.py` owns the idle limit and the session cap.
+
 ## Decisions + authorization
 
 Blockers: None
