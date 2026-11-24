@@ -870,6 +870,7 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
         return subprocess.CompletedProcess(arguments, 0, reply, "")
 
     monkeypatch.setattr(browser, "ensure_tool", lambda: "agent-browser")
+    monkeypatch.setattr(browser, "limit_sessions", lambda *_: None)
     monkeypatch.setattr(browser, "run_tool", tool)
     code = browser.browser_command(
         tmp_path, ["capture", "http://x", "--session", session()]
