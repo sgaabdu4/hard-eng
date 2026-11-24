@@ -248,9 +248,10 @@ def full_ship(
     *,
     widths: tuple[int, ...] = WIDTHS,
     findings: list[dict[str, object]] | None = None,
+    ux: str = REAL_UX,
 ) -> tuple[Fixture, FakeGitHub, bytes]:
     """A ready PR whose After image is a generated measured capture."""
-    fixture, fake = ship_setup(tmp_path, monkeypatch)
+    fixture, fake = ship_setup(tmp_path, monkeypatch, ux=ux)
     after = measured_after(fixture.root, widths, findings)
     record = write_look(fixture.root, fixture.head, after)
     fake.pulls[0]["body"] = f"{_UI_BODY}\n{look.block_text(record)}\n{_UNDO}"
