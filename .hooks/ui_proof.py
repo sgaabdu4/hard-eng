@@ -497,9 +497,9 @@ def look_problem(
     plan_digest: str = "",
 ) -> str | None:
     """A clean look record for this head that covers each After image, and a PR block that matches it."""
-    import look
+    from look_records import records_for
 
-    records = look.records_for(root, head)
+    records = records_for(root, head)
     if not records:
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>` and paste its block into the PR body"
     problems = [

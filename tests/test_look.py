@@ -87,8 +87,7 @@ def install_agent(tmp_path: Path, name: str, reads: int, answer: str) -> Path:
     return log
 
 
-@pytest.fixture
-def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def look_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "project"
     init(root)
     (root / "README.md").write_text("project\n")
@@ -105,6 +104,9 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     return root
+
+
+project = pytest.fixture(look_project)
 
 
 def make_images(root: Path, count: int) -> list[Path]:
@@ -267,7 +269,7 @@ def test_review_text_names_the_look_command() -> None:
 def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
     tmp_path: Path, project: Path
 ) -> None:
-    import look
+    import look_records
 
     images = make_images(project, 2)
     install_agent(tmp_path, "codex", 1, good_answer(1))
@@ -276,11 +278,11 @@ def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
     second = run_look(project, "claude", images[1:])
     assert first["images"] != second["images"]
     head = git(project, "rev-parse", "HEAD").strip()
-    assert len(look.records_for(project, head)) == 2
+    assert len(look_records.records_for(project, head)) == 2
     first_hash = hashlib.sha256(images[0].read_bytes()).hexdigest()
     assert any(
         item["sha256"] == first_hash
-        for record in look.records_for(project, head)
+        for record in look_records.records_for(project, head)
         for item in listed(record, "images")
     )
 

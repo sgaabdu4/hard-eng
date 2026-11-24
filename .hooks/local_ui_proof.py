@@ -285,24 +285,17 @@ def _local_look_problem(
     min_mtime_ns: int,
 ) -> str | None:
     import look
-    from challenge import store
+    from look_records import record_files
     from plans import usability_rules
 
-    folder = store(evidence, head, look.STORE).parent
-    paths: list[Path] = sorted(folder.glob(f"{head}-*.json")) if folder.is_dir() else []
-    if not paths:
+    files = record_files(root, head, evidence)
+    if not files:
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>`"
     expected_design = look.design_hash(root)
     wanted = [name for name, _ in usability_rules()]
     covered: set[str] = set()
     first_problem: str | None = None
-    for path in paths:
-        try:
-            record = json.loads(path.read_text())
-        except (OSError, ValueError):
-            continue
-        if not isinstance(record, dict):
-            continue
+    for path, record in files:
         problem, opened = _single_local_look_problem(
             record,
             path,
