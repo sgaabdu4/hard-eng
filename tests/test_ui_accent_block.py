@@ -150,3 +150,52 @@ def test_a_different_ink_in_another_colour_form_still_counts_as_a_colour(
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
         assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
+
+
+def with_tint(tint: str) -> str:
+    return screen(
+        "<div><p style='margin:0;color:rgb(160, 59, 38)'>Rent due</p>"
+        f"<p style='margin:0;color:rgb(160, 59, 38);background:{tint}'>Unit 4 status</p>"
+        f"{pair('#00b', 'transparent')}</div>"
+    )
+
+
+TINTS = {
+    "rgba-ten-percent": "rgba(0, 130, 60, 0.1)",
+    "oklab-ten-percent": "oklab(0.6 -0.15 0.1 / 0.1)",
+    "srgb-ten-percent": "color(srgb 0 0.5 0.25 / 0.1)",
+}
+
+
+@pytest.mark.parametrize("tint", TINTS.values(), ids=TINTS)
+def test_a_ten_percent_tint_of_a_third_hue_still_counts(
+    tmp_path: Path, site: str, browser: ModuleType, tint: str
+) -> None:
+    page(tmp_path, with_tint(tint))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
+
+
+@pytest.mark.parametrize(
+    "tint", ["rgba(0, 130, 60, 0.09)", "oklab(0.6 -0.15 0.1 / 0.09)"]
+)
+def test_a_tint_under_ten_percent_stays_skipped(
+    tmp_path: Path, site: str, browser: ModuleType, tint: str
+) -> None:
+    page(tmp_path, with_tint(tint))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
+
+
+def test_a_channel_outside_the_colour_range_reads_as_the_nearest_inside_it(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(
+        tmp_path,
+        ink_at_two_strengths("rgb(128, 0, 51)", "color(srgb 0.501961 -0.1 0.2)"),
+    )
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
