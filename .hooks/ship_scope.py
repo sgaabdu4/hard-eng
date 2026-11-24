@@ -125,13 +125,14 @@ def delivered_files(
     stage: str,
 ) -> list[dict[str, JsonValue]]:
     """The files of the PR when screens need them or the delivered stage has no plan; a delivered stage with no `--plan` for an ordinary PR that changed a plan is refused."""
-    from ship_record import route
+    from ship_record import base_before_merge, route
     from ui_proof import changed_files
 
+    before = base_before_merge(root, pull.head_sha, pull.merge_commit_sha)
     unplanned = (
         stage == "delivered"
         and plan is None
-        and route(root, pull, policy["base"], merged=True) is None
+        and route(root, pull, policy["base"], before) is None
     )
     if not (policy["ui_paths"] or unplanned):
         return []

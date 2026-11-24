@@ -185,21 +185,70 @@ class JoinPull:
     base_ref: str = "develop"
     rebaseable: bool | None = True
     default_branch: str | None = "main"
+    merge_commit_sha: str | None = None
 
 
 def test_a_merged_join_keeps_its_route_when_the_base_already_holds_the_default_tip(
     tmp_path: Path,
 ) -> None:
-    from ship_record import route
+    from ship_record import base_before_merge, route
 
     fixture = develop_policy(tmp_path, "chore/join-main-hotfix")
-    _origin_refs(fixture, "head")
-    head = git(fixture.root, "rev-parse", "HEAD")
-    git(fixture.root, "update-ref", "refs/remotes/origin/develop", head)
-    pull = JoinPull(head)
-    assert route(fixture.root, pull, "develop") is None
-    assert route(fixture.root, pull, "develop", merged=True) == "join"
-    _origin_refs(fixture, "parent")
-    git(fixture.root, "update-ref", "refs/remotes/origin/develop", head)
-    own = JoinPull(head, head_ref="feature/own-work")
-    assert route(fixture.root, own, "develop", merged=True) is None
+    root = fixture.root
+    develop = git(root, "rev-parse", "HEAD")
+    first = git(root, "rev-list", "--max-parents=0", "HEAD")
+    tree = git(root, "rev-parse", "HEAD^{tree}")
+    main = git(root, "commit-tree", tree, "-p", first, "-m", "main tip")
+    join = git(root, "commit-tree", tree, "-p", develop, "-p", main, "-m", "join")
+    merged = git(root, "commit-tree", tree, "-p", develop, "-p", join, "-m", "merge")
+    git(root, "update-ref", "refs/remotes/origin/main", main)
+    git(root, "update-ref", "refs/remotes/origin/develop", merged)
+    pull = JoinPull(join, merge_commit_sha=merged)
+    before = base_before_merge(root, join, merged)
+    assert before == develop
+    assert route(root, pull, "develop") is None
+    assert route(root, pull, "develop", before) == "join"
+
+    own = git(root, "commit-tree", tree, "-p", develop, "-m", "own work")
+    feature = git(root, "commit-tree", tree, "-p", own, "-p", main, "-m", "main in")
+    after = git(root, "commit-tree", tree, "-p", develop, "-p", feature, "-m", "merge")
+    git(root, "update-ref", "refs/remotes/origin/develop", after)
+    task = JoinPull(feature, head_ref="feature/own-work", merge_commit_sha=after)
+    assert route(root, task, "develop", base_before_merge(root, feature, after)) is None
+    assert base_before_merge(root, join, after) is None
+
+
+def test_the_delivered_stage_needs_no_plan_for_a_merged_join_but_asks_for_one_otherwise(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ship_scope
+    import ui_proof
+
+    fixture = develop_policy(tmp_path, "chore/join-main-hotfix")
+    root = fixture.root
+    develop = git(root, "rev-parse", "HEAD")
+    first = git(root, "rev-list", "--max-parents=0", "HEAD")
+    tree = git(root, "rev-parse", "HEAD^{tree}")
+    main = git(root, "commit-tree", tree, "-p", first, "-m", "main tip")
+    join = git(root, "commit-tree", tree, "-p", develop, "-p", main, "-m", "join")
+    work = git(root, "commit-tree", tree, "-p", develop, "-m", "own work")
+    own = git(root, "commit-tree", tree, "-p", work, "-p", main, "-m", "main in")
+    git(root, "update-ref", "refs/remotes/origin/main", main)
+    monkeypatch.setattr(
+        ui_proof, "changed_files", lambda *_: [{"filename": "features/x/PLAN.md"}]
+    )
+    policy = {"base": "develop", "ui_paths": []}
+    identity = ("acme", "widget", 7)
+    for head, ref, expect in (
+        (join, "chore/join-main", False),
+        (own, "feature/x", True),
+    ):
+        merged = git(root, "commit-tree", tree, "-p", develop, "-p", head, "-m", "m")
+        git(root, "update-ref", "refs/remotes/origin/develop", merged)
+        pull = JoinPull(head, head_ref=ref, merge_commit_sha=merged)
+        args = (root, pull, identity, policy, None, "delivered")
+        if expect:
+            with pytest.raises(shipping.ShippingError, match="--plan is missing"):
+                ship_scope.delivered_files(*args)
+        else:
+            assert ship_scope.delivered_files(*args) == []
