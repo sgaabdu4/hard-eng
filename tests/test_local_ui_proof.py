@@ -325,17 +325,18 @@ def _assert_unchanged_routes_and_owners(root: Path, base_plan: str) -> None:
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "names /" in problem
 
-    for desc, expected in (
-        ("/settings/ screen", "/settings/"),
-        ("/settings?tab=security screen", "/settings"),
-        ("/ signed out", "/"),
-        ("Settings at desktop / mobile sizes", ""),
-    ):
+    cases: list[tuple[str, list[str]]] = [
+        ("/settings/ screen", ["/settings/"]),
+        ("/settings?tab=security screen", ["/settings"]),
+        ("/ signed out", ["/"]),
+        ("Settings at desktop / mobile sizes", []),
+    ]
+    for desc, expected in cases:
         plan_body = base_plan.replace(
             REAL_UX, UNCHANGED_UX.replace("the card at rest", desc)
         )
         assert (
-            local_ui_proof._unchanged_route(
+            local_ui_proof._unchanged_routes(
                 plan_body, local_ui_proof.reference_section(plan_body)
             )
             == expected
@@ -520,3 +521,64 @@ def test_push_text_checks_refuses_missing_local_ui_proof(
     root = web_change_repo(tmp_path)
     assert push_check(gate_runner, root, monkeypatch) == 1
     assert "UI evidence" in capsys.readouterr().out
+
+
+DESIGN = "# Design\n\n## Overview\nNavy primary.\n"
+LISTED_SURFACES = [
+    "/other, /account and /c/[id]",
+    "/other, /account, and /c/[id]",
+    "/other, /account, /c/[id]",
+]
+
+
+def surface_ux(surface: str) -> str:
+    return REAL_UX.replace("Existing — /account,", f"Existing — {surface},")
+
+
+@pytest.mark.parametrize("surface", LISTED_SURFACES)
+def test_local_complete_check_accepts_a_capture_of_any_listed_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, surface: str
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, ux=surface_ux(surface), design=DESIGN)
+    head = git(root, "rev-parse", "HEAD").strip()
+    after = write_clean_browser(root, route="/account")
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
+def test_local_complete_check_names_every_listed_route_for_an_unlisted_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, ux=surface_ux("/one, /two and /c/[id]"))
+    write_clean_browser(root, route="/account")
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "/account" in problem
+    assert all(route in problem for route in ("/one", "/two", "/c/[id]"))
+
+
+def test_local_complete_check_refuses_a_one_route_surface_capture_of_another_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, ux=surface_ux("/one"))
+    write_clean_browser(root, route="/account")
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "names /one;" in problem
+
+
+def test_local_complete_check_refuses_a_looked_at_capture_of_an_unlisted_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design=DESIGN)
+    head = git(root, "rev-parse", "HEAD").strip()
+    listed = write_clean_browser(root, name="after", route="/account")
+    stray = write_clean_browser(root, name="stray", route="/other")
+    write_look(root, head, listed, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+    write_look(root, head, stray, design_doc=look.design_hash(root))
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "stray-390.png" in problem
+    assert "capture the changed screen" in problem

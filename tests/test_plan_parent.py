@@ -195,7 +195,9 @@ UNCHANGED = "N/A — unchanged: ![Before](a.png) ![After](a.png) — Home screen
 def pair(parent_line: str = f"Parent: {PARENT}") -> dict[str, str]:
     reference = "\n\n## ux_reference\n{}\n\n## Verification\n"
     return {
-        PARENT: "# Effort\nStatus: Ready" + reference.format(MOCK),
+        PARENT: "# Effort\nStatus: Ready"
+        + reference.format(MOCK)
+        + "Owners: src/App.tsx\n",
         CHILD: f"# Step\nStatus: Complete\n{parent_line}" + reference.format(UNCHANGED),
     }
 
