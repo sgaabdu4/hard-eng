@@ -6,7 +6,7 @@ Status: Ready
 
 Fix two `look` faults found on a real run after the merged work on the carry and the px guard:
 1. An old-format clean record covered a new head. `covering_record` compared a missing `inputs` field with a missing key, and a record image that is not in the run matched too. A record that lacks a compared field must never cover or count as changed. Every copy of this compare goes through one helper in `.hooks/look_records.py`.
-2. A fresh Claude reviewer wrote every rule line as `Rule: Pass. text` with no dash, and `look` refused the whole run. Make the reviewer form need no dash character: the prompt states `- <rule>: Pass|Fail|N/A. <what you saw>`, and `look` accepts `Rule: Pass. text`, `Rule: Pass - text` and `Rule: Pass — text`. Every other form check stays.
+2. A fresh Claude reviewer wrote every rule line as `Rule: Pass. text` with no dash, and `look` refused the whole run. Make the reviewer form need no dash character: the prompt states `- <rule>: <verdict>. <what you saw>` with a period after the verdict word, and `look` accepts `Rule: Pass. text`, `Rule: Pass - text` and `Rule: Pass — text`. Every other form check stays.
 
 Non-goals: changing `split_rule_line` or the PR block form, and any other look check.
 
