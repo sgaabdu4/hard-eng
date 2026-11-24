@@ -285,9 +285,10 @@ def _local_look_problem(
     min_mtime_ns: int,
 ) -> str | None:
     import look
+    from look_records import record_files
     from plans import usability_rules
 
-    files = look.record_files(root, head, evidence)
+    files = record_files(root, head, evidence)
     if not files:
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>`"
     expected_design = look.design_hash(root)
