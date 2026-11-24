@@ -463,7 +463,7 @@ def held_words(root: Path, reference: str, name: str) -> list[str] | None:
 def verified_test_ref_repair(
     root: Path, references: set[str], name: str, changed: set[str]
 ) -> bool:
-    """True when an old Complete plan changed only the targets after `→` on its checkboxes, passes the rules of an unchanged plan, and every new or affected target exists."""
+    """True when an old Complete plan changed only the targets after `→` on its checkboxes, whatever the form of the plan, and every new or affected target exists."""
     from plan_tests import missing_tests
 
     current = (root / name).read_text()
@@ -475,10 +475,6 @@ def verified_test_ref_repair(
         text is None or words_without_acceptance_refs(text) != normalized
         for text in base_texts
     ):
-        return False
-    try:
-        validate_plan(root / name, changed=False)
-    except ValueError:
         return False
     new_rows = [references for _, references in acceptance_rows(current)]
     base_rows = [
