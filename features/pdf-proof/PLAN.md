@@ -1,6 +1,6 @@
 # Capture refuses a document it cannot mask
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -24,15 +24,15 @@ Authority: Autonomous: the user asked on 2026-11-24 to put client unblocking fir
 
 ## Acceptance + steps
 
-- [ ] Capture of a URL whose response is `application/pdf` (served at a path with no `.pdf`) fails, names `application/pdf`, says no image was kept, and leaves no image and no record → `tests/test_browser.py::test_capture_keeps_no_image_of_a_pdf_it_cannot_mask`
-- [ ] Measure of an open session on a PDF fails the same way and writes nothing → `tests/test_browser.py::test_measure_keeps_no_image_of_a_pdf_in_an_open_session`
-- [ ] An HTML page is captured and measured as before: same records, same findings, same hiding → `tests/test_browser.py::test_capture_draws_boxes_at_each_width`, `tests/test_browser.py::test_measure_records_an_open_session_state`, `tests/test_browser.py::test_capture_places_fixed_bars_once_at_their_edge`
-- [ ] A failing check after the screenshot still keeps no image → `tests/test_browser.py::test_capture_keeps_no_image_when_the_frame_check_fails`
+- [x] Capture of a URL whose response is `application/pdf` (served at a path with no `.pdf`) fails, names `application/pdf`, says no image was kept, and leaves no image and no record → `tests/test_browser.py::test_capture_keeps_no_image_of_a_pdf_it_cannot_mask`
+- [x] Measure of an open session on a PDF fails the same way and writes nothing → `tests/test_browser.py::test_measure_keeps_no_image_of_a_pdf_in_an_open_session`
+- [x] An HTML page is captured and measured as before: same records, same findings, same hiding → `tests/test_browser.py::test_capture_draws_boxes_at_each_width`, `tests/test_browser.py::test_measure_records_an_open_session_state`, `tests/test_browser.py::test_capture_places_fixed_bars_once_at_their_edge`
+- [x] A failing check after the screenshot still keeps no image → `tests/test_browser.py::test_capture_keeps_no_image_when_the_frame_check_fails`
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: On `origin/main` (4b75d2c0) the new capture test fails (`assert 0 == 1`: capture of the PDF succeeds and keeps three images). The existing browser, look and local UI tests pass on the branch with the fix: 95 tests, 93 first run, then the two that use a fake browser tool pass after the fake answers the content type.
+Evidence: On `origin/main` (4b75d2c0) the new capture test fails (`assert 0 == 1`: capture of the PDF succeeds). The failing tests are commit fd3b1094, before the fix. The Ready check ran on the branch: 7752 tests passed, and every static gate passed.
 Execution: One builder in a hotfix worktree from `main`; the failing tests are committed before the fix.
 
 ## Risks + recovery
@@ -46,10 +46,10 @@ N/A — no screen changes; Hard Eng has no app UI.
 ## Verification
 
 Result: Pending
-Evidence: Pending the final gate.
+Evidence: The two new tests fail on `origin/main` and pass with the fix. The browser, look and local UI test files pass (95 tests). The Ready check passed with 7752 tests and every static gate. Real run with agent-browser 0.43.0 and Chrome 158, from an invented two-page PDF and an invented HTML page served by a local test server: `browser capture` of the PDF exits 1 with `the document is application/pdf, which capture cannot read to hide emails and phones, so no image was kept` and writes no file; `browser measure` on an open session of the PDF prints the same and writes no file; `browser capture` of the HTML page exits 0, writes three images, and the record of the 390 px image holds `findings: []`, `route: /page` and `width: 390`. Before the fix the same PDF capture kept three images whose page showed the phone number in clear.
 E2E: N/A — the change is a check inside the capture command, proved by the tests above, which drive the real browser tool.
-Real service: Required — agent-browser with Chrome: the changed capture ran one time against a real PDF and one HTML page served by a local test server.
-Retro: Required on Complete plans.
+Real service: Passed — agent-browser with Chrome: the changed capture and measure ran one time against a real PDF and one HTML page served by a local test server; the PDF was refused with no file, the HTML page kept its records.
+Retro: Escaped bug: a PDF page image with emails and phones in clear, because `FRAME_CHECK` counts embeds inside the page and the viewer sits outside it → `tests/test_browser.py::test_capture_keeps_no_image_of_a_pdf_it_cannot_mask`, `tests/test_browser.py::test_measure_keeps_no_image_of_a_pdf_in_an_open_session` (committed red first); the gate that should have caught it was the capture tests, which served HTML only. Failed check: two fake-tool tests failed after the fix because the fake did not answer the content type → `tests/test_browser.py::test_capture_keeps_no_image_when_the_frame_check_fails` now answers it. Hard Eng fault: a change that only edits a generated PDF still cannot pass a visible-change proof → the planned PDF proof route, which needs a PDF library and its own plan.
 
 Delivery target: PR
 Delivery: Pending — required remote proof.
