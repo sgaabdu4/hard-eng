@@ -1,4 +1,6 @@
 import json
+import shlex
+import signal
 import subprocess
 import sys
 from contextlib import suppress
@@ -7,6 +9,7 @@ from unittest.mock import Mock
 
 import gate_config
 import pytest
+import ship_actions
 import update
 import update_pr
 import update_runner
@@ -281,6 +284,33 @@ def test_a_refused_push_of_the_update_branch_names_the_next_step(
         f"`{update_runner.UPDATE_COMMAND}` again."
     ) in printed
     assert "returned non-zero exit status" not in printed
+
+
+def test_a_push_that_a_signal_stopped_says_rerun_and_names_no_fault(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source, target, _ = release
+    add_origin(target)
+    git(target, "switch", "-qc", "feature/work")
+    monkeypatch.setattr(update_runner.signal, "signal", Mock())
+    reference = source / ".agents/skills/he/references/workflow.md"
+    reference.write_text(reference.read_text() + "\nnew release\n")
+    select_release(source, monkeypatch)
+    assert update_runner.apply_update(target) == 0
+    hook = target / ".git/hooks/pre-push"
+    hook.write_text(
+        f"#!/bin/sh\necho {shlex.quote(ship_actions.stopped_line(signal.SIGTERM))}\nexit 1\n"
+    )
+    hook.chmod(0o755)
+    assert update_pr.publish(target) == 1
+    printed = capsys.readouterr().out
+    assert (
+        f"The push of {update_runner.UPDATE_BRANCH} was stopped by a signal, so no check "
+        f"failed. Run `{update_runner.UPDATE_COMMAND}` again."
+    ) in printed
+    assert "a fault in this project" not in printed
 
 
 NEW_RULE = '\nROLE_TOOLS["shared"]["deployment"] = ("trivy",)\n'
