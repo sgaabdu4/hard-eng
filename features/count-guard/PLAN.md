@@ -1,6 +1,6 @@
 # Look review: a No clutter Fail with removals on some screens stands
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -45,11 +45,11 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: The look tests (46) passed on the head and the Ready check passed with 7898 tests. The challenge ran four rounds and was clean at the last head; it found three real faults (a count with no comma after the kept count, a test that could not fail, a comma list that took in a kept number), and the comma list is declined above.
 E2E: N/A — the change is a check of reviewer text, proved by the tests above.
 Real service: N/A — no service is called.
-Retro: Pending.
+Retro: Escaped bug: the earlier guard matched `removed 0` anywhere in the line, and its tests held one count for one screen only. The gate that should catch it is the tests gate, `tests/test_look.py`: each refused row now carries `Fix:` and checks the exact refusal message, so a broken guard cannot pass through the no-fix refusal.
 
 Delivery target: PR
 Delivery: Pending — required remote proof.
