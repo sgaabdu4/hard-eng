@@ -784,7 +784,8 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
         if arguments[:1] == ("eval",) and text and "data-he-ring" in text:
             reply = json.dumps('{"missing": [], "boxes": []}')
         else:
-            reply = json.dumps("[]") if arguments[:1] == ("eval",) else ""
+            empty = json.dumps('{"found": [], "measured": {}}')
+            reply = empty if arguments[:1] == ("eval",) else ""
         if arguments[:1] == ("a11y",):
             reply = '{"data": {"violations": []}}'
         return subprocess.CompletedProcess(arguments, 0, reply, "")
