@@ -33,6 +33,7 @@ TIMEOUT = 600
 STEP_TIMEOUT = 300
 REFRESH_SECONDS = 24 * 60 * 60
 WIDTHS = (390, 768, 1280)
+READABLE_KINDS = frozenset({"text/html", "application/xhtml+xml", "text/plain"})
 SHARED = (
     "Each agent keeps its own browser session: pass --session NAME, and never "
     "`close --all`, because parallel agents share the tool."
@@ -417,6 +418,18 @@ def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
         )
 
 
+def require_readable_document(tool: str, folder: Path, session: str) -> None:
+    """Refuse a document that the page script cannot read and mask; the browser reports its kind."""
+    kind = json.loads(
+        require(run_tool(tool, folder, session, "eval", "document.contentType"))
+    )
+    if kind not in READABLE_KINDS:
+        raise ValueError(
+            f"the document is {kind}, which capture cannot read to hide emails and phones, "
+            "so no image was kept"
+        )
+
+
 def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object]]:
     """The faults of the page as it is now: the page script and axe, before anything draws on it."""
     from ui_measure import AXE_TAGS, axe_findings, decoration_script, measure_script
@@ -456,6 +469,7 @@ def shoot_page(
     from ui_measure import write_record
 
     folder = output_folder(root)
+    require_readable_document(tool, folder, session)
     findings = measure_page(tool, folder, session)
     script = PAGE_SCRIPT.replace("RINGS", json.dumps(rings))
     reply = require(run_tool(tool, folder, session, "eval", "--stdin", text=script))
