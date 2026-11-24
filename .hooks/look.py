@@ -309,13 +309,13 @@ def judged_lines(unmeasured: bool = False) -> list[str]:
 
 
 def owner_lines(
-    root: Path, digests: list[str], plan: dict[str, tuple[str, str]] | None
+    root: Path, head: str, digests: list[str], plan: dict[str, tuple[str, str]] | None
 ) -> dict[str, str]:
     """One line for each rule without the judgement kind, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line. A finding in a record fails a measured rule always; a measured rule with an unmeasured image keeps the reviewer's line unless a record fails."""
     from ui_measure import PROOF_KINDS
     from ui_proof import measure_verdict
 
-    measure = measure_verdict(root, digests)
+    measure = measure_verdict(root, head, digests)
     reviewed = lacks_record(root, digests)
     lines: dict[str, str] = {}
     for name, _ in usability_rules():
@@ -340,13 +340,14 @@ def owner_lines(
 def with_owner_lines(
     record: dict[str, object],
     root: Path,
+    head: str,
     digests: list[str],
     plan: dict[str, tuple[str, str]] | None,
 ) -> None:
     """Give the record one line for each Usability rule, in rule order: the reviewer's line for a judged rule, the owner's line for the others. An owner Fail makes the run findings."""
     if record["outcome"] not in ("clean", "findings"):
         return
-    owned = owner_lines(root, digests, plan)
+    owned = owner_lines(root, head, digests, plan)
     own = {split_rule_line(line)[0]: line for line in cast(list[str], record["rules"])}
     record["rules"] = [owned.get(name) or own[name] for name, _ in usability_rules()]
     if any(split_rule_line(line)[1] == "Fail" for line in owned.values()):
@@ -939,6 +940,7 @@ def look_command(root: Path, argv: list[str]) -> int:
     with_owner_lines(
         record,
         root,
+        head,
         digests,
         plan_rules(root, Path(args.plan), head) if args.plan else None,
     )

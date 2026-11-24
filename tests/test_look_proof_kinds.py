@@ -272,3 +272,26 @@ def test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
     assert "Widths: Fail — label too narrow" in prompt_of(log)
+
+
+def test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    commit(project, "inputs")
+    folder = project / ".hard-eng/browser"
+    folder.mkdir(parents=True)
+    old = folder / "old-390.png"
+    old.write_bytes(PNG + bytes([1]) * 20)
+    ui_measure.write_record(
+        project, old, 390, [{"rule": "overflow", "at": "page"}], "/home"
+    )
+    (project / "notes.txt").write_text("the page is fixed\n")
+    commit(project, "fix the page")
+    images = captures(project)
+    install_agent(tmp_path, "claude", 3, good_answer(3))
+    record = run_look(project, "codex", images)
+    assert record["outcome"] == "clean"
+    assert stored(record)["Widths"].startswith("Widths: Pass — measured: ")

@@ -222,12 +222,34 @@ def _finding_rules(record: Mapping[str, object]) -> str:
     )
 
 
-def measure_verdict(root: Path, digests: list[str]) -> tuple[str, str]:
-    """The browser records' verdict on the images with these digests: Fail with the findings, Pass with the widths measured, N/A when no image has a record."""
+def _capture_stems(
+    records: list[dict[str, object]], digest: str, head: str
+) -> list[str]:
+    """The capture sets of the image with this digest: those taken at the head from a clean tree, or every set when none was."""
+    stems = list(
+        dict.fromkeys(_stem(item) for item in records if item["sha256"] == digest)
+    )
+    current = [
+        stem
+        for stem in stems
+        if any(
+            item.get("commit") == head and not item.get("dirty")
+            for item in records
+            if _stem(item) == stem
+        )
+    ]
+    return current or stems
+
+
+def measure_verdict(root: Path, head: str, digests: list[str]) -> tuple[str, str]:
+    """The verdict of the browser records of the head on the images with these digests: Fail with the findings, Pass with the widths measured, N/A when no image has a record."""
+    items = browser_record_files(root)
+    records = [record for _, record in items]
+    sets = {digest: _capture_stems(records, digest, head) for digest in digests}
     found = [
         (path, record)
-        for path, record in browser_record_files(root)
-        if record["sha256"] in digests
+        for path, record in items
+        if _stem(record) in sets.get(str(record["sha256"]), [])
     ]
     if not found:
         return "N/A", "no measure record for these images; `browser capture` writes one"
@@ -392,24 +414,13 @@ def measured_problem(
     by_image = {str(record["image"]): (path, record) for path, record in items}
     for data in after:
         digest = sha256(data)
-        stems = list(
-            dict.fromkeys(_stem(item) for item in records if item["sha256"] == digest)
-        )
+        stems = _capture_stems(records, digest, head)
         if not stems:
             return (
                 f"an After image (sha256 {digest[:12]}) matches no measured capture in .hard-eng/browser; "
                 "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
             )
-        current = [
-            stem
-            for stem in stems
-            if any(
-                item.get("commit") == head and not item.get("dirty")
-                for item in records
-                if _stem(item) == stem
-            )
-        ]
-        for stem in current or stems:
+        for stem in stems:
             problem, _ = capture_set_problem(by_image, stem, head, route)
             if problem:
                 return problem
