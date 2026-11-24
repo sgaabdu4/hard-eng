@@ -32,7 +32,7 @@ Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fau
 - [ ] A plan Fail for a test rule fails the run, and with no plan the line says the plan check decides → `tests/test_look_proof_kinds.py::test_a_test_rule_takes_its_line_from_the_plan`.
 - [ ] A rule with `measured` and `judgement` still goes to the reviewer with its measured values → `tests/test_look_proof_kinds.py::test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer`.
 - [ ] An owner Fail line never returns to the reviewer as an earlier fix → `tests/test_look_proof_kinds.py::test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix`.
-- [ ] The skill link and size checks pass after the one-line reference change → `tests/test_skill_links.py`.
+- [ ] The skill links still resolve after the one-line reference change → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 
 ## Baseline + execution
 
