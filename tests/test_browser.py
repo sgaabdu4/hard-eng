@@ -793,24 +793,20 @@ def test_capture_replaces_a_pdf_in_a_same_origin_frame(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     page(tmp_path, "preview.html", "<iframe id=doc src='/invoice'></iframe>")
-    tool, name = browser.ensure_tool(), session()
-
-    def step(*arguments: str, text: str | None = None) -> str:
-        return browser.require(
-            browser.run_tool(tool, tmp_path, name, *arguments, text=text)
-        )
-
+    name = session()
     try:
-        step("open", f"{site}/preview.html")
-        step("wait", "--load", "networkidle")
-        step("eval", "--stdin", text=browser.PAGE_SCRIPT.replace("RINGS", "[]"))
-        shown = step(
+        plain_step(tmp_path, name, "open", f"{site}/preview.html")
+        plain_step(tmp_path, name, "wait", "--load", "networkidle")
+        plain_step(tmp_path, name, "eval", browser.PAGE_SCRIPT.replace("RINGS", "[]"))
+        shown = plain_step(
+            tmp_path,
+            name,
             "eval",
             "document.querySelector('#doc').tagName + document.body.textContent",
         )
-        unread = step("eval", browser.FRAME_CHECK)
+        unread = plain_step(tmp_path, name, "eval", browser.FRAME_CHECK)
     finally:
-        step("close")
+        plain_step(tmp_path, name, "close")
     assert json.loads(shown) == "DIV[frame hidden]"
     assert json.loads(unread) == 0
 
