@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import shipping
 import ui_proof
 from test_ui_quality import full_ship, ready
 from ui_proof import sha256
@@ -153,3 +154,85 @@ def test_unchanged_pair_uses_pr_base_sha_after_merge(
     fake.pulls = [pull_without_base_sha]
     with pytest.raises(shipping.ShippingError, match="Before taken at the base"):
         shipping.verify(fixture.root, fixture.plan, _PR_URL, "delivered")
+
+
+SURFACES = [
+    "/other, /account and /c/[id]",
+    "/other, /account, and /c/[id]",
+    "/other, /account, /c/[id]",
+    "/other and /account",
+]
+
+
+def surface_ux(surface: str) -> str:
+    from test_ui_quality import REAL_UX
+
+    return REAL_UX.replace("Existing — /account,", f"Existing — {surface},")
+
+
+@pytest.mark.parametrize("surface", SURFACES)
+def test_an_after_capture_of_any_route_the_surface_lists_passes_ship(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, surface: str
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch, ux=surface_ux(surface))
+    ready(fixture.root, fixture)
+
+
+def test_an_after_capture_of_a_route_the_surface_does_not_list_names_every_listed_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _, _ = full_ship(
+        tmp_path, monkeypatch, ux=surface_ux("/one, /two and /c/[id]")
+    )
+    with pytest.raises(shipping.ShippingError) as refused:
+        ready(fixture.root, fixture)
+    assert "/account" in str(refused.value)
+    assert all(route in str(refused.value) for route in ("/one", "/two", "/c/[id]"))
+
+
+def test_a_one_route_surface_still_refuses_another_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, _, _ = full_ship(tmp_path, monkeypatch, ux=surface_ux("/one"))
+    with pytest.raises(shipping.ShippingError, match="names /one;"):
+        ready(fixture.root, fixture)
+
+
+LONG_SURFACE = (
+    "Surface: Existing — /work/calls, /work/people, /work/items/[itemId]/preview, "
+    "/work/visits/[visitId], /work/leads/[leadId], /work/cases and /work/numbers, "
+    "rendered by `app/src/components/work/Form.tsx`, `Box.tsx` and `Parts.tsx` in "
+    "`app/src/components/work/`, `app/src/app/work/people/Row.tsx`."
+)
+
+
+def test_a_long_surface_line_returns_exactly_its_routes() -> None:
+    plan = f"## ux_reference\n\nResult: Passed\n{LONG_SURFACE}\nBefore: none\n"
+    assert ui_proof.surface_routes(plan) == [
+        "/work/calls",
+        "/work/people",
+        "/work/items/[itemId]/preview",
+        "/work/visits/[visitId]",
+        "/work/leads/[leadId]",
+        "/work/cases",
+        "/work/numbers",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("captured", "off"),
+    [
+        ("/work/items/abc/preview", False),
+        ("/work/numbers", False),
+        ("/work/visits/v-9?tab=notes", False),
+        ("/work", True),
+        ("/other", True),
+        ("/work/items/preview", True),
+        ("/work/items//preview", True),
+    ],
+)
+def test_a_capture_of_a_listed_bracket_route_passes_and_others_are_refused(
+    captured: str, off: bool
+) -> None:
+    plan = f"## ux_reference\n\n{LONG_SURFACE}\n"
+    assert ui_proof.off_surface(captured, ui_proof.surface_routes(plan)) is off

@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol, cast
@@ -29,7 +29,14 @@ CATALOG_FOLDERS = frozenset(("l10n", "locales", "i18n", "messages"))
 PAGE_WRITE = re.compile(
     r"innerHTML|textContent|createElement|\.style\b|className|classList"
 )
-SURFACE_ROUTE = re.compile(r"(?m)^Surface: *\w+ — (/\S*?)[,\s]")
+SURFACE_ROUTES = re.compile(
+    r"(?m)^Surface: *\w+ — (/[^\s,]*(?:(?:,\s*(?:and\s+)?|\s+and\s+)/[^\s,]*)*)"
+)
+ROUTE_TOKEN = re.compile(r"/[^\s,]*")
+ROUTE_PARAM = re.compile(r"(\[[^\]/]+\])")
+PLAN_PATH_TOKEN = re.compile(
+    r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?|[A-Za-z0-9_.-]+/"
+)
 TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[a-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
@@ -146,6 +153,38 @@ def reference_problem(
             "`N/A — unchanged: ![Before](<file>) ![After](<file>) — <screen and state>`"
         )
     return None
+
+
+def plan_owns_visible(text: str, visible: list[str]) -> list[str]:
+    """The visible files that the plan names, by path, by folder or by glob."""
+    tokens = set(PLAN_PATH_TOKEN.findall(text))
+    owned: list[str] = []
+    for name in visible:
+        if name in text or any(
+            (token.endswith("/") and name.startswith(token))
+            or fnmatch.fnmatchcase(name, token)
+            for token in tokens
+        ):
+            owned.append(name)
+    return owned
+
+
+def plans_reference_problem(
+    plans: list[str], visible: list[str], body: str = "", unchanged_note: bool = False
+) -> str | None:
+    """The reference problem of the changed plans on a visible change: with several plans, each plan that names a visible file is judged on those files, and otherwise one plan that fits all of them is enough."""
+    if not plans:
+        return None
+    for text in plans:
+        owned = plan_owns_visible(text, visible)
+        if (len(plans) == 1 or owned) and (
+            problem := reference_problem(text, owned or visible, body, unchanged_note)
+        ):
+            return problem
+    problems = [
+        reference_problem(text, visible, body, unchanged_note) for text in plans
+    ]
+    return None if None in problems else problems[0]
 
 
 def browser_record_files(root: Path) -> list[tuple[Path, dict[str, object]]]:
@@ -272,7 +311,7 @@ def _unchanged_width_problem(
     head: str,
     base: str,
     *,
-    route: str,
+    routes: Sequence[str],
     allow_dirty_after: bool,
     min_mtime_ns: int,
 ) -> str | None:
@@ -283,10 +322,10 @@ def _unchanged_width_problem(
     _, before = before_entry
     after_path, after = after_entry
     for side, record in (("Before", before), ("After", after)):
-        if route and not on_route(str(record.get("route", "")), route):
+        if off_surface(str(record.get("route", "")), routes):
             return (
                 f"the unchanged {side} capture {record['image']} is of the page "
-                f"{record.get('route') or 'unknown'}, but the plan names {route}; capture the changed screen"
+                f"{record.get('route') or 'unknown'}, but the plan names {', '.join(routes)}; capture the changed screen"
             )
     if before["sha256"] != after["sha256"]:
         return f"the unchanged pair differs at {width} px; the screen changed, so write a real ux_reference"
@@ -308,7 +347,7 @@ def unchanged_problem(
     head: str,
     base: str,
     *,
-    route: str = "",
+    routes: Sequence[str] = (),
     allow_dirty_after: bool = False,
     min_mtime_ns: int = 0,
 ) -> str | None:
@@ -337,7 +376,7 @@ def unchanged_problem(
             width,
             head,
             base,
-            route=route,
+            routes=routes,
             allow_dirty_after=allow_dirty_after,
             min_mtime_ns=min_mtime_ns,
         ):
@@ -346,13 +385,24 @@ def unchanged_problem(
 
 
 def on_route(captured: str, route: str) -> bool:
-    """Whether a captured page is the route itself or a path, query or fragment below it; the home route `/` is the home page only."""
+    """Whether a captured page is the route itself or a path, query or fragment below it; a `[name]` segment of the route matches any one path segment; the home route `/` is the home page only."""
     if route == "/":
         return captured == "/" or captured[:2] in ("/?", "/#")
-    rest = captured.removeprefix(route)
-    return captured.startswith(route) and (
-        not rest or route.endswith("/") or rest[0] in "/?#"
+    pattern = "".join(
+        "[^/?#]+" if part.startswith("[") else re.escape(part)
+        for part in ROUTE_PARAM.split(route)
     )
+    found = re.match(pattern, captured)
+    return found is not None and (
+        found.end() == len(captured)
+        or route.endswith("/")
+        or captured[found.end()] in "/?#"
+    )
+
+
+def off_surface(captured: str, routes: Sequence[str]) -> bool:
+    """Whether a plan names routes and the captured page is none of them."""
+    return bool(routes) and not any(on_route(captured, route) for route in routes)
 
 
 def _stem(record: dict[str, object]) -> str:
@@ -364,7 +414,7 @@ def capture_set_problem(
     by_image: Mapping[str, tuple[Path, dict[str, object]]],
     stem: str,
     head: str,
-    route: str,
+    routes: Sequence[str],
     *,
     allow_dirty: bool = False,
     min_mtime_ns: int = 0,
@@ -381,9 +431,9 @@ def capture_set_problem(
                 set(),
             )
         path, peer = entry
-        if route and not on_route(str(peer.get("route", "")), route):
+        if off_surface(str(peer.get("route", "")), routes):
             return (
-                f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {route}; capture the changed screen",
+                f"the After capture {peer['image']} is of the page {peer.get('route') or 'unknown'}, but the plan's Surface names {', '.join(routes)}; capture the changed screen",
                 set(),
             )
         if peer.get("commit") != head or (not allow_dirty and peer.get("dirty")):
@@ -406,7 +456,7 @@ def capture_set_problem(
 
 
 def measured_problem(
-    root: Path, head: str, after: list[bytes], route: str = ""
+    root: Path, head: str, after: list[bytes], routes: Sequence[str] = ()
 ) -> str | None:
     """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width; of several sets with the same image, those taken at the head all count."""
     items = browser_record_files(root)
@@ -421,7 +471,7 @@ def measured_problem(
                 "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
             )
         for stem in stems:
-            problem, _ = capture_set_problem(by_image, stem, head, route)
+            problem, _ = capture_set_problem(by_image, stem, head, routes)
             if problem:
                 return problem
     return None
@@ -545,10 +595,10 @@ def is_native(visible: list[str]) -> bool:
     return bool(visible) and all(name.endswith(NATIVE) for name in visible)
 
 
-def surface_route(plan_text: str) -> str:
-    """The route that the plan's `Surface: Existing — /route, rendered by ...` line names, or an empty string."""
-    found = SURFACE_ROUTE.search(reference_section(plan_text))
-    return found[1] if found else ""
+def surface_routes(plan_text: str) -> list[str]:
+    """Every route that the plan's `Surface: Existing — /a, /b and /c, rendered by ...` line names, or an empty list."""
+    found = SURFACE_ROUTES.search(reference_section(plan_text))
+    return ROUTE_TOKEN.findall(found[1]) if found else []
 
 
 def evidence_problem(
@@ -557,12 +607,12 @@ def evidence_problem(
     body: str,
     after: list[bytes],
     visible: list[str],
-    route: str = "",
+    routes: Sequence[str] = (),
     plan_rel: str = "",
     plan_digest: str = "",
 ) -> str | None:
     if not is_native(visible) and (
-        problem := measured_problem(root, head, after, route)
+        problem := measured_problem(root, head, after, routes)
     ):
         return problem
     return look_problem(root, head, body, after, plan_rel, plan_digest)
@@ -627,7 +677,7 @@ def ship_problem(
         body,
         after,
         visible,
-        surface_route(plan_text),
+        surface_routes(plan_text),
         plan_rel,
         verified_digest,
     )
