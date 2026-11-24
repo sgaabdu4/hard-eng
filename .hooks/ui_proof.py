@@ -181,7 +181,9 @@ def plans_reference_problem(
             problem := reference_problem(text, owned or visible, body, unchanged_note)
         ):
             return problem
-    problems = [reference_problem(text, visible, body, unchanged_note) for text in plans]
+    problems = [
+        reference_problem(text, visible, body, unchanged_note) for text in plans
+    ]
     return None if None in problems else problems[0]
 
 
