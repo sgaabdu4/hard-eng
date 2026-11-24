@@ -926,6 +926,17 @@ def _plan_scope(
         return None, "Deploy" if policy["delivery"] else "Merge"
 
 
+def _plan_in(files: list[dict[str, JsonValue]]) -> str | None:
+    """The first plan that the PR adds or changes; a change that needed a plan changes one."""
+    from plans import is_plan_path
+
+    for item in files:
+        name = cast(str, item["filename"])
+        if item.get("status") != "removed" and is_plan_path(Path(name)):
+            return name
+    return None
+
+
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     from ship_record import base_matches, ship_method
     from ui_proof import changed_files
@@ -967,8 +978,17 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         else:
             revision = _delivered(resolved_root, pull, pull.base_ref, origin_url)
             merged_sha = revision
+        unplanned = stage == "delivered" and resolved_plan is None
+        files = (
+            changed_files(resolved_root, owner, name, number)
+            if policy["ui_paths"] or unplanned
+            else []
+        )
+        if unplanned and (named := _plan_in(files)):
+            raise ShippingError(
+                f"--plan is missing: this PR changed {named}; pass --plan {named}"
+            )
         if policy["ui_paths"]:
-            files = changed_files(resolved_root, owner, name, number)
             _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
         _checks(
             resolved_root,
