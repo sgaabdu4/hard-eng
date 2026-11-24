@@ -490,12 +490,13 @@ const radiusOf = (el) => {
   const value = getComputedStyle(el).borderTopLeftRadius, b = el.getBoundingClientRect();
   return value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value));
 };
-const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter((el) => visible(el) && ownText(el) && !el.closest("a,button,[role=button]") && chip(el))];
+const drawn = (el) => { const s = getComputedStyle(el); return ownText(el) || s.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(s.borderTopWidth) > 0; };
+const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter((el) => visible(el) && drawn(el))];
 const radii = [];
 const seenRadii = new Set();
 for (const el of rounded) {
-  const px = radiusOf(el), key = name(el) + px;
-  if (px > 0 && radii.length < 20 && !seenRadii.has(key)) { seenRadii.add(key); radii.push({ at: name(el), px }); }
+  const px = radiusOf(el);
+  if (px > 0 && radii.length < 20 && !seenRadii.has(px)) { seenRadii.add(px); radii.push({ at: name(el), px }); }
 }
 const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes, radii };
 return JSON.stringify({ found, measured });

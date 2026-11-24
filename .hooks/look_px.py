@@ -15,20 +15,14 @@ TEXT = re.compile(
 RADIUS = re.compile(
     rf"(?i)\b(?:corners?|radius|radii)(?:\s+radius)?\s+{SOFT}{NUMBER}|(?:{HEDGE_WORDS}\s*)?{NUMBER}\s+(?:corners?|radius|rounded)\b"
 )
-ELEMENTS = re.compile(
-    r"(?i)\b(?:badge|chip|pill|tag|label|button|control|link|input|field|select)s?\b"
-)
 REQUIRED_BEFORE = re.compile(
     r"(?i)\b(?:sets?|requires?|required|minimum|maximum|min|max|at least|at most|under|below|above|over|should|must|expects?|token|guideline|target|not|instead|rather|versus|vs|DESIGN)\b"
 )
 REQUIRED_AFTER = re.compile(r"(?i)^\W*(?:minimum|maximum|min|max|token)\b")
 TOLERANCE = 0.5
-REACH = 40
 
 
-def _claims(
-    pattern: re.Pattern[str], text: str, *, element: bool = False
-) -> list[float]:
+def _claims(pattern: re.Pattern[str], text: str) -> list[float]:
     """The hedged px estimate that the line gives for the image itself, since an estimate by eye is the guess to check; a value in the same clause as a requirement word is a target, not a measure, and 0 px is never recorded."""
     line = text.replace("DESIGN.md", "DESIGN")
     claims = []
@@ -38,16 +32,7 @@ def _claims(
             REQUIRED_AFTER.search(line[found.end() :])
         )
         number = next((group for group in found.groups() if group), "")
-        if (
-            number
-            and HEDGE.search(found.group(0))
-            and float(number)
-            and not required
-            and (
-                ELEMENTS.search(line[max(start, found.start() - REACH) : found.start()])
-                or not element
-            )
-        ):
+        if number and HEDGE.search(found.group(0)) and float(number) and not required:
             claims.append(float(number))
     return claims
 
@@ -73,7 +58,7 @@ def px_problem(lines: list[str], measured: list[dict[str, object]]) -> str | Non
         if split_rule_line(line)[1] != "Fail":
             continue
         for kind, values in held.items():
-            claims = _claims(patterns[kind], line, element=kind == "corner radius")
+            claims = _claims(patterns[kind], line)
             for claim in claims if values else []:
                 if all(abs(claim - value) > TOLERANCE for value in values):
                     shown = ", ".join(f"{value:g}" for value in sorted(values))
