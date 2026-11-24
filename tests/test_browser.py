@@ -789,6 +789,32 @@ def test_measure_keeps_no_image_of_a_pdf_in_an_open_session(
     assert not list(folder.glob("invoice-*"))
 
 
+def test_capture_replaces_a_pdf_in_a_same_origin_frame(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(tmp_path, "preview.html", "<iframe id=doc src='/invoice'></iframe>")
+    tool, name = browser.ensure_tool(), session()
+
+    def step(*arguments: str, text: str | None = None) -> str:
+        return browser.require(
+            browser.run_tool(tool, tmp_path, name, *arguments, text=text)
+        )
+
+    try:
+        step("open", f"{site}/preview.html")
+        step("wait", "--load", "networkidle")
+        step("eval", "--stdin", text=browser.PAGE_SCRIPT.replace("RINGS", "[]"))
+        shown = step(
+            "eval",
+            "document.querySelector('#doc') ? 'frame' : document.body.textContent",
+        )
+        unread = step("eval", browser.FRAME_CHECK)
+    finally:
+        step("close")
+    assert "frame hidden" in json.loads(shown)
+    assert json.loads(unread) == 0
+
+
 @pytest.mark.parametrize("start_fails", [False, True])
 def test_capture_keeps_no_image_when_the_frame_check_fails(
     tmp_path: Path,
