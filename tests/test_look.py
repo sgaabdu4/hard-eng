@@ -961,3 +961,102 @@ def test_a_carried_record_reads_the_browser_records_of_the_evidence_checkout(
     git(project, "worktree", "add", "-q", str(snapshot), new)
     assert [r["head"] for _, r in look.record_files(snapshot, new, project)] == [new]
     assert look.record_files(snapshot, new, snapshot) == []
+
+
+def findings_answer(images: int, rule: str, text: str) -> str:
+    rules = [
+        f"- {name}: {f'Fail — {text}' if name == rule else 'Pass — looked at it'}"
+        for name, _ in usability_rules()
+    ]
+    details = [f"Image image-{n}.png: a card" for n in range(1, images + 1)]
+    return "\n".join([*rules, *details, "VERDICT: findings"])
+
+
+def two_images_with_a_clean_look_of_the_first(
+    tmp_path: Path, project: Path
+) -> tuple[list[Path], str]:
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    commit(project, "inputs")
+    images = make_images(project, 2)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images[:1])
+    old = git(project, "rev-parse", "HEAD").strip()
+    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
+    commit(project, "unrelated change")
+    return images, old
+
+
+def test_an_unchanged_image_is_not_sent_to_the_reviewer_again(
+    tmp_path: Path, project: Path
+) -> None:
+    images, old = two_images_with_a_clean_look_of_the_first(tmp_path, project)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "claude", images)
+    sent = [name for name in json.loads(log.read_text())["files"] if "image-" in name]
+    assert sent == ["image-1.png"]
+    assert record["outcome"] == "clean"
+    listed_images = listed(record, "images")
+    assert [item["sha256"] for item in listed_images] == [
+        hashlib.sha256(image.read_bytes()).hexdigest() for image in images
+    ]
+    assert [item.get("carried_from") for item in listed_images] == [old, None]
+    assert all(item["read"] is True for item in listed_images)
+
+
+def test_a_run_whose_images_are_all_unchanged_does_not_start_the_reviewer(
+    tmp_path: Path, project: Path
+) -> None:
+    images, old = two_images_with_a_clean_look_of_the_first(tmp_path, project)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    log.unlink()
+    (project / "notes.txt").write_text("another change\n")
+    commit(project, "another unrelated change")
+    record = run_look(project, "claude", images[:1])
+    assert not log.exists()
+    assert record["outcome"] == "clean"
+    assert [item.get("carried_from") for item in listed(record, "images")] == [old]
+
+
+def test_the_prompt_holds_the_earlier_fixed_finding_for_the_same_image_name(
+    tmp_path: Path, project: Path
+) -> None:
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    commit(project, "inputs")
+    images = make_images(project, 1)
+    install_agent(
+        tmp_path,
+        "claude",
+        1,
+        findings_answer(1, "Alignment", "merge badge and meta into one line"),
+    )
+    run_look(project, "claude", images)
+    images[0].write_bytes(PNG + b"badge and meta on one line")
+    commit(project, "fix the badge")
+    head = git(project, "rev-parse", "HEAD").strip()
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "image-1.png: Alignment: Fail — merge badge and meta into one line" in prompt
+    assert f"fixed at {head[:7]}" in prompt
+    assert "never ask to undo an earlier fix" in prompt.lower()
+
+
+def test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed(
+    tmp_path: Path, project: Path
+) -> None:
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    commit(project, "inputs")
+    images = make_images(project, 1)
+    install_agent(
+        tmp_path,
+        "claude",
+        1,
+        findings_answer(1, "Alignment", "merge badge and meta into one line"),
+    )
+    run_look(project, "claude", images)
+    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
+    commit(project, "unrelated change")
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    assert "fixed at" not in " ".join(json.loads(log.read_text())["argv"])
