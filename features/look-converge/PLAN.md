@@ -20,6 +20,7 @@ Sources: N/A — found by real client pull requests that could not finish `look`
 
 Owners: `.hooks/look.py` (prompt, reviewer answer parser, run record), `.hooks/look_records.py` (carried records, earlier findings, owner lines; the proof-kinds owner), `.hooks/ui_measure.py` (measure script, `PROOF_KINDS`, limits), `.hooks/ui_tokens.py` (`DESIGN.md` front matter reading). No second owner is added; the finding-to-rule table sits beside `PROOF_KINDS`, and the token verdict sits in `look_records.py` beside `owner_lines`.
 Data flow: `look_command` reads the images, keys each one (`image_keys`), asks `review`, then `with_owner_lines` swaps in the owner lines. Items 1 to 3 change `review` and `judge`; item 4 changes `look_command`; item 5 changes `owner_lines`.
+Same cause: items 1, 2 and 3 share one cause, which is that the run keeps no list of earlier Fails and the parser reads one line for each rule; they stay separate commits in the same two files. Items 4 and 5 have other causes (a record path that a rerun overwrites, and measured values that only the reviewer reads) and other owners.
 Any edit of the prompt changes every image key, so each project's clean records stop carrying once after this release. The PR says so.
 
 ## Decisions + authorization
