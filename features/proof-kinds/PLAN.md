@@ -29,7 +29,7 @@ Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fau
 - [ ] A reviewer line for a rule without `judgement` cannot fail the run and is not counted as missing → `tests/test_look_proof_kinds.py::test_a_reviewer_line_for_a_rule_without_judgement_is_ignored`.
 - [ ] The record and the block give one line per rule, and each line without `judgement` names its owner → `tests/test_look_proof_kinds.py::test_the_block_gives_each_rule_a_line_and_names_the_owner`.
 - [ ] A measure record with a finding fails the measured-only rules and the run → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_the_measured_rules_and_the_run`.
-- [ ] A plan Fail for a test rule fails the run, and no plan gives an N/A line → `tests/test_look_proof_kinds.py::test_a_test_rule_takes_its_line_from_the_plan`.
+- [ ] A plan Fail for a test rule fails the run, and with no plan the line says the plan check decides → `tests/test_look_proof_kinds.py::test_a_test_rule_takes_its_line_from_the_plan`.
 - [ ] A rule with `measured` and `judgement` still goes to the reviewer with its measured values → `tests/test_look_proof_kinds.py::test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer`.
 - [ ] An owner Fail line never returns to the reviewer as an earlier fix → `tests/test_look_proof_kinds.py::test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix`.
 - [ ] The skill link and size checks pass after the one-line reference change → `tests/test_skill_links.py`.
