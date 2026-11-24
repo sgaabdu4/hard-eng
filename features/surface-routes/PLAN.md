@@ -59,5 +59,5 @@ Retro: Second escaped bug (same cause, two readers judge one rule two ways): the
 Reader: the changed `checks.md` sentences went to a cold reader in two passes. The first pass asked what "compared as written" was compared with, and that wording was dropped when the bracket rule changed. The second pass ran on the text at the time of this review; it asked whether "starts with a listed route" means a text prefix, whether `[name]` means one or more segments, and what "Its record" points to, so the text now says that the page path is a listed route or a path, query or fragment below it, that `[name]` matches exactly one non-empty segment, and "The record of each After image".
 Canary: no flow of `release_canary.py` reaches the new refusal; none of them reads a Surface line or a browser capture.
 
-Delivery target: PR
-Delivery: Pending — required remote proof.
+Delivery target: Merge
+Delivery: Pending — `hard-eng` passes on the PR to `main`, the merge on `main`, then the join PR merged into `develop`.
