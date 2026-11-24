@@ -268,16 +268,31 @@ def rule_refusal(
     return px_problem(rule_lines, measured)
 
 
-def judged_names() -> list[str]:
-    """The Usability rules with the judgement kind: the only rules that the reviewer decides."""
+def judged_names(unmeasured: bool = False) -> list[str]:
+    """The Usability rules with the judgement kind: the rules that the reviewer decides. An image with no measure record has no owner for a `measured` rule, so then the reviewer decides that rule too."""
     from ui_measure import PROOF_KINDS
 
-    return [name for name, _ in usability_rules() if "judgement" in PROOF_KINDS[name]]
+    return [
+        name
+        for name, _ in usability_rules()
+        if "judgement" in PROOF_KINDS[name]
+        or (unmeasured and "measured" in PROOF_KINDS[name])
+    ]
 
 
-def judged_lines() -> list[str]:
+def lacks_record(root: Path | None, digests: list[str]) -> bool:
+    """True when an image has no `.hard-eng/browser` measure record, as a mockup or a native screen has none."""
+    if root is None:
+        return True
+    from ui_proof import browser_record_files
+
+    recorded = {record["sha256"] for _, record in browser_record_files(root)}
+    return any(digest not in recorded for digest in digests)
+
+
+def judged_lines(unmeasured: bool = False) -> list[str]:
     """The rule lines of the rules that the reviewer decides."""
-    wanted = set(judged_names())
+    wanted = set(judged_names(unmeasured))
     return [
         line
         for line, (name, _) in zip(usability_lines(), usability_rules(), strict=True)
@@ -288,11 +303,12 @@ def judged_lines() -> list[str]:
 def owner_lines(
     root: Path, digests: list[str], plan: dict[str, tuple[str, str]] | None
 ) -> dict[str, str]:
-    """One line for each rule without the judgement kind, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line."""
+    """One line for each rule without the judgement kind, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line. A finding in a record fails a measured rule always; a measured rule with an unmeasured image keeps the reviewer's line unless a record fails."""
     from ui_measure import PROOF_KINDS
     from ui_proof import measure_verdict
 
     measure = measure_verdict(root, digests)
+    reviewed = lacks_record(root, digests)
     lines: dict[str, str] = {}
     for name, _ in usability_rules():
         kinds = PROOF_KINDS[name]
@@ -300,6 +316,8 @@ def owner_lines(
             continue
         if "measured" in kinds:
             verdict, text = measure
+            if verdict == "N/A" or (verdict == "Pass" and reviewed):
+                continue
         elif plan is None:
             verdict, text = "N/A", "no plan given; the plan check decides"
         else:
@@ -334,6 +352,7 @@ def judge(
     *,
     require_design: bool = False,
     measured: list[dict[str, object]] | None = None,
+    unmeasured: bool = False,
 ) -> tuple[str, list[str], dict[str, str]]:
     """The outcome, the rule lines and the image details of the reviewer's answer."""
     if unread := [name for name in names if not read[name]]:
@@ -341,7 +360,7 @@ def judge(
     lines = [clean_line(line) for line in answer.strip().splitlines()]
     if not lines or lines[-1] not in VERDICTS:
         return "not done: the reviewer gave no exact VERDICT line", [], {}
-    wanted = judged_names()
+    wanted = judged_names(unmeasured)
     found = {
         split_rule_line(line)[0]: line
         for line in lines
@@ -687,8 +706,9 @@ def prompt_for(
     values: dict[str, str] | None = None,
     fixed: list[str] | None = None,
     held: int = 0,
+    unmeasured: bool = False,
 ) -> str:
-    rules = "\n".join(f"- {line}" for line in judged_lines())
+    rules = "\n".join(f"- {line}" for line in judged_lines(unmeasured))
     ring_parts = [
         f"{name}: "
         + ", ".join(f"(x={b['x']}, y={b['y']}, {b['w']}x{b['h']}px)" for b in boxes)
@@ -751,6 +771,7 @@ def review(
     design_digest: str = "",
     head: str = "",
     held: int = 0,
+    unmeasured: bool = False,
 ) -> dict[str, object]:
     from look_records import earlier_fixes, image_keys
 
@@ -778,7 +799,7 @@ def review(
         digests = [str(item["sha256"]) for item in listed]
         for item, key in zip(
             listed,
-            image_keys(root, scope, design, design_id, digests),
+            image_keys(root, scope, design, design_id, digests, unmeasured),
             strict=True,
         ):
             item["inputs"] = key
@@ -803,6 +824,7 @@ def review(
             values=values,
             fixed=fixed,
             held=held,
+            unmeasured=unmeasured,
         )
         reviewer, fresh, result, problem, skipped = run_first_reviewer(
             host, folder, prompt, root
@@ -833,6 +855,7 @@ def review(
         {name: name in times for name in names},
         require_design=bool(design),
         measured=[m for d in digests if (m := recorded_measured(root, d))],
+        unmeasured=unmeasured,
     )
     if outcome.startswith("not done"):
         record["answer"] = answer
@@ -876,7 +899,8 @@ def look_command(root: Path, argv: list[str]) -> int:
     )
     design, design_digest = design_text(root), design_hash(root)
     digests = [sha256(image.read_bytes()) for image in images]
-    keys = image_keys(root, scope, design, design_digest, digests)
+    lacking = lacks_record(root, digests)
+    keys = image_keys(root, scope, design, design_digest, digests, lacking)
     found = (
         None
         if args.all
@@ -894,6 +918,7 @@ def look_command(root: Path, argv: list[str]) -> int:
             design_digest=design_digest,
             head=head,
             held=len(images) - len(pending),
+            unmeasured=lacking,
         )
         if pending
         else None

@@ -31,6 +31,7 @@ def image_keys(
     design: str,
     design_digest: str,
     digests: list[str],
+    unmeasured: bool,
 ) -> list[str]:
     """One key for each image: its bytes, its ring boxes and measured values, the rules, the design documents and the plan scope that the reviewer reads."""
     import look
@@ -38,7 +39,12 @@ def image_keys(
     names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
     ringed, values = look.image_inputs(root, names, digests)
     shared = look.sha256(
-        json.dumps([look.prompt_for([], design, scope=scope), design_digest]).encode()
+        json.dumps(
+            [
+                look.prompt_for([], design, scope=scope, unmeasured=unmeasured),
+                design_digest,
+            ]
+        ).encode()
     )
     return [
         look.sha256(
@@ -88,6 +94,7 @@ def carried_record(
         look.design_text(root),
         look.design_hash(root),
         [str(item["sha256"]) for item in entries],
+        look.lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
     )
     if keys != [item["inputs"] for item in entries]:
         return None
