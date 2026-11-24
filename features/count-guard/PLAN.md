@@ -20,7 +20,7 @@ Single source: `.hooks/look.py::nothing_removed` owns the reading of removed cou
 
 Blockers: None.
 Handoff: Approval
-Authority: Autonomous: the user asked on 2026-11-23 to fix every Hard Eng fault found in the rollout; standing rule: merge each task PR once its checks pass.
+Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fault found in the rollout; standing rule: merge each task PR once its checks pass.
 
 ## Acceptance + steps
 
@@ -51,5 +51,5 @@ E2E: N/A — the change is a check of reviewer text, proved by the tests above.
 Real service: N/A — no service is called.
 Retro: Escaped bug: the earlier guard matched `removed 0` anywhere in the line and its tests held one count for one screen only → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused` (rows `removed 0 / 0 / 5` and `removed 0 / 3`). Review correction, round 1: a count with no comma after the kept count was not refused → the same test (rows `kept 34 removed 0` and `kept 15 / 19 / 74 removed 0 / 0 / 0`). Review correction, round 1: the refused rows had no `Fix:` and could pass through the no-fix refusal → the same test (each refused row holds `Fix:` and checks the message `its own count says 0 removed`). Review correction, round 2: a comma list took in a kept number → the same test (rows `kept 34, 0 removed` and `removed 0, 3 badges repeat the title`). Review correction, round 3: the decline line lacked the ` :: ` form that the review tool reads → None — the next round read it and the challenge command owns that rule. Review correction, round 5 and round 6: this Retro named no test for each correction, then a prevention that pointed at itself → None — a wording gap in this plan only, repaired here; the challenge review reads each Retro against the Retro rule, and no code changed. Failed check: freshness on the base branch (types-pyyaml) → None — outside cause, repaired by the merged PR 717 and the branch rebased. Failed check: one `tests/test_agent_hooks.py` case in the parallel run → None — it passed alone, and in the full rerun, so it is not caused by this change. Failed check: semgrep flagged a regex built inside a function → None — the semgrep rule in the security gate already caught it before the push.
 
-Delivery target: PR
-Delivery: Pending — required remote proof.
+Delivery target: Merge
+Delivery: Pending — CI, then the rebase merge into `develop`.
