@@ -20,7 +20,7 @@ Deliverables: None
 
 - Fault 1, empty fields match: In scope — An old-format clean record (no `inputs`, no per-image `file`) never covers a new head
 - Fault 2, rule line form: In scope — Each of the three line forms parses, and a line with no verdict word is still refused
-- Fault 3, browser sessions pile up: In scope — The environment of every step carries one fixed idle limit, and a new session past the cap is refused
+- Fault 3, browser sessions pile up: In scope — The environment of every step carries one fixed idle limit that the caller's environment cannot raise
 
 ## Repository context
 
