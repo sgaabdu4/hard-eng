@@ -42,6 +42,7 @@ Review declined: A fresh run of the old prompt to prove the cause again :: the s
 - [ ] A missing `file` or `sha256` in an earlier finding is not read as a changed image → `tests/test_look_carry.py::test_a_finding_without_a_digest_is_not_called_fixed`.
 - [ ] Each of the three line forms parses, and a line with no verdict word is still refused → `tests/test_look.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`.
 - [ ] The prompt states the dash-free form and holds no em dash → `tests/test_look.py::test_the_prompt_form_needs_no_em_dash`.
+- [ ] The plan scope guard follows the same forms, so `Rule: Pass. text` in `## Outcome + scope` is refused as a verdict leak → `tests/test_look.py::test_the_plan_scope_refuses_a_verdict_in_the_plain_form_too`.
 - [ ] Skill and reference links and size limits pass → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 
 ## Baseline + execution
