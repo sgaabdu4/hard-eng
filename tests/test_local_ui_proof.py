@@ -349,17 +349,18 @@ def _assert_unchanged_routes_and_owners(root: Path, base_plan: str) -> None:
     problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
     assert problem is not None and "names /" in problem
 
-    for desc, expected in (
-        ("/settings/ screen", "/settings/"),
-        ("/settings?tab=security screen", "/settings"),
-        ("/ signed out", "/"),
-        ("Settings at desktop / mobile sizes", ""),
-    ):
+    cases: list[tuple[str, list[str]]] = [
+        ("/settings/ screen", ["/settings/"]),
+        ("/settings?tab=security screen", ["/settings"]),
+        ("/ signed out", ["/"]),
+        ("Settings at desktop / mobile sizes", []),
+    ]
+    for desc, expected in cases:
         plan_body = base_plan.replace(
             REAL_UX, UNCHANGED_UX.replace("the card at rest", desc)
         )
         assert (
-            local_ui_proof._unchanged_route(
+            local_ui_proof._unchanged_routes(
                 plan_body, local_ui_proof.reference_section(plan_body)
             )
             == expected

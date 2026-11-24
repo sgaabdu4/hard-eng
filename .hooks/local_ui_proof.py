@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import cast
 
@@ -34,7 +35,7 @@ from ui_proof import (
     merge_base,
     reference_problem,
     reference_section,
-    surface_route,
+    surface_routes,
     unchanged_problem,
     visible_files,
 )
@@ -210,7 +211,7 @@ def _dirty_ui_mtime_ns(
 
 
 def _local_browser_proof(
-    evidence: Path, head: str, route: str, dirty_tree: bool, min_mtime_ns: int
+    evidence: Path, head: str, routes: list[str], dirty_tree: bool, min_mtime_ns: int
 ) -> tuple[set[str], str | None]:
     items = browser_record_files(evidence)
     by_image = {str(rec["image"]): (path, rec) for path, rec in items}
@@ -233,7 +234,7 @@ def _local_browser_proof(
             by_image,
             stem,
             head,
-            route,
+            routes,
             allow_dirty=dirty_tree,
             min_mtime_ns=min_mtime_ns,
         )
@@ -242,6 +243,34 @@ def _local_browser_proof(
         elif first_problem is None:
             first_problem = problem
     return (clean_hashes, None) if clean_hashes else (set(), first_problem)
+
+
+def _opened_sets_problem(
+    evidence: Path,
+    head: str,
+    routes: list[str],
+    dirty_tree: bool,
+    min_mtime_ns: int,
+    opened: set[str],
+) -> str | None:
+    items = browser_record_files(evidence)
+    by_image = {str(rec["image"]): (path, rec) for path, rec in items}
+    for stem in dict.fromkeys(
+        _stem(rec)
+        for _, rec in items
+        if rec.get("commit") == head and rec["sha256"] in opened
+    ):
+        problem, _ = capture_set_problem(
+            by_image,
+            stem,
+            head,
+            routes,
+            allow_dirty=dirty_tree,
+            min_mtime_ns=min_mtime_ns,
+        )
+        if problem:
+            return problem
+    return None
 
 
 def _single_local_look_problem(
@@ -271,7 +300,7 @@ def _single_local_look_problem(
     if not native and not any(opened & hashes for hashes in route_hashes):
         return (
             "Look review: the record does not cover any clean measured capture at this head; run `look` on the After images",
-            set(),
+            opened,
         )
     return None, opened
 
@@ -283,6 +312,7 @@ def _local_look_problem(
     route_hashes: list[set[str]],
     native: bool,
     min_mtime_ns: int,
+    opened_problem: Callable[[set[str]], str | None],
 ) -> str | None:
     import look
     from look_records import record_files
@@ -294,6 +324,7 @@ def _local_look_problem(
     expected_design = look.design_hash(root)
     wanted = [name for name, _ in usability_rules()]
     covered: set[str] = set()
+    looked: set[str] = set()
     first_problem: str | None = None
     for path, record in files:
         problem, opened = _single_local_look_problem(
@@ -306,6 +337,7 @@ def _local_look_problem(
             native,
             min_mtime_ns,
         )
+        looked |= opened
         if problem is None:
             if native:
                 return None
@@ -313,7 +345,7 @@ def _local_look_problem(
         elif first_problem is None:
             first_problem = problem
     if not native and route_hashes and all(covered & hashes for hashes in route_hashes):
-        return None
+        return opened_problem(looked)
     if not native and covered:
         return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
     return (
@@ -354,13 +386,13 @@ def _plan_owns_visible(text: str, visible: list[str]) -> list[str]:
     return owned
 
 
-def _unchanged_route(plan_text: str, reference: str) -> str:
-    if route := surface_route(plan_text):
-        return route
+def _unchanged_routes(plan_text: str, reference: str) -> list[str]:
+    if routes := surface_routes(plan_text):
+        return routes
     tail = reference.rpartition(" — ")[2].strip()
     if match := PLAN_ROUTE_TOKEN.search(tail):
-        return match[1] or match[2] or match[3] or match[4] or ""
-    return ""
+        return [match[1] or match[2] or match[3] or match[4] or ""]
+    return []
 
 
 def _plans_reference_problem(plans: list[str], visible: list[str]) -> str | None:
@@ -422,20 +454,20 @@ def _local_visible_context(
 def _unchanged_plans_problem(
     root: Path,
     evidence: Path,
-    items: list[tuple[str, str]],
+    items: list[tuple[str, list[str]]],
     head: str,
     base_branch: str,
     dirty_ui: bool,
     min_mtime_ns: int,
 ) -> str | None:
     base_sha = merge_base(root, base_branch, head=head)
-    for ref, route in items:
+    for ref, routes in items:
         if problem := unchanged_problem(
             evidence,
             ref,
             head,
             base_sha,
-            route=route,
+            routes=routes,
             allow_dirty_after=dirty_ui,
             min_mtime_ns=min_mtime_ns,
         ):
@@ -461,7 +493,7 @@ def local_ui_proof_problem(
     evidence = evidence_root(root)
     dirty_ui, min_mtime_ns = _dirty_ui_mtime_ns(root, patterns, visible)
     unchanged = [
-        (ref, _unchanged_route(text, ref))
+        (ref, _unchanged_routes(text, ref))
         for text in plans
         if UNCHANGED_LINE.match(ref := reference_section(text))
     ]
@@ -479,20 +511,31 @@ def local_ui_proof_problem(
             return problem
         if not visual_plans:
             return None
-    routes = list(
-        dict.fromkeys(r for text in visual_plans if (r := surface_route(text)))
-    )
+    plan_routes = [tuple(surface_routes(text)) for text in visual_plans]
+    groups = [list(group) for group in dict.fromkeys(plan_routes) if group]
     native = is_native(visible)
     route_hashes: list[set[str]] = []
     if not native:
-        for route in routes or [""]:
+        for group in groups or [[]]:
             hashes, problem = _local_browser_proof(
-                evidence, head, route, dirty_ui, min_mtime_ns
+                evidence, head, group, dirty_ui, min_mtime_ns
             )
             if problem:
                 return problem
             route_hashes.append(hashes)
-    return _local_look_problem(root, evidence, head, route_hashes, native, min_mtime_ns)
+    scopes = [*plan_routes, *(routes for _, routes in unchanged)]
+    listed = [route for scope in scopes for route in scope] if all(scopes) else []
+    return _local_look_problem(
+        root,
+        evidence,
+        head,
+        route_hashes,
+        native,
+        min_mtime_ns,
+        lambda opened: _opened_sets_problem(
+            evidence, head, listed, dirty_ui, min_mtime_ns, opened
+        ),
+    )
 
 
 def validate_local_ui_proof(
