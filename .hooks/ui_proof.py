@@ -34,6 +34,9 @@ SURFACE_ROUTES = re.compile(
 )
 ROUTE_TOKEN = re.compile(r"/[^\s,]*")
 ROUTE_PARAM = re.compile(r"(\[[^\]/]+\])")
+PLAN_PATH_TOKEN = re.compile(
+    r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?|[A-Za-z0-9_.-]+/"
+)
 TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[a-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
@@ -150,6 +153,36 @@ def reference_problem(
             "`N/A — unchanged: ![Before](<file>) ![After](<file>) — <screen and state>`"
         )
     return None
+
+
+def plan_owns_visible(text: str, visible: list[str]) -> list[str]:
+    """The visible files that the plan names, by path, by folder or by glob."""
+    tokens = set(PLAN_PATH_TOKEN.findall(text))
+    owned: list[str] = []
+    for name in visible:
+        if name in text or any(
+            (token.endswith("/") and name.startswith(token))
+            or fnmatch.fnmatchcase(name, token)
+            for token in tokens
+        ):
+            owned.append(name)
+    return owned
+
+
+def plans_reference_problem(
+    plans: list[str], visible: list[str], body: str = "", unchanged_note: bool = False
+) -> str | None:
+    """The reference problem of the changed plans on a visible change: with several plans, each plan that names a visible file is judged on those files, and otherwise one plan that fits all of them is enough."""
+    if not plans:
+        return None
+    for text in plans:
+        owned = plan_owns_visible(text, visible)
+        if (len(plans) == 1 or owned) and (
+            problem := reference_problem(text, owned or visible, body, unchanged_note)
+        ):
+            return problem
+    problems = [reference_problem(text, visible, body, unchanged_note) for text in plans]
+    return None if None in problems else problems[0]
 
 
 def browser_record_files(root: Path) -> list[tuple[Path, dict[str, object]]]:

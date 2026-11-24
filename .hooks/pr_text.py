@@ -366,6 +366,7 @@ def ui_problem(
         Change,
         changed_files,
         file_names,
+        plans_reference_problem,
         reference_problem,
         ui_names,
         visible_files,
@@ -410,9 +411,9 @@ def ui_problem(
         except ShippingError as error:
             return f"The plan {plan} cannot be read at the PR head ({error})"
     parents = named_parents(texts)
-    for plan, text in texts.items():
-        if plan not in parents and (
-            problem := reference_problem(text, visible, body, note)
-        ):
-            return problem
-    return None
+    return plans_reference_problem(
+        [text for plan, text in texts.items() if plan not in parents],
+        visible,
+        body,
+        note,
+    )

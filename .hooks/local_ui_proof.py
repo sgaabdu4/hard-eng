@@ -1,6 +1,5 @@
 """Fast local Complete-stage UI proof checks: pure file-record checks before ship, skipped in CI and --quick."""
 
-import fnmatch
 import json
 import os
 import re
@@ -12,9 +11,6 @@ from typing import cast
 from gate_config import ALL_ZERO_OBJECT_ID
 from plans import _is_test as is_test_path
 
-PLAN_PATH_TOKEN = re.compile(
-    r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.*-]+)+/?|[A-Za-z0-9_.-]+/"
-)
 PLAN_ROUTE_TOKEN = re.compile(
     r"(?:^|[\s`(])(/(?:[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*/?))(?=$|[\s`),.;:?#])"
     r"|^(/)(?=$|[\s`),.;:?#])"
@@ -33,6 +29,7 @@ from ui_proof import (
     look_base_problem,
     matches,
     merge_base,
+    plans_reference_problem,
     reference_problem,
     reference_section,
     surface_routes,
@@ -373,19 +370,6 @@ def _active_plan_texts(root: Path, base: str | None, changed: set[str]) -> list[
     ]
 
 
-def _plan_owns_visible(text: str, visible: list[str]) -> list[str]:
-    tokens = set(PLAN_PATH_TOKEN.findall(text))
-    owned: list[str] = []
-    for name in visible:
-        if name in text or any(
-            (token.endswith("/") and name.startswith(token))
-            or fnmatch.fnmatchcase(name, token)
-            for token in tokens
-        ):
-            owned.append(name)
-    return owned
-
-
 def _unchanged_routes(plan_text: str, reference: str) -> list[str]:
     if routes := surface_routes(plan_text):
         return routes
@@ -393,19 +377,6 @@ def _unchanged_routes(plan_text: str, reference: str) -> list[str]:
     if match := PLAN_ROUTE_TOKEN.search(tail):
         return [match[1] or match[2] or match[3] or match[4] or ""]
     return []
-
-
-def _plans_reference_problem(plans: list[str], visible: list[str]) -> str | None:
-    if not plans:
-        return None
-    for text in plans:
-        owned = _plan_owns_visible(text, visible)
-        if (len(plans) == 1 or owned) and (
-            problem := reference_problem(text, owned or visible, "", False)
-        ):
-            return problem
-    problems = [reference_problem(text, visible, "", False) for text in plans]
-    return None if None in problems else problems[0]
 
 
 def _local_visible_context(
@@ -484,7 +455,7 @@ def local_ui_proof_problem(
         return None
     head, base_branch, patterns, changed, visible = context
     plans = _active_plan_texts(root, base, changed)
-    if problem := _plans_reference_problem(plans, visible):
+    if problem := plans_reference_problem(plans, visible):
         return problem
     if problem := guideline_problem(
         root, [name for name in visible if (root / name).is_file()]
