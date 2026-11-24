@@ -110,6 +110,25 @@ def test_a_function_over_the_complexity_limit_fails_the_static_check_and_passes_
     assert runner.check(static=True) == 0
 
 
+def test_a_quick_check_refuses_a_bad_plan_line_as_the_full_check_does(
+    runner: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    configure(tmp_path, [gate("format", "pass", role="format", parallel=True)])
+    assert runner.check(quick=True) == 0
+    bad = "- [x] Observe the configured command exit."
+    (tmp_path / "PLAN.md").write_text(
+        completed_plan.replace(
+            "- [x] Observe the configured command exit → N/A — fixture plan has no product test.",
+            bad,
+        )
+    )
+    assert bad in (tmp_path / "PLAN.md").read_text()
+    with pytest.raises(ValueError, match="Acceptance \\+ steps line needs"):
+        runner.check(quick=True)
+    with pytest.raises(ValueError, match="Acceptance \\+ steps line needs"):
+        runner.check()
+
+
 def test_the_first_quick_check_in_a_checkout_runs_the_install_one_time(
     runner: ModuleType, tmp_path: Path
 ) -> None:
