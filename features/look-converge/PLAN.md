@@ -38,7 +38,7 @@ Authority: Autonomous. The user asked on 2026-11-24 to make Hard Eng correct bef
 - [ ] A second run at the same head and inputs keeps the first clean or findings record, prints it again and starts no reviewer; a run that ended `not done`, and a run with other inputs, still run → `tests/test_look.py::test_a_second_run_at_the_same_head_keeps_the_first_verdict`.
 - [ ] A measure finding of a mapped rule (accent count, button groups, edges, secondary text) is a code Fail that the reviewer's Pass cannot overrule; a code Pass never replaces a reviewer Fail → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_its_judged_rule_in_code`.
 - [ ] A measured text size or corner radius that no `DESIGN.md` token holds is a code Fail on Design system; a clamped radius, a token set that is missing and an old record without the clamp field give no verdict → `tests/test_look_proof_kinds.py::test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code`.
-- [ ] 5 `look` runs on one frozen invented fixture give the same Fail set; a run after the fixture's faults are fixed is clean → the records named in the `Real service:` line.
+- [ ] 5 `look` runs on one frozen invented fixture give the same Fail set; a run after the fixture's faults are fixed is clean → N/A — real model runs, not a test; the records are in the `Real service:` line.
 
 ## Baseline + execution
 
