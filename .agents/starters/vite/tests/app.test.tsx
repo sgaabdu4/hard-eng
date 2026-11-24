@@ -2,20 +2,22 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act } from "react";
 
-beforeAll(() => {
+const COLD_LOAD_MS = 30_000;
+
+beforeAll(async () => {
 	GlobalRegistrator.register();
 	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 	document.body.innerHTML = '<div id="root"></div>';
-});
+	await act(async () => {
+		await import("../src/main.tsx");
+	});
+}, COLD_LOAD_MS);
 
 afterAll(async () => {
 	await GlobalRegistrator.unregister();
 });
 
 test("the starter screen boots into #root and its counter counts clicks", async () => {
-	await act(async () => {
-		await import("../src/main.tsx");
-	});
 	expect(document.querySelector("h1")?.textContent).toBe("Get started");
 	const counter = document.querySelector("button.counter");
 	expect(counter?.textContent).toBe("Count is 0");
