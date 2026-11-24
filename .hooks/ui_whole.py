@@ -316,6 +316,24 @@ def library_covers_screens(
     return []
 
 
+def default_library(root: Path, names: list[str], ui_paths: list[str]) -> list[str]:
+    """The `ui` folders among the project's UI files as library entries, when they pass the library rules; else none."""
+    texts = dict.fromkeys(names, "")
+    entries = sorted(
+        {
+            "/".join(parts[: parts.index("ui") + 1]) + "/*"
+            for name in names
+            if inside(name, ui_paths)
+            and "ui" in (parts := PurePosixPath(name).parts[:-1])
+        }
+    )
+    if setting_findings(texts, ui_paths, entries) or library_covers_screens(
+        root, texts, ui_paths, entries
+    ):
+        return []
+    return entries
+
+
 def compared_token_file(name: str, text: str, ui_paths: list[str]) -> bool:
     if PurePosixPath(name).name.startswith("tailwind.config."):
         return True
