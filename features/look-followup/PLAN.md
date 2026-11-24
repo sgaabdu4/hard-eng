@@ -50,7 +50,7 @@ Review declined: A fresh run of the old prompt to prove the cause again :: the s
 - [ ] Each of the three line forms parses, and a line with no verdict word is still refused → `tests/test_look.py::test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict`.
 - [ ] The prompt states the dash-free form and holds no em dash → `tests/test_look.py::test_the_prompt_form_needs_no_em_dash`.
 - [ ] The plan scope guard follows the same forms, so `Rule: Pass. text` in `## Outcome + scope` is refused as a verdict leak → `tests/test_look.py::test_the_plan_scope_refuses_a_verdict_in_the_plain_form_too`.
-- [ ] A Fail line with no `Fix:` text is refused as not done, and a Fail line with its item and fix stands → `tests/test_look.py::test_a_fail_line_that_names_no_fix_is_refused`.
+- [ ] A Fail line with no `Fix:` text is refused as not done, and a Fail line with its item and fix stands → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`.
 - [ ] The environment of every step carries one fixed idle limit that the caller's environment cannot raise → `tests/test_browser.py::test_the_idle_limit_is_fixed_and_the_environment_cannot_raise_it`.
 - [ ] A new session past the cap is refused with the open names and their close commands → `tests/test_browser.py::test_a_new_session_past_the_cap_is_refused_with_the_open_names`.
 - [ ] A step on an open session passes at the cap, and the sessions of another checkout do not count → `tests/test_browser.py::test_a_step_on_an_open_session_passes_and_another_checkouts_sessions_do_not_count`.
