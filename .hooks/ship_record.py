@@ -73,7 +73,7 @@ def is_join(root: Path, pull: Pull, default: str, merged: bool = False) -> bool:
         and base_tip is not None
         and _contains(root, tip, pull.head_sha)
         and (merged or not _contains(root, tip, base_tip))
-        and not _carries_own_work(root, pull, tip, base_tip)
+        and not _carries_own_work(root, pull, tip, tip if merged else base_tip)
     )
 
 

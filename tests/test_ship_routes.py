@@ -199,5 +199,7 @@ def test_a_merged_join_keeps_its_route_when_the_base_already_holds_the_default_t
     pull = JoinPull(head)
     assert route(fixture.root, pull, "develop") is None
     assert route(fixture.root, pull, "develop", merged=True) == "join"
-    side = JoinPull(head, head_ref="feature/own-work", base_ref="main")
-    assert route(fixture.root, side, "develop", merged=True) is None
+    _origin_refs(fixture, "parent")
+    git(fixture.root, "update-ref", "refs/remotes/origin/develop", head)
+    own = JoinPull(head, head_ref="feature/own-work")
+    assert route(fixture.root, own, "develop", merged=True) is None
