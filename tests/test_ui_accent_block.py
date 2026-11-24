@@ -150,3 +150,43 @@ def test_a_different_ink_in_another_colour_form_still_counts_as_a_colour(
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
         assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
+
+
+def with_tint(tint: str) -> str:
+    return screen(
+        "<div><p style='margin:0;color:rgb(160, 59, 38)'>Rent due</p>"
+        f"<p style='margin:0;color:rgb(160, 59, 38);background:{tint}'>Unit 4 status</p>"
+        f"{pair('#00b', 'transparent')}</div>"
+    )
+
+
+COUNTED = Counter({"accent-colours": 1})
+TINTS = {
+    "rgba-ten-percent": ("rgba(0, 130, 60, 0.1)", COUNTED),
+    "oklab-ten-percent": ("oklab(0.6 -0.15 0.1 / 0.1)", COUNTED),
+    "srgb-ten-percent": ("color(srgb 0 0.5 0.25 / 0.1)", COUNTED),
+    "rgba-nine-percent": ("rgba(0, 130, 60, 0.09)", Counter()),
+    "oklab-nine-percent": ("oklab(0.6 -0.15 0.1 / 0.09)", Counter()),
+}
+
+
+@pytest.mark.parametrize(("tint", "expected"), TINTS.values(), ids=TINTS)
+def test_a_tint_of_a_third_hue_counts_from_ten_percent_up(
+    tmp_path: Path, site: str, browser: ModuleType, tint: str, expected: Counter[str]
+) -> None:
+    page(tmp_path, with_tint(tint))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == expected, (width, found[width])
+
+
+def test_a_channel_outside_the_colour_range_reads_as_the_nearest_inside_it(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(
+        tmp_path,
+        ink_at_two_strengths("rgb(128, 0, 51)", "color(srgb 0.501961 -0.1 0.2)"),
+    )
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
