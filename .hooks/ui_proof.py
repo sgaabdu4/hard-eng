@@ -33,6 +33,7 @@ SURFACE_ROUTES = re.compile(
     r"(?m)^Surface: *\w+ — (/[^\s,]*(?:(?:,\s*(?:and\s+)?|\s+and\s+)/[^\s,]*)*)"
 )
 ROUTE_TOKEN = re.compile(r"/[^\s,]*")
+ROUTE_PARAM = re.compile(r"(\[[^\]/]+\])")
 TEMPLATE_MARKUP = re.compile(r"""(?:^|[\s`'">])</?[a-z][\w-]*(?:\s[^<>]*)?/?>""")
 STRING_LITERAL = re.compile(r"""(["'])(?:(?!\1)[^\\\n]|\\.)+\1""")
 SWIFT_VIEW = re.compile(
@@ -349,12 +350,18 @@ def unchanged_problem(
 
 
 def on_route(captured: str, route: str) -> bool:
-    """Whether a captured page is the route itself or a path, query or fragment below it; the home route `/` is the home page only."""
+    """Whether a captured page is the route itself or a path, query or fragment below it; a `[name]` segment of the route matches any one path segment; the home route `/` is the home page only."""
     if route == "/":
         return captured == "/" or captured[:2] in ("/?", "/#")
-    rest = captured.removeprefix(route)
-    return captured.startswith(route) and (
-        not rest or route.endswith("/") or rest[0] in "/?#"
+    pattern = "".join(
+        "[^/?#]+" if part.startswith("[") else re.escape(part)
+        for part in ROUTE_PARAM.split(route)
+    )
+    found = re.match(pattern, captured)
+    return found is not None and (
+        found.end() == len(captured)
+        or route.endswith("/")
+        or captured[found.end()] in "/?#"
     )
 
 
