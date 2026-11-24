@@ -254,3 +254,21 @@ def test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix(
     prompt = prompt_of(log)
     assert "Alignment: Fail — badge and meta apart" in prompt
     assert "Widths: Fail" not in prompt
+
+
+def test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix(
+    tmp_path: Path, project: Path
+) -> None:
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    commit(project, "inputs")
+    images = make_images(project, 1)
+    install_agent(
+        tmp_path, "claude", 1, findings_answer(1, "Widths", "label too narrow")
+    )
+    assert run_look(project, "codex", images)["outcome"] == "findings"
+    images[0].write_bytes(PNG + b"fixed")
+    (project / "notes.txt").write_text("the label is wider\n")
+    commit(project, "widen the label")
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    assert "Widths: Fail — label too narrow" in prompt_of(log)

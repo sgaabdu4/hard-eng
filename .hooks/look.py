@@ -280,6 +280,14 @@ def judged_names(unmeasured: bool = False) -> list[str]:
     ]
 
 
+def owner_prefixes() -> tuple[str, ...]:
+    """The text starts that mark a line from an owner check, not from the reviewer."""
+    from ui_measure import PROOF_KINDS
+
+    kinds = {kind for found in PROOF_KINDS.values() for kind in found}
+    return tuple(f"{kind}:" for kind in sorted(kinds - {"judgement"}))
+
+
 def lacks_record(root: Path | None, digests: list[str]) -> bool:
     """True when an image has no `.hard-eng/browser` measure record, as a mockup or a native screen has none."""
     if root is None:
