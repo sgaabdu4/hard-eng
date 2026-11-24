@@ -847,6 +847,9 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
 ) -> None:
     checks: list[tuple[str, ...]] = []
 
+    def no_limit(tool: str, folder: Path, session: str) -> None:
+        del tool, folder, session
+
     def tool(
         name: str, folder: Path, session: str, *arguments: str, text: str | None = None
     ) -> subprocess.CompletedProcess[str]:
@@ -870,7 +873,7 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
         return subprocess.CompletedProcess(arguments, 0, reply, "")
 
     monkeypatch.setattr(browser, "ensure_tool", lambda: "agent-browser")
-    monkeypatch.setattr(browser, "limit_sessions", lambda *_: None)
+    monkeypatch.setattr(browser, "limit_sessions", no_limit)
     monkeypatch.setattr(browser, "run_tool", tool)
     code = browser.browser_command(
         tmp_path, ["capture", "http://x", "--session", session()]
