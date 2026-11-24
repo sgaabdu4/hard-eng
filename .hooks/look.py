@@ -698,9 +698,9 @@ def _read_record(path: Path) -> dict[str, object] | None:
 
 
 def carried_record(
-    root: Path, head: str, record: dict[str, object]
+    root: Path, head: str, record: dict[str, object], evidence: Path | None = None
 ) -> dict[str, object] | None:
-    """A clean record of another head, set to this head, when the prompt, the design documents and the plan scope are the same; else None."""
+    """A clean record of another head, set to this head, when the prompt, the design documents and the plan scope are the same; the browser records come from `evidence`."""
     images = record.get("images")
     prompt = record.get("prompt_sha256")
     if (
@@ -721,7 +721,7 @@ def carried_record(
         return None
     digests = [str(item["sha256"]) for item in listed_images(record)]
     names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
-    ringed, values = image_inputs(root, names, digests)
+    ringed, values = image_inputs(evidence or root, names, digests)
     rebuilt = prompt_for(
         names, design_text(root), scope=scope, ringed=ringed, values=values
     )
@@ -751,7 +751,9 @@ def record_files(
     for path in _newest_earlier(paths, head, own_sets):
         record = _read_record(path)
         owned = bool(record) and record.get("head") == path.stem.rpartition("-")[0]
-        carried = carried_record(root, head, record) if record and owned else None
+        carried = (
+            carried_record(root, head, record, evidence) if record and owned else None
+        )
         if carried:
             found.append((path, carried))
     return found

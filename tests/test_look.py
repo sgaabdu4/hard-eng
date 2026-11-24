@@ -855,7 +855,7 @@ def test_look_truncates_large_design_docs_in_utf8_bytes_and_preserves_ui_library
 
 
 def clean_look_then_new_head(
-    tmp_path: Path, project: Path, *, plan: bool = False
+    tmp_path: Path, project: Path, *, plan: bool = False, measured: bool = False
 ) -> tuple[list[Path], str, str]:
     """A clean look record at one head, then a commit that changes no input of the reviewer; returns the images, the old head and the new head."""
     (project / ".gitignore").write_text(".hard-eng/\n")
@@ -865,6 +865,11 @@ def clean_look_then_new_head(
         plan_file.write_text(full_plan("A KPI board with one card."))
     commit(project, "inputs")
     images = make_images(project, 1)
+    if measured:
+        import ui_measure
+
+        values: dict[str, object] = {"radii": [{"at": "Go", "px": 6}]}
+        ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
     install_agent(tmp_path, "claude", 1, good_answer(1))
     extra = ["--plan", "features/kpi-board/PLAN.md"] if plan else None
     run_look(project, "claude", images, extra=extra)
@@ -917,3 +922,42 @@ def test_a_look_record_does_not_carry_when_one_reviewer_input_changed(
     commit(project, f"change: {change}")
     new = git(project, "rev-parse", "HEAD").strip()
     assert look.records_for(project, new) == []
+
+
+def test_a_carried_record_backs_the_new_head_in_ship_and_in_the_local_proof(
+    tmp_path: Path, project: Path
+) -> None:
+    import local_ui_proof
+    import look
+    import ui_proof
+
+    images, _, new = clean_look_then_new_head(
+        tmp_path, project, plan=True, measured=True
+    )
+    after = [image.read_bytes() for image in images]
+    plan_rel = "features/kpi-board/PLAN.md"
+    digest = look.plan_scope(project, Path(plan_rel), new)[2]
+    block = look.block_text(look.records_for(project, new)[0])
+    assert ui_proof.look_problem(project, new, block, after, plan_rel, digest) is None
+    opened = [{hashlib.sha256(data).hexdigest() for data in after}]
+    assert (
+        local_ui_proof._local_look_problem(project, project, new, opened, False, 0)
+        is None
+    )
+
+    problem = ui_proof.look_problem(
+        project, new, block, [PNG + b"another image"], plan_rel, digest
+    )
+    assert problem is not None and "does not cover the After image" in problem
+
+
+def test_a_carried_record_reads_the_browser_records_of_the_evidence_checkout(
+    tmp_path: Path, project: Path
+) -> None:
+    import look
+
+    _, _, new = clean_look_then_new_head(tmp_path, project, plan=True, measured=True)
+    snapshot = tmp_path / "snapshot"
+    git(project, "worktree", "add", "-q", str(snapshot), new)
+    assert [r["head"] for _, r in look.record_files(snapshot, new, project)] == [new]
+    assert look.record_files(snapshot, new, snapshot) == []
