@@ -1,4 +1,4 @@
-"""A look Fail line that gives a text size or a corner radius in px that the measured values of the image do not hold is refused."""
+"""A look Fail line that gives a text size in px that the measured values of the image do not hold is refused."""
 
 from pathlib import Path
 
@@ -37,7 +37,6 @@ def look_with(
     ("text", "claimed", "held"),
     [
         ("the badge text is about 11 px", "text size 11 px", "12, 16"),
-        ("the badge has corners about 4 px", "corner radius 4 px", "6"),
         ("the badge font is roughly 11 px", "text size 11 px", "12, 16"),
     ],
 )
@@ -53,26 +52,21 @@ def test_a_fail_line_with_a_px_size_that_the_measured_values_do_not_hold_is_refu
     "text",
     [
         "text 12 px is too small for a label",
-        "the badge has corners 6 px, too sharp for the card",
         "the badge text is about 12 px and the button is 44 px high",
         "the caption text is 12 px, under the 14 px text minimum",
-        "the badge has 6 px corners but DESIGN.md sets an 8 px radius",
-        "the card corners are 12 px, too round for a table row",
-        "the badge corners are 6 px, not the 8 px radius in DESIGN.md",
-        "the card has 12 px corners while the buttons have 6 px corners",
-        "buttons use 4 px corners but cards use 12 px corners",
         "the label text is about 3 px off the baseline",
-        "buttons use 6 px corners but cards use about 12 px corners",
-        "the badge has 6 px corners but the card has about 12 px corners",
-        "the badge has 4 px corners but the card has 12 px corners",
-        "the badge has 6 px corners but the DESIGN.md radius is 8 px",
-        "the button has 6 px corners instead of 8 px corners",
-        "the Cancel button has 0 px corners while Save has 6 px corners",
     ],
 )
 def test_a_fail_line_with_a_px_size_that_the_measured_values_hold_passes_the_guard(
     tmp_path: Path, project: Path, text: str
 ) -> None:
+    assert look_with(tmp_path, project, text)["outcome"] == "findings"
+
+
+def test_a_corner_radius_claim_is_not_refused_even_when_the_measured_values_differ(
+    tmp_path: Path, project: Path
+) -> None:
+    text = "the thumbnail has corners about 8 px, the card has 12 px corners"
     assert look_with(tmp_path, project, text)["outcome"] == "findings"
 
 
