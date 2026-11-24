@@ -19,6 +19,9 @@ from gate_config import GateConfig, parse_config
 
 TOOL = "agent-browser"
 INIT_SCRIPTS = "AGENT_BROWSER_INIT_SCRIPTS"
+IDLE_LIMIT = "AGENT_BROWSER_IDLE_TIMEOUT_MS"
+IDLE_MS = "300000"
+MAX_SESSIONS = 4
 ROLE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 USAGE = (
     "browser --session S <agent-browser step>: run one step from .hard-eng/browser. "
@@ -399,12 +402,52 @@ def hold_script_file() -> str | None:
 
 
 def checkout_space(folder: Path) -> dict[str, str]:
-    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart, and each page starts with the same request delay."""
+    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart, an idle session shuts itself down after a fixed time, and each page starts with the same request delay."""
     digest = hashlib.sha256(str(folder.resolve()).encode()).hexdigest()[:10]
-    env = {**os.environ, "AGENT_BROWSER_NAMESPACE": "he-" + digest}
+    env = {
+        **os.environ,
+        "AGENT_BROWSER_NAMESPACE": "he-" + digest,
+        IDLE_LIMIT: IDLE_MS,
+    }
     scripts = [env.get(INIT_SCRIPTS), hold_script_file()]
     env[INIT_SCRIPTS] = ",".join(script for script in scripts if script)
     return env
+
+
+def step_session(steps: list[str]) -> str:
+    for index, step in enumerate(steps):
+        if step == "--session":
+            return steps[index + 1] if index + 1 < len(steps) else ""
+        if step.startswith("--session="):
+            return step.removeprefix("--session=")
+    return ""
+
+
+def limit_sessions(tool: str, folder: Path, session: str) -> None:
+    """Refuse a session name that is not open yet when this checkout already holds the most it may, so a job that never closes cannot pile up browsers."""
+    done = subprocess.run(
+        [tool, "session", "list", "--json"],
+        cwd=folder,
+        env=checkout_space(folder),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=STEP_TIMEOUT,
+    )
+    try:
+        open_names = [str(name) for name in json.loads(done.stdout)["data"]["sessions"]]
+    except (ValueError, KeyError, TypeError):
+        return
+    if session in open_names or len(open_names) < MAX_SESSIONS:
+        return
+    closers = "; ".join(
+        f"python3 .hooks/hard-eng.py browser --session {name} close"
+        for name in open_names
+    )
+    raise ValueError(
+        f"this checkout holds {len(open_names)} open browser sessions ({', '.join(open_names)}), "
+        f"the most it may hold, and {session} is a new one. Close one first: {closers}"
+    )
 
 
 def run_tool(
@@ -559,6 +602,7 @@ def capture(root: Path, argv: list[str]) -> int:
     if args.state:
         args.state = str(Path(args.state).resolve())
     tool, folder = ensure_tool(), output_folder(root)
+    limit_sessions(tool, folder, args.session)
     images: list[Path] = []
     try:
         for width in WIDTHS:
@@ -580,6 +624,7 @@ def measure(root: Path, argv: list[str]) -> int:
     parser.add_argument("--name", required=True)
     args = parser.parse_args(argv)
     tool, folder = ensure_tool(), output_folder(root)
+    limit_sessions(tool, folder, args.session)
     width = int(
         json.loads(require(run_tool(tool, folder, args.session, "eval", "innerWidth")))
     )
@@ -615,6 +660,7 @@ def signin(root: Path, argv: list[str]) -> int:
     username = environment_value(role["username_env"], env_file)
     password = environment_value(role["password_env"], env_file)
     tool, folder = ensure_tool(), output_folder(root)
+    limit_sessions(tool, folder, args.session)
     state = folder / "state" / f"{args.role}.json"
     login = f"{args.role}-{uuid.uuid4().hex[:12]}"
     state.parent.mkdir(exist_ok=True)
@@ -657,6 +703,7 @@ def dispatch(root: Path, argv: list[str]) -> int:
         return 2
     tool = ensure_tool()
     folder = output_folder(root)
+    limit_sessions(tool, folder, step_session(argv))
     record_action(folder, argv)
     os.chdir(folder)
     os.execve(tool, [tool, *argv], checkout_space(folder))
