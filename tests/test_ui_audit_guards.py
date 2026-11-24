@@ -49,6 +49,17 @@ AUDIT_FAULTS = {
         "clipped-control",
         1,
     ),
+    "wrapped-button": (
+        "<button style='width:96px;min-height:44px;font-size:16px'>Save landlord record</button>",
+        "wrapped-label",
+        1,
+    ),
+    "wrapped-link-button": (
+        "<a href='/rent' style='display:block;width:96px;min-height:44px;font-size:16px;"
+        "background:#124;color:#fff'>Review rent schedule</a>",
+        "wrapped-label",
+        1,
+    ),
     "clipped-chrome": (
         (
             "<aside style='position:fixed;top:0;left:0;width:200px;height:960px;overflow:visible'>"
@@ -83,6 +94,21 @@ def test_each_runtime_audit_guard_finds_one_fault(
     found = capture(browser, tmp_path, site, "audit")
     for width in WIDTHS:
         assert found[width] == Counter({rule: count}), (width, found[width])
+
+
+def test_a_one_line_button_and_a_wrapped_text_link_pass_the_label_rule(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/audit.html").write_text(
+        "<!doctype html><html lang=en><title>Audit</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style><body>"
+        "<button style='min-height:44px;min-width:44px;font-size:16px'>Save</button>"
+        "<p style='width:120px'>Read the <a href='/rent'>full rent schedule for the unit</a> now.</p>"
+        "</body>"
+    )
+    found = capture(browser, tmp_path, site, "audit")
+    for width in WIDTHS:
+        assert found[width]["wrapped-label"] == 0, (width, found[width])
 
 
 def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
