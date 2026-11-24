@@ -378,6 +378,31 @@ def test_challenge_falls_back_to_second_reviewer_when_first_fails(
     assert "fresh" not in record
 
 
+def test_an_agent_that_is_not_installed_passes_the_review_to_the_next_one(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    (tmp_path / "bin" / "codex").unlink()
+    (tmp_path / "git-only").mkdir()
+    (tmp_path / "git-only" / "git").symlink_to(
+        next(
+            Path(p) / "git"
+            for p in os.environ["PATH"].split(os.pathsep)
+            if (Path(p) / "git").exists()
+        )
+    )
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{tmp_path / 'git-only'}")
+    agy_log = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert agy_log.is_file()
+    assert not host_log.exists()
+    record = record_of(branch)
+    assert (record["reviewer"], record["outcome"]) == ("agy", "clean")
+    assert "fresh" not in record
+
+
 def test_findings_never_send_the_review_to_another_agent(
     branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
