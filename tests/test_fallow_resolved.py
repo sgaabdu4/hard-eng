@@ -195,7 +195,7 @@ def test_an_entry_glob_for_files_no_plugin_finds_asks_for_names(
     assert "already finds" not in str(refused.value)
 
 
-def tests_group(report: str = "coverage/lcov.info") -> list[Group]:
+def group_with_a_tests_gate(report: str = "coverage/lcov.info") -> list[Group]:
     tests: Gate = {
         "name": "tests",
         "role": "tests",
@@ -221,7 +221,7 @@ def test_a_committed_coverage_file_cannot_feed_the_crap_score(tmp_path: Path) ->
         },
     )
     with pytest.raises(ValueError, match=r"health\.coverage[\s\S]*never a committed"):
-        validate_resolved(root, tests_group(), 900)
+        validate_resolved(root, group_with_a_tests_gate(), 900)
 
 
 def test_the_coverage_file_that_the_tests_gate_writes_may_feed_it(
@@ -237,7 +237,7 @@ def test_the_coverage_file_that_the_tests_gate_writes_may_feed_it(
             "src/main.ts": "export {};\n",
         },
     )
-    validate_resolved(root, tests_group(), 900)
+    validate_resolved(root, group_with_a_tests_gate(), 900)
 
 
 def test_boundaries_must_cover_every_file(tmp_path: Path) -> None:
