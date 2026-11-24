@@ -457,11 +457,13 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
         ],
         "gaps": [{"at": "main", "axis": "y", "gaps": [14, 14]}],
         "sizes": {"controls": [{"at": "Go", "w": 120, "h": 44}], "text_px": [16, 24]},
+        "radii": [{"at": "Go", "px": 6}],
     }
     ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=measured)
     ui_measure.write_record(project, images[1], 1280, [])
     run_look(project, "codex", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "corner radius 6 px (Go)" in prompt
     assert "A measured value beats an eye estimate" in prompt
     assert "never fail a rule against a measured pass" in prompt
     assert "image-1.png: contrast 6.37:1 (#1a1a1a on #ffffff, 16 px)" in prompt

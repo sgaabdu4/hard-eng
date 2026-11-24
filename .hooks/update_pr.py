@@ -431,8 +431,9 @@ def failed_push(stopped: bool) -> int:
     """Say what a failed push of the update branch means; a stop by a signal is no fault."""
     if stopped:
         print(
-            f"The push of {UPDATE_BRANCH} was stopped by a signal, so no check "
-            f"failed. Run `{UPDATE_COMMAND}` again."
+            f"The push of {UPDATE_BRANCH} was stopped by a signal. The stop is not a "
+            "fault in the project. Fix any other failure printed above, then run "
+            f"`{UPDATE_COMMAND}` again."
         )
         return 1
     print(

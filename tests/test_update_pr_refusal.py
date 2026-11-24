@@ -308,8 +308,9 @@ def test_a_push_that_a_signal_stopped_says_rerun_and_names_no_fault(
     assert update_pr.publish(target) == 1
     printed = capsys.readouterr().out
     assert (
-        f"The push of {update_runner.UPDATE_BRANCH} was stopped by a signal, so no check "
-        f"failed. Run `{update_runner.UPDATE_COMMAND}` again."
+        f"The push of {update_runner.UPDATE_BRANCH} was stopped by a signal. The stop "
+        "is not a fault in the project. Fix any other failure printed above, then "
+        f"run `{update_runner.UPDATE_COMMAND}` again."
     ) in printed
     assert "a fault in this project" not in printed
 

@@ -879,7 +879,9 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         else:
             revision = _delivered(resolved_root, pull, pull.base_ref, origin_url)
             merged_sha = revision
-        files = delivered_files(resolved_root, identity, policy, resolved_plan, stage)
+        files = delivered_files(
+            resolved_root, pull, identity, policy, resolved_plan, stage
+        )
         if policy["ui_paths"]:
             _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
         _checks(
