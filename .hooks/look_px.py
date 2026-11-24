@@ -21,6 +21,7 @@ REQUIRED_BEFORE = re.compile(
 )
 REQUIRED_AFTER = re.compile(r"(?i)^\W*(?:minimum|maximum|min|max|token)\b")
 TOLERANCE = 0.5
+REACH = 40
 
 
 def _claims(
@@ -31,8 +32,6 @@ def _claims(
     claims = []
     for found in pattern.finditer(line):
         start = max(line.rfind(mark, 0, found.start()) for mark in ",;:.") + 1
-        ends = [i for mark in ",;:." if (i := line.find(mark, found.end())) >= 0]
-        clause = line[start : min(ends, default=len(line))]
         required = REQUIRED_BEFORE.search(line[start : found.start()]) or (
             REQUIRED_AFTER.search(line[found.end() :])
         )
@@ -41,7 +40,10 @@ def _claims(
             number
             and float(number)
             and not required
-            and (ELEMENTS.search(clause) or not element)
+            and (
+                ELEMENTS.search(line[max(start, found.start() - REACH) : found.start()])
+                or not element
+            )
         ):
             claims.append(float(number))
     return claims
