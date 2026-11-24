@@ -315,6 +315,40 @@ def test_a_session_without_the_request_delay_is_refused(
         browser.run_tool(tool, folder, name, "close")
 
 
+VALUES_PAGE = (
+    "<main><h1 style='font-size:24px;font-weight:700;margin:0 0 14px'>Board</h1>"
+    "<p style='margin:0 0 14px;color:#767676;font-size:16px'>Grey on white</p>"
+    "<p style='margin:0;color:#000;font-size:16px'>Black on white</p>"
+    "<div style='margin-top:14px'><button style='min-height:44px;min-width:120px;font-size:16px'>Go</button></div></main>"
+)
+
+
+def test_the_record_holds_the_measured_contrast_gaps_and_sizes(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/values.html").write_text(
+        "<!doctype html><html lang=en><title>Values</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{VALUES_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "values")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    values = record["measured"]
+    ratios = {item["ratio"] for item in values["contrast"]}
+    assert {4.54, 21.0} <= ratios
+    grey = next(item for item in values["contrast"] if item["ratio"] == 4.54)
+    assert (grey["fg"], grey["bg"], grey["px"]) == ("#767676", "#ffffff", 16)
+    assert [14, 14, 14] in [item["gaps"] for item in values["gaps"]]
+    assert {"w": 120, "h": 44} in [
+        {"w": item["w"], "h": item["h"]} for item in values["sizes"]["controls"]
+    ]
+    assert {16, 24} <= set(values["sizes"]["text_px"])
+
+
 def test_each_press_is_measured_apart_from_the_load(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:

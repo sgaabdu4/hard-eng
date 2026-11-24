@@ -429,6 +429,66 @@ def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
     assert "--ring" not in " ".join(json.loads(log.read_text())["argv"])
 
 
+def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    images = make_images(project, 2)
+    log = install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "Measured values" not in prompt
+
+    measured = {
+        "contrast": [
+            {"at": "p", "ratio": 6.37, "fg": "#1a1a1a", "bg": "#ffffff", "px": 16}
+        ],
+        "gaps": [{"at": "main", "axis": "y", "gaps": [14, 14]}],
+        "sizes": {"controls": [{"at": "Go", "w": 120, "h": 44}], "text_px": [16, 24]},
+    }
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=measured)
+    ui_measure.write_record(project, images[1], 1280, [])
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "A measured value beats an eye estimate" in prompt
+    assert "never fail a rule against a measured pass" in prompt
+    assert "image-1.png: contrast 6.37:1 (#1a1a1a on #ffffff, 16 px)" in prompt
+    assert "gaps 14, 14 px" in prompt
+    assert "control Go 120x44 px" in prompt
+    assert "image-2.png: contrast" not in prompt
+
+    images[0].write_bytes(PNG + b"edited-after-capture")
+    run_look(project, "codex", images)
+    assert "6.37:1" not in " ".join(json.loads(log.read_text())["argv"])
+
+
+@pytest.mark.parametrize(
+    ("line", "outcome"),
+    [
+        ("No clutter: Fail — kept 34, removed 0", "not done"),
+        ("No clutter (kept 34, removed 0): Fail — too many labels", "not done"),
+        ("No clutter: Fail — kept 34, removed 2", "findings"),
+        ("No clutter: Pass — kept 34, removed 0", "clean"),
+    ],
+)
+def test_a_fail_line_that_contradicts_its_own_count_is_refused(
+    tmp_path: Path, project: Path, line: str, outcome: str
+) -> None:
+    images = make_images(project, 1)
+    rules = [
+        line if name == "No clutter" else f"- {name}: Pass — looked at it"
+        for name, _ in usability_rules()
+    ]
+    verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
+    answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
+    install_agent(tmp_path, "claude", 1, answer)
+    record = run_look(project, "codex", images)
+    assert str(record["outcome"]).startswith(outcome)
+    if outcome == "not done":
+        assert "No clutter" in str(record["outcome"])
+
+
 def full_plan(
     scope: str,
     ux: str = "Surface: Existing — /kpi, rendered by app\nRules:\n- No clutter: Pass — builder secret claim",
