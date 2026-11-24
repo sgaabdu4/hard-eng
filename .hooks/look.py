@@ -742,23 +742,32 @@ def record_files(
     folder = store(evidence or root, head, STORE).parent
     paths = sorted(folder.glob("*-*.json")) if folder.is_dir() else []
     found: list[tuple[Path, dict[str, object]]] = []
-    own_sets: set[str] = set()
-    earlier: dict[str, tuple[Path, dict[str, object]]] = {}
-    for path in sorted(paths, key=lambda item: item.stat().st_mtime_ns):
-        if (record := _read_record(path)) is None:
-            continue
-        owner, _, image_set = path.stem.rpartition("-")
-        if owner == head:
-            found.append((path, record))
-            own_sets.add(image_set)
-        elif record.get("head") == owner:
-            earlier[image_set] = (path, record)
-    for image_set, (path, record) in earlier.items():
-        if image_set not in own_sets and (
-            carried := carried_record(root, head, record)
+    for path in paths:
+        if path.stem.rpartition("-")[0] == head and (
+            (record := _read_record(path)) is not None
         ):
+            found.append((path, record))
+    own_sets = {path.stem.rpartition("-")[2] for path, _ in found}
+    for path in _newest_earlier(paths, head, own_sets):
+        record = _read_record(path)
+        owned = bool(record) and record.get("head") == path.stem.rpartition("-")[0]
+        carried = carried_record(root, head, record) if record and owned else None
+        if carried:
             found.append((path, carried))
     return found
+
+
+def _newest_earlier(paths: list[Path], head: str, own_sets: set[str]) -> list[Path]:
+    """For each image set that this head has no record for, the newest record file of an earlier head."""
+    newest: dict[str, tuple[int, Path]] = {}
+    for path in paths:
+        owner, _, image_set = path.stem.rpartition("-")
+        if owner == head or image_set in own_sets:
+            continue
+        mtime = path.stat().st_mtime_ns
+        if image_set not in newest or mtime > newest[image_set][0]:
+            newest[image_set] = (mtime, path)
+    return [path for _, path in newest.values()]
 
 
 def records_for(root: Path, head: str) -> list[dict[str, object]]:
