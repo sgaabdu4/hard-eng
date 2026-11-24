@@ -330,15 +330,15 @@ def _local_look_problem(
 
 
 def _active_plan_texts(root: Path, base: str | None, changed: set[str]) -> list[str]:
-    from change_size import judged_plans
+    from change_size import judged_plans, unedited_plans
     from plan_parent import named_parents
     from plans import plan_status
 
     _, _, applicable = judged_plans(root, base, changed)
+    names = {str(path.relative_to(root)) for path in applicable if path.is_file()}
     texts = {
-        str(path.relative_to(root)): path.read_text()
-        for path in applicable
-        if path.is_file()
+        name: (root / name).read_text()
+        for name in sorted(names - unedited_plans(root, base, names))
     }
     parents = named_parents(texts)
     return [

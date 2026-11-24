@@ -354,12 +354,44 @@ REF_CONNECTORS = re.compile(
 )
 
 
+LEADING_BULLET = re.compile(r"^\s*[-*+]\s+")
+LEADING_NUMBER = re.compile(r"^\s*(\d+)[.)]\s+")
+THEMATIC_BREAK = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
+TABLE_RULE = re.compile(r"^:?-+:?$")
+ESCAPED = re.compile(r"\\([\\`*_{}\[\]()#+\-.!|])")
+
+
+def _words(text: str) -> list[str]:
+    """The words of one run of text without the backslashes, and without the `*` and `_` that a formatter moves round a word."""
+    found = []
+    for word in text.split():
+        word = ESCAPED.sub(r"\1", word)
+        if "`" not in word:
+            word = word.strip("*_") or word.strip()
+        if word:
+            found.append(word)
+    return found
+
+
+def _line_words(line: str) -> list[str]:
+    if THEMATIC_BREAK.match(line):
+        return ["---"]
+    if line.lstrip().startswith("|"):
+        found = ["|"]
+        for cell in line.strip().strip("|").split("|"):
+            found += ["---"] if TABLE_RULE.match(cell.strip()) else _words(cell)
+            found.append("|")
+        return found
+    if LEADING_BULLET.match(line):
+        return ["-", *_words(LEADING_BULLET.sub("", line, 1))]
+    if numbered := LEADING_NUMBER.match(line):
+        return [f"{numbered[1]}.", *_words(LEADING_NUMBER.sub("", line, 1))]
+    return _words(line)
+
+
 def plan_words(text: str) -> list[str]:
-    """The words of a plan; every table rule counts as one form."""
-    return [
-        "---" if word.count("-") > 2 and not word.strip("-:") else word
-        for word in text.split()
-    ]
+    """The words of a plan, the same after a formatter rewraps lines, moves list markers, emphasis marks and escapes, pads a table or redraws its rules."""
+    return [word for line in text.splitlines() for word in _line_words(line)]
 
 
 def normalize_acceptance_line(line: str) -> str:
@@ -512,6 +544,26 @@ def reformatted_plans(root: Path, base: str | None, changed: set[str]) -> set[st
             for reference in references
         )
         or verified_test_ref_repair(root, references, name, changed)
+    }
+
+
+def unedited_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
+    """Changed plan paths whose words equal those that the base and the branch point hold: a formatter wrote them, not a person."""
+    names = [
+        name for name in changed if is_plan_path(Path(name)) and (root / name).is_file()
+    ]
+    references = {
+        reference
+        for reference in (base or "HEAD", default_branch_point(root))
+        if reference
+    }
+    return {
+        name
+        for name in names
+        if all(
+            held_words(root, reference, name) == plan_words((root / name).read_text())
+            for reference in references
+        )
     }
 
 
