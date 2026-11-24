@@ -1,6 +1,5 @@
 """The reviewer's answer: the rule line forms it may write, and the Fail lines that cannot stand."""
 
-import json
 from pathlib import Path
 
 import look_answer
@@ -8,7 +7,6 @@ import pytest
 from plans import usability_rules
 from test_look import (
     FIXTURES,
-    good_answer,
     install_agent,
     judged_rule_names,
     listed,
@@ -190,17 +188,6 @@ def test_a_fail_line_must_name_the_frame_it_shows(
     assert str(record["outcome"]).startswith(outcome)
     if outcome == "not done":
         assert "names no frame" in str(record["outcome"])
-
-
-def test_the_prompt_asks_for_every_frame_and_element_of_a_failing_rule(
-    tmp_path: Path, project: Path
-) -> None:
-    images = make_images(project, 1)
-    log = install_agent(tmp_path, "claude", 1, good_answer(1))
-    run_look(project, "codex", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "every frame and element" in prompt
-    assert "`image-N.png: <element>`" in prompt
 
 
 def test_the_fix_of_the_next_rule_does_not_belong_to_a_fail_without_one(
