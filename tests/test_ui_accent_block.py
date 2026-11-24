@@ -81,3 +81,29 @@ def test_accent_colours_around_a_button_group_still_count(
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
         assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
+
+
+def ink_at_two_strengths(ink: str, faded: str) -> str:
+    return screen(
+        f"<div><p style='margin:0;color:{ink}'>Rent due</p>"
+        f"<p style='margin:0;font:700 24px sans-serif;color:{faded}'>Unit 4 status</p>"
+        f"{pair('#00b', 'transparent')}</div>"
+    )
+
+
+def test_one_ink_at_two_strengths_counts_as_one_colour(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(tmp_path, ink_at_two_strengths("rgb(160, 59, 38)", "rgba(160, 59, 38, 0.7)"))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
+
+
+def test_two_different_inks_still_count_as_two_colours(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(tmp_path, ink_at_two_strengths("#2b1b17", "#5a3a10"))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
