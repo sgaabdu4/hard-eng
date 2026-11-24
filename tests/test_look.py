@@ -443,7 +443,12 @@ def test_look_reads_a_real_claude_answer() -> None:
     import look
 
     answer = (FIXTURES / "claude-answer.txt").read_text()
-    outcome, rules, details = look.judge(answer, ["image-1.png"], {"image-1.png": True})
+    read = {"image-1.png": True}
+    assert look.judge(answer, ["image-1.png"], read)[0].startswith(
+        "not done: a Fail line names no frame"
+    )
+    framed = answer.replace("Fail — ", "Fail — image-1.png: ")
+    outcome, rules, details = look.judge(framed, ["image-1.png"], read)
     assert outcome == "findings"
     assert len(rules) == len(judged_rule_names())
     assert "image-1.png" in details
@@ -538,7 +543,7 @@ ZERO = "its own count says 0 removed"
             ZERO,
         ),
         (
-            "No clutter: Fail — kept 34, removed 2. Fix: merge the badges",
+            "No clutter: Fail — image-1.png: kept 34, removed 2. Fix: merge the badges",
             "findings",
             "",
         ),
@@ -563,23 +568,23 @@ ZERO = "its own count says 0 removed"
             ZERO,
         ),
         (
-            "No clutter: Fail — too many labels. Fix: merge the badges (kept 15 / 19 / 74, removed 0 / 0 / 5)",
+            "No clutter: Fail — image-1.png: too many labels. Fix: merge the badges (kept 15 / 19 / 74, removed 0 / 0 / 5)",
             "findings",
             "",
         ),
         (
-            "No clutter (kept 15 / 19 / 74, removed 0 / 0 / 5): Fail — too many labels. Fix: merge the badges",
+            "No clutter (kept 15 / 19 / 74, removed 0 / 0 / 5): Fail — image-1.png: too many labels. Fix: merge the badges",
             "findings",
             "",
         ),
         (
-            "No clutter: Fail — too many labels. Fix: merge the badges (kept 15 / 19, removed 0 / 3)",
+            "No clutter: Fail — image-1.png: too many labels. Fix: merge the badges (kept 15 / 19, removed 0 / 3)",
             "findings",
             "",
         ),
         ("Design system: Fail — There are three problems.", "not done", "Fix:"),
         ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
-        ("Design system: Fail — A new colour. Fix: use the token.", "findings", ""),
+        ("Design system: Fail — image-1.png: A new colour. Fix: use the token.", "findings", ""),
     ],
 )
 def test_a_fail_line_that_cannot_stand_is_refused(
@@ -634,6 +639,38 @@ def test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole(
     if outcome == "findings":
         text = " ".join(str(line) for line in listed(record, "rules"))
         assert "Fix: merge the badge" in text
+
+
+@pytest.mark.parametrize(
+    ("line", "outcome"),
+    [
+        ("Design system: Fail — a new colour. Fix: use the token.", "not done"),
+        ("Design system: Fail — image-9.png: a new colour. Fix: use it.", "not done"),
+        ("Design system: Fail — image-1.png: a colour. Fix: use it.", "findings"),
+        (
+            "Design system: Fail — image-1.png: a colour; image-2.png: a size. Fix: use it.",
+            "findings",
+        ),
+    ],
+)
+def test_a_fail_line_must_name_the_frame_it_shows(
+    tmp_path: Path, project: Path, line: str, outcome: str
+) -> None:
+    record = look_with_line(tmp_path, project, line, outcome)
+    assert str(record["outcome"]).startswith(outcome)
+    if outcome == "not done":
+        assert "names no frame" in str(record["outcome"])
+
+
+def test_the_prompt_asks_for_every_frame_and_element_of_a_failing_rule(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "every frame and element" in prompt
+    assert "`image-N.png: <element>`" in prompt
 
 
 def test_the_fix_of_the_next_rule_does_not_belong_to_a_fail_without_one(

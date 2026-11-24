@@ -167,7 +167,7 @@ def test_a_carried_record_reads_the_browser_records_of_the_evidence_checkout(
 
 def findings_answer(images: int, rule: str, text: str) -> str:
     rules = [
-        f"- {name}: {f'Fail — {text} Fix: change it.' if name == rule else 'Pass — looked at it'}"
+        f"- {name}: {f'Fail — image-1.png: {text} Fix: change it.' if name == rule else 'Pass — looked at it'}"
         for name, _ in usability_rules()
     ]
     details = [f"Image image-{n}.png: a card" for n in range(1, images + 1)]
@@ -247,32 +247,87 @@ def test_the_prompt_lists_an_earlier_fail_without_calling_it_fixed(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "image-1.png: Alignment: Fail — merge badge and meta into one line" in prompt
+    assert "Alignment: Fail — image-1.png: merge badge and meta into one line" in prompt
     assert "earlier look findings" in prompt.lower()
     assert "fixed" not in prompt.lower()
     assert "never ask to undo an earlier fix" in prompt.lower()
 
 
-@pytest.mark.parametrize("digest_kept", [True, False])
-def test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed(
-    tmp_path: Path, project: Path, *, digest_kept: bool
-) -> None:
-    import look
+def answer_with_rechecks(fails: dict[str, str], rechecks: list[str]) -> str:
+    rules = [
+        f"- {name}: {f'Fail — {fails[name]} Fix: change it.' if name in fails else 'Pass — looked at it'}"
+        for name, _ in usability_rules()
+    ]
+    verdict = "findings" if fails else "clean"
+    detail = "Image image-1.png: a card"
+    return "\n".join([*rules, detail, *rechecks, f"VERDICT: {verdict}"])
 
+
+@pytest.mark.parametrize("edit", ["image bytes", "design", "nothing"])
+def test_each_earlier_fail_is_listed_for_a_recheck_and_never_called_fixed(
+    tmp_path: Path, project: Path, edit: str
+) -> None:
     images = a_look_that_found_the_badge_fault(tmp_path, project)
-    if not digest_kept:
-        head = git(project, "rev-parse", "HEAD").strip()
-        path = look.record_path(
-            project, head, [hashlib.sha256(images[0].read_bytes()).hexdigest()]
-        )
-        record = json.loads(path.read_text())
-        del record["images"][0]["sha256"]
-        path.write_text(json.dumps(record))
-    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
-    commit(project, "unrelated change")
+    if edit == "image bytes":
+        images[0].write_bytes(PNG + b"badge and meta on one line")
+    if edit == "design":
+        (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    (project / "notes.txt").write_text(f"change: {edit}\n")
+    commit(project, f"change: {edit}")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    assert "fixed at" not in " ".join(json.loads(log.read_text())["argv"])
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "R1: Alignment: Fail — image-1.png: merge badge and meta" in prompt
+    assert "(frames: image-1.png)" in prompt
+    assert "fixed" not in prompt.lower()
+
+
+@pytest.mark.parametrize(
+    ("lines", "alignment", "outcome", "reason"),
+    [
+        ([], "Pass", "not done", "skipped Recheck R1"),
+        (["Recheck R1: gone. image-1.png: the badge sits in the title"], "Pass", "clean", ""),
+        (["Recheck R1: gone."], "Pass", "not done", "names no frame"),
+        (["Recheck R1: gone. image-7.png: x"], "Pass", "not done", "names no frame"),
+        (["Recheck R1: still shown. image-1.png: badge"], "Pass", "not done", "not a Fail"),
+        (["Recheck R1: still shown. image-1.png: badge"], "Fail", "findings", ""),
+        (["Recheck R1: maybe. image-1.png: badge"], "Pass", "not done", "skipped Recheck R1"),
+    ],
+)
+def test_each_earlier_fail_is_rechecked_one_by_one(
+    tmp_path: Path,
+    project: Path,
+    lines: list[str],
+    alignment: str,
+    outcome: str,
+    reason: str,
+) -> None:
+    images = a_look_that_found_the_badge_fault(tmp_path, project)
+    (project / "notes.txt").write_text("a change\n")
+    commit(project, "a change")
+    fails = {"Alignment": "image-1.png: badge and meta apart"} if alignment == "Fail" else {}
+    install_agent(tmp_path, "claude", 1, answer_with_rechecks(fails, lines))
+    record = run_look(project, "claude", images)
+    assert str(record["outcome"]).startswith(outcome)
+    assert reason in str(record["outcome"])
+    if outcome != "not done":
+        assert record["rechecks"] == [line.replace("Recheck ", "") for line in lines]
+
+
+def test_a_later_clean_verdict_ends_the_recheck_list(
+    tmp_path: Path, project: Path
+) -> None:
+    images = a_look_that_found_the_badge_fault(tmp_path, project)
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    commit(project, "design")
+    gone = ["Recheck R1: gone. image-1.png: merged"]
+    install_agent(tmp_path, "claude", 1, answer_with_rechecks({}, gone))
+    assert run_look(project, "claude", images)["outcome"] == "clean"
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand green.\n")
+    commit(project, "design again")
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    assert "earlier look findings" not in " ".join(json.loads(log.read_text())["argv"]).lower()
 
 
 def test_a_run_that_holds_back_images_tells_the_reviewer_and_all_forces_a_full_review(
