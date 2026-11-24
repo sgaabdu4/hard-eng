@@ -195,7 +195,9 @@ UNCHANGED = "N/A — unchanged: ![Before](a.png) ![After](a.png) — Home screen
 def pair(parent_line: str = f"Parent: {PARENT}") -> dict[str, str]:
     reference = "\n\n## ux_reference\n{}\n\n## Verification\n"
     return {
-        PARENT: "# Effort\nStatus: Ready" + reference.format(MOCK),
+        PARENT: "# Effort\nStatus: Ready"
+        + reference.format(MOCK)
+        + "Owners: src/App.tsx\n",
         CHILD: f"# Step\nStatus: Complete\n{parent_line}" + reference.format(UNCHANGED),
     }
 
@@ -211,7 +213,6 @@ def test_the_pr_text_check_skips_a_parent_plan_beside_its_step(
         is None
     )
     unlinked = pair("Parent: features/other/PLAN.md")
-    unlinked[PARENT] += "Owners: src/App.tsx\n"
     assert "ux_reference says N/A" in str(
         pr_problem(tmp_path / "c", monkeypatch, unlinked)
     )
