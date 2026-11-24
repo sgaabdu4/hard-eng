@@ -52,6 +52,12 @@ for image in sorted(here.glob("image-*.png"))[: {reads}]:
 """
 
 
+def judged_rule_names() -> list[str]:
+    from ui_measure import PROOF_KINDS
+
+    return [name for name, _ in usability_rules() if "judgement" in PROOF_KINDS[name]]
+
+
 def good_answer(images: int) -> str:
     rules = [f"- {name}: Pass — looked at it" for name, _ in usability_rules()]
     details = [
@@ -87,8 +93,7 @@ def install_agent(tmp_path: Path, name: str, reads: int, answer: str) -> Path:
     return log
 
 
-@pytest.fixture
-def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def look_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "project"
     init(root)
     (root / "README.md").write_text("project\n")
@@ -105,6 +110,9 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CLAUDECODE", raising=False)
     monkeypatch.delenv("ANTIGRAVITY_AGENT", raising=False)
     return root
+
+
+project = pytest.fixture(look_project)
 
 
 def make_images(root: Path, count: int) -> list[Path]:
@@ -180,7 +188,7 @@ def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) 
     assert seen["files"] == ["image-1.png", "image-2.png"]
     for forbidden in (str(project), "PLAN", "diff", "Pass line", "after-0", "builder"):
         assert forbidden not in prompt, forbidden
-    assert all(name in prompt for name, _ in usability_rules())
+    assert all(name in prompt for name in judged_rule_names())
     assert project.name not in seen["cwd"]
 
 
@@ -267,7 +275,7 @@ def test_review_text_names_the_look_command() -> None:
 def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
     tmp_path: Path, project: Path
 ) -> None:
-    import look
+    import look_records
 
     images = make_images(project, 2)
     install_agent(tmp_path, "codex", 1, good_answer(1))
@@ -276,11 +284,11 @@ def test_a_second_look_run_at_the_same_commit_keeps_the_first_record(
     second = run_look(project, "claude", images[1:])
     assert first["images"] != second["images"]
     head = git(project, "rev-parse", "HEAD").strip()
-    assert len(look.records_for(project, head)) == 2
+    assert len(look_records.records_for(project, head)) == 2
     first_hash = hashlib.sha256(images[0].read_bytes()).hexdigest()
     assert any(
         item["sha256"] == first_hash
-        for record in look.records_for(project, head)
+        for record in look_records.records_for(project, head)
         for item in listed(record, "images")
     )
 
@@ -306,6 +314,47 @@ def test_look_reads_the_rule_lines_and_image_lines_a_reviewer_actually_writes(
     assert record["outcome"] == "clean", record["outcome"]
     assert len(listed(record, "images")) == 1
     assert "image-1.png" in cast(dict[str, str], record["details"])
+
+
+@pytest.mark.parametrize("separator", [". ", " - ", " — "])
+def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
+    separator: str,
+) -> None:
+    import look
+
+    names = judged_rule_names()
+    image = ["Image image-1.png: a card with a title", "VERDICT: clean"]
+    read = {"image-1.png": True}
+
+    def rule_lines(answer: list[str]) -> tuple[str, list[str]]:
+        outcome, rules, _ = look.judge("\n".join(answer), ["image-1.png"], read)
+        return outcome, rules
+
+    given = [f"- {name}: Pass{separator}looked at it" for name in names]
+    assert rule_lines([*given, *image]) == (
+        "clean",
+        [f"{name}: Pass — looked at it" for name in names],
+    )
+    for broken in (f"- {names[0]}: looked at it", f"- {names[0]}: Pass."):
+        outcome, rules = rule_lines([broken, *given[1:], *image])
+        assert outcome.startswith("not done"), broken
+        assert rules == []
+
+
+def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None:
+    _, _, prompt = first_prompt(tmp_path, project)
+    form = prompt.partition("\n\nRules:")[0]
+    assert "`- <rule>: Pass|Fail|N/A. <what you saw>`" in form
+    assert "—" not in form
+
+
+def test_the_plan_scope_refuses_a_verdict_in_the_plain_form_too() -> None:
+    import look
+
+    with pytest.raises(ValueError, match="reviewer verdicts"):
+        look.extract_outcome_scope(
+            full_plan("A card.\n\nNo clutter: Pass. 31 kept"), "plan"
+        )
 
 
 def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
@@ -386,8 +435,15 @@ def test_look_reads_a_real_claude_answer() -> None:
     answer = (FIXTURES / "claude-answer.txt").read_text()
     outcome, rules, details = look.judge(answer, ["image-1.png"], {"image-1.png": True})
     assert outcome == "findings"
-    assert len(rules) == len(usability_rules())
+    assert len(rules) == len(judged_rule_names())
     assert "image-1.png" in details
+
+
+def first_prompt(tmp_path: Path, project: Path) -> tuple[list[Path], Path, str]:
+    images = make_images(project, 2)
+    log = install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "codex", images)
+    return images, log, " ".join(json.loads(log.read_text())["argv"])
 
 
 def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
@@ -395,10 +451,7 @@ def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
 ) -> None:
     import ui_measure
 
-    images = make_images(project, 2)
-    log = install_agent(tmp_path, "claude", 2, good_answer(2))
-    run_look(project, "codex", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    images, log, prompt = first_prompt(tmp_path, project)
     assert "--ring" not in prompt
     assert "3px solid red" not in prompt
     assert "0 removed" in prompt
@@ -427,6 +480,38 @@ def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
     images[0].write_bytes(PNG + b"edited-after-capture")
     run_look(project, "codex", images)
     assert "--ring" not in " ".join(json.loads(log.read_text())["argv"])
+
+
+@pytest.mark.parametrize(
+    ("line", "outcome", "reason"),
+    [
+        ("Design system: Fail — There are three problems.", "not done", "Fix:"),
+        ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
+        ("Design system: Fail — A new colour. Fix: use the token.", "findings", ""),
+    ],
+)
+def test_a_fail_line_that_cannot_stand_is_refused(
+    tmp_path: Path, project: Path, line: str, outcome: str, reason: str
+) -> None:
+    record = look_with_line(tmp_path, project, line, outcome)
+    assert str(record["outcome"]).startswith(outcome)
+    assert reason in str(record["outcome"])
+
+
+def look_with_line(
+    tmp_path: Path, project: Path, line: str, outcome: str
+) -> dict[str, object]:
+    """A run whose reviewer gives `line` for its rule and Pass for every other rule."""
+    images = make_images(project, 1)
+    rule = line.partition(":")[0].partition(" (")[0]
+    rules = [
+        line if name == rule else f"- {name}: Pass — looked at it"
+        for name, _ in usability_rules()
+    ]
+    verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
+    answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
+    install_agent(tmp_path, "claude", 1, answer)
+    return run_look(project, "codex", images)
 
 
 def full_plan(

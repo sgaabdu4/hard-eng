@@ -10,6 +10,7 @@ LIMITS = {
     "text_px": 11,
     "control_px": 44,
     "link_px": 24,
+    "desktop_px": 1280,
     "accent_colours": 2,
     "secondary_words": 20,
     "frame_ratio": 1.1,
@@ -99,10 +100,26 @@ for (const el of texts) {
   const px = parseFloat(getComputedStyle(el).fontSize);
   if (px < LIMITS.text_px) found.push({ rule: "text-size", at: name(el), px });
 }
+const isLink = (el) => el.tagName === "A" || el.getAttribute("role") === "link";
+const inSentence = (el) => {
+  if (getComputedStyle(el).display !== "inline") return false;
+  let block = el.parentElement;
+  while (block && getComputedStyle(block).display === "inline") block = block.parentElement;
+  if (!block) return false;
+  const sameLine = (n) => { for (let p = n.parentElement; p && p !== block; p = p.parentElement) if (getComputedStyle(p).display !== "inline") return false; return true; };
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const host = n.parentElement;
+    if (host && !host.closest("a[href],[role=link]") && sameLine(n) && visible(host) && n.nodeValue.trim().length > 1) return true;
+  }
+  return false;
+};
 for (const el of controls) {
   const b = el.getBoundingClientRect();
-  const link = el.tagName === "A" || el.getAttribute("role") === "link";
-  if (!link && (b.width < LIMITS.control_px || b.height < LIMITS.control_px)) {
+  const link = isLink(el);
+  if (link && inSentence(el)) continue;
+  const floor = link && innerWidth >= LIMITS.desktop_px ? LIMITS.link_px : LIMITS.control_px;
+  if (b.width < floor || b.height < floor) {
     found.push({ rule: "tap-size", at: name(el), w: Math.round(b.width), h: Math.round(b.height) });
   }
 }

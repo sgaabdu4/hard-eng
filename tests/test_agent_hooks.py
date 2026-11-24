@@ -14,8 +14,8 @@ from typing import override
 from unittest.mock import Mock
 
 import agent_hooks
+import commit_attribution
 import gate_config
-import plans
 import process_group
 import pytest
 import update
@@ -897,15 +897,15 @@ def test_check_rejects_claude_attribution_when_settings_turn_it_off(
     base = git(repository, "rev-parse", "HEAD")
     trailer = "Change\n\nCo-Authored-By: Claude Opus <noreply@anthropic.com>"
     git(repository, "commit", "--allow-empty", "-qm", trailer)
-    plans.validate_attribution(repository, base)
+    commit_attribution.validate_attribution(repository, base)
     (repository / ".claude").mkdir()
     (repository / ".claude/settings.json").write_text(
         json.dumps({"attribution": {"commit": "", "pr": ""}})
     )
     clean = commit(repository, "Turn attribution off")
     with pytest.raises(ValueError, match="Co-Authored-By: Claude"):
-        plans.validate_attribution(repository, base)
-    plans.validate_attribution(repository, clean)
+        commit_attribution.validate_attribution(repository, base)
+    commit_attribution.validate_attribution(repository, clean)
     git(
         repository,
         "-c",
@@ -918,11 +918,11 @@ def test_check_rejects_claude_attribution_when_settings_turn_it_off(
         "Plain message",
     )
     with pytest.raises(ValueError, match="Claude author or committer"):
-        plans.validate_attribution(repository, clean)
+        commit_attribution.validate_attribution(repository, clean)
     with pytest.raises(ValueError, match="Claude"):
-        plans.validate_attribution(repository, "0" * 40)
+        commit_attribution.validate_attribution(repository, "0" * 40)
     with pytest.raises(ValueError, match="valid Git --base"):
-        plans.validate_attribution(repository, "1" * 40)
+        commit_attribution.validate_attribution(repository, "1" * 40)
 
 
 def test_attribution_check_allows_text_that_only_names_the_rule(
@@ -941,7 +941,7 @@ def test_attribution_check_allows_text_that_only_names_the_rule(
         "-qm",
         "x\n\nCo-authored-by: Ada <a@example.com>",
     )
-    plans.validate_attribution(repository, base)
+    commit_attribution.validate_attribution(repository, base)
     body = "Reject 'Generated with Claude Code' text and session_ links.\n"
     agent_hooks.reject_attribution(repository, "pr", body, "PR body")
 

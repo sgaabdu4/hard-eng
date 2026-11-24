@@ -222,6 +222,49 @@ def _finding_rules(record: Mapping[str, object]) -> str:
     )
 
 
+def _capture_stems(
+    records: list[dict[str, object]], digest: str, head: str
+) -> list[str]:
+    """The capture sets of the image with this digest: those taken at the head from a clean tree, or every set when none was."""
+    stems = list(
+        dict.fromkeys(_stem(item) for item in records if item["sha256"] == digest)
+    )
+    current = [
+        stem
+        for stem in stems
+        if any(
+            item.get("commit") == head and not item.get("dirty")
+            for item in records
+            if _stem(item) == stem
+        )
+    ]
+    return current or stems
+
+
+def measure_verdict(root: Path, head: str, digests: list[str]) -> tuple[str, str]:
+    """The verdict of the browser records of the head on the images with these digests: Fail with the findings, Pass with the widths measured, N/A when no image has a record."""
+    items = browser_record_files(root)
+    records = [record for _, record in items]
+    sets = {digest: _capture_stems(records, digest, head) for digest in digests}
+    found = [
+        (path, record)
+        for path, record in items
+        if _stem(record) in sets.get(str(record["sha256"]), [])
+    ]
+    if not found:
+        return "N/A", "no measure record for these images; `browser capture` writes one"
+    if failed := [record for _, record in found if record.get("findings")]:
+        return "Fail", "; ".join(
+            f"{record['image']} has findings ({_finding_rules(record)})"
+            for record in failed
+        ) + "; fix the screen and capture it again"
+    widths = sorted({int(str(record["width"])) for _, record in found})
+    seen = ", ".join(map(str, widths[:-1]))
+    where = f"{seen} and {widths[-1]}" if seen else str(widths[-1])
+    texts = b"".join(path.read_bytes() for path in sorted(path for path, _ in found))
+    return "Pass", f"0 findings at {where} (record {sha256(texts)[:12]})"
+
+
 def _unchanged_width_problem(
     by_image: Mapping[str, tuple[Path, dict[str, object]]],
     stems: list[str],
@@ -371,24 +414,13 @@ def measured_problem(
     by_image = {str(record["image"]): (path, record) for path, record in items}
     for data in after:
         digest = sha256(data)
-        stems = list(
-            dict.fromkeys(_stem(item) for item in records if item["sha256"] == digest)
-        )
+        stems = _capture_stems(records, digest, head)
         if not stems:
             return (
                 f"an After image (sha256 {digest[:12]}) matches no measured capture in .hard-eng/browser; "
                 "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
             )
-        current = [
-            stem
-            for stem in stems
-            if any(
-                item.get("commit") == head and not item.get("dirty")
-                for item in records
-                if _stem(item) == stem
-            )
-        ]
-        for stem in current or stems:
+        for stem in stems:
             problem, _ = capture_set_problem(by_image, stem, head, route)
             if problem:
                 return problem
@@ -497,9 +529,9 @@ def look_problem(
     plan_digest: str = "",
 ) -> str | None:
     """A clean look record for this head that covers each After image, and a PR block that matches it."""
-    import look
+    from look_records import records_for
 
-    records = look.records_for(root, head)
+    records = records_for(root, head)
     if not records:
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>` and paste its block into the PR body"
     problems = [
