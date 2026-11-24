@@ -2,6 +2,7 @@
 
 import json
 import re
+import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -297,3 +298,151 @@ def test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since(
     record = run_look(project, "codex", images)
     assert record["outcome"] == "clean"
     assert stored(record)["Widths"].startswith("Widths: Pass — measured: ")
+
+
+JUDGED_BY_CODE = [
+    ("competing-buttons", "Hierarchy"),
+    ("accent-colours", "Hierarchy"),
+    ("heading-hierarchy", "Hierarchy"),
+    ("duplicate-buttons", "No clutter"),
+    ("extra-text", "No clutter"),
+    ("field-control", "No clutter"),
+    ("shared-edge", "Alignment"),
+]
+
+
+@pytest.mark.parametrize(("finding", "rule"), JUDGED_BY_CODE)
+def test_a_measure_finding_fails_its_judged_rule_in_code(
+    tmp_path: Path, project: Path, finding: str, rule: str
+) -> None:
+    import ui_measure
+
+    images = make_images(project, 1)
+    ui_measure.write_record(
+        project, images[0], 1280, [{"rule": finding, "at": "Save"}], "/kpi"
+    )
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "codex", images)
+    assert record["outcome"] == "findings"
+    found = OWNER_LINE.fullmatch(stored(record)[rule])
+    assert found
+    assert (found[2], found[3]) == ("Fail", "measured")
+    assert finding in found[4]
+    for other in (name for name in BOTH if name != rule):
+        assert "looked at it" in stored(record)[other]
+
+
+def test_a_finding_that_no_judged_rule_owns_leaves_those_rules_to_the_reviewer(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    images = make_images(project, 1)
+    ui_measure.write_record(
+        project, images[0], 1280, [{"rule": "wrapped-label", "at": "Save"}], "/kpi"
+    )
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "codex", images)
+    for name in BOTH:
+        assert "looked at it" in stored(record)[name]
+
+
+def test_a_code_pass_never_erases_a_reviewer_fail(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    images = make_images(project, 1)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi")
+    answer = good_answer(1).replace(
+        "- Hierarchy: Pass — looked at it",
+        "- Hierarchy: Fail — image-1.png: two loud buttons. Fix: quiet one.",
+    )
+    install_agent(tmp_path, "claude", 1, answer)
+    record = run_look(project, "codex", images)
+    assert record["outcome"] == "findings"
+    assert stored(record)["Hierarchy"].startswith("Hierarchy: Fail — image-1.png: two")
+
+
+TOKENS = (
+    "---\nrounded:\n  sm: 4px\n  md: 8px\n"
+    "typography:\n  body:\n    fontSize: 14px\n  title:\n    fontSize: 1.25rem\n---\n"
+    "# Design\n\n## Overview\nPlain.\n"
+)
+SIZES = {"controls": [], "text_px": [14, 20, 13]}
+RADII = [
+    {"at": "card", "px": 8, "clamped": False},
+    {"at": "badge", "px": 7, "clamped": False},
+    {"at": "pill", "px": 11, "clamped": True},
+    {"at": "old", "px": 5},
+]
+
+
+def look_against_tokens(
+    tmp_path: Path, project: Path, design: str, values: dict[str, object]
+) -> dict[str, object]:
+    import ui_measure
+
+    (project / "DESIGN.md").write_text(design)
+    commit(project, "design")
+    images = make_images(project, 1)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    return run_look(project, "codex", images)
+
+
+def test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code(
+    tmp_path: Path, project: Path
+) -> None:
+    record = look_against_tokens(
+        tmp_path, project, TOKENS, {"sizes": SIZES, "radii": RADII}
+    )
+    assert record["outcome"] == "findings"
+    found = OWNER_LINE.fullmatch(stored(record)["Design system"])
+    assert found
+    assert (found[2], found[3]) == ("Fail", "measured")
+    assert "text size 13 px" in found[4]
+    assert "corner radius 7 px" in found[4]
+    for held in ("text size 14", "text size 20", "radius 8", "radius 11", "radius 5"):
+        assert held not in found[4]
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["all held", "no token group", "no measured values", "old record only", "no PyYAML"],
+)
+def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_reviewer(
+    tmp_path: Path, project: Path, case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    design = TOKENS
+    values: dict[str, object] = {
+        "sizes": {"controls": [], "text_px": [14, 20]},
+        "radii": [{"at": "card", "px": 8, "clamped": False}],
+    }
+    if case == "no token group":
+        design = "---\ncolors:\n  ink: '#111111'\n---\n# Design\n\n## Overview\nPlain.\n"
+        values = {"sizes": SIZES, "radii": RADII}
+    if case == "no measured values":
+        values = {"contrast": []}
+    if case == "old record only":
+        values = {"sizes": {"controls": [], "text_px": [14]}, "radii": [{"at": "x", "px": 7}]}
+    if case == "no PyYAML":
+        monkeypatch.setitem(sys.modules, "yaml", None)
+        values = {"sizes": SIZES, "radii": RADII}
+    record = look_against_tokens(tmp_path, project, design, values)
+    assert record["outcome"] == "clean"
+    assert "looked at it" in stored(record)["Design system"]
+
+
+def test_the_prompt_says_that_code_decides_the_measured_rules(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    images = make_images(project, 1)
+    ui_measure.write_record(
+        project, images[0], 1280, [], "/kpi", measured={"radii": [{"at": "Go", "px": 6}]}
+    )
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    assert "Code already decides the measure findings" in prompt_of(log)
