@@ -234,3 +234,21 @@ def test_a_finding_of_an_image_that_has_not_changed_is_not_called_fixed(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
     assert "fixed at" not in " ".join(json.loads(log.read_text())["argv"])
+
+
+def test_a_run_that_holds_back_images_tells_the_reviewer_and_all_forces_a_full_review(
+    tmp_path: Path, project: Path
+) -> None:
+    images, _ = two_images_with_a_clean_look_of_the_first(tmp_path, project)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "holds back 1 unchanged image" in prompt
+    assert "not shown" in prompt
+
+    (project / "notes.txt").write_text("another change\n")
+    commit(project, "another unrelated change")
+    log = install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "claude", images, extra=["--all"])
+    sent = [name for name in json.loads(log.read_text())["files"] if "image-" in name]
+    assert sent == ["image-1.png", "image-2.png"]
