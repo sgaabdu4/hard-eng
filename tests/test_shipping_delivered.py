@@ -183,3 +183,16 @@ def test_delivered_without_a_plan_still_passes_for_a_pr_that_changed_no_plan(
         files=[{"filename": "src/util.ts", "patch": "@@ -1 +1 @@\n-a\n+b"}],
     )
     assert shipping.verify(fixture.root, None, _PR_URL, "delivered").merged_sha
+
+
+def test_delivered_without_a_plan_passes_for_a_release_that_carries_plans(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _delivered_fake(
+        tmp_path,
+        monkeypatch,
+        [_run_of(_PUSH_SUITE, 1, "success")],
+        release=True,
+        files=[_PLAN_FILE],
+    )
+    assert shipping.verify(fixture.root, None, _PR_URL, "delivered").merged_sha
