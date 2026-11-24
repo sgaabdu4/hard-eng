@@ -474,6 +474,38 @@ def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
     assert "--ring" not in " ".join(json.loads(log.read_text())["argv"])
 
 
+@pytest.mark.parametrize(
+    ("line", "outcome", "reason"),
+    [
+        ("Design system: Fail — There are three problems.", "not done", "Fix:"),
+        ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
+        ("Design system: Fail — A new colour. Fix: use the token.", "findings", ""),
+    ],
+)
+def test_a_fail_line_that_cannot_stand_is_refused(
+    tmp_path: Path, project: Path, line: str, outcome: str, reason: str
+) -> None:
+    record = look_with_line(tmp_path, project, line, outcome)
+    assert str(record["outcome"]).startswith(outcome)
+    assert reason in str(record["outcome"])
+
+
+def look_with_line(
+    tmp_path: Path, project: Path, line: str, outcome: str
+) -> dict[str, object]:
+    """A run whose reviewer gives `line` for its rule and Pass for every other rule."""
+    images = make_images(project, 1)
+    rule = line.partition(":")[0].partition(" (")[0]
+    rules = [
+        line if name == rule else f"- {name}: Pass — looked at it"
+        for name, _ in usability_rules()
+    ]
+    verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
+    answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
+    install_agent(tmp_path, "claude", 1, answer)
+    return run_look(project, "codex", images)
+
+
 def full_plan(
     scope: str,
     ux: str = "Surface: Existing — /kpi, rendered by app\nRules:\n- No clutter: Pass — builder secret claim",
