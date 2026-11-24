@@ -643,6 +643,13 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     return status
 
 
+def line_references(line: str) -> list[tuple[str, str]]:
+    """The `path::test` names in the text of one checkbox line, without a `[case]` suffix."""
+    return [
+        (path, name.split("[", 1)[0]) for path, name in TEST_REFERENCE.findall(line)
+    ]
+
+
 def acceptance_tests(
     sections: dict[str, str],
 ) -> tuple[list[tuple[str, str]], set[str]]:
@@ -652,14 +659,14 @@ def acceptance_tests(
     references: list[tuple[str, str]] = []
     requirements: set[str] = set()
     for line in CHECKBOX_REST.findall(sections["Acceptance + steps"]):
-        found = TEST_REFERENCE.findall(line)
+        found = line_references(line)
         named = set(REQUIREMENT_ID.findall(line))
         if not found and not named and not NOT_APPLICABLE_PROOF.search(line):
             raise ValueError(
                 "Acceptance + steps line needs a `path::test name` reference, "
                 f"a requirement ID or N/A — reason:{line[:80]}"
             )
-        references.extend((path, name.split("[", 1)[0]) for path, name in found)
+        references.extend(found)
         requirements |= named
     return references, requirements
 
