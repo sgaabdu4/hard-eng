@@ -52,6 +52,12 @@ for image in sorted(here.glob("image-*.png"))[: {reads}]:
 """
 
 
+def judged_rule_names() -> list[str]:
+    from ui_measure import PROOF_KINDS
+
+    return [name for name, _ in usability_rules() if "judgement" in PROOF_KINDS[name]]
+
+
 def good_answer(images: int) -> str:
     rules = [f"- {name}: Pass — looked at it" for name, _ in usability_rules()]
     details = [
@@ -182,7 +188,7 @@ def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) 
     assert seen["files"] == ["image-1.png", "image-2.png"]
     for forbidden in (str(project), "PLAN", "diff", "Pass line", "after-0", "builder"):
         assert forbidden not in prompt, forbidden
-    assert all(name in prompt for name, _ in usability_rules())
+    assert all(name in prompt for name in judged_rule_names())
     assert project.name not in seen["cwd"]
 
 
@@ -316,7 +322,7 @@ def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
 ) -> None:
     import look
 
-    names = [name for name, _ in usability_rules()]
+    names = judged_rule_names()
     image = ["Image image-1.png: a card with a title", "VERDICT: clean"]
     read = {"image-1.png": True}
 
@@ -429,7 +435,7 @@ def test_look_reads_a_real_claude_answer() -> None:
     answer = (FIXTURES / "claude-answer.txt").read_text()
     outcome, rules, details = look.judge(answer, ["image-1.png"], {"image-1.png": True})
     assert outcome == "findings"
-    assert len(rules) == len(usability_rules())
+    assert len(rules) == len(judged_rule_names())
     assert "image-1.png" in details
 
 

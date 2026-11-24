@@ -232,12 +232,35 @@ def clean_line(line: str) -> str:
     return f"{plain[1]}: {plain[2]} — {plain[3]}" if plain else text
 
 
+def judged_names(unmeasured: bool = False) -> list[str]:
+    """The Usability rules with the judgement kind: the rules that the reviewer decides. An image with no measure record has no owner for a `measured` rule, so then the reviewer decides that rule too."""
+    from ui_measure import PROOF_KINDS
+
+    return [
+        name
+        for name, _ in usability_rules()
+        if "judgement" in PROOF_KINDS[name]
+        or (unmeasured and "measured" in PROOF_KINDS[name])
+    ]
+
+
+def judged_lines(unmeasured: bool = False) -> list[str]:
+    """The rule lines of the rules that the reviewer decides."""
+    wanted = set(judged_names(unmeasured))
+    return [
+        line
+        for line, (name, _) in zip(usability_lines(), usability_rules(), strict=True)
+        if name in wanted
+    ]
+
+
 def judge(
     answer: str,
     names: list[str],
     read: dict[str, bool],
     *,
     require_design: bool = False,
+    unmeasured: bool = False,
 ) -> tuple[str, list[str], dict[str, str]]:
     """The outcome, the rule lines and the image details of the reviewer's answer."""
     if unread := [name for name in names if not read[name]]:
@@ -245,7 +268,7 @@ def judge(
     lines = [clean_line(line) for line in answer.strip().splitlines()]
     if not lines or lines[-1] not in VERDICTS:
         return "not done: the reviewer gave no exact VERDICT line", [], {}
-    wanted = [name for name, _ in usability_rules()]
+    wanted = judged_names(unmeasured)
     found = {
         split_rule_line(line)[0]: line
         for line in lines
@@ -424,8 +447,8 @@ def committed_plan_blob(root: Path, rev: str, rel: str) -> bytes | None:
     return shown.stdout
 
 
-def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, str]:
-    """Committed repository-relative path, bounded Outcome + scope text, and SHA-256 of a plan."""
+def committed_plan(root: Path, plan: Path, head: str) -> tuple[str, bytes]:
+    """The repository-relative path and the committed bytes of a plan."""
     candidate = plan if plan.is_absolute() else root / plan
     if candidate.is_symlink():
         raise ValueError(f"look: --plan must not be a symlink: {plan}")
@@ -448,10 +471,31 @@ def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, st
         raise ValueError(
             f"look: {rel_posix} must be committed at HEAD without uncommitted edits before look --plan"
         )
-    scope = extract_outcome_scope(
-        committed.decode("utf-8", errors="replace"), rel_posix
-    )
-    return rel_posix, bound_utf8(scope, MAX_SCOPE_BYTES), sha256(committed)
+    return rel_posix, committed
+
+
+def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, str]:
+    """Committed repository-relative path, bounded Outcome + scope text, and SHA-256 of a plan."""
+    rel, committed = committed_plan(root, plan, head)
+    scope = extract_outcome_scope(committed.decode("utf-8", errors="replace"), rel)
+    return rel, bound_utf8(scope, MAX_SCOPE_BYTES), sha256(committed)
+
+
+def plan_rules(root: Path, plan: Path, head: str) -> dict[str, tuple[str, str]]:
+    """The verdict and text of each Rules line in the committed plan's ux_reference."""
+    from plans import rule_lines
+
+    rel, committed = committed_plan(root, plan, head)
+    text = committed.decode("utf-8", errors="replace").replace("\r\n", "\n")
+    try:
+        section = plan_sections(text, allow_placeholders=True)["ux_reference"]
+    except ValueError as error:
+        raise ValueError(f"look: {rel}: {error}") from error
+    found: dict[str, tuple[str, str]] = {}
+    for line in rule_lines(section):
+        label, verdict, detail, _ = split_rule_line(line)
+        found[label] = (verdict, detail)
+    return found
 
 
 def _valid_ring_box(box: object) -> dict[str, int] | None:
@@ -553,8 +597,9 @@ def prompt_for(
     ringed: dict[str, list[dict[str, int]]] | None = None,
     fixed: list[str] | None = None,
     held: int = 0,
+    unmeasured: bool = False,
 ) -> str:
-    rules = "\n".join(f"- {line}" for line in usability_lines())
+    rules = "\n".join(f"- {line}" for line in judged_lines(unmeasured))
     ring_parts = [
         f"{name}: "
         + ", ".join(f"(x={b['x']}, y={b['y']}, {b['w']}x{b['h']}px)" for b in boxes)
@@ -614,6 +659,7 @@ def review(
     design_digest: str = "",
     head: str = "",
     held: int = 0,
+    unmeasured: bool = False,
 ) -> dict[str, object]:
     from look_records import earlier_fixes, image_keys
 
@@ -640,7 +686,7 @@ def review(
         digests = [str(item["sha256"]) for item in listed]
         for item, key in zip(
             listed,
-            image_keys(root, scope, design, design_id, digests),
+            image_keys(root, scope, design, design_id, digests, unmeasured),
             strict=True,
         ):
             item["inputs"] = key
@@ -663,6 +709,7 @@ def review(
             ringed=image_inputs(root, names, digests),
             fixed=fixed,
             held=held,
+            unmeasured=unmeasured,
         )
         reviewer, fresh, result, problem, skipped = run_first_reviewer(
             host, folder, prompt, root
@@ -688,6 +735,7 @@ def review(
         names,
         {name: name in times for name in names},
         require_design=bool(design),
+        unmeasured=unmeasured,
     )
     if outcome.startswith("not done"):
         record["answer"] = answer
@@ -707,7 +755,13 @@ def record_path(root: Path, head: str, hashes: list[str]) -> Path:
 
 
 def look_command(root: Path, argv: list[str]) -> int:
-    from look_records import combined, covering_record, image_keys
+    from look_records import (
+        combined,
+        covering_record,
+        image_keys,
+        lacks_record,
+        with_owner_lines,
+    )
 
     parser = argparse.ArgumentParser(prog="hard-eng.py look")
     parser.add_argument("images", nargs="+")
@@ -731,7 +785,8 @@ def look_command(root: Path, argv: list[str]) -> int:
     )
     design, design_digest = design_text(root), design_hash(root)
     digests = [sha256(image.read_bytes()) for image in images]
-    keys = image_keys(root, scope, design, design_digest, digests)
+    lacking = lacks_record(root, digests)
+    keys = image_keys(root, scope, design, design_digest, digests, lacking)
     found = (
         None
         if args.all
@@ -749,6 +804,7 @@ def look_command(root: Path, argv: list[str]) -> int:
             design_digest=design_digest,
             head=head,
             held=len(images) - len(pending),
+            unmeasured=lacking,
         )
         if pending
         else None
@@ -758,6 +814,13 @@ def look_command(root: Path, argv: list[str]) -> int:
     if rel_plan:
         record["plan"] = rel_plan
         record["plan_sha256"] = plan_digest
+    with_owner_lines(
+        record,
+        root,
+        head,
+        digests,
+        plan_rules(root, Path(args.plan), head) if args.plan else None,
+    )
     hashes = [str(item["sha256"]) for item in listed_images(record)]
     path = record_path(root, head, hashes)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-"""The look records that back a head: its own, and the clean verdicts that carry from earlier heads one image at a time."""
+"""The look records that back a head: its own, the clean verdicts that carry from earlier heads one image at a time, and the owner-check line of each rule that the reviewer does not decide."""
 
 import json
 import subprocess
@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import cast
 
 from challenge import store
-from plans import split_rule_line
+from plans import split_rule_line, usability_rules
 
 STORE = "look"
 MAX_FIXED_LINES = 8
@@ -31,6 +31,7 @@ def image_keys(
     design: str,
     design_digest: str,
     digests: list[str],
+    unmeasured: bool,
 ) -> list[str]:
     """One key for each image: its bytes and ring boxes, the rules, the design documents and the plan scope that the reviewer reads."""
     import look
@@ -38,7 +39,12 @@ def image_keys(
     names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
     ringed = look.image_inputs(root, names, digests)
     shared = look.sha256(
-        json.dumps([look.prompt_for([], design, scope=scope), design_digest]).encode()
+        json.dumps(
+            [
+                look.prompt_for([], design, scope=scope, unmeasured=unmeasured),
+                design_digest,
+            ]
+        ).encode()
     )
     return [
         look.sha256(json.dumps([shared, digest, ringed.get(name, [])]).encode())
@@ -84,6 +90,7 @@ def carried_record(
         look.design_text(root),
         look.design_hash(root),
         [str(item["sha256"]) for item in entries],
+        lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
     )
     if keys != [item["inputs"] for item in entries]:
         return None
@@ -189,6 +196,7 @@ def earlier_fixes(
     root: Path, head: str, pairs: list[tuple[str, str, str]]
 ) -> list[str]:
     """The Fail lines of earlier findings on this branch for the same file names, when the image has changed since; each is marked as fixed at this head. `pairs` holds (prompt name, file name, digest)."""
+    prefixes = owner_prefixes()
     lines: dict[str, list[str]] = {}
     fresh = sorted(
         _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
@@ -211,8 +219,8 @@ def earlier_fixes(
             if _same(item.get("file"), file) and _changed(item.get("sha256"), digest)
         ]
         for line in cast(list[str], record.get("rules", [])):
-            _, verdict, _, _ = split_rule_line(line)
-            if names and verdict == "Fail":
+            _, verdict, text, _ = split_rule_line(line)
+            if names and verdict == "Fail" and not text.startswith(prefixes):
                 lines.setdefault(line, [])
                 lines[line] += [name for name in names if name not in lines[line]]
     return [
@@ -229,3 +237,67 @@ def _on_branch(root: Path, ancestor: str, head: str) -> bool:
         check=False,
     )
     return done.returncode == 0
+
+
+def owner_prefixes() -> tuple[str, ...]:
+    """The text starts that mark a line from an owner check, not from the reviewer."""
+    from ui_measure import PROOF_KINDS
+
+    kinds = {kind for found in PROOF_KINDS.values() for kind in found}
+    return tuple(f"{kind}:" for kind in sorted(kinds - {"judgement"}))
+
+
+def lacks_record(root: Path | None, digests: list[str]) -> bool:
+    """True when an image has no `.hard-eng/browser` measure record, as a mockup or a native screen has none."""
+    if root is None:
+        return True
+    from ui_proof import browser_record_files
+
+    recorded = {record["sha256"] for _, record in browser_record_files(root)}
+    return any(digest not in recorded for digest in digests)
+
+
+def owner_lines(
+    root: Path, head: str, digests: list[str], plan: dict[str, tuple[str, str]] | None
+) -> dict[str, str]:
+    """One line for each rule without the judgement kind, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line. A finding in a record fails a measured rule always; a measured rule with an unmeasured image keeps the reviewer's line unless a record fails."""
+    from ui_measure import PROOF_KINDS
+    from ui_proof import measure_verdict
+
+    measure = measure_verdict(root, head, digests)
+    reviewed = lacks_record(root, digests)
+    lines: dict[str, str] = {}
+    for name, _ in usability_rules():
+        kinds = PROOF_KINDS[name]
+        if "judgement" in kinds:
+            continue
+        if "measured" in kinds:
+            verdict, text = measure
+            if verdict == "N/A" or (verdict == "Pass" and reviewed):
+                continue
+        elif plan is None:
+            verdict, text = "N/A", "no plan given; the plan check decides"
+        else:
+            verdict, text = plan.get(
+                name,
+                ("N/A", "the plan has no line for this rule; the plan check decides"),
+            )
+        lines[name] = f"{name}: {verdict} — {kinds[0]}: {text or 'no text'}"
+    return lines
+
+
+def with_owner_lines(
+    record: dict[str, object],
+    root: Path,
+    head: str,
+    digests: list[str],
+    plan: dict[str, tuple[str, str]] | None,
+) -> None:
+    """Give the record one line for each Usability rule, in rule order: the reviewer's line for a judged rule, the owner's line for the others. An owner Fail makes the run findings."""
+    if record["outcome"] not in ("clean", "findings"):
+        return
+    owned = owner_lines(root, head, digests, plan)
+    own = {split_rule_line(line)[0]: line for line in cast(list[str], record["rules"])}
+    record["rules"] = [owned.get(name) or own[name] for name, _ in usability_rules()]
+    if any(split_rule_line(line)[1] == "Fail" for line in owned.values()):
+        record["outcome"] = "findings"
