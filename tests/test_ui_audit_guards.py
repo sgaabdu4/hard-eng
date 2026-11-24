@@ -300,7 +300,7 @@ def test_a_session_without_the_request_delay_is_refused(
 ) -> None:
     board(tmp_path, "plain", "")
     name = session()
-    monkeypatch.setattr(browser, "hold_script_file", lambda _folder: None)
+    monkeypatch.setattr(browser, "hold_script_file", lambda: None)
     tool, folder = browser.ensure_tool(), browser.output_folder(tmp_path)
     try:
         browser.require(

@@ -18,6 +18,7 @@ from typing import cast
 from gate_config import GateConfig, parse_config
 
 TOOL = "agent-browser"
+INIT_SCRIPTS = "AGENT_BROWSER_INIT_SCRIPTS"
 ROLE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 USAGE = (
     "browser --session S <agent-browser step>: run one step from .hard-eng/browser. "
@@ -379,10 +380,31 @@ def session_actions(folder: Path, session: str) -> list[tuple[int, str]]:
     return found
 
 
+def hold_script_file() -> str | None:
+    """The file of the script that makes every request of a page wait the same time; it sits in the shared tool folder, named by its text, so no checkout changes."""
+    from tool_setup import shared_tool_folder
+    from ui_measure import hold_script
+
+    text = hold_script()
+    path = (
+        shared_tool_folder()
+        / f"request-hold-{hashlib.sha256(text.encode()).hexdigest()[:12]}.js"
+    )
+    if not path.is_file():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+        partial.write_text(text)
+        partial.replace(path)
+    return str(path)
+
+
 def checkout_space(folder: Path) -> dict[str, str]:
-    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart."""
+    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart, and each page starts with the same request delay."""
     digest = hashlib.sha256(str(folder.resolve()).encode()).hexdigest()[:10]
-    return {**os.environ, "AGENT_BROWSER_NAMESPACE": "he-" + digest}
+    env = {**os.environ, "AGENT_BROWSER_NAMESPACE": "he-" + digest}
+    scripts = [env.get(INIT_SCRIPTS), hold_script_file()]
+    env[INIT_SCRIPTS] = ",".join(script for script in scripts if script)
+    return env
 
 
 def run_tool(
@@ -431,10 +453,16 @@ def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object
             text=measure_script(session_actions(folder, session)),
         )
     )
+    page = json.loads(json.loads(reply))
+    if any(item["rule"] == "request-delay-missing" for item in page):
+        raise ValueError(
+            "the open page has no fixed request delay, because its session was opened outside this command; "
+            f"close session {session} and open the page again with `browser --session {session} open <url>`"
+        )
     audit = require(
         run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
     )
-    found = [*json.loads(json.loads(reply)), *axe_findings(audit)]
+    found = [*page, *axe_findings(audit)]
     contrast = [item for item in found if item["rule"] == "contrast"]
     if not contrast:
         return found
