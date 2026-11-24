@@ -519,14 +519,17 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
     assert "6.37:1" not in " ".join(json.loads(log.read_text())["argv"])
 
 
+ZERO = "its own count says 0 removed"
+
+
 @pytest.mark.parametrize(
     ("line", "outcome", "reason"),
     [
-        ("No clutter: Fail — kept 34, removed 0", "not done", "No clutter"),
+        ("No clutter: Fail — kept 34, removed 0. Fix: merge", "not done", ZERO),
         (
-            "No clutter (kept 34, removed 0): Fail — too many labels",
+            "No clutter (kept 34, removed 0): Fail — too many labels. Fix: merge",
             "not done",
-            "No clutter",
+            ZERO,
         ),
         (
             "No clutter: Fail — kept 34, removed 2. Fix: merge the badges",
@@ -534,12 +537,28 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
             "",
         ),
         ("No clutter: Pass — kept 34, removed 0", "clean", ""),
-        ("No clutter: Fail — kept 34, removed: 0", "not done", "No clutter"),
-        ("No clutter: Fail — too many labels, 0 removed", "not done", "No clutter"),
+        ("No clutter: Fail — kept 34, removed: 0. Fix: merge", "not done", ZERO),
+        ("No clutter: Fail — too many labels, 0 removed. Fix: merge", "not done", ZERO),
+        ("No clutter: Fail — kept 34 removed 0. Fix: merge", "not done", ZERO),
         (
-            "No clutter: Fail — too many labels (kept 15 / 19 / 74, removed 0 / 0 / 0)",
+            "No clutter: Fail — too many labels. Fix: merge (kept 15 / 19 / 74, removed 0 / 0 / 0)",
             "not done",
-            "No clutter",
+            ZERO,
+        ),
+        (
+            "No clutter: Fail — too many labels. Fix: merge (kept 15 / 19 / 74 removed 0 / 0 / 0)",
+            "not done",
+            ZERO,
+        ),
+        (
+            "No clutter: Fail — too many labels. Fix: merge (kept 15, 19; removed 0, 0)",
+            "not done",
+            ZERO,
+        ),
+        (
+            "No clutter: Fail — too many labels. Fix: merge (kept 15, 19, 74; removed 0, 0, 5)",
+            "findings",
+            "",
         ),
         (
             "No clutter: Fail — too many labels. Fix: merge the badges (kept 15 / 19 / 74, removed 0 / 0 / 5)",

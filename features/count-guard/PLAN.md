@@ -24,9 +24,9 @@ Authority: Autonomous: the user asked on 2026-11-23 to fix every Hard Eng fault 
 
 ## Acceptance + steps
 
-- [x] A Fail line with removed counts `0 / 0 / 5`, in the note before or after the text, stands as a finding → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
+- [x] A Fail line with removed counts `0 / 0 / 5` or `0, 0, 5`, in the note before or after the text, stands as a finding → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
 - [x] A Fail line with removed counts `0 / 3` stands as a finding (a zero for one screen only) → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
-- [x] A Fail line with `removed 0`, `removed: 0`, `0 removed` or `removed 0 / 0 / 0` stays refused → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
+- [x] A Fail line with `removed 0`, `removed: 0`, `0 removed`, `kept 34 removed 0` or `removed 0 / 0 / 0` stays refused, and each row has a `Fix:` so only the count guard can refuse it → `tests/test_look.py::test_a_fail_line_that_cannot_stand_is_refused`
 
 ## Baseline + execution
 
