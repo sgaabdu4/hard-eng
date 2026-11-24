@@ -268,6 +268,65 @@ def rule_refusal(
     return px_problem(rule_lines, measured)
 
 
+def judged_names() -> list[str]:
+    """The Usability rules with the judgement kind: the only rules that the reviewer decides."""
+    from ui_measure import PROOF_KINDS
+
+    return [name for name, _ in usability_rules() if "judgement" in PROOF_KINDS[name]]
+
+
+def judged_lines() -> list[str]:
+    """The rule lines of the rules that the reviewer decides."""
+    wanted = set(judged_names())
+    return [
+        line
+        for line, (name, _) in zip(usability_lines(), usability_rules(), strict=True)
+        if name in wanted
+    ]
+
+
+def owner_lines(
+    root: Path, digests: list[str], plan: dict[str, tuple[str, str]] | None
+) -> dict[str, str]:
+    """One line for each rule without the judgement kind, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line."""
+    from ui_measure import PROOF_KINDS
+    from ui_proof import measure_verdict
+
+    measure = measure_verdict(root, digests)
+    lines: dict[str, str] = {}
+    for name, _ in usability_rules():
+        kinds = PROOF_KINDS[name]
+        if "judgement" in kinds:
+            continue
+        if "measured" in kinds:
+            verdict, text = measure
+        elif plan is None:
+            verdict, text = "N/A", "no plan given; the plan check decides"
+        else:
+            verdict, text = plan.get(
+                name,
+                ("N/A", "the plan has no line for this rule; the plan check decides"),
+            )
+        lines[name] = f"{name}: {verdict} — {kinds[0]}: {text or 'no text'}"
+    return lines
+
+
+def with_owner_lines(
+    record: dict[str, object],
+    root: Path,
+    digests: list[str],
+    plan: dict[str, tuple[str, str]] | None,
+) -> None:
+    """Give the record one line for each Usability rule, in rule order: the reviewer's line for a judged rule, the owner's line for the others. An owner Fail makes the run findings."""
+    if record["outcome"] not in ("clean", "findings"):
+        return
+    owned = owner_lines(root, digests, plan)
+    own = {split_rule_line(line)[0]: line for line in cast(list[str], record["rules"])}
+    record["rules"] = [owned.get(name) or own[name] for name, _ in usability_rules()]
+    if any(split_rule_line(line)[1] == "Fail" for line in owned.values()):
+        record["outcome"] = "findings"
+
+
 def judge(
     answer: str,
     names: list[str],
@@ -282,7 +341,7 @@ def judge(
     lines = [clean_line(line) for line in answer.strip().splitlines()]
     if not lines or lines[-1] not in VERDICTS:
         return "not done: the reviewer gave no exact VERDICT line", [], {}
-    wanted = [name for name, _ in usability_rules()]
+    wanted = judged_names()
     found = {
         split_rule_line(line)[0]: line
         for line in lines
@@ -453,8 +512,8 @@ def committed_plan_blob(root: Path, rev: str, rel: str) -> bytes | None:
     return shown.stdout
 
 
-def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, str]:
-    """Committed repository-relative path, bounded Outcome + scope text, and SHA-256 of a plan."""
+def committed_plan(root: Path, plan: Path, head: str) -> tuple[str, bytes]:
+    """The repository-relative path and the committed bytes of a plan."""
     candidate = plan if plan.is_absolute() else root / plan
     if candidate.is_symlink():
         raise ValueError(f"look: --plan must not be a symlink: {plan}")
@@ -477,10 +536,31 @@ def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, st
         raise ValueError(
             f"look: {rel_posix} must be committed at HEAD without uncommitted edits before look --plan"
         )
-    scope = extract_outcome_scope(
-        committed.decode("utf-8", errors="replace"), rel_posix
-    )
-    return rel_posix, bound_utf8(scope, MAX_SCOPE_BYTES), sha256(committed)
+    return rel_posix, committed
+
+
+def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, str]:
+    """Committed repository-relative path, bounded Outcome + scope text, and SHA-256 of a plan."""
+    rel, committed = committed_plan(root, plan, head)
+    scope = extract_outcome_scope(committed.decode("utf-8", errors="replace"), rel)
+    return rel, bound_utf8(scope, MAX_SCOPE_BYTES), sha256(committed)
+
+
+def plan_rules(root: Path, plan: Path, head: str) -> dict[str, tuple[str, str]]:
+    """The verdict and text of each Rules line in the committed plan's ux_reference."""
+    from plans import rule_lines
+
+    rel, committed = committed_plan(root, plan, head)
+    text = committed.decode("utf-8", errors="replace").replace("\r\n", "\n")
+    try:
+        section = plan_sections(text, allow_placeholders=True)["ux_reference"]
+    except ValueError as error:
+        raise ValueError(f"look: {rel}: {error}") from error
+    found: dict[str, tuple[str, str]] = {}
+    for line in rule_lines(section):
+        label, verdict, detail, _ = split_rule_line(line)
+        found[label] = (verdict, detail)
+    return found
 
 
 def _valid_ring_box(box: object) -> dict[str, int] | None:
@@ -608,7 +688,7 @@ def prompt_for(
     fixed: list[str] | None = None,
     held: int = 0,
 ) -> str:
-    rules = "\n".join(f"- {line}" for line in usability_lines())
+    rules = "\n".join(f"- {line}" for line in judged_lines())
     ring_parts = [
         f"{name}: "
         + ", ".join(f"(x={b['x']}, y={b['y']}, {b['w']}x{b['h']}px)" for b in boxes)
@@ -823,6 +903,12 @@ def look_command(root: Path, argv: list[str]) -> int:
     if rel_plan:
         record["plan"] = rel_plan
         record["plan_sha256"] = plan_digest
+    with_owner_lines(
+        record,
+        root,
+        digests,
+        plan_rules(root, Path(args.plan), head) if args.plan else None,
+    )
     hashes = [str(item["sha256"]) for item in listed_images(record)]
     path = record_path(root, head, hashes)
     path.parent.mkdir(parents=True, exist_ok=True)

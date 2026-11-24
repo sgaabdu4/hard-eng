@@ -222,6 +222,27 @@ def _finding_rules(record: Mapping[str, object]) -> str:
     )
 
 
+def measure_verdict(root: Path, digests: list[str]) -> tuple[str, str]:
+    """The browser records' verdict on the images with these digests: Fail with the findings, Pass with the widths measured, N/A when no image has a record."""
+    found = [
+        (path, record)
+        for path, record in browser_record_files(root)
+        if record["sha256"] in digests
+    ]
+    if not found:
+        return "N/A", "no measure record for these images; `browser capture` writes one"
+    if failed := [record for _, record in found if record.get("findings")]:
+        return "Fail", "; ".join(
+            f"{record['image']} has findings ({_finding_rules(record)})"
+            for record in failed
+        ) + "; fix the screen and capture it again"
+    widths = sorted({int(str(record["width"])) for _, record in found})
+    seen = ", ".join(map(str, widths[:-1]))
+    where = f"{seen} and {widths[-1]}" if seen else str(widths[-1])
+    texts = b"".join(path.read_bytes() for path in sorted(path for path, _ in found))
+    return "Pass", f"0 findings at {where} (record {sha256(texts)[:12]})"
+
+
 def _unchanged_width_problem(
     by_image: Mapping[str, tuple[Path, dict[str, object]]],
     stems: list[str],
