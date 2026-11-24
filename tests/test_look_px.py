@@ -58,6 +58,10 @@ def test_a_fail_line_with_a_px_size_that_the_measured_values_do_not_hold_is_refu
         "the caption text is 12 px, under the 14 px text minimum",
         "the badge has 6 px corners but DESIGN.md sets an 8 px radius",
         "the card corners are 12 px, too round for a table row",
+        "the badge corners are 6 px, not the 8 px radius in DESIGN.md",
+        "the badge has 6 px corners but the DESIGN.md radius is 8 px",
+        "the button has 6 px corners instead of 8 px corners",
+        "the Cancel button has 0 px corners while Save has 6 px corners",
     ],
 )
 def test_a_fail_line_with_a_px_size_that_the_measured_values_hold_passes_the_guard(
