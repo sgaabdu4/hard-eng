@@ -64,6 +64,7 @@ MEASURED_SECTION = (
     "an eye estimate; never fail a rule against a measured pass:\n{lines}"
 )
 FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
+NUMBER = re.compile(r"\d+")
 REMOVED_COUNT = re.compile(
     r"(?i)\bremoved\s*:?\s*(\d+(?:\s*/\s*\d+)*)|\b(\d+(?:\s*/\s*\d+)*)\s+removed\b"
 )
@@ -244,7 +245,7 @@ def nothing_removed(line: str) -> bool:
     counts = [
         int(number)
         for found in REMOVED_COUNT.finditer(line)
-        for number in re.findall(r"\d+", found[1] or found[2])
+        for number in NUMBER.findall(found[1] or found[2])
     ]
     return bool(counts) and not any(counts)
 
