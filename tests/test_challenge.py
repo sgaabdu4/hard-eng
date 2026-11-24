@@ -378,6 +378,22 @@ def test_challenge_falls_back_to_second_reviewer_when_first_fails(
     assert "fresh" not in record
 
 
+def test_findings_never_send_the_review_to_another_agent(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    agy_log = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert not agy_log.exists()
+    assert not host_log.exists()
+    record = record_of(branch)
+    assert (record["reviewer"], record["outcome"]) == ("codex", "findings")
+    assert "fresh" not in record
+
+
 def test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails(
     branch: Path,
     tmp_path: Path,
