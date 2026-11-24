@@ -96,6 +96,21 @@ def add_package_groups(root: Path, config: GateConfig) -> None:
         ]
 
 
+def add_ui_library(root: Path, config: GateConfig) -> None:
+    """A project with UI paths and no library setting gets the shared `ui` folders that pass the library rules, in the same step as the hooks that need it."""
+    from gate_config import repository_files
+    from ui_whole import default_library
+
+    shipping = config.get("shipping")
+    paths = shipping.get("ui_paths") if isinstance(shipping, dict) else None
+    if not isinstance(shipping, dict) or shipping.get("ui_library") or not paths:
+        return
+    ui_paths = [path for path in paths if isinstance(path, str)]
+    names = [path.relative_to(root).as_posix() for path in repository_files(root)]
+    if library := default_library(root, names, ui_paths):
+        shipping["ui_library"] = list(library)
+
+
 def configure_hooks(root: Path, changes: dict[str, str]) -> list[str]:
     import agent_hooks
     from gate_config import json_file
@@ -809,6 +824,7 @@ def plan_install(
 
     add_swift_groups(root, config)
     add_package_groups(root, config)
+    add_ui_library(root, config)
     from project_setup import (
         adapt_boundaries,
         add_freshness,

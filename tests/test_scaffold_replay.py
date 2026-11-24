@@ -6,7 +6,9 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import change_size
+import gate_config
 import pytest
+import shipping
 import tool_setup
 import update
 from conftest import SOURCE, commit, default_policy, git, load_module
@@ -281,12 +283,15 @@ def test_an_update_adds_the_ui_library_key_in_the_same_commit(
     release_now(source, monkeypatch, "release one")
     update.update(target)
     monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
-    shipping = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
-    assert shipping["ui_library"] == ["src/ui/*"]
-    changed = set(git(target, "diff", "--name-only", base).splitlines())
-    assert {"hard-eng.gates.json", ".hooks/hard-eng.py"} <= changed
+    saved = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
+    assert saved["ui_library"] == ["src/ui/*"]
+    assert git(target, "rev-list", "--count", f"{base}..HEAD") == "1"
+    changed = set(git(target, "show", "--name-only", "--format=", "HEAD").splitlines())
+    assert {"hard-eng.gates.json", ".hooks/hard-eng-source.json"} <= changed
     assert change_size.update_only(target, base, changed)
-    assert update.check_scaffold_update(target, base)
+    policy = shipping.load_policy(target)
+    assert policy is not None and policy["ui_library"] == ["src/ui/*"]
+    assert gate_config.load_groups(target)
 
 
 def test_an_update_leaves_an_existing_ui_library_key_alone(
@@ -296,8 +301,8 @@ def test_an_update_leaves_an_existing_ui_library_key_alone(
     base = web_project(target, ui_library=["src/shared/*"])
     release_now(source, monkeypatch, "release one")
     update.update(target)
-    shipping = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
-    assert shipping["ui_library"] == ["src/shared/*"]
+    saved = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
+    assert saved["ui_library"] == ["src/shared/*"]
     assert "hard-eng.gates.json" not in git(target, "diff", "--name-only", base)
 
 
