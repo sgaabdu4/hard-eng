@@ -211,6 +211,7 @@ def test_the_pr_text_check_skips_a_parent_plan_beside_its_step(
         is None
     )
     unlinked = pair("Parent: features/other/PLAN.md")
+    unlinked[PARENT] += "Owners: src/App.tsx\n"
     assert "ux_reference says N/A" in str(
         pr_problem(tmp_path / "c", monkeypatch, unlinked)
     )
