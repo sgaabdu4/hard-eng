@@ -36,7 +36,7 @@ SURFACE_VALUE = re.compile(r"(Existing|New|Mock) — \S.+")
 TEST_REFERENCE = re.compile(r"`([^`\s]+?)::(?:[^`\n]*::)?([^`\n]+)`")
 DECISION_SECTION = re.compile(r"(?ms)^## Decision\n(.*?)(?=^## |\Z)")
 NONE_VALUE = re.compile(r"(?i:none)(?:[.;:](?:\s.*)?|\s+[—–-]\s.*)?")
-DELIVERY_TARGET_FIELD = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:")
+DELIVERY_TARGET_FIELD = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target\b")
 CHECKBOX_LABEL = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[([^]\n]*)\](?:\s|$)")
 CHECKBOX_REST = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[[^]\n]*\](.*)$")
 PLACEHOLDER_STATUS = re.compile(
