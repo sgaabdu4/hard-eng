@@ -681,7 +681,7 @@ def untested_requirements(root: Path, requirements: set[str]) -> list[str]:
 def _validate_shipping(root: Path, path: Path, status: str) -> None:
     content = path.read_text()
     if status in {"Ready", "Complete"} and DELIVERY_TARGET_FIELD.search(content):
-        from shipping import plan_target_problem
+        from ship_scope import plan_target_problem
 
         verification = plan_sections(content)["Verification"]
         if problem := plan_target_problem(root, verification):
