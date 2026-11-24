@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import shipping
 from conftest import git
+from gate_config import JsonValue
 from test_shipping import (
     _PR_URL,
     FakeGitHub,
@@ -234,10 +235,14 @@ def test_the_delivered_stage_needs_no_plan_for_a_merged_join_but_asks_for_one_ot
     work = git(root, "commit-tree", tree, "-p", develop, "-m", "own work")
     own = git(root, "commit-tree", tree, "-p", work, "-p", main, "-m", "main in")
     git(root, "update-ref", "refs/remotes/origin/main", main)
-    monkeypatch.setattr(
-        ui_proof, "changed_files", lambda *_: [{"filename": "features/x/PLAN.md"}]
-    )
-    policy = {"base": "develop", "ui_paths": []}
+
+    def listed(*_: object) -> list[dict[str, JsonValue]]:
+        return [{"filename": "features/x/PLAN.md"}]
+
+    monkeypatch.setattr(ui_proof, "changed_files", listed)
+    policy = shipping.load_policy(root)
+    assert policy is not None
+    policy["ui_paths"] = []
     identity = ("acme", "widget", 7)
     for head, ref, expect in (
         (join, "chore/join-main", False),
@@ -245,7 +250,24 @@ def test_the_delivered_stage_needs_no_plan_for_a_merged_join_but_asks_for_one_ot
     ):
         merged = git(root, "commit-tree", tree, "-p", develop, "-p", head, "-m", "m")
         git(root, "update-ref", "refs/remotes/origin/develop", merged)
-        pull = JoinPull(head, head_ref=ref, merge_commit_sha=merged)
+        pull = shipping._PullRequest(
+            state="closed",
+            draft=False,
+            head_ref=ref,
+            head_sha=head,
+            head_repository="acme/widget",
+            base_ref="develop",
+            base_repository="acme/widget",
+            body="",
+            mergeable=None,
+            mergeable_state=None,
+            merged=True,
+            merged_at="2026-11-24T00:00:00Z",
+            merge_commit_sha=merged,
+            commits=1,
+            rebaseable=False,
+            default_branch="main",
+        )
         args = (root, pull, identity, policy, None, "delivered")
         if expect:
             with pytest.raises(shipping.ShippingError, match="--plan is missing"):
