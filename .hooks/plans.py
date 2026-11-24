@@ -775,6 +775,16 @@ def _point(root: Path) -> str | None:
     return None
 
 
+def plan_stages(
+    root: Path, applicable: list[Path], changed: set[str], asks_size: bool
+) -> dict[Path, str]:
+    """The stage of each plan; a plan that the change does not hold is named as another task's when it fails."""
+    try:
+        return {path: plan_stage(root, path, changed) for path in applicable}
+    except ValueError as error:
+        raise ValueError(f"{error}{OTHER_PLAN * asks_size}") from error
+
+
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
@@ -817,10 +827,7 @@ def validate_plans(
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
         )
-    try:
-        statuses = {path: plan_stage(root, path, changed) for path in applicable}
-    except ValueError as error:
-        raise ValueError(f"{error}{OTHER_PLAN * asks_size}") from error
+    statuses = plan_stages(root, applicable, changed, asks_size)
     reached = any(
         STAGES.index(status) >= STAGES.index(stage) for status in statuses.values()
     )
