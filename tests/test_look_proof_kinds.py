@@ -89,12 +89,12 @@ def test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_review
     assert set(MEASURED_ONLY) <= set(sent)
     assert not set(sent) & set(TEST_ONLY)
     answer = good_answer(1).replace(
-        "- Widths: Pass — looked at it", "- Widths: Fail — too narrow Fix: widen it"
+        "- Widths: Pass — looked at it", "- Widths: Fail — image-1.png: too narrow Fix: widen it"
     )
     install_agent(tmp_path, "claude", 1, answer)
     record = run_look(project, "codex", images)
     assert record["outcome"] == "findings"
-    assert stored(record)["Widths"].startswith("Widths: Fail — too narrow")
+    assert stored(record)["Widths"].startswith("Widths: Fail — image-1.png: too narrow")
 
 
 def test_a_reviewer_line_for_a_rule_without_judgement_is_ignored(
@@ -102,7 +102,7 @@ def test_a_reviewer_line_for_a_rule_without_judgement_is_ignored(
 ) -> None:
     images = captures(project)
     answer = good_answer(3).replace(
-        "- Widths: Pass — looked at it", "- Widths: Fail — too narrow Fix: widen it"
+        "- Widths: Pass — looked at it", "- Widths: Fail — image-1.png: too narrow Fix: widen it"
     )
     answer = answer.replace(
         "- States: Pass — looked at it", "- States: Fail — empty Fix: say what next"
@@ -252,7 +252,7 @@ def test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
     prompt = prompt_of(log)
-    assert "Alignment: Fail — badge and meta apart" in prompt
+    assert "Alignment: Fail — image-1.png: badge and meta apart" in prompt
     assert "Widths: Fail" not in prompt
 
 
@@ -271,7 +271,7 @@ def test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix(
     commit(project, "widen the label")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
-    assert "Widths: Fail — label too narrow" in prompt_of(log)
+    assert "Widths: Fail — image-1.png: label too narrow" in prompt_of(log)
 
 
 def test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since(

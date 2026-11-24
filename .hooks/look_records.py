@@ -1,6 +1,7 @@
 """The look records that back a head: its own, the clean verdicts that carry from earlier heads one image at a time, and the owner-check line of each rule that the reviewer does not decide."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import cast
@@ -9,7 +10,7 @@ from challenge import store
 from plans import split_rule_line, usability_rules
 
 STORE = "look"
-MAX_FIXED_LINES = 8
+FRAME = re.compile(r"image-\d+\.png")
 
 
 def _read_record(path: Path) -> dict[str, object] | None:
@@ -59,10 +60,6 @@ def image_keys(
 def _same(recorded: object, wanted: object) -> bool:
     """A recorded field that is missing never equals anything, so an old-format record cannot match by lacking the field."""
     return recorded is not None and recorded == wanted
-
-
-def _changed(recorded: object, wanted: object) -> bool:
-    return recorded is not None and not _same(recorded, wanted)
 
 
 def carried_record(
@@ -197,39 +194,52 @@ def combined(
 
 
 def earlier_findings(
-    root: Path, head: str, pairs: list[tuple[str, str, str]]
-) -> list[str]:
-    """The Fail lines of earlier findings on this branch for the same file names, when the image has changed since; no line claims that a finding is fixed. `pairs` holds (prompt name, file name, digest)."""
+    root: Path, head: str, pairs: list[tuple[str, str, str]], judged: list[str]
+) -> list[tuple[str, str]]:
+    """The Fail lines of the newest clean or findings record on this branch for each file name, as (rule, text) items to recheck. A later clean record of a file ends its list. Frame names in a line are set to the names of this run. No line claims that a finding is fixed. `pairs` holds (prompt name, file name, digest)."""
     prefixes = owner_prefixes()
-    lines: dict[str, list[str]] = {}
-    fresh = sorted(
+    current = {file: name for name, file, _ in pairs}
+    items: dict[str, tuple[str, list[str]]] = {}
+    claimed: set[str] = set()
+    newest = sorted(
         _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
     )
-    for path in fresh:
+    for path in newest:
         record = _read_record(path)
         owner = record.get("head") if record else None
         if (
             record is None
-            or record.get("outcome") != "findings"
+            or record.get("outcome") not in ("clean", "findings")
             or not isinstance(owner, str)
             or not _on_branch(root, owner, head)
         ):
             continue
         entries = cast(list[dict[str, object]], record.get("images", []))
-        names = [
-            name
-            for name, file, digest in pairs
-            for item in entries
-            if _same(item.get("file"), file) and _changed(item.get("sha256"), digest)
+        then = {str(item.get("name")): str(item.get("file")) for item in entries}
+        files = [
+            file
+            for file in current
+            if file not in claimed and file in then.values()
         ]
+        claimed.update(files)
+        if not files or record.get("outcome") != "findings":
+            continue
+        names = [current[file] for file in files]
+
+        def now(found: re.Match[str], table: dict[str, str] = then) -> str:
+            file = table.get(found[0], found[0])
+            return current.get(file, file)
+
         for line in cast(list[str], record.get("rules", [])):
-            _, verdict, text, _ = split_rule_line(line)
-            if names and verdict == "Fail" and not text.startswith(prefixes):
-                lines.setdefault(line, [])
-                lines[line] += [name for name in names if name not in lines[line]]
+            label, verdict, text, _ = split_rule_line(line)
+            if verdict == "Fail" and label in judged and not text.startswith(prefixes):
+                shown = FRAME.sub(now, line)
+                items.setdefault(shown, (label, []))[1].extend(
+                    name for name in names if name not in items[shown][1]
+                )
     return [
-        f"{', '.join(names)}: {line}"
-        for line, names in list(lines.items())[:MAX_FIXED_LINES]
+        (label, f"{line} (frames: {', '.join(names)})")
+        for line, (label, names) in items.items()
     ]
 
 

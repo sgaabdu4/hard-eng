@@ -102,6 +102,6 @@ def test_the_prompt_lists_an_earlier_finding_of_another_rule_and_asks_not_to_bri
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "image-1.png: Design system: Fail — use the badge token" in prompt
+    assert "Design system: Fail — image-1.png: use the badge token" in prompt
     assert "must not bring back another earlier finding" in prompt
     assert git(project, "rev-parse", "HEAD").strip()[:7] not in prompt
