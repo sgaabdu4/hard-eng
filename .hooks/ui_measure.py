@@ -39,7 +39,9 @@ PROOF_KINDS = {
 DECORATION = '[aria-hidden="true"],[role=img]'
 COLOUR_JS = (
     "const rgb = (() => { const cv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true }); "
-    "return (c) => { cv.clearRect(0, 0, 1, 1); cv.fillStyle = 'rgba(0, 0, 0, 0)'; cv.fillStyle = c; cv.fillRect(0, 0, 1, 1); const d = cv.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; }; })(); "
+    "return (c) => { const m = /^(rgba?\\(|color\\(srgb )(.*)\\)$/.exec(c); if (m) { const n = m[2].split(/[\\s,\\/]+/).filter(Boolean).map(Number); "
+    "if (n.length >= 3 && n.length <= 4 && n.every(Number.isFinite)) { const k = m[1][0] === 'c' ? 255 : 1; return [Math.round(n[0] * k), Math.round(n[1] * k), Math.round(n[2] * k), n.length > 3 ? n[3] : 1]; } } "
+    "cv.clearRect(0, 0, 1, 1); cv.fillStyle = 'rgba(0, 0, 0, 0)'; cv.fillStyle = c; cv.fillRect(0, 0, 1, 1); const d = cv.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; }; })(); "
 )
 DECORATED_JS = (
     "((el) => { const root = el.closest(DECORATION_JSON); if (!root) return false; "
