@@ -137,9 +137,12 @@ def stop_number(code: int) -> int | None:
     )
 
 
+STOP_MARK = "the pre-push check was stopped by"
+
+
 def stopped_line(number: int) -> str:
     return (
-        f"Hard Eng: the pre-push check was stopped by {signal.Signals(number).name} "
+        f"Hard Eng: {STOP_MARK} {signal.Signals(number).name} "
         "before it finished. The stop is not a fault in the project, and neither is "
         "a gate that the stop ended. Fix any other failure printed above, then run "
         "the push again."
