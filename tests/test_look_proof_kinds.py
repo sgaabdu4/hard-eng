@@ -70,8 +70,8 @@ def stored(record: dict[str, object]) -> dict[str, str]:
 def test_the_prompt_holds_only_the_rules_with_a_judgement_kind(
     tmp_path: Path, project: Path
 ) -> None:
-    images = make_images(project, 1)
-    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    images = captures(project)
+    log = install_agent(tmp_path, "claude", 3, good_answer(3))
     run_look(project, "codex", images)
     sent = prompt_rule_names(prompt_of(log))
     assert sent == [name for name, k in kinds().items() if "judgement" in k]
@@ -79,17 +79,35 @@ def test_the_prompt_holds_only_the_rules_with_a_judgement_kind(
     assert set(BOTH) <= set(sent)
 
 
-def test_a_reviewer_line_for_a_rule_without_judgement_is_ignored(
+def test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_reviewer(
     tmp_path: Path, project: Path
 ) -> None:
     images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    sent = prompt_rule_names(prompt_of(log))
+    assert set(MEASURED_ONLY) <= set(sent)
+    assert not set(sent) & set(TEST_ONLY)
     answer = good_answer(1).replace(
+        "- Widths: Pass — looked at it", "- Widths: Fail — too narrow Fix: widen it"
+    )
+    install_agent(tmp_path, "claude", 1, answer)
+    record = run_look(project, "codex", images)
+    assert record["outcome"] == "findings"
+    assert stored(record)["Widths"].startswith("Widths: Fail — too narrow")
+
+
+def test_a_reviewer_line_for_a_rule_without_judgement_is_ignored(
+    tmp_path: Path, project: Path
+) -> None:
+    images = captures(project)
+    answer = good_answer(3).replace(
         "- Widths: Pass — looked at it", "- Widths: Fail — too narrow Fix: widen it"
     )
     answer = answer.replace(
         "- States: Pass — looked at it", "- States: Fail — empty Fix: say what next"
     )
-    install_agent(tmp_path, "claude", 1, answer)
+    install_agent(tmp_path, "claude", 3, answer)
     record = run_look(project, "codex", images)
     assert record["outcome"] == "clean"
     assert "Fail" not in stored(record)["Widths"]
@@ -97,10 +115,10 @@ def test_a_reviewer_line_for_a_rule_without_judgement_is_ignored(
 
     judged = "\n".join(
         line
-        for line in good_answer(1).splitlines()
+        for line in good_answer(3).splitlines()
         if line.partition(":")[0].removeprefix("- ") not in {*MEASURED_ONLY, *TEST_ONLY}
     )
-    install_agent(tmp_path, "claude", 1, judged)
+    install_agent(tmp_path, "claude", 3, judged)
     assert run_look(project, "codex", images)["outcome"] == "clean"
 
 
