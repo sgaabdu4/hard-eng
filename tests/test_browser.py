@@ -236,6 +236,24 @@ def fake_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> Pat
     return tool
 
 
+def test_every_step_of_a_session_gets_the_same_request_delay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import browser
+    import ui_measure
+
+    monkeypatch.delenv("AGENT_BROWSER_INIT_SCRIPTS", raising=False)
+    folder = browser.output_folder(tmp_path)
+    scripts = browser.checkout_space(folder)["AGENT_BROWSER_INIT_SCRIPTS"].split(",")
+    assert len(scripts) == 1
+    hold = Path(scripts[0]).read_text()
+    assert f"const HOLD = {ui_measure.LIMITS['request_hold_ms']};" in hold
+    assert browser.checkout_space(folder)["AGENT_BROWSER_INIT_SCRIPTS"] == scripts[0]
+    monkeypatch.setenv("AGENT_BROWSER_INIT_SCRIPTS", "/elsewhere/own.js")
+    kept = browser.checkout_space(folder)["AGENT_BROWSER_INIT_SCRIPTS"].split(",")
+    assert kept == ["/elsewhere/own.js", scripts[0]]
+
+
 def test_installs_like_other_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
