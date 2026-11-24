@@ -654,6 +654,8 @@ def acceptance_tests(
     for line in CHECKBOX_REST.findall(sections["Acceptance + steps"]):
         found = TEST_REFERENCE.findall(line)
         named = set(REQUIREMENT_ID.findall(line))
+        if found:
+            named = {name for name in named if not name.startswith("HE-")}
         if not found and not named and not NOT_APPLICABLE_PROOF.search(line):
             raise ValueError(
                 "Acceptance + steps line needs a `path::test name` reference, "
