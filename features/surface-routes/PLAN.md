@@ -42,7 +42,7 @@ Execution: One builder in a hotfix worktree from `main`.
 
 ## Risks + recovery
 
-The local check now refuses a state that it accepted: a clean look record of a capture set of an unlisted route, next to a clean set of a listed route. Recovery: revert the commit. A `[name]` segment matches one path segment, so a capture of `/c/42` now matches `/c/[id]`.
+The local check now refuses a state that it accepted: a clean look record of a capture set of an unlisted route, next to a clean set of a listed route. The CI PR text check now skips a plan with no screen reference that names no screen file, where it judged every changed plan on every screen file; `tests/test_plan_parent.py::test_the_pr_text_check_skips_a_parent_plan_beside_its_step` now makes the unlinked parent name the screen file. Recovery: revert the commit. A `[name]` segment matches one path segment, so a capture of `/c/42` now matches `/c/[id]`.
 
 ## ux_reference
 
