@@ -271,19 +271,107 @@ def lacks_record(root: Path | None, digests: list[str]) -> bool:
     return any(digest not in recorded for digest in digests)
 
 
+def design_scales(design: str) -> tuple[set[int], set[int]]:
+    """The text sizes and corner radii, in px, that the front matter of DESIGN.md holds as tokens. A python3 without PyYAML, a missing front matter or a missing group gives an empty set, which means no verdict."""
+    from ui_tokens import FRONT_MATTER, half_up, length_px
+
+    try:
+        import yaml
+    except ImportError:
+        return set(), set()
+    front = FRONT_MATTER.match(design)
+    try:
+        data = yaml.safe_load(front[1]) if front else None
+    except yaml.YAMLError:
+        return set(), set()
+    groups = data if isinstance(data, dict) else {}
+    roles, rounded = groups.get("typography"), groups.get("rounded")
+    sizes = {
+        half_up(px)
+        for style in (roles.values() if isinstance(roles, dict) else [])
+        if isinstance(style, dict)
+        and (px := length_px(str(style.get("fontSize", "")))) is not None
+    }
+    radii = {
+        half_up(px)
+        for value in (rounded.values() if isinstance(rounded, dict) else [])
+        if (px := length_px(str(value))) is not None
+    }
+    return sizes, radii
+
+
+def token_fault(root: Path, digests: list[str]) -> str:
+    """The measured text sizes and corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, and a record without the clamp field, give no verdict."""
+    import look
+
+    try:
+        design = (root / "DESIGN.md").read_text()
+    except OSError:
+        return ""
+    sizes, radii = design_scales(design)
+    texts: set[int] = set()
+    corners: set[int] = set()
+    for digest in digests:
+        values = look.recorded_measured(root, digest) or {}
+        measured = cast(dict[str, object], values.get("sizes") or {})
+        texts |= {int(px) for px in cast(list[int], measured.get("text_px", []))}
+        corners |= {
+            int(str(item["px"]))
+            for item in cast(list[dict[str, object]], values.get("radii", []))
+            if item.get("clamped") is False
+        }
+    faults = [
+        f"text size {px} px is in no typography token ({', '.join(map(str, sorted(sizes)))} px)"
+        for px in sorted(texts - sizes)
+        if sizes
+    ] + [
+        f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(radii)))} px)"
+        for px in sorted(corners - radii)
+        if radii
+    ]
+    return "; ".join(faults) + "; use a token or add it to DESIGN.md" if faults else ""
+
+
+def code_fails(root: Path, head: str, digests: list[str]) -> dict[str, str]:
+    """A Fail text for each judged rule that code decides: a measure finding of a rule that owns it, and the token fault of Design system. A rule without a fault is absent, so the reviewer's line for it stands."""
+    from ui_measure import FINDING_RULES
+    from ui_proof import measure_found
+
+    found: dict[str, list[str]] = {}
+    for _, record in measure_found(root, head, digests):
+        names: dict[str, set[str]] = {}
+        for item in cast(list[dict[str, object]], record.get("findings") or []):
+            if rule := FINDING_RULES.get(str(item.get("rule"))):
+                names.setdefault(rule, set()).add(str(item["rule"]))
+        for rule, kinds in names.items():
+            found.setdefault(rule, []).append(
+                f"{record['image']} has findings ({', '.join(sorted(kinds))})"
+            )
+    fails = {
+        rule: "; ".join(texts) + "; fix the screen and capture it again"
+        for rule, texts in found.items()
+    }
+    if fault := token_fault(root, digests):
+        fails["Design system"] = fault
+    return fails
+
+
 def owner_lines(
     root: Path, head: str, digests: list[str], plan: dict[str, tuple[str, str]] | None
 ) -> dict[str, str]:
-    """One line for each rule without the judgement kind, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line. A finding in a record fails a measured rule always; a measured rule with an unmeasured image keeps the reviewer's line unless a record fails."""
+    """One line for each rule that code decides, from its owner check: a measured rule from the browser records, a test rule from the plan's Rules line. A finding in a record fails a measured rule always; a measured rule with an unmeasured image keeps the reviewer's line unless a record fails. A rule with the judgement kind gets a line only for a code Fail, which the reviewer cannot overrule."""
     from ui_measure import PROOF_KINDS
     from ui_proof import measure_verdict
 
     measure = measure_verdict(root, head, digests)
     reviewed = lacks_record(root, digests)
+    fails = code_fails(root, head, digests)
     lines: dict[str, str] = {}
     for name, _ in usability_rules():
         kinds = PROOF_KINDS[name]
         if "judgement" in kinds:
+            if name in fails:
+                lines[name] = f"{name}: Fail — measured: {fails[name]}"
             continue
         if "measured" in kinds:
             verdict, text = measure

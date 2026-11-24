@@ -39,6 +39,15 @@ PROOF_KINDS = {
     "Widths": ("measured",),
     "Performance": ("test",),
 }
+FINDING_RULES = {
+    "competing-buttons": "Hierarchy",
+    "accent-colours": "Hierarchy",
+    "heading-hierarchy": "Hierarchy",
+    "duplicate-buttons": "No clutter",
+    "extra-text": "No clutter",
+    "field-control": "No clutter",
+    "shared-edge": "Alignment",
+}
 DECORATION = '[aria-hidden="true"],[role=img]'
 COLOUR_JS = (
     "const rgb = (() => { const cv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true }); "
@@ -510,17 +519,19 @@ const sizes = {
 };
 const radiusOf = (el) => {
   const value = getComputedStyle(el).borderTopLeftRadius;
-  if (!parseFloat(value)) return 0;
+  if (!parseFloat(value)) return null;
   const b = el.getBoundingClientRect();
   const half = Math.round(Math.min(b.width, b.height) / 2);
-  return value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.min(Math.round(parseFloat(value)), half);
+  const declared = value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value));
+  return { px: Math.min(declared, half), clamped: declared >= half };
 };
 const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter(visible)];
 const radii = [];
 const seenRadii = new Set();
 for (const el of rounded) {
-  const px = radiusOf(el);
-  if (px > 0 && radii.length < 20 && !seenRadii.has(px)) { seenRadii.add(px); radii.push({ at: name(el), px }); }
+  const r = radiusOf(el);
+  const key = r && r.px + (r.clamped ? "c" : "");
+  if (r && r.px > 0 && radii.length < 20 && !seenRadii.has(key)) { seenRadii.add(key); radii.push({ at: name(el), px: r.px, clamped: r.clamped }); }
 }
 const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes, radii };
 return JSON.stringify({ found, measured });
