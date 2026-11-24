@@ -136,7 +136,11 @@ def _run(
             env=env,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except subprocess.TimeoutExpired as error:
+        raise ShippingError(
+            f"{executable} timed out after {timeout:g} seconds"
+        ) from error
+    except OSError as error:
         raise ShippingError(f"{executable} query unavailable") from error
     if result.returncode != 0:
         reason = result.stderr.strip().rpartition("\n")[2]
