@@ -100,10 +100,50 @@ def test_one_ink_at_two_strengths_counts_as_one_colour(
         assert found[width] == Counter(), (width, found[width])
 
 
+SAME_INK = {
+    "rgb-and-srgb": (
+        "rgb(44, 62, 80)",
+        "color(srgb 0.172549 0.243137 0.313726 / 0.75)",
+    ),
+    "srgb-and-oklab": (
+        "color(srgb 0.172549 0.243137 0.313726 / 0.75)",
+        "oklab(0.356408 -0.0140117 -0.0364867 / 0.75)",
+    ),
+    "rgb-and-oklab": ("rgb(44, 62, 80)", "oklab(0.356408 -0.0140117 -0.0364867 / 0.75)"),
+    "oklab-alone": ("oklab(0.5 0.1 0.05)", "oklab(0.5 0.1 0.05 / 0.75)"),
+    "oklch-alone": ("oklch(0.5 0.15 30)", "oklch(0.5 0.15 30 / 0.75)"),
+}
+
+
+@pytest.mark.parametrize("inks", SAME_INK.values(), ids=SAME_INK)
+def test_one_ink_in_two_colour_forms_counts_as_one_colour(
+    tmp_path: Path, site: str, browser: ModuleType, inks: tuple[str, str]
+) -> None:
+    page(tmp_path, ink_at_two_strengths(*inks))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
+
+
 def test_two_different_inks_still_count_as_two_colours(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     page(tmp_path, ink_at_two_strengths("#2b1b17", "#5a3a10"))
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
+
+
+def test_a_different_ink_in_another_colour_form_still_counts_as_a_colour(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(
+        tmp_path,
+        ink_at_two_strengths(
+            "color(srgb 0.172549 0.243137 0.313726 / 0.75)",
+            "oklab(0.45 0.08 -0.02 / 0.75)",
+        ),
+    )
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
         assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
