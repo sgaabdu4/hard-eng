@@ -24,6 +24,7 @@ LAYOUT_RULES = {
     "duplicate-buttons",
     "heading-hierarchy",
     "clipped-control",
+    "wrapped-label",
     "clipped-chrome",
     "accent-colours",
     "overflow",
