@@ -11,7 +11,7 @@ dependencies = [
 dev = [
     "pytest>=9.2.0",
     "pytest-cov>=7",
-    "types-pyyaml>=6.0.12.20261113",
+    "types-pyyaml>=6.0.12.20261122",
 ]
 
 [tool.uv]
