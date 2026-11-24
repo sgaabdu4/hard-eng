@@ -70,7 +70,12 @@ def web_change_repo(
     git(root, "branch", "-f", "main", "HEAD")
     git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
     (root / "src/App.tsx").write_text("export const App = () => <p>New</p>;\n")
-    plan_text = (root / "PLAN.md").read_text().replace(NO_UX, ux) + "\n"
+    plan_text = (
+        (root / "PLAN.md")
+        .read_text()
+        .replace(NO_UX, ux)
+        .replace("no product release", "one screen edit")
+    )
     (root / "PLAN.md").write_text(plan_text)
     if commit_work:
         commit(root, "ui work")
