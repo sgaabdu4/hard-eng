@@ -41,6 +41,19 @@ def fake_cli(
     return log
 
 
+def git_only_path(tmp_path: Path) -> Path:
+    directory = tmp_path / "git-only"
+    directory.mkdir()
+    (directory / "git").symlink_to(
+        next(
+            Path(p) / "git"
+            for p in os.environ["PATH"].split(os.pathsep)
+            if (Path(p) / "git").exists()
+        )
+    )
+    return directory
+
+
 @pytest.fixture
 def branch(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CLAUDECODE", raising=False)
@@ -326,15 +339,7 @@ def test_unavailable_reviewer_records_not_done(
 ) -> None:
     big(branch)
     if code is None:
-        (tmp_path / "git-only").mkdir()
-        (tmp_path / "git-only" / "git").symlink_to(
-            next(
-                Path(p) / "git"
-                for p in os.environ["PATH"].split(os.pathsep)
-                if (Path(p) / "git").exists()
-            )
-        )
-        monkeypatch.setenv("PATH", str(tmp_path / "git-only"))
+        monkeypatch.setenv("PATH", str(git_only_path(tmp_path)))
     else:
         fake_cli(tmp_path / "bin", "codex", "", code, error)
         fake_cli(tmp_path / "bin", "agy", "", code, "agy unavailable")
@@ -355,44 +360,29 @@ def test_unavailable_reviewer_records_not_done(
 
 @pytest.mark.parametrize(
     ("code", "output", "error"),
-    [(1, "", "Not signed in"), (0, "Looks fine without exact verdict", "")],
+    [
+        (1, "", "Not signed in"),
+        (0, "Looks fine without exact verdict", ""),
+        (None, "", ""),
+    ],
 )
 def test_challenge_falls_back_to_second_reviewer_when_first_fails(
     branch: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    code: int,
+    code: int | None,
     output: str,
     error: str,
 ) -> None:
     big(branch)
-    fake_cli(tmp_path / "bin", "codex", output, code, error)
-    agy_log = fake_cli(tmp_path / "bin", "agy", "Looks solid.\nVERDICT: clean")
-    host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
-    monkeypatch.setenv("CLAUDECODE", "1")
-    assert challenge.challenge(branch, None, None) == 0
-    assert agy_log.is_file()
-    assert not host_log.exists()
-    record = record_of(branch)
-    assert (record["reviewer"], record["outcome"]) == ("agy", "clean")
-    assert "fresh" not in record
-
-
-def test_an_agent_that_is_not_installed_passes_the_review_to_the_next_one(
-    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    big(branch)
-    (tmp_path / "bin" / "codex").unlink()
-    (tmp_path / "git-only").mkdir()
-    (tmp_path / "git-only" / "git").symlink_to(
-        next(
-            Path(p) / "git"
-            for p in os.environ["PATH"].split(os.pathsep)
-            if (Path(p) / "git").exists()
+    if code is None:
+        (tmp_path / "bin" / "codex").unlink()
+        monkeypatch.setenv(
+            "PATH", f"{tmp_path / 'bin'}{os.pathsep}{git_only_path(tmp_path)}"
         )
-    )
-    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{tmp_path / 'git-only'}")
-    agy_log = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    else:
+        fake_cli(tmp_path / "bin", "codex", output, code, error)
+    agy_log = fake_cli(tmp_path / "bin", "agy", "Looks solid.\nVERDICT: clean")
     host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
     assert challenge.challenge(branch, None, None) == 0
