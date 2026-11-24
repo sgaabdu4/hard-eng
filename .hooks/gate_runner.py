@@ -662,6 +662,7 @@ def check(
     import plans
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
+    from gate_schedule import QUICK_ROLES, STATIC_ROLES
     from gate_times import gate_budget
     from process_group import (
         ci_edits,
@@ -670,7 +671,6 @@ def check(
         record_pass,
         save_installed,
     )
-    from gate_schedule import QUICK_ROLES, STATIC_ROLES
     from reports import quick_groups
 
     roles = STATIC_ROLES if static else QUICK_ROLES

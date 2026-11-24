@@ -558,7 +558,7 @@ def test_ship_reads_the_screen_part_of_the_pr_text_check_as_ci_does(
 ) -> None:
     root = _project(tmp_path, ui_paths=["src/**"])
     (tmp_path / "pull").mkdir()
-    changed = {"filename": "src/App.tsx", "status": "modified"}
+    changed: dict[str, object] = {"filename": "src/App.tsx", "status": "modified"}
     fixture = _fixture(tmp_path / "pull")
     fake = FakeGitHub(_pull(fixture, body=_VALID), [], [changed])
     _patch_gh(monkeypatch, fake)

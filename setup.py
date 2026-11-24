@@ -103,7 +103,12 @@ def add_ui_library(root: Path, config: GateConfig) -> None:
 
     shipping = config.get("shipping")
     paths = shipping.get("ui_paths") if isinstance(shipping, dict) else None
-    if not isinstance(shipping, dict) or shipping.get("ui_library") or not paths:
+    if (
+        not isinstance(shipping, dict)
+        or shipping.get("ui_library")
+        or not isinstance(paths, list)
+        or not paths
+    ):
         return
     ui_paths = [path for path in paths if isinstance(path, str)]
     names = [path.relative_to(root).as_posix() for path in repository_files(root)]

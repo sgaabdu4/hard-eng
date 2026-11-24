@@ -55,8 +55,10 @@ AUDIT_FAULTS = {
         1,
     ),
     "wrapped-link-button": (
-        "<a href='/rent' style='display:block;width:96px;min-height:44px;font-size:16px;"
-        "background:#124;color:#fff'>Review rent schedule</a>",
+        (
+            "<a href='/rent' style='display:block;width:96px;min-height:44px;font-size:16px;"
+            "background:#124;color:#fff'>Review rent schedule</a>"
+        ),
         "wrapped-label",
         1,
     ),

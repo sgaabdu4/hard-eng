@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from gate_config import Gate, Group, validate_gate
 from resolved_settings import judge_before_run, validate_resolved
-from test_fallow_resolved import need_fallow, group_with_a_tests_gate
+from test_fallow_resolved import group_with_a_tests_gate, need_fallow
 from test_strict_refusals import project
 
 PYPROJECT = '[project]\nname = "x"\nversion = "0"\nrequires-python = "{}"\n'

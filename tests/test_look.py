@@ -450,7 +450,7 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
     prompt = " ".join(json.loads(log.read_text())["argv"])
     assert "Measured values" not in prompt
 
-    measured = {
+    measured: dict[str, object] = {
         "contrast": [
             {"at": "p", "ratio": 6.37, "fg": "#1a1a1a", "bg": "#ffffff", "px": 16}
         ],
