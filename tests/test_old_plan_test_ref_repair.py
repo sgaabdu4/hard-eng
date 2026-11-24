@@ -166,3 +166,69 @@ def test_retargeting_a_directory_symlink_still_checks_referenced_tests(
 
     with pytest.raises(ValueError, match="acceptance names tests that do not exist"):
         change_size.judged_stage(root, base, None)
+
+
+KEPT_AND_OLD = "def test_old():\n    pass\n\ndef test_kept():\n    pass\n"
+PROOFLESS = "- [x] An old line with no named proof."
+OLD_TARGET = "`tests/test_one.py::test_old`"
+KEPT_TARGET = "`tests/test_one.py::test_kept`"
+
+
+@pytest.mark.parametrize("beside", [False, True], ids=["alone", "beside_my_plan"])
+@pytest.mark.parametrize("stage", [None, "Ready", "Complete"])
+def test_repointing_an_old_plan_with_a_proofless_row_gives_the_untouched_result(
+    tmp_path: Path, completed_plan: str, stage: str | None, beside: bool
+) -> None:
+    root, old, base = old_plan_with_test_ref(
+        tmp_path, completed_plan, KEPT_AND_OLD, extra_row=PROOFLESS
+    )
+    if beside:
+        mine = root / "features/mine/PLAN.md"
+        mine.parent.mkdir(parents=True)
+        mine.write_text(completed_plan)
+    untouched = change_size.judged_stage(root, base, stage)
+
+    (root / OLD_NAME).write_text(old.replace(OLD_TARGET, KEPT_TARGET))
+
+    assert change_size.judged_stage(root, base, stage) == untouched
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("text before the arrow", "Same cause"),
+        ("added checkbox with a target", "Same cause"),
+        ("added checkbox with no proof", "Same cause"),
+        ("removed checkbox", "Same cause"),
+        ("changed text outside the checkboxes", "Same cause"),
+        ("target set to N/A", "Same cause"),
+        ("target to a missing test", "acceptance names tests that do not exist"),
+    ],
+)
+def test_a_repoint_with_another_change_is_still_judged_as_a_changed_plan(
+    tmp_path: Path, completed_plan: str, case: str, expected: str
+) -> None:
+    root, old, base = old_plan_with_test_ref(
+        tmp_path, completed_plan, KEPT_AND_OLD, extra_row=PROOFLESS
+    )
+    edited = old.replace(OLD_TARGET, KEPT_TARGET)
+    if case == "text before the arrow":
+        edited = edited.replace("Observe the configured", "Observe any configured")
+    if case == "added checkbox with a target":
+        edited = edited.replace(
+            PROOFLESS, f"{PROOFLESS}\n- [x] A new outcome → {KEPT_TARGET}."
+        )
+    if case == "added checkbox with no proof":
+        edited = edited.replace(PROOFLESS, f"{PROOFLESS}\n- [x] Another old line.")
+    if case == "removed checkbox":
+        edited = edited.replace(f"\n{PROOFLESS}", "")
+    if case == "changed text outside the checkboxes":
+        edited = edited.replace("Verify fixture command", "Verify the fixture command")
+    if case == "target set to N/A":
+        edited = old.replace(OLD_TARGET, "N/A — gone")
+    if case == "target to a missing test":
+        edited = old.replace(OLD_TARGET, "`tests/test_one.py::test_missing`")
+    (root / OLD_NAME).write_text(edited)
+
+    with pytest.raises(ValueError, match=expected):
+        change_size.judged_stage(root, base, None)
