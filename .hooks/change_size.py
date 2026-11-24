@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 
 from dependency_graph import owner_language
 from gate_config import SOURCE_FILE, Group, changed_files, parse_config
+from plan_tests import acceptance_rows, acceptance_span, repo_paths
 from plans import (
     SMALL_SIZE,
     _git_output,
@@ -361,8 +362,6 @@ def moved_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
     return moved
 
 
-ACCEPTANCE_HEADING = re.compile(r"(?m)^## Acceptance \+ steps\s*$")
-NEXT_HEADING = re.compile(r"(?m)^## ")
 ACCEPTANCE_ARROW = re.compile(r"(?:→|->)")
 REF_CONNECTORS = re.compile(
     r"^[\s,.;:()+/&-]*(?:(?:and|or)[\s,.;:()+/&-]*)*$", re.IGNORECASE
@@ -429,39 +428,14 @@ def words_without_acceptance_refs(text: str) -> list[str] | None:
     """Words of a Complete plan with acceptance test references normalized so test-ref-only repairs match."""
     if plan_status(text) != "Complete":
         return None
-    heading = ACCEPTANCE_HEADING.search(text)
-    if heading is None:
+    span = acceptance_span(text)
+    if span is None:
         return None
-    end_match = NEXT_HEADING.search(text, heading.end())
-    end = end_match.start() if end_match else len(text)
+    start, end = span
     body = "\n".join(
-        normalize_acceptance_line(line)
-        for line in text[heading.end() : end].splitlines()
+        normalize_acceptance_line(line) for line in text[start:end].splitlines()
     )
-    return plan_words(f"{text[: heading.end()]}\n{body}\n{text[end:]}")
-
-
-def _repo_paths(root: Path, text: str) -> set[str]:
-    rel = PurePosixPath(text)
-    paths = {
-        rel.as_posix(),
-        *(parent.as_posix() for parent in rel.parents if parent != PurePosixPath(".")),
-    }
-    try:
-        paths.add((root / text).resolve().relative_to(root.resolve()).as_posix())
-    except ValueError:
-        pass
-    return paths
-
-
-def _acceptance_row_refs(text: str) -> list[list[tuple[str, str]]]:
-    from plans import CHECKBOX_REST, TEST_REFERENCE
-
-    sections = plan_sections(text, allow_placeholders=True)
-    return [
-        [(path, name.split("[", 1)[0]) for path, name in TEST_REFERENCE.findall(line)]
-        for line in CHECKBOX_REST.findall(sections["Acceptance + steps"])
-    ]
+    return plan_words(f"{text[:start]}\n{body}\n{text[end:]}")
 
 
 def held_text(root: Path, reference: str, name: str) -> str | None:
@@ -489,7 +463,7 @@ def held_words(root: Path, reference: str, name: str) -> list[str] | None:
 def verified_test_ref_repair(
     root: Path, references: set[str], name: str, changed: set[str]
 ) -> bool:
-    """True when an old Complete plan changed only acceptance test refs and every changed/affected test exists."""
+    """True when an old Complete plan changed only the targets after `→` on its checkboxes, passes the rules of an unchanged plan, and every new or affected target exists."""
     from plan_tests import missing_tests
 
     current = (root / name).read_text()
@@ -503,17 +477,15 @@ def verified_test_ref_repair(
     ):
         return False
     try:
-        acceptance_tests(plan_sections(current, allow_placeholders=True))
-        new_rows = _acceptance_row_refs(current)
+        validate_plan(root / name, changed=False)
     except ValueError:
         return False
-    base_rows: list[list[list[tuple[str, str]]]] = []
-    for text in base_texts:
-        assert text is not None
-        try:
-            base_rows.append(_acceptance_row_refs(text))
-        except ValueError:
-            base_rows.append([])
+    new_rows = [references for _, references in acceptance_rows(current)]
+    base_rows = [
+        [references for _, references in acceptance_rows(text)]
+        for text in base_texts
+        if text is not None
+    ]
     checked: list[tuple[str, str]] = []
     for index, row in enumerate(new_rows):
         common = (
@@ -524,7 +496,7 @@ def verified_test_ref_repair(
         checked.extend(
             ref
             for ref in row
-            if ref not in common or (_repo_paths(root, ref[0]) & changed)
+            if ref not in common or (repo_paths(root, ref[0]) & changed)
         )
     if missing := missing_tests(root, checked):
         raise ValueError(

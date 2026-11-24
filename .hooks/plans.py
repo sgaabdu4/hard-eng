@@ -643,12 +643,19 @@ def validate_plan(path: Path, *, changed: bool = True) -> str:
     return status
 
 
+def line_references(line: str) -> list[tuple[str, str]]:
+    """The `path::test` names in the text of one checkbox line, without a `[case]` suffix."""
+    return [
+        (path, name.split("[", 1)[0]) for path, name in TEST_REFERENCE.findall(line)
+    ]
+
+
 def acceptance_references(sections: dict[str, str]) -> list[tuple[str, str]]:
     """The `path::test` names of every acceptance line, whatever the form of the other lines."""
     return [
-        (path, name.split("[", 1)[0])
+        reference
         for line in CHECKBOX_REST.findall(sections["Acceptance + steps"])
-        for path, name in TEST_REFERENCE.findall(line)
+        for reference in line_references(line)
     ]
 
 
