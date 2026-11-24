@@ -268,6 +268,30 @@ def rule_refusal(
     return px_problem(rule_lines, measured)
 
 
+def answer_lines(answer: str) -> list[str]:
+    """The reviewer's answer as clean lines. A Fail rule line also takes the lines under it, up to the next rule, image or verdict line, so a `Fix:` on an indented or sub-bullet line belongs to its own rule."""
+    names = {name for name, _ in usability_rules()}
+    lines: list[str] = []
+    failing = False
+    for raw in answer.strip().splitlines():
+        line = clean_line(raw)
+        label, verdict, _, _ = split_rule_line(line)
+        if (
+            failing
+            and line
+            and label not in names
+            and not IMAGE_DETAIL.match(line)
+            and line not in VERDICTS
+        ):
+            lines[-1] = f"{lines[-1]} {line}"
+            continue
+        if failing and not line:
+            continue
+        lines.append(line)
+        failing = label in names and verdict == "Fail"
+    return lines
+
+
 def judged_names(unmeasured: bool = False) -> list[str]:
     """The Usability rules with the judgement kind: the rules that the reviewer decides. An image with no measure record has no owner for a `measured` rule, so then the reviewer decides that rule too."""
     from ui_measure import PROOF_KINDS
@@ -302,7 +326,7 @@ def judge(
     """The outcome, the rule lines and the image details of the reviewer's answer."""
     if unread := [name for name in names if not read[name]]:
         return f"not done: the reviewer did not open {', '.join(unread)}", [], {}
-    lines = [clean_line(line) for line in answer.strip().splitlines()]
+    lines = answer_lines(answer)
     if not lines or lines[-1] not in VERDICTS:
         return "not done: the reviewer gave no exact VERDICT line", [], {}
     wanted = judged_names(unmeasured)
