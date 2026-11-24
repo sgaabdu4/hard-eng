@@ -20,6 +20,7 @@ Single source: N/A — the floor has one owner, the dev group of `pyproject.toml
 
 Blockers: None.
 Handoff: Approval
+Review declined: A colour at exactly 10 % opacity is skipped by the colour reader of PR 714 :: this change moves only a type stub version and touches no colour code; the finding belongs to code that PR 714 merged, and the next hotfix (alpha-byte, rows at 0.1 and 0.09, red first) repairs it in the one function `rgb` before the join into develop.
 Authority: Autonomous. Baseline repair: the gate blocks the delivery check of a merged repair and the release that the maintainer asked for.
 
 ## Acceptance + steps
