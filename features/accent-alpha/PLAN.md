@@ -44,7 +44,7 @@ Execution: Test first, then the one function.
 
 ## Risks + recovery
 
-A colour in a wide space such as `color(display-p3 ...)` is converted to 8-bit sRGB by the canvas, so two forms of one colour could still differ by one in a channel at a rounding edge; the tests cover the oklab form of one ink against its `rgb()` and `color(srgb ...)` forms. The page script measures about 4.4 ms per run after the fix against 4.9 to 5.7 ms before (50 runs each, two rounds), so the fix adds no time. Recovery: revert the commits.
+A colour in a wide space such as `color(display-p3 ...)` is converted to 8-bit sRGB by the canvas, so two forms of one colour could still differ by one in a channel at a rounding edge; the tests cover the oklab form of one ink against its `rgb()` and `color(srgb ...)` forms. The page script measures about 4.6 to 4.7 ms per run after the fix against 4.9 to 5.5 ms before (50 runs each, two rounds), so the fix adds no time. Recovery: revert the commits.
 Not checked: a real installed project page.
 
 ## ux_reference
