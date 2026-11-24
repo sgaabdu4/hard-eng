@@ -1001,7 +1001,9 @@ def two_plan_ci_problem(
         {"filename": "features/a/PLAN.md", "status": "modified"},
         {"filename": "features/b/PLAN.md", "status": "modified"},
     ]
-    screen_plan = f"## ux_reference\n{REAL_UX}\n\n## Verification\nOwners: src/App.tsx\n"
+    screen_plan = (
+        f"## ux_reference\n{REAL_UX}\n\n## Verification\nOwners: src/App.tsx\n"
+    )
     repair_plan = f"## ux_reference\n{NO_UX}\n\n## Verification\n{repair_owner}\n"
     return ci_problem(
         tmp_path / "ci",
