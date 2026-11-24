@@ -54,7 +54,7 @@ Review declined: A fresh run of the old prompt to prove the cause again :: the s
 - [ ] The environment of every step carries one fixed idle limit that the caller's environment cannot raise → `tests/test_browser.py::test_the_idle_limit_is_fixed_and_the_environment_cannot_raise_it`.
 - [ ] A new session past the cap is refused with the open names and their close commands → `tests/test_browser.py::test_a_new_session_past_the_cap_is_refused_with_the_open_names`.
 - [ ] A step on an open session passes at the cap, and the sessions of another checkout do not count → `tests/test_browser.py::test_a_step_on_an_open_session_passes_and_another_checkouts_sessions_do_not_count`.
-- [ ] The e2e skill line for `browser --session` states the idle limit and the cap, and links stay sound → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
+- [ ] The e2e skill line for `browser --session` states the idle limit and the cap, and links stay sound → `tests/test_browser.py::test_skills_point_to_the_command` and `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 - [ ] Skill and reference links and size limits pass → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 
 ## Baseline + execution
@@ -74,7 +74,7 @@ N/A — Hard Eng is a CLI and hook toolkit with no visual application UI.
 ## Verification
 
 Result: Pending
-Evidence: Pending
+Evidence: Real tool, agent-browser 0.43.0: `session list --json` printed `{"success":true,"data":{"sessions":["name",...]}}` with two and with four sessions open and `{"sessions":[]}` for another checkout's namespace, which is the shape that `limit_sessions` reads. With 4 sessions open, a fifth new name was refused with the four names and their close commands, and a step on an open name ran. All four sessions were gone between 5 and 6 minutes after the last step, with the 5 minute limit. A step took 119 to 153 ms with the change and 187 to 260 ms on the base copy, which had no compiled modules.
 E2E: N/A — a CLI and hook fix, verified by fixture tests.
 Real service: N/A — no deployed service is involved.
 Retro: Pending
