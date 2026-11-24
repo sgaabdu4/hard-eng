@@ -409,6 +409,24 @@ def wait_for_running_update(root: Path) -> None:
         fcntl.flock(handle, fcntl.LOCK_SH)
 
 
+def push_lines(root: Path, expected: str) -> tuple[bool, bool]:
+    """Push the update branch, showing each line as it comes; say whether it passed and whether the pre-push check named a signal stop."""
+    from ship_actions import STOP_MARK
+
+    push = subprocess.Popen(
+        ["git", "push", expected, "origin", UPDATE_BRANCH],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    stopped = False
+    for line in push.stdout or ():
+        print(line, end="", flush=True)
+        stopped = stopped or STOP_MARK in line
+    return push.wait() == 0, stopped
+
+
 def publish(root: Path, merge: bool = True) -> int:
     wait_for_running_update(root)
     base = update_base(root)
@@ -456,10 +474,14 @@ def publish(root: Path, merge: bool = True) -> int:
     if lease is None:
         return 1
     expected = f"--force-with-lease=refs/heads/{UPDATE_BRANCH}:{lease}"
-    pushed = subprocess.run(
-        ["git", "push", expected, "origin", UPDATE_BRANCH], cwd=root, check=False
-    )
-    if pushed.returncode:
+    pushed_ok, stopped = push_lines(root, expected)
+    if not pushed_ok:
+        if stopped:
+            print(
+                f"The push of {UPDATE_BRANCH} was stopped by a signal, so no check "
+                f"failed. Run `{UPDATE_COMMAND}` again."
+            )
+            return 1
         print(
             f"The push of {UPDATE_BRANCH} failed; the lines above give the reason. "
             "If the output says the check was stopped before it finished, the stop is "
