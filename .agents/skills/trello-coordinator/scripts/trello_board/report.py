@@ -346,12 +346,44 @@ def queues(items: list[Item]) -> list[Item]:
     return result
 
 
+def client_duplicates(ctx: Context) -> dict[str, str]:
+    """Card id → client number for each open card that is not the oldest of its client and is not marked checked."""
+    pattern = ctx.config.client
+    if pattern is None:
+        return {}
+    snapshot = ctx.snapshot
+    finished = {name for role, name in ctx.config.lists.items() if role == "done"}
+    by_client: dict[str, list[Obj]] = {}
+    for card in snapshot.cards:
+        found = pattern.search(text(card.get("name")))
+        if found and snapshot.lists.get(text(card.get("idList"))) not in finished:
+            by_client.setdefault(found.group(1), []).append(card)
+    checked = {
+        i for i, name in snapshot.labels.items() if name == ctx.config.checked_label
+    }
+    duplicates: dict[str, str] = {}
+    for client, same in by_client.items():
+        older = min(
+            same, key=lambda card: (len(text(card.get("id"))), text(card.get("id")))
+        )
+        for card in same:
+            labels = card.get("idLabels")
+            marked = isinstance(labels, list) and any(
+                text(i) in checked for i in labels
+            )
+            if card is not older and not marked:
+                duplicates[text(card.get("id"))] = client
+    return duplicates
+
+
 def unnumbered(ctx: Context, view: View) -> list[Item]:
     at = text(view.card.get("dateLastActivity"))
     if not NUMBER.match(view.name):
         return [item(view, at, "", "")]
     if text(view.card.get("id")) in duplicate_ids(ctx.snapshot.cards):
         return [item(view, at, "", f"another card also has #{view.ref}")]
+    if client := client_duplicates(ctx).get(text(view.card.get("id"))):
+        return [item(view, at, "", f"another open card also names client {client}")]
     return []
 
 

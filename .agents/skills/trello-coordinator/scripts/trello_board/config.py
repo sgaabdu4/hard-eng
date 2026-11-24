@@ -16,6 +16,8 @@ FIELDS = (
     "timing",
     "roles",
     "privacy",
+    "clientPattern",
+    "checkedLabel",
 )
 REQUIRED_LISTS = ("todo", "doing", "testing", "done")
 OPTIONAL_LISTS = ("urgent", "discuss")
@@ -63,6 +65,8 @@ class Config:
     promise_hours: float
     done_grace_hours: float
     privacy: tuple[re.Pattern[str], ...]
+    client: re.Pattern[str] | None = None
+    checked_label: str = ""
 
     def refuse_private(self, body: str) -> None:
         if EMAIL.search(body):
@@ -221,6 +225,23 @@ def compile_privacy(value: Json) -> tuple[re.Pattern[str], ...]:
         raise TrelloError(f"trello.json: privacy holds a bad regex: {error}") from error
 
 
+def compile_client(value: Json) -> re.Pattern[str] | None:
+    if value is None:
+        return None
+    try:
+        pattern = re.compile(value) if isinstance(value, str) else None
+    except re.error as error:
+        raise TrelloError(
+            f"trello.json: clientPattern is a bad regex: {error}"
+        ) from error
+    if pattern is None or pattern.groups != 1:
+        raise TrelloError(
+            "trello.json: clientPattern must be a regex with one group, "
+            "the client number in a card name"
+        )
+    return pattern
+
+
 def read_json(path: Path) -> Obj:
     if not path.is_file():
         raise TrelloError("trello.json is missing at the repository root")
@@ -264,4 +285,8 @@ def load_config(root: Path) -> Config:
         promise_hours=hours["promiseHours"],
         done_grace_hours=hours["doneGraceHours"],
         privacy=compile_privacy(data.get("privacy")),
+        client=compile_client(data.get("clientPattern")),
+        checked_label=name_field(data, "checkedLabel")
+        if "checkedLabel" in data
+        else "",
     )
