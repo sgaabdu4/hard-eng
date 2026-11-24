@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-A plan whose `Surface:` line names several routes accepts an After capture of any listed route, in `ship` and in the local Complete check. The local check refuses a looked-at capture of an unlisted route, as `ship` does. Non-goals: matching `[id]` bracket segments against real page paths; any other ship rule.
+A plan whose `Surface:` line names several routes accepts an After capture of any listed route, in `ship` and in the local Complete check. The local check refuses a looked-at capture of an unlisted route, as `ship` does. A `[name]` segment of a listed route matches any one segment of the page path. Non-goals: any other ship rule.
 
 ## Sources + coverage
 
@@ -39,7 +39,7 @@ Execution: One builder in a hotfix worktree from `main`.
 
 ## Risks + recovery
 
-The local check now refuses a state that it accepted: a clean look record of a capture set of an unlisted route, next to a clean set of a listed route. Recovery: revert the commit. A `[id]` segment is compared literally, so a capture of `/c/42` does not match `/c/[id]`; list another route or capture the literal path.
+The local check now refuses a state that it accepted: a clean look record of a capture set of an unlisted route, next to a clean set of a listed route. Recovery: revert the commit. A `[name]` segment matches one path segment, so a capture of `/c/42` now matches `/c/[id]`.
 
 ## ux_reference
 
@@ -48,12 +48,12 @@ N/A — no screen changes; Hard Eng has no app UI.
 ## Verification
 
 Result: Passed
-Evidence: The six new tests fail on `origin/main` (ship refuses the second listed route, both messages name one route, and the local check passes a stray looked-at set) and pass after the change. The Ready check ran the full suite with 7740 passed, and the static gates passed. A `[id]` segment is compared literally; this is a stated limit.
+Evidence: The six new tests fail on `origin/main` (ship refuses the second listed route, both messages name one route, and the local check passes a stray looked-at set) and pass after the change. The Ready check ran the full suite with 7740 passed, and the static gates passed. A long Surface line with seven routes and bracket segments returns exactly its seven routes.
 E2E: N/A — the change is a pure check of plan text and local capture records, proved by the tests above.
 Real service: N/A — no outside service is called.
 Retro: Escaped bug: `tests/test_ui_capture_match.py::test_an_after_capture_of_any_route_the_surface_lists_passes_ship` and `tests/test_local_ui_proof.py::test_local_complete_check_accepts_a_capture_of_any_listed_route` now cover several routes; the gate that should have caught it was the ship UI evidence test set, which only used one-route Surface lines; the local Complete check ran too late to judge the attached image, because it accepted any one clean capture set while `ship` judges each set that holds an After image, and `tests/test_local_ui_proof.py::test_local_complete_check_refuses_a_looked_at_capture_of_an_unlisted_route` now closes that gap; the failing cases were committed before the fix. Failed check: the types gate flagged an empty list in a test table → `tests/test_local_ui_proof.py::test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes` now types it.
 
-Reader: the changed `checks.md` sentences went to a cold reader; it asked what "compared as written" was compared with, so the text now says that each route is written as the capture's page path shows it, never as a `[id]` placeholder. The other phrases it quoted were in the sentence before the change.
+Reader: the changed `checks.md` sentences went to a cold reader; it asked what "compared as written" was compared with, so that wording was dropped and the text now says that a `[name]` segment matches any one segment of the page path. The other phrases it quoted were in the sentence before the change.
 Canary: no flow of `release_canary.py` reaches the new refusal; none of them reads a Surface line or a browser capture.
 
 Delivery target: PR
