@@ -8,7 +8,7 @@ A change to a Flutter `.arb` localization file, with `.dart` screens, needs a na
 
 ## Sources + coverage
 
-Sources: the maintainer's request of 2026-11-24 to ship this fix to `main` as a hotfix, read in full; the four `develop` commits of the same fix (`fd56959f`, `de947987`, `b752cf87`, `31cc9b3e`).
+Sources: the maintainer's request of 2026-11-24 to ship this fix to `main` as a hotfix, read in full. The `develop` commits of the same fix (`fd56959f`, `de947987`, `b752cf87`, `31cc9b3e`), read in full.
 Reviewer: N/A — a one-word fix with a stated set of cases that must keep failing.
 Deliverables: None
 
