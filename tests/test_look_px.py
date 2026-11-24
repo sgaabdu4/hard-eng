@@ -38,7 +38,7 @@ def look_with(
     [
         ("the badge text is about 11 px", "text size 11 px", "12, 16"),
         ("the badge has corners about 4 px", "corner radius 4 px", "6"),
-        ("an 11 px font on the badge", "text size 11 px", "12, 16"),
+        ("the badge font is roughly 11 px", "text size 11 px", "12, 16"),
     ],
 )
 def test_a_fail_line_with_a_px_size_that_the_measured_values_do_not_hold_is_refused(
@@ -60,6 +60,8 @@ def test_a_fail_line_with_a_px_size_that_the_measured_values_do_not_hold_is_refu
         "the card corners are 12 px, too round for a table row",
         "the badge corners are 6 px, not the 8 px radius in DESIGN.md",
         "the card has 12 px corners while the buttons have 6 px corners",
+        "buttons use 4 px corners but cards use 12 px corners",
+        "the badge has 4 px corners but the card has 12 px corners",
         "the badge has 6 px corners but the DESIGN.md radius is 8 px",
         "the button has 6 px corners instead of 8 px corners",
         "the Cancel button has 0 px corners while Save has 6 px corners",
