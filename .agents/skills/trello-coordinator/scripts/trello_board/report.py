@@ -44,7 +44,11 @@ CONDITION = re.compile(
 FINISHED = re.compile(
     r"\b(?:(?:is|are) (?:now |already )?(?:live|done)|went live)\b", re.IGNORECASE
 )
-WAITS = re.compile(rf"next release|not built yet|{WORKING}", re.IGNORECASE)
+OPEN_PR = (
+    r"\b(?:in|waits? for|waiting for) (?:an? |the )?(?:open )?(?:PR|pull request)\b"
+)
+WAITS = re.compile(rf"next release|not built yet|{WORKING}|{OPEN_PR}", re.IGNORECASE)
+WAITS_IN_DOING = re.compile(OPEN_PR, re.IGNORECASE)
 LIVE = re.compile(r"\b(?:(?:is|are) (?:now |already )?live|went live)\b", re.IGNORECASE)
 NUMBER = re.compile(r"^\s*#(\d+)")
 ACK_WORD = r"(?:ok(?:ay)?|thanks?(?: you)?|works?|done)"
@@ -301,9 +305,10 @@ def labels(ctx: Context, view: View) -> list[Item]:
 
 def waits_on_us(ctx: Context, view: View) -> list[Item]:
     ours = view.last_ours
-    if not ours or view.role != "testing":
+    pattern = {"testing": WAITS, "doing": WAITS_IN_DOING}.get(view.role)
+    if not ours or pattern is None:
         return []
-    if says(WAITS, ours.text) and not says(LIVE, ours.text):
+    if says(pattern, ours.text) and not says(LIVE, ours.text):
         return [from_event(view, ours)]
     return []
 
