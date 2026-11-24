@@ -1,6 +1,6 @@
 # Decide each Usability rule by its own proof kind in look
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -26,19 +26,19 @@ Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fau
 
 ## Acceptance + steps
 
-- [ ] The prompt holds only the rules with the `judgement` kind when every image has a measure record → `tests/test_look_proof_kinds.py::test_the_prompt_holds_only_the_rules_with_a_judgement_kind`.
-- [ ] A reviewer line for a rule without `judgement` cannot fail the run and is not counted as missing, when its owner check has a record → `tests/test_look_proof_kinds.py::test_a_reviewer_line_for_a_rule_without_judgement_is_ignored`.
-- [ ] The record and the block give one line per rule, and each line without `judgement` names its owner → `tests/test_look_proof_kinds.py::test_the_block_gives_each_rule_a_line_and_names_the_owner`.
-- [ ] A measure record with a finding fails the measured-only rules and the run → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_the_measured_rules_and_the_run`.
-- [ ] A plan Fail for a test rule fails the run, and with no plan the line says the plan check decides → `tests/test_look_proof_kinds.py::test_a_test_rule_takes_its_line_from_the_plan`.
-- [ ] An image with no measure record (a mockup or a native screen) leaves the `measured` rules to the reviewer → `tests/test_look_proof_kinds.py::test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_reviewer`.
-- [ ] The 20-control and 12-contrast-pair limits of the reader values cut no finding → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`.
-- [ ] A standalone link gets the target-size check, a link inside a sentence stays exempt, and a 30 px link passes at 1280 px only → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`.
-- [ ] A reviewer Fail on a measured rule is sent back as an earlier fix → `tests/test_look_proof_kinds.py::test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix`.
-- [ ] An older capture with findings does not fail a page that a capture at the head shows clean → `tests/test_look_proof_kinds.py::test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since`.
-- [ ] A rule with `measured` and `judgement` still goes to the reviewer with its measured values → `tests/test_look_proof_kinds.py::test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer`.
-- [ ] An owner Fail line never returns to the reviewer as an earlier fix → `tests/test_look_proof_kinds.py::test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix`.
-- [ ] The skill links still resolve after the one-line reference change → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
+- [x] The prompt holds only the rules with the `judgement` kind when every image has a measure record → `tests/test_look_proof_kinds.py::test_the_prompt_holds_only_the_rules_with_a_judgement_kind`.
+- [x] A reviewer line for a rule without `judgement` cannot fail the run and is not counted as missing, when its owner check has a record → `tests/test_look_proof_kinds.py::test_a_reviewer_line_for_a_rule_without_judgement_is_ignored`.
+- [x] The record and the block give one line per rule, and each line without `judgement` names its owner → `tests/test_look_proof_kinds.py::test_the_block_gives_each_rule_a_line_and_names_the_owner`.
+- [x] A measure record with a finding fails the measured-only rules and the run → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_the_measured_rules_and_the_run`.
+- [x] A plan Fail for a test rule fails the run, and with no plan the line says the plan check decides → `tests/test_look_proof_kinds.py::test_a_test_rule_takes_its_line_from_the_plan`.
+- [x] An image with no measure record (a mockup or a native screen) leaves the `measured` rules to the reviewer → `tests/test_look_proof_kinds.py::test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_reviewer`.
+- [x] The 20-control and 12-contrast-pair limits of the reader values cut no finding → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`.
+- [x] A standalone link gets the target-size check, a link inside a sentence stays exempt, and a 30 px link passes at 1280 px only → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`.
+- [x] A reviewer Fail on a measured rule is sent back as an earlier fix → `tests/test_look_proof_kinds.py::test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix`.
+- [x] An older capture with findings does not fail a page that a capture at the head shows clean → `tests/test_look_proof_kinds.py::test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since`.
+- [x] A rule with `measured` and `judgement` still goes to the reviewer with its measured values → `tests/test_look_proof_kinds.py::test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer`.
+- [x] An owner Fail line never returns to the reviewer as an earlier fix → `tests/test_look_proof_kinds.py::test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix`.
+- [x] The skill links still resolve after the one-line reference change → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
 
 ## Baseline + execution
 
@@ -56,11 +56,11 @@ N/A — no visible UI; hook code and a reference line only.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: N/A — no user journey of an installed app changes; the focused tests run `look` with a fake reviewer.
+Result: Passed
+Evidence: 2026-11-24, on the rebased branch: `tests/test_ui_*.py tests/test_browser.py tests/test_look_proof_kinds.py` gave `489 passed`; the earlier look set (`test_look.py`, `test_look_carry.py`, `test_look_px.py`, `test_local_ui_proof.py`, `test_shipping_ui_evidence.py`, `test_skill_links.py`) gave `184 passed` before the rebase. Static gates (format, lint, complexity, annotations, types, dead code, duplicates, declarations) passed. `look` timing, prompt build plus judge with a fake reviewer, two runs each: develop 0.170 and 0.172 ms, this branch 0.247 and 0.248 ms. The independent review of the exact head `b13b90c4` was clean after three rounds of findings.
+E2E: N/A — no user journey of an installed app changes; the focused tests run `look` with a fake reviewer and `browser capture` against local pages.
 Real service: N/A — the change calls no outside service; it reads local browser records and the committed plan.
-Retro: Pending
+Retro: (1) Review correction: native screens have no measure record, so Accessibility and Widths lost their only check → `tests/test_look_proof_kinds.py::test_an_image_with_no_measure_record_leaves_the_measured_rules_to_the_reviewer`. (2) Review correction: a reviewer Fail on a measured rule was dropped from the earlier fixes → `tests/test_look_proof_kinds.py::test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix`. (3) User correction: `tap-size` skipped every link, so a standalone link passed once the reviewer left → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`. (4) User correction: an older capture with findings failed a fixed page → `tests/test_look_proof_kinds.py::test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since`. (5) Review correction: the sentence exemption counted text of block siblings → the `a standalone link under a heading and a paragraph` case of the same test as (3). (6) Failed check: `look.py` passed 1000 lines and the file size check refused it in the wide test run → None — the check named the file; the code moved to `look_records.py`. (7) Failed checks: the plan check refused three plan wordings → None — each refusal named its line.
 
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
