@@ -18,6 +18,7 @@ FALLOW_KEYS = {
     "ignoreDependencyOverrides": "equal",
     "rulePacks": "free",
     "ignoreExportsUsedInFile": "equal",
+    "keepExportTags": "equal",
     "usedClassMembers": "equal",
     "duplicates.enabled": "equal",
     "duplicates.mode": "equal",

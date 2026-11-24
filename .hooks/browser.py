@@ -44,6 +44,32 @@ PROFILE = (
     "@{HOME}/.agent-browser/browsers/chrome-*/chrome flags=(unconfined) {\\n  userns,\\n}\\n"
 )
 NO_SANDBOX = re.compile(r"(?:^|[\s,])--no-sandbox(?=$|[\s,=])")
+SESSION_NAME = re.compile(r"[\w-]+")
+INPUT_VERBS = frozenset(
+    {
+        "click",
+        "dblclick",
+        "type",
+        "fill",
+        "press",
+        "tap",
+        "key",
+        "keydown",
+        "keyup",
+        "check",
+        "uncheck",
+        "select",
+        "drag",
+        "upload",
+        "download",
+    }
+)
+KEYBOARD_INPUT = frozenset({"type", "inserttext"})
+MOUSE_INPUT = frozenset({"down", "up"})
+FIND_LOCATORS = frozenset(
+    {"role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last"}
+)
+MAX_ACTIONS = 500
 
 PAGE_SCRIPT = """(async () => {
 const phone = /(?<!\\d)(?:\\+\\d{1,3}[\\s.-]?)?(?:\\(\\d{2,5}\\)|\\d{2,5})[\\s.-]?\\d{3,5}(?:[\\s.-]?\\d{3,5})?(?!\\d)/g;
@@ -295,6 +321,64 @@ def refusal(steps: list[str]) -> str | None:
     return None
 
 
+def action_mark(argv: list[str]) -> tuple[str, str] | None:
+    """The session and the verb of a step that commits input, read from `--session S <step>` only."""
+    if argv[:1] == ["--session"]:
+        session, steps = (argv[1] if len(argv) > 1 else ""), argv[2:]
+    elif argv and argv[0].startswith("--session="):
+        session, steps = argv[0].removeprefix("--session="), argv[1:]
+    else:
+        return None
+    if not SESSION_NAME.fullmatch(session):
+        return None
+    match steps:
+        case [verb, *_] if verb in INPUT_VERBS:
+            return session, verb
+        case ["keyboard", kind, *_] if kind in KEYBOARD_INPUT:
+            return session, f"keyboard {kind}"
+        case ["mouse", kind, *_] if kind in MOUSE_INPUT:
+            return session, f"mouse {kind}"
+        case ["find", locator, _, verb, *_] if (
+            locator in FIND_LOCATORS and verb in INPUT_VERBS
+        ):
+            return session, f"find {verb}"
+        case ["find", "nth", _, _, verb, *_] if verb in INPUT_VERBS:
+            return session, f"find {verb}"
+    return None
+
+
+def actions_file(folder: Path, session: str) -> Path:
+    return folder / f"actions-{session}.log"
+
+
+def record_action(folder: Path, argv: list[str]) -> None:
+    """Note the time of a step that commits input; the page cannot write this file, and a failure here never touches the step."""
+    mark = action_mark(argv)
+    if mark is None:
+        return
+    try:
+        with actions_file(folder, mark[0]).open("a") as handle:
+            handle.write(f"{time.time_ns() // 1_000_000} {mark[1]}\n")
+    except OSError:
+        return
+
+
+def session_actions(folder: Path, session: str) -> list[tuple[int, str]]:
+    """Each recorded action of a session as (time in ms since 1970, verb); lines that do not read are skipped."""
+    if not SESSION_NAME.fullmatch(session):
+        return []
+    try:
+        lines = actions_file(folder, session).read_text().splitlines()
+    except OSError:
+        return []
+    found: list[tuple[int, str]] = []
+    for line in lines[-MAX_ACTIONS:]:
+        stamp, _, verb = line.partition(" ")
+        if stamp.isdigit() and verb:
+            found.append((int(stamp), verb))
+    return found
+
+
 def checkout_space(folder: Path) -> dict[str, str]:
     """Sessions live in the home folder; a namespace per checkout keeps worktrees apart."""
     digest = hashlib.sha256(str(folder.resolve()).encode()).hexdigest()[:10]
@@ -338,7 +422,14 @@ def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object
     from ui_measure import AXE_TAGS, axe_findings, decoration_script, measure_script
 
     reply = require(
-        run_tool(tool, folder, session, "eval", "--stdin", text=measure_script())
+        run_tool(
+            tool,
+            folder,
+            session,
+            "eval",
+            "--stdin",
+            text=measure_script(session_actions(folder, session)),
+        )
     )
     audit = require(
         run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
@@ -526,6 +617,7 @@ def dispatch(root: Path, argv: list[str]) -> int:
         return 2
     tool = ensure_tool()
     folder = output_folder(root)
+    record_action(folder, argv)
     os.chdir(folder)
     os.execve(tool, [tool, *argv], checkout_space(folder))
 
