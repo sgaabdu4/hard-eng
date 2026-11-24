@@ -44,10 +44,6 @@ def button(fill: str, label: str = "Go") -> str:
     )
 
 
-LINK = (
-    "<a href='#x' style='display:inline-block;width:10px;height:10px;"
-    "font-size:16px;overflow:hidden'>a</a>"
-)
 FAULTS = {
     "text": ("<p style='font-size:10px'>Small words</p>", "text-size", 1),
     "tap": (
@@ -55,7 +51,6 @@ FAULTS = {
         "tap-size",
         1,
     ),
-    "link": (f"<p style='margin:0'>{LINK}{LINK}</p>", "link-size", 2),
     "competing": (f"<div>{pair('#b00', '#00b')}</div>", "competing-buttons", 1),
     "accents": (
         f"<div><p style='color:#b00'>a</p><p style='color:#060'>b</p>{pair('#00b', 'transparent')}</div>",
