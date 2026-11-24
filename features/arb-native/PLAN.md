@@ -12,9 +12,9 @@ Sources: the maintainer's request of 2026-11-24 to ship this fix to `main` as a 
 Reviewer: N/A — a one-word fix with a stated set of cases that must keep failing.
 Deliverables: None
 
-- A Flutter change with an `.arb` file and `.dart` screens passes ship with a native pair: In scope — no browser capture is asked for
-- A web change with an `.arb` file still needs a browser capture: In scope — a `.tsx` file with an `.arb` file fails with "matches no measured capture"
-- The local Complete check takes an `.arb` file as native: In scope — a native pair passes it
+- A Flutter change with an `.arb` file passes ship with a native pair: In scope — A Flutter change with an `.arb` file passes ship with a native pair
+- A web change with an `.arb` file still needs a browser capture: In scope — A web change with an `.arb` file still needs a browser capture
+- The local Complete check takes an `.arb` file as native: In scope — The local Complete check takes an `.arb` file as native
 
 ## Repository context
 
