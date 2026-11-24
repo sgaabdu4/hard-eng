@@ -165,7 +165,7 @@ def test_a_carried_record_reads_the_browser_records_of_the_evidence_checkout(
 
 def findings_answer(images: int, rule: str, text: str) -> str:
     rules = [
-        f"- {name}: {f'Fail — {text}' if name == rule else 'Pass — looked at it'}"
+        f"- {name}: {f'Fail — {text} Fix: change it.' if name == rule else 'Pass — looked at it'}"
         for name, _ in usability_rules()
     ]
     details = [f"Image image-{n}.png: a card" for n in range(1, images + 1)]

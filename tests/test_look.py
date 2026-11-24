@@ -524,25 +524,53 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
     [
         ("No clutter: Fail — kept 34, removed 0", "not done"),
         ("No clutter (kept 34, removed 0): Fail — too many labels", "not done"),
-        ("No clutter: Fail — kept 34, removed 2", "findings"),
+        ("No clutter: Fail — kept 34, removed 2. Fix: merge the badges", "findings"),
         ("No clutter: Pass — kept 34, removed 0", "clean"),
     ],
 )
 def test_a_fail_line_that_contradicts_its_own_count_is_refused(
     tmp_path: Path, project: Path, line: str, outcome: str
 ) -> None:
+    record = look_with_line(tmp_path, project, line, outcome)
+    assert str(record["outcome"]).startswith(outcome)
+    if outcome == "not done":
+        assert "No clutter" in str(record["outcome"])
+
+
+def look_with_line(
+    tmp_path: Path, project: Path, line: str, outcome: str
+) -> dict[str, object]:
+    """A run whose reviewer gives `line` for its rule and Pass for every other rule."""
     images = make_images(project, 1)
+    rule = line.partition(":")[0].partition(" (")[0]
     rules = [
-        line if name == "No clutter" else f"- {name}: Pass — looked at it"
+        line if name == rule else f"- {name}: Pass — looked at it"
         for name, _ in usability_rules()
     ]
     verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
     answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
     install_agent(tmp_path, "claude", 1, answer)
-    record = run_look(project, "codex", images)
+    return run_look(project, "codex", images)
+
+
+@pytest.mark.parametrize(
+    ("line", "outcome"),
+    [
+        ("Design system: Fail — There are three problems.", "not done"),
+        ("Design system: Fail — The badge is a new colour. Fix:", "not done"),
+        (
+            "Design system: Fail — The badge is a new colour. Fix: use the badge token.",
+            "findings",
+        ),
+    ],
+)
+def test_a_fail_line_that_names_no_fix_is_refused(
+    tmp_path: Path, project: Path, line: str, outcome: str
+) -> None:
+    record = look_with_line(tmp_path, project, line, outcome)
     assert str(record["outcome"]).startswith(outcome)
     if outcome == "not done":
-        assert "No clutter" in str(record["outcome"])
+        assert "Fix:" in str(record["outcome"])
 
 
 def full_plan(
