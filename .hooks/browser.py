@@ -126,7 +126,7 @@ wrap(window);
 const watchFrame = (frame) => {
   let inner = null;
   try { inner = frame.contentDocument; } catch (error) { inner = null; }
-  if (!inner?.body || (inner.URL === "about:blank" && frame.getAttribute("src"))) return replaceFrame(frame);
+  if (!inner?.body || !READABLE.includes(inner.contentType) || (inner.URL === "about:blank" && frame.getAttribute("src"))) return replaceFrame(frame);
   frame.dataset.hardEngRead = "";
   wrap(inner.defaultView);
   if (!frame.hardEngWatched) {
@@ -195,7 +195,7 @@ for (const selector of RINGS) {
   }
 }
 return JSON.stringify({ missing, boxes });
-})()"""
+})()""".replace("READABLE", json.dumps(sorted(READABLE_KINDS)))
 
 
 FRAME_CHECK = """(() => {
@@ -204,10 +204,13 @@ const unread = (root) => [...root.querySelectorAll("*")].reduce((count, element)
   if (element.shadowRoot) count += unread(element.shadowRoot);
   if (!element.matches("iframe,frame")) return count;
   if (!("hardEngRead" in element.dataset)) return count + 1;
-  try { return count + unread(element.contentDocument); } catch (error) { return count + 1; }
+  try {
+    const inner = element.contentDocument;
+    return READABLE.includes(inner.contentType) ? count + unread(inner) : count + 1;
+  } catch (error) { return count + 1; }
 }, 0);
 return unread(document);
-})()"""
+})()""".replace("READABLE", json.dumps(sorted(READABLE_KINDS)))
 
 
 def browser_roles(config: GateConfig) -> dict[str, dict[str, str]]:

@@ -806,12 +806,12 @@ def test_capture_replaces_a_pdf_in_a_same_origin_frame(
         step("eval", "--stdin", text=browser.PAGE_SCRIPT.replace("RINGS", "[]"))
         shown = step(
             "eval",
-            "document.querySelector('#doc') ? 'frame' : document.body.textContent",
+            "document.querySelector('#doc').tagName + document.body.textContent",
         )
         unread = step("eval", browser.FRAME_CHECK)
     finally:
         step("close")
-    assert "frame hidden" in json.loads(shown)
+    assert json.loads(shown) == "DIV[frame hidden]"
     assert json.loads(unread) == 0
 
 
