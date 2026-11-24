@@ -6,12 +6,14 @@ from typing import cast
 from plans import split_rule_line
 
 NUMBER = r"(\d+(?:\.\d+)?)\s*px"
-SOFT = r"(?:(?:is|of|at|only|just)\s+)*(?:(?:about|around|roughly|approximately|nearly|~)\s*)?"
+HEDGE_WORDS = r"(?:about|around|roughly|approximately|nearly|~)"
+HEDGE = re.compile(rf"(?i){HEDGE_WORDS}")
+SOFT = rf"(?:(?:is|of|at|only|just)\s+)*(?:{HEDGE_WORDS}\s*)?"
 TEXT = re.compile(
-    rf"(?i)\b(?:text|font)(?:\s+size)?\s+{SOFT}{NUMBER}|{NUMBER}\s+(?:text|font)\b"
+    rf"(?i)\b(?:text|font)(?:\s+size)?\s+{SOFT}{NUMBER}|(?:{HEDGE_WORDS}\s*)?{NUMBER}\s+(?:text|font)\b"
 )
 RADIUS = re.compile(
-    rf"(?i)\b(?:corners?|radius|radii)(?:\s+radius)?\s+{SOFT}{NUMBER}|{NUMBER}\s+(?:corners?|radius|rounded)\b"
+    rf"(?i)\b(?:corners?|radius|radii)(?:\s+radius)?\s+{SOFT}{NUMBER}|(?:{HEDGE_WORDS}\s*)?{NUMBER}\s+(?:corners?|radius|rounded)\b"
 )
 ELEMENTS = re.compile(
     r"(?i)\b(?:badge|chip|pill|tag|label|button|control|link|input|field|select)s?\b"
@@ -27,7 +29,7 @@ REACH = 40
 def _claims(
     pattern: re.Pattern[str], text: str, *, element: bool = False
 ) -> list[float]:
-    """The px that the line gives for the image itself; a value in the same clause as a requirement word is a target, not a measure, and 0 px is never recorded."""
+    """The hedged px estimate that the line gives for the image itself, since an estimate by eye is the guess to check; a value in the same clause as a requirement word is a target, not a measure, and 0 px is never recorded."""
     line = text.replace("DESIGN.md", "DESIGN")
     claims = []
     for found in pattern.finditer(line):
@@ -38,6 +40,7 @@ def _claims(
         number = next((group for group in found.groups() if group), "")
         if (
             number
+            and HEDGE.search(found.group(0))
             and float(number)
             and not required
             and (
