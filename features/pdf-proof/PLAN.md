@@ -46,7 +46,7 @@ N/A — no screen changes; Hard Eng has no app UI.
 
 ## Verification
 
-Result: Pending
+Result: Passed
 Evidence: The two new tests fail on `origin/main` and pass with the fix. The browser, look and local UI test files pass (95 tests). The Ready check passed with 7752 tests and every static gate. Real run with agent-browser 0.43.0 and Chrome 158, from an invented two-page PDF and an invented HTML page served by a local test server: `browser capture` of the PDF exits 1 with `the document is application/pdf, which capture cannot read to hide emails and phones, so no image was kept` and writes no file; `browser measure` on an open session of the PDF prints the same and writes no file; `browser capture` of the HTML page exits 0, writes three images, and the record of the 390 px image holds `findings: []`, `route: /page` and `width: 390`. Before the fix the same PDF capture kept three images whose page showed the phone number in clear.
 E2E: N/A — the change is a check inside the capture command, proved by the tests above, which drive the real browser tool.
 Real service: Passed — agent-browser with Chrome: the changed capture and measure ran one time against a real PDF and one HTML page served by a local test server; the PDF was refused with no file, the HTML page kept its records.
