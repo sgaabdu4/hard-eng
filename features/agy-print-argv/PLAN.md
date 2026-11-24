@@ -1,27 +1,27 @@
-# Fix the agy reviewer command and let look fall back when a reviewer cannot run
+# Fix the agy reviewer command
 
-Status: Draft
+Status: Ready
 
 ## Outcome + scope
 
-`challenge` reaches `agy` again: its command attaches the prompt to the print flag, and its session settings use `agentMode` `plan`, because agy 1.5.15 refuses `default` (valid: `accept-edits`, `auto`, `plan`). `look` tries the next supported reviewer when one exits non-zero, then a fresh session of the host agent. The canary command for `agy` gets the same print form. Non-goals: adding `agy` to `look`, retrying a review that ran but gave a bad answer, changing the proof rules of `look`.
+`challenge` reaches `agy` again: its command attaches the prompt to the print flag, and its session settings use `agentMode` `plan`, because agy 1.5.15 refuses `default` (valid: `accept-edits`, `auto`, `plan`). The canary command for `agy` gets the same print form. The fallback order of `challenge` stays as main has it: the other agents first, a fresh host session only when all of them are unavailable, and findings never cause a fallback. Non-goals: any change to `look`, which another hotfix owns; adding `agy` to `look`; changing the fallback rules.
 
 ## Sources + coverage
 
-Sources: N/A — the request is the failing `challenge` and `look` runs on this Mac while Codex is out of quota; no user source.
+Sources: N/A — the request is the failing `challenge` run on this Mac while Codex is out of quota; no user source.
 Deliverables: None
 
 ## Repository context
 
-Owners: `.hooks/challenge.py` (`command`), `release_canary.py` (`agent_command`), `.hooks/look.py` (`reviewer_attempts`, `run_first_reviewer`, `run_reviewer`, `review`).
+Owners: `.hooks/challenge.py` (`command`, `agy_read_only_settings`), `release_canary.py` (`agent_command`).
 Same cause: `agy` 1.5.15 reads the word after `-p` as the prompt. The canary command had the same order (`agy -p --dangerously-skip-permissions <task>`), so it gets the same fix. Searched the hooks for `"-p"` in agent commands: no other agent command is built for `agy`.
-Single source: N/A — no value gains a second copy; the `look` fallback reuses `reviewers_for` order.
+Single source: N/A — no value gains a second copy.
 
 ## Decisions + authorization
 
-Blockers: agy answers `RESOURCE_EXHAUSTED (code 429)` until about 2026-11-28; the real agy run needs the line `Independent review by agy at <sha>` with a verdict. The review fallback ships first in its own hotfix.
+Blockers: None. The earlier `RESOURCE_EXHAUSTED (code 429)` answer from agy ended: on 2026-11-24 a real `agy -p="Reply with the single word ok."` printed `ok`. The real run still needs the line `Independent review by agy at <sha>` with a verdict.
 Handoff: Clarification
-Authority: Autonomous — the user's standing rule: merge each task PR once its checks pass; this hotfix unblocks every installed project's review.
+Authority: Autonomous — the user asked on 2026-11-24 to fix the agy launcher, prove a real agy challenge, and release this scoped fix through every normal gate.
 
 ## Acceptance + steps
 
@@ -29,9 +29,9 @@ Authority: Autonomous — the user's standing rule: merge each task PR once its 
 - [x] The session settings use `agentMode` `plan` → `tests/test_challenge.py::test_agy_reviewer_runs_read_only_with_session_settings`. Real agy with the pinned model and the same other keys: `plan` ran git and a file read and blocked a shell write outside the repo; `auto` allowed that write. `accept-edits` was not compared. A second fault, found by the first real `challenge` run: `agentMode: unrecognized value "default"`.
 - [x] The models overlay still sets the `agy` model flags in front → `tests/test_challenge.py::test_challenge_honors_local_models_overlay_for_order_and_flags`
 - [x] The canary command for `agy` attaches the prompt; the `claude` command is unchanged → `tests/test_release_canary.py::test_agent_command_supports_agy`
-- [x] `look` falls back to a fresh same-agent session when the other agent exits non-zero → `tests/test_look.py::test_look_falls_back_when_the_other_agent_cannot_run`
-- [x] `look` does not replace a review that ran with no VERDICT line → `tests/test_look.py::test_look_does_not_replace_a_bad_review_with_a_retry`
-- [x] The attempt list keeps the old choice when no agent is installed → `tests/test_look.py::test_look_passes_models_json_flags_and_supports_agy_host_fallback`
+- [x] `challenge` tries the other agents first, in `models.json` order → `tests/test_challenge.py::test_challenge_honors_local_models_overlay_for_order_and_flags`
+- [x] A fresh host session runs only when every other agent is unavailable → `tests/test_challenge.py::test_challenge_falls_back_to_second_reviewer_when_first_fails` and `tests/test_challenge.py::test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails`
+- [x] Findings never cause a fallback → `tests/test_challenge.py::test_findings_never_send_the_review_to_another_agent`
 
 ## Baseline + execution
 
@@ -50,9 +50,9 @@ N/A — hooks only; no visible UI.
 ## Verification
 
 Result: Pending
-Evidence: 2026-11-23 on this branch. Red first: the agy argv test failed on `-p` before the fix; the fresh-host test and the three-reason test failed before the `challenge` change. Focused tests: `tests/test_challenge.py`, `tests/test_look.py` and `tests/test_release_canary.py`, 129 passed; `tests/test_skill_links.py` 13 passed. Static gates with the commands of `hard-eng.gates.json`: format, lint, complexity, annotations, types and dead-code exit 0. The test setup now puts failing fakes of all three agent CLIs first on PATH, because four tests reached the real `claude` CLI once the fallback existed, and one ran a real review. Real `look` on an invented image, twice: Codex exited 1, a fresh Claude session opened the image and wrote a record; the second record holds the real limit text from the Codex JSON error row. `skipped` is a new look record key and `fresh` a new challenge record key; each says why the host ran, and neither reaches the PR block or `ship`.
+Evidence: 2026-11-24 on this branch, rebased on main 009927fb. Red first: the agy argv test failed on `-p` before the fix (2026-11-23); the new findings test failed against a loop that also fell back on findings. Focused tests: `tests/test_challenge.py` and `tests/test_release_canary.py`, 108 passed.
 E2E: N/A — no user journey changes.
-Real service: Required — agy 1.5.15: `challenge` on this branch, after the quota reset, must print `Independent review by agy at <sha>` with a verdict; a clean line alone can come from the fallback. So far agy took the new command and answered `RESOURCE_EXHAUSTED (code 429)` (exit 3); before the fix it exited 2 on `-p took "--model" as its prompt`. Before the quota ran out, real agy in `plan` mode ran git and a file read and blocked a shell write.
-Retro: (1) agy 1.5.15 read the word after `-p` as the prompt → `tests/test_challenge.py::test_agy_reviewer_runs_read_only_with_session_settings` and `tests/test_release_canary.py::test_agent_command_supports_agy` (outside cause: an agy release). (2) agy 1.5.15 refused `agentMode` `default` → the same agy test. (3) `look` stopped when the other agent exited non-zero → `tests/test_look.py::test_look_falls_back_when_the_other_agent_cannot_run`. (4) User correction: reviews must not block when Codex and agy are out → `tests/test_challenge.py::test_challenge_falls_back_to_a_fresh_host_session_when_every_other_agent_fails`. (5) Four challenge tests reached the real `claude` CLI → the `branch` fixture in `tests/test_challenge.py` fakes every agent CLI. (6) The Ready check ran before the `agentMode` commit → None — the Complete check runs at the final head.
+Real service: Required — agy 1.5.15: `challenge` on this branch must print `Independent review by agy at <sha>` with a verdict; a clean line from the fresh host fallback does not count. On 2026-11-24 a real `agy -p="Reply with the single word ok."` printed `ok`, so the 429 limit has ended. Before the fix agy exited 2 on `-p took "--model" as its prompt`. Earlier, real agy in `plan` mode ran git and a file read and blocked a shell write.
+Retro: (1) agy 1.5.15 read the word after `-p` as the prompt → `tests/test_challenge.py::test_agy_reviewer_runs_read_only_with_session_settings` and `tests/test_release_canary.py::test_agent_command_supports_agy` (outside cause: an agy release). (2) agy 1.5.15 refused `agentMode` `default` → the same agy test. (3) The rule that findings never cause a fallback had only indirect proof → `tests/test_challenge.py::test_findings_never_send_the_review_to_another_agent`.
 Delivery target: Merge
 Delivery: Pending
