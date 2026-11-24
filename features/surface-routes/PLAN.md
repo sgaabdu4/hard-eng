@@ -53,5 +53,8 @@ E2E: N/A — the change is a pure check of plan text and local capture records, 
 Real service: N/A — no outside service is called.
 Retro: Escaped bug: `tests/test_ui_capture_match.py::test_an_after_capture_of_any_route_the_surface_lists_passes_ship` and `tests/test_local_ui_proof.py::test_local_complete_check_accepts_a_capture_of_any_listed_route` now cover several routes; the gate that should have caught it was the ship UI evidence test set, which only used one-route Surface lines; the local Complete check ran too late to judge the attached image, because it accepted any one clean capture set while `ship` judges each set that holds an After image, and `tests/test_local_ui_proof.py::test_local_complete_check_refuses_a_looked_at_capture_of_an_unlisted_route` now closes that gap; the failing cases were committed before the fix. Failed check: the types gate flagged an empty list in a test table → `tests/test_local_ui_proof.py::test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes` now types it.
 
+Reader: the changed `checks.md` sentences went to a cold reader; it asked what "compared as written" was compared with, so the text now says that each route is written as the capture's page path shows it, never as a `[id]` placeholder. The other phrases it quoted were in the sentence before the change.
+Canary: no flow of `release_canary.py` reaches the new refusal; none of them reads a Surface line or a browser capture.
+
 Delivery target: PR
 Delivery: Pending — required remote proof.
