@@ -16,8 +16,8 @@ Sources: the maintainer's brief of 2026-11-24 and the sealed logs of three real 
 Reviewer: N/A — two small faults with a stated cause.
 Deliverables: None
 
-- Fault 1, empty fields match: In scope — one helper owns the compare
-- Fault 2, rule line form: In scope — the prompt form needs no em dash, and the parser takes three forms
+- Fault 1, empty fields match: In scope — An old-format clean record (no `inputs`, no per-image `file`) never covers a new head
+- Fault 2, rule line form: In scope — Each of the three line forms parses, and a line with no verdict word is still refused
 
 ## Repository context
 
