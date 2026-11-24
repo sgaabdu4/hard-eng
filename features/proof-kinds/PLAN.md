@@ -35,6 +35,7 @@ Authority: Autonomous — the user asked on 2026-11-23 to fix every Hard Eng fau
 - [ ] The 20-control and 12-contrast-pair limits of the reader values cut no finding → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`.
 - [ ] A standalone link gets the target-size check, a link inside a sentence stays exempt, and a 30 px link passes at 1280 px only → `tests/test_ui_tap_links.py::test_the_measure_flags_what_the_limits_and_the_exemption_leave`.
 - [ ] A reviewer Fail on a measured rule is sent back as an earlier fix → `tests/test_look_proof_kinds.py::test_a_reviewer_fail_on_a_measured_rule_is_sent_back_as_an_earlier_fix`.
+- [ ] An older capture with findings does not fail a page that a capture at the head shows clean → `tests/test_look_proof_kinds.py::test_an_older_capture_with_findings_does_not_fail_a_page_fixed_since`.
 - [ ] A rule with `measured` and `judgement` still goes to the reviewer with its measured values → `tests/test_look_proof_kinds.py::test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer`.
 - [ ] An owner Fail line never returns to the reviewer as an earlier fix → `tests/test_look_proof_kinds.py::test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix`.
 - [ ] The skill links still resolve after the one-line reference change → `tests/test_skill_links.py::test_distributed_skill_links_resolve`.
