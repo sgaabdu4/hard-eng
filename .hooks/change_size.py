@@ -170,6 +170,21 @@ def update_only(root: Path, base: str, changed: set[str]) -> bool:
     return not changed - update_written(root, base, changed, found)
 
 
+def update_needs_no_plan(
+    root: Path, base: str | None, changed: set[str], explicit_stage: bool
+) -> bool:
+    """Say so and return True when only files that a verified Hard Eng update wrote changed and no stage was asked for."""
+    if (
+        base is None
+        or explicit_stage
+        or not changed
+        or not update_only(root, base, changed)
+    ):
+        return False
+    print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
+    return True
+
+
 def _verdict(
     root: Path,
     point: str,

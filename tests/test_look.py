@@ -400,15 +400,19 @@ def test_look_reads_a_real_claude_answer() -> None:
     assert "image-1.png" in details
 
 
+def first_prompt(tmp_path: Path, project: Path) -> tuple[list[Path], Path, str]:
+    images = make_images(project, 2)
+    log = install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "codex", images)
+    return images, log, " ".join(json.loads(log.read_text())["argv"])
+
+
 def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
     tmp_path: Path, project: Path
 ) -> None:
     import ui_measure
 
-    images = make_images(project, 2)
-    log = install_agent(tmp_path, "claude", 2, good_answer(2))
-    run_look(project, "codex", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    images, log, prompt = first_prompt(tmp_path, project)
     assert "--ring" not in prompt
     assert "3px solid red" not in prompt
     assert "0 removed" in prompt
@@ -444,10 +448,7 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
 ) -> None:
     import ui_measure
 
-    images = make_images(project, 2)
-    log = install_agent(tmp_path, "claude", 2, good_answer(2))
-    run_look(project, "codex", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    images, log, prompt = first_prompt(tmp_path, project)
     assert "Measured values" not in prompt
 
     measured: dict[str, object] = {

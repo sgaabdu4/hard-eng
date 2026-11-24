@@ -85,7 +85,7 @@ def test_a_static_check_runs_the_analyzer_roles_and_no_tests(
             for role in roles
         ],
     )
-    assert runner.check(static=True) == 0
+    assert runner.check(quick=True, static=True) == 0
     assert {path.name for path in tmp_path.iterdir()} & set(roles) == set(STATIC_ROLES)
 
 
@@ -104,10 +104,10 @@ def test_a_function_over_the_complexity_limit_fails_the_static_check_and_passes_
         ],
     )
     assert runner.check(quick=True) == 0
-    assert runner.check(static=True) == 1
+    assert runner.check(quick=True, static=True) == 1
     assert not (tmp_path / "tests-ran").exists()
     (tmp_path / "src.py").write_text("def f(a):\n    return a\n")
-    assert runner.check(static=True) == 0
+    assert runner.check(quick=True, static=True) == 0
 
 
 def test_a_quick_check_refuses_a_bad_plan_line_as_the_full_check_does(

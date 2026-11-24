@@ -840,8 +840,7 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
 
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     from ship_record import base_matches, ship_method
-    from ship_scope import plan_in, plan_scope, target_problem
-    from ui_proof import changed_files
+    from ship_scope import delivered_files, plan_scope, target_problem
 
     if stage not in {"ready", "delivered"}:
         raise ShippingError("shipping stage must be ready or delivered")
@@ -880,16 +879,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         else:
             revision = _delivered(resolved_root, pull, pull.base_ref, origin_url)
             merged_sha = revision
-        unplanned = stage == "delivered" and resolved_plan is None
-        files = (
-            changed_files(resolved_root, owner, name, number)
-            if policy["ui_paths"] or unplanned
-            else []
-        )
-        if unplanned and (named := plan_in(files)):
-            raise ShippingError(
-                f"--plan is missing: this PR changed {named}; pass --plan {named}"
-            )
+        files = delivered_files(resolved_root, identity, policy, resolved_plan, stage)
         if policy["ui_paths"]:
             _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
         _checks(

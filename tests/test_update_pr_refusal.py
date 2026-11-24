@@ -253,11 +253,10 @@ def test_a_refused_checkout_plan_with_no_shipping_block_names_the_ci_step_once(
     assert outcome.endswith(f"{CI_STEP}.")
 
 
-def test_a_refused_push_of_the_update_branch_names_the_next_step(
-    release: tuple[Path, Path, str],
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def updated_project(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    """The project on a work branch with the new release applied, and its remote."""
     source, target, _ = release
     remote = add_origin(target)
     git(target, "switch", "-qc", "feature/work")
@@ -266,6 +265,15 @@ def test_a_refused_push_of_the_update_branch_names_the_next_step(
     reference.write_text(reference.read_text() + "\nnew release\n")
     select_release(source, monkeypatch)
     assert update_runner.apply_update(target) == 0
+    return target, remote
+
+
+def test_a_refused_push_of_the_update_branch_names_the_next_step(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target, remote = updated_project(release, monkeypatch)
     hook = remote / "hooks/pre-receive"
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
@@ -291,14 +299,7 @@ def test_a_push_that_a_signal_stopped_says_rerun_and_names_no_fault(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    source, target, _ = release
-    add_origin(target)
-    git(target, "switch", "-qc", "feature/work")
-    monkeypatch.setattr(update_runner.signal, "signal", Mock())
-    reference = source / ".agents/skills/he/references/workflow.md"
-    reference.write_text(reference.read_text() + "\nnew release\n")
-    select_release(source, monkeypatch)
-    assert update_runner.apply_update(target) == 0
+    target, _ = updated_project(release, monkeypatch)
     hook = target / ".git/hooks/pre-push"
     hook.write_text(
         f"#!/bin/sh\necho {shlex.quote(ship_actions.stopped_line(signal.SIGTERM))}\nexit 1\n"

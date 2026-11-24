@@ -662,7 +662,6 @@ def check(
     import plans
     from ci_setup import push_base, require_ci_base
     from gate_config import load_groups, parse_config
-    from gate_schedule import QUICK_ROLES, STATIC_ROLES
     from gate_times import gate_budget
     from process_group import (
         ci_edits,
@@ -673,8 +672,6 @@ def check(
     )
     from reports import quick_groups
 
-    roles = STATIC_ROLES if static else QUICK_ROLES
-    quick = quick or static
     require_ci_base(base, ROOT)
     base = push_base(ROOT, base)
     parse_config((ROOT / "hard-eng.gates.json").read_text())
@@ -707,7 +704,7 @@ def check(
             workflow_checked=merging_in_workflow(shard),
         )
         groups = quick_groups(
-            language_groups(every, languages), quick, installed, roles
+            language_groups(every, languages), quick, installed, static
         )
         if shard:
             from shards import shard_groups
@@ -828,7 +825,7 @@ def check_command(args: "Namespace") -> int:
         plan_stage=args.plan_stage,
         dependents=not args.without_dependents,
         related_tests=args.related_tests,
-        quick=args.quick,
+        quick=args.quick or args.static,
         languages=language_filter(args),
         shard=args.shard,
         static=args.static,
