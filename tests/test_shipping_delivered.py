@@ -149,8 +149,11 @@ def test_delivered_judges_a_release_on_the_branch_it_merged_into(
     assert _verify(fixture).merged_sha
 
 
-_SCREEN = {"filename": "src/App.ts", "patch": "@@ -1 +1 @@\n-a\n+b"}
-_PLAN_FILE = {"filename": "features/shipping/PLAN.md", "patch": "@@ -0,0 +1 @@\n+x"}
+_SCREEN: dict[str, object] = {"filename": "src/App.ts", "patch": "@@ -1 +1 @@\n-a\n+b"}
+_PLAN_FILE: dict[str, object] = {
+    "filename": "features/shipping/PLAN.md",
+    "patch": "@@ -0,0 +1 @@\n+x",
+}
 
 
 def test_delivered_without_a_plan_says_the_plan_is_missing_when_the_pr_changed_a_plan(
