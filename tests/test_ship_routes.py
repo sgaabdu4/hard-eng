@@ -1,6 +1,7 @@
 """The release, hotfix and join pull requests pass ship with a merge commit; every other pull request into the default branch stays refused."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -175,3 +176,28 @@ def test_the_base_branch_into_a_branch_that_is_not_the_default_stays_refused(
     pull = _route_pull(fixture, "develop", "staging", 1)
     with pytest.raises(shipping.ShippingError, match="base branch does not match"):
         _ship(monkeypatch, fixture, pull, plan=fixture.plan)
+
+
+@dataclass(frozen=True)
+class JoinPull:
+    head_sha: str
+    head_ref: str = "chore/join-main-hotfix"
+    base_ref: str = "develop"
+    rebaseable: bool | None = True
+    default_branch: str | None = "main"
+
+
+def test_a_merged_join_keeps_its_route_when_the_base_already_holds_the_default_tip(
+    tmp_path: Path,
+) -> None:
+    from ship_record import route
+
+    fixture = develop_policy(tmp_path, "chore/join-main-hotfix")
+    _origin_refs(fixture, "head")
+    head = git(fixture.root, "rev-parse", "HEAD")
+    git(fixture.root, "update-ref", "refs/remotes/origin/develop", head)
+    pull = JoinPull(head)
+    assert route(fixture.root, pull, "develop") is None
+    assert route(fixture.root, pull, "develop", merged=True) == "join"
+    side = JoinPull(head, head_ref="feature/own-work", base_ref="main")
+    assert route(fixture.root, side, "develop", merged=True) is None

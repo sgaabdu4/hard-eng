@@ -309,7 +309,10 @@ for (const h of h2s) {
   }
 }
 const measureCtx = document.createElement("canvas").getContext("2d");
-const stackedBlocks = (el) => [...el.querySelectorAll("*")].some((c) => ownText(c) && !getComputedStyle(c).display.startsWith("inline"));
+const stackedBlocks = (el) => {
+  const rows = [...el.querySelectorAll("*")].filter((c) => ownText(c) && visible(c) && !getComputedStyle(c).display.startsWith("inline")).map((c) => c.getBoundingClientRect());
+  return rows.some((a, i) => rows.slice(i + 1).some((b) => a.bottom <= b.top + 1 || b.bottom <= a.top + 1));
+};
 const labelLines = (el) => {
   const boxes = [];
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);

@@ -65,20 +65,20 @@ def _carries_own_work(root: Path, pull: Pull, tip: str, base_tip: str) -> bool:
     return done.returncode != 0 or bool(done.stdout.strip())
 
 
-def is_join(root: Path, pull: Pull, default: str) -> bool:
-    """The head holds the default branch's tip, which the base lacks, and adds no work of its own; local refs, so fetch first."""
+def is_join(root: Path, pull: Pull, default: str, merged: bool = False) -> bool:
+    """The head holds the default branch's tip, which the base lacks until the join is merged, and adds no work of its own; local refs, so fetch first."""
     tip, base_tip = _remote_tip(root, default), _remote_tip(root, pull.base_ref)
     return (
         tip is not None
         and base_tip is not None
         and _contains(root, tip, pull.head_sha)
-        and not _contains(root, tip, base_tip)
+        and (merged or not _contains(root, tip, base_tip))
         and not _carries_own_work(root, pull, tip, base_tip)
     )
 
 
-def route(root: Path, pull: Pull, base: str) -> str | None:
-    """release, hotfix or join when the pull request moves work between the base and the default branch; else None."""
+def route(root: Path, pull: Pull, base: str, merged: bool = False) -> str | None:
+    """release, hotfix or join when the pull request moves work between the base and the default branch; else None. A merged join already sits in the base."""
     default = pull.default_branch
     if is_release(pull, base) and default in (None, pull.base_ref):
         return "release"
@@ -86,7 +86,7 @@ def route(root: Path, pull: Pull, base: str) -> str | None:
         return None
     if pull.base_ref == default and pull.head_ref.startswith("hotfix/"):
         return "hotfix"
-    if pull.base_ref == base and is_join(root, pull, default):
+    if pull.base_ref == base and is_join(root, pull, default, merged):
         return "join"
     return None
 
