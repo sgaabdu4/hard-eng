@@ -355,6 +355,15 @@ def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None
     assert "—" not in form
 
 
+def test_the_plan_scope_refuses_a_verdict_in_the_plain_form_too() -> None:
+    import look
+
+    with pytest.raises(ValueError, match="reviewer verdicts"):
+        look.extract_outcome_scope(
+            full_plan("A card.\n\nNo clutter: Pass. 31 kept"), "plan"
+        )
+
+
 def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
     tmp_path: Path, project: Path
 ) -> None:
