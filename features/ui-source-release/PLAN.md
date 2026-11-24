@@ -26,9 +26,9 @@ Authority: Autonomous: the user asked on 2026-11-24 to release Hard Eng with eve
 
 - [ ] An update leaves `ui_library` to the project, so the pushed policy holds no key that an older release refuses, and a replay of the update plans no change → `tests/test_scaffold_replay.py::test_an_update_leaves_the_ui_library_key_to_the_project`; a first install still writes the `ui` default → `tests/test_scaffold_replay.py::test_a_first_install_writes_the_ui_library_default`.
 - [ ] A `components` folder gets no guessed library, because a guess there cut base element findings from 315 to 2 on a real web app → `tests/test_scaffold_replay.py::test_setup_writes_no_library_for_a_components_folder`.
-- [ ] An empty `ui_library` refusal names the key and the value form, and the exact value when one `ui` folder holds the shared parts → `tests/test_ui_single_source.py::test_the_empty_library_refusal_names_the_key_and_the_value`.
-- [ ] A stylesheet or component file outside `ui_paths` names both fixes: add its folder to `ui_paths` when users receive it, or remove a preview from git → `tests/test_ui_single_source.py::test_a_file_outside_ui_paths_names_both_fixes`.
-- [ ] A library of 2,000 parts passes the index check, and the look excerpt keeps `DESIGN.md` within its byte limit; no refusal and no limit change is needed → `tests/test_ui_single_source.py::test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bounded`.
+- [ ] An empty `ui_library` refusal names the key and the value form, and the exact value when one `ui` folder holds the shared parts → `tests/test_ui_library_refusals.py::test_the_empty_library_refusal_names_the_key_and_the_value`.
+- [ ] A stylesheet or component file outside `ui_paths` names both fixes: add its folder to `ui_paths` when users receive it, or remove a preview from git → `tests/test_ui_library_refusals.py::test_a_file_outside_ui_paths_names_both_fixes`.
+- [ ] A library of 2,000 parts passes the index check, and the look excerpt keeps `DESIGN.md` within its byte limit; no refusal and no limit change is needed → `tests/test_ui_library_refusals.py::test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bounded`.
 - [ ] The text of a failed update push says the rule is intended, has no waiver, and is fixed in the project → `tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step`.
 - [ ] A real update on a project that sits on the old release pushes past the old pre-push check and reports the true list → Evidence in Verification (real run).
 
