@@ -1,6 +1,7 @@
 """Each plan acceptance line names a test that exists and was not skipped."""
 
 import json
+import re
 import time
 from pathlib import Path
 from types import ModuleType
@@ -11,7 +12,7 @@ import pytest
 from change_size import plan_tests
 from conftest import add_origin, commit, configure, gate, git, init, plan_document
 from gate_config import repository_files
-from plan_tests import missing_tests
+from plan_tests import acceptance_rows, missing_tests
 from plans import (
     is_plan_path,
     plan_files,
@@ -893,3 +894,76 @@ def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_wit
         match="features/old/PLAN.md: acceptance names tests that do not exist: tests/test_one.py::test_named",
     ):
         validate_plans(repository, base, "Complete")
+
+
+NAMED_ROW = "- [x] Observe it → `tests/test_one.py::test_named`."
+
+
+def old_plan_of_form(plan: str, form: str) -> str:
+    text = plan.replace(UNPROVED, NAMED_ROW)
+    if form == "no ux_reference section":
+        return re.sub(r"(?ms)^## ux_reference\n.*?(?=^## )", "", text)
+    if form == "a bare N/A":
+        return text.replace("Verify fixture", "Notes: N/A\nVerify fixture", 1)
+    if form == "a ./ path":
+        return text.replace("`tests/test_one", "`./tests/test_one")
+    return text
+
+
+@pytest.mark.parametrize("how", ["edit", "delete the file"])
+@pytest.mark.parametrize(
+    "form", ["plain", "no ux_reference section", "a bare N/A", "a ./ path"]
+)
+def test_removing_a_named_test_is_refused_whatever_the_form_of_the_old_plan(
+    repository: Path, completed_plan: str, form: str, how: str
+) -> None:
+    (repository / "tests").mkdir()
+    source = repository / "tests/test_one.py"
+    source.write_text(
+        "def test_named():\n    pass\n\n\ndef test_unnamed():\n    pass\n"
+    )
+    old = repository / "features/old/PLAN.md"
+    old.parent.mkdir(parents=True)
+    text = old_plan_of_form(completed_plan, form)
+    old.write_text(text)
+    base = commit(repository, "plans and tests")
+    mine = repository / "features/mine/PLAN.md"
+    mine.parent.mkdir()
+    mine.write_text(completed_plan)
+    if how == "edit":
+        source.write_text("def test_unnamed():\n    pass\n")
+    else:
+        source.unlink()
+    line = next(n for n, row in enumerate(text.splitlines(), 1) if "test_named" in row)
+
+    with pytest.raises(
+        ValueError,
+        match=rf"features/old/PLAN.md: acceptance names tests that do not exist: \S*tests/test_one.py::test_named \(line {line}\)",
+    ):
+        validate_plans(repository, base, "Complete")
+
+
+def test_the_lenient_reader_gives_the_rows_of_the_strict_reader(
+    completed_plan: str,
+) -> None:
+    text = completed_plan.replace(
+        UNPROVED,
+        f"{NAMED_ROW}\n- [x] A row with no proof.\n- [x] Two → `a/test_x.py::test_a` and `b/test_y.py::test_b[1|2]`.",
+    )
+    rows = acceptance_rows(text)
+
+    assert [refs for _, refs in rows] == [
+        [("tests/test_one.py", "test_named")],
+        [],
+        [("a/test_x.py", "test_a"), ("b/test_y.py", "test_b")],
+    ]
+    lines = text.splitlines()
+    assert [number for number, _ in rows] == [
+        lines.index(row) + 1
+        for row in lines
+        if row.startswith("- [x] ")
+        and ("test_named" in row or "no proof" in row or "test_a" in row)
+    ]
+    assert (
+        acceptance_rows(re.sub(r"(?m)^## Acceptance \+ steps$", "## Steps", text)) == []
+    )
