@@ -23,6 +23,8 @@ Blockers: None.
 Handoff: Approval
 Authority: Autonomous: the user asked on 2026-11-24 to put client unblocking first and to release scoped client fixes to main through every normal gate; this false finding blocks a client's merge.
 
+Review declined: a page that redirects to a PDF after the first document check can keep an unmasked capture in `.hooks/browser.py` (`shoot_page`, `require_readable_document`) :: the code is the merged PDF capture refusal of another hotfix, on `main` before this change; this change touches only the accent count in `ui_measure.py` and its tests, and the reviewer found no defect there; the scope of this hotfix allows no other change; the finding goes to the owner of that hotfix
+
 ## Acceptance + steps
 
 - [x] A list row and a panel whose only third colour is the page's text colour give no accent finding → `tests/test_ui_accent_block.py::test_the_page_ink_text_is_not_an_accent`
