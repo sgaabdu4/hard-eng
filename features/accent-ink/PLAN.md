@@ -1,6 +1,6 @@
 # The page's own text colour is not an accent
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -25,9 +25,9 @@ Authority: Autonomous: the user asked on 2026-11-24 to put client unblocking fir
 
 ## Acceptance + steps
 
-- [ ] A list row and a panel whose only third colour is the page's text colour give no accent finding → `tests/test_ui_accent_block.py::test_the_page_ink_text_is_not_an_accent`
-- [ ] A block with three real accents plus body text, a block whose text uses a hued colour that is not the page ink, and a block with a fill in the page ink still give the finding → `tests/test_ui_accent_block.py::test_accent_colours_around_a_button_group_still_count`
-- [ ] Two different inks still count as two colours when neither is the page ink → `tests/test_ui_accent_block.py::test_two_different_inks_still_count_as_two_colours`
+- [x] A list row and a panel whose only third colour is the page's text colour give no accent finding → `tests/test_ui_accent_block.py::test_the_page_ink_text_is_not_an_accent`
+- [x] A block with three real accents plus body text, a block whose text uses a hued colour that is not the page ink, and a block with a fill in the page ink still give the finding → `tests/test_ui_accent_block.py::test_accent_colours_around_a_button_group_still_count`
+- [x] Two different inks still count as two colours when neither is the page ink → `tests/test_ui_accent_block.py::test_two_different_inks_still_count_as_two_colours`
 
 Steps:
 
@@ -55,7 +55,11 @@ N/A — measure script and tests; no visible UI.
 
 ## Verification
 
-Result: Pending
+Result: Passed
+Evidence: Red first on `main`: `list-row` and `panel` fail with `accent-colours` at 390 px; the three near misses already hold. Green after the fix: 97 tests of `test_ui_accent_block.py`, `test_ui_quality.py` and `test_ui_pages.py`. One existing case, two different inks, used the page ink as one of its two inks; it now uses two other hued colours and still expects the finding.
+E2E: Passed — `browser capture` on three local invented pages with the real browser, three widths each. The list-row page: 0 findings at 390, 768 and 1280 px. The panel page: 0 findings at each width. The near miss (blue button, red badge, green tile, page ink): `accent-colours` with `colours: 3` at each width.
+Real service: N/A — no outside service is called.
+Retro: (1) Fault on `main`: the base text colour passed the floors of `hue()` and counted as an accent → `tests/test_ui_accent_block.py::test_the_page_ink_text_is_not_an_accent`. (2) One existing test used the page ink as a test colour and had to change with the fix → the same file.
 
 Delivery target: Merge
 Delivery: Pending — `hard-eng` passes on the PR to `main`, the merge on `main`, then the join PR merged into `develop`.
