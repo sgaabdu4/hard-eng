@@ -6,11 +6,13 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 import local_ui_proof
 import look
 import pytest
 import ui_measure
+import ui_proof
 from comments import validate_rules
 from conftest import SOURCE, commit, git
 from plans import usability_rules
@@ -22,6 +24,8 @@ from test_ui_quality import (
     REAL_UX,
     UNCHANGED_UX,
     WIDTHS,
+    look_record,
+    sha_of,
     write_look,
     write_pair,
 )
@@ -142,6 +146,49 @@ def test_local_complete_check_refuses_missing_browser_and_look_then_passes(
     write_look(root, head, after, design_doc=look.design_hash(root))
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
     validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
+
+
+def stray_look(root: Path, head: str, after: bytes, strays: list[bytes]) -> None:
+    images = cast(list[dict[str, object]], look_record(head, after)["images"])
+    images += [
+        {"name": f"stray-{n}.png", "sha256": sha_of(data), "read": True, "read_at": "t"}
+        for n, data in enumerate(strays)
+    ]
+    write_look(root, head, after, design_doc=look.design_hash(root), images=images)
+
+
+def test_local_complete_check_names_every_opened_image_that_matches_no_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design="# Design\n\n## Overview\nNavy primary.\n")
+    head = git(root, "rev-parse", "HEAD").strip()
+    after = write_clean_browser(root, route="/account")
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+    strays = [f"scratch-{number}".encode() for number in range(3)]
+    stray_look(root, head, after, strays)
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and problem.startswith("3 After images")
+    assert problem == ui_proof.measured_problem(
+        root, head, [after, *strays], ["/account"]
+    )
+
+
+def test_the_quick_check_never_runs_the_local_ui_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design="# Design\n\n## Overview\nNavy primary.\n")
+    ran: list[bool] = []
+    monkeypatch.setattr(
+        local_ui_proof, "validate_local_ui_proof", lambda *_: ran.append(True)
+    )
+    validate_rules(root, "origin/main", screens=True, full=False, stage="Complete")
+    assert ran == []
+    validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
+    assert ran == [True]
 
 
 def test_local_complete_check_refuses_na_ux_reference_on_visible_change(
