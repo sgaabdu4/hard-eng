@@ -412,3 +412,92 @@ def test_a_line_whose_items_all_pass_in_code_becomes_a_pass(
     )
     assert "at or over the 11 px floor" in line
     assert record["outcome"] == "clean"
+
+
+def two_rounds(
+    tmp_path: Path,
+    project: Path,
+    first_fail: str,
+    first: dict[str, object],
+    second: dict[str, object],
+    second_answer: str | None = None,
+) -> tuple[dict[str, object], str]:
+    """Round one holds a reviewer Fail line over a record; round two is a new head over another record, with the reviewer saying only what its answer says."""
+    import ui_measure
+    from test_look import next_head
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(DESIGN)
+    commit(project, "inputs")
+    images = make_images(project, 1)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=first)
+    install_agent(tmp_path, "claude", 1, answer_with(first_fail))
+    assert run_look(project, "codex", images)["outcome"] == "findings"
+    next_head(project)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=second)
+    log = install_agent(tmp_path, "claude", 1, second_answer or good_answer(1))
+    record = run_look(project, "codex", images)
+    return record, prompt_of(log)
+
+
+NO_FACTS = values()
+EARLIER = "Earlier look findings"
+
+
+def test_an_earlier_measured_item_is_decided_by_code_before_the_prompt(
+    tmp_path: Path, project: Path
+) -> None:
+    fail = "image-1.png: Hint [colour] Fix: use ink"
+    held = values(texts=[text_fact("Hint")])
+    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, held)
+    assert EARLIER not in prompt
+    assert record["outcome"] == "clean"
+
+
+def test_an_earlier_true_colour_fail_stays_a_fail_when_the_reviewer_says_nothing(
+    tmp_path: Path, project: Path
+) -> None:
+    fail = "image-1.png: Hint [colour] Fix: use ink"
+    off = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676")])
+    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, off)
+    assert EARLIER not in prompt
+    assert record["outcome"] == "findings"
+    line = stored_rule(record, "Design system")
+    assert line.startswith("Design system: Fail — image-1.png: Hint [colour] — code: ")
+    assert "is not in the colour tokens" in line
+
+
+def test_an_earlier_item_that_code_cannot_find_is_listed_again(
+    tmp_path: Path, project: Path
+) -> None:
+    fail = (
+        "image-1.png: Hint [colour]; image-1.png: the card sits left [judgement] "
+        "Fix: use ink"
+    )
+    answer = good_answer(1).replace(
+        "VERDICT: clean",
+        "Recheck R1: gone image-1.png: the card\nRecheck R2: gone image-1.png: Hint\nVERDICT: clean",
+    )
+    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, NO_FACTS, answer)
+    earlier = prompt.partition(EARLIER)[2]
+    assert "image-1.png: the card sits left [judgement]" in earlier
+    assert "image-1.png: Hint [colour]" in earlier
+    assert record["outcome"] == "clean"
+
+
+def test_a_judgement_item_stays_on_the_list_when_a_measured_item_leaves_it(
+    tmp_path: Path, project: Path
+) -> None:
+    fail = (
+        "image-1.png: Hint [colour]; image-1.png: the card sits left [judgement] "
+        "Fix: use ink"
+    )
+    held = values(texts=[text_fact("Hint")])
+    answer = good_answer(1).replace(
+        "VERDICT: clean", "Recheck R1: gone image-1.png: the card\nVERDICT: clean"
+    )
+    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, held, answer)
+    earlier = prompt.partition(EARLIER)[2]
+    assert "image-1.png: the card sits left [judgement]" in earlier
+    assert "Hint [colour]" not in earlier
+    assert record["outcome"] == "clean"

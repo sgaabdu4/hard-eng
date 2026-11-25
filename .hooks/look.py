@@ -30,7 +30,7 @@ from look_answer import (
     recheck_lines,
 )
 from look_facts import Tokens, design_tokens, measured_text
-from look_records import STORE, with_code_decisions
+from look_records import STORE, with_code_decisions, with_earlier_fails
 from models import cli_flags, trusted_base_ref
 from plans import (
     is_plan_path,
@@ -676,7 +676,12 @@ def review(
         ):
             item["inputs"] = key
         ringed, values = image_inputs(root, names, digests)
-        items = (
+        frames = {
+            name: recorded_measured(root, digest)
+            for name, digest in zip(names, digests, strict=True)
+        }
+        tokens = design_tokens(root)
+        items, earlier_fails = (
             earlier_findings(
                 root,
                 head,
@@ -685,9 +690,11 @@ def review(
                     for n, i, d in zip(names, images, digests, strict=True)
                 ],
                 judged_names(unmeasured),
+                frames,
+                tokens,
             )
             if root and head
-            else []
+            else ([], [])
         )
         earlier = [f"R{number}: {text}" for number, (_, text) in enumerate(items, 1)]
         prompt = prompt_for(
@@ -734,15 +741,8 @@ def review(
     if outcome.startswith("not done"):
         record["answer"] = answer
     else:
-        outcome, rule_lines = with_code_decisions(
-            outcome,
-            rule_lines,
-            {
-                name: recorded_measured(root, digest)
-                for name, digest in zip(names, digests, strict=True)
-            },
-            design_tokens(root),
-        )
+        outcome, rule_lines = with_code_decisions(outcome, rule_lines, frames, tokens)
+        outcome, rule_lines = with_earlier_fails(outcome, rule_lines, earlier_fails)
     record.update(
         outcome=outcome,
         rules=rule_lines,
