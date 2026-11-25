@@ -112,7 +112,9 @@ def test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     found = captured(tmp_path, site, browser, "wrapped", WRAPPED_PAGE)
-    rows = [row for row in rows_of(found, "texts") if row["at"].startswith("xxxxxxxx")]
+    rows = [
+        row for row in rows_of(found, "texts") if str(row["at"]).startswith("xxxxxxxx")
+    ]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", False)]
 
 
@@ -126,7 +128,9 @@ def test_a_centred_line_with_an_inline_link_is_centred(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     found = captured(tmp_path, site, browser, "inline", INLINE_PAGE)
-    rows = [row for row in rows_of(found, "texts") if row["at"].startswith("Already")]
+    rows = [
+        row for row in rows_of(found, "texts") if str(row["at"]).startswith("Already")
+    ]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", True)]
 
 
