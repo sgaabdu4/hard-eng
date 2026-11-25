@@ -501,3 +501,28 @@ def test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key() -> None:
     assert len(tap) == 1
     assert "no key" not in tap[0]
     assert look_facts.item_keys(measured, tokens)["gap"] == frozenset()
+
+
+def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        texts=[
+            text_fact("Even one", 14, weight=400),
+            text_fact("Bold two", 14, weight=700),
+            text_fact("Settings", 14, align="center", centred=True),
+            text_fact("Settings", 14, align="start", centred=False),
+            text_fact("Heading", 20, align="start", centred=False),
+        ],
+        gaps=[{"at": "Even one", "to": "Bold two", "px": 8, "axis": "x"}],
+    )
+    listed = look_facts.measured_text(measured, tokens).splitlines()
+    weight = [line for line in listed if line.startswith("weight keys:")]
+    align = [line for line in listed if line.startswith("align keys:")]
+    assert weight == ["weight keys: Bold two | Even one"]
+    assert len(align) == 1
+    assert "Heading" in align[0]
+    assert "Settings" not in align[0]

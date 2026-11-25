@@ -54,6 +54,8 @@ Decisions made here, each with a reason:
 - [x] A label repeated in two rows with one style gets no weight verdict → `tests/test_ui_gap_and_init_script.py::test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict`
 - [x] A key whose facts disagree has no key, and its item is refused by form → `tests/test_look_keys.py::test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused`
 - [x] A listed fact that code cannot decide says it has no key, so a reviewer does not copy it into a measured item → `tests/test_look_keys.py::test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key`
+- [x] Each text kind lists its own keys, and a key whose facts disagree is not listed → `tests/test_look_keys.py::test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed`
+- [x] An icon button named like a link gives no weight verdict to either → `tests/test_ui_gap_and_init_script.py::test_an_icon_button_named_like_a_link_gives_no_weight_verdict`
 
 Steps:
 
