@@ -37,5 +37,7 @@ def deliver(root: Path, args: Namespace, adopt: Callable[[], int]) -> int:
 
         return challenge(root, args.base, args.host)
     from ship_actions import run
+    from tool_setup import ensure_python_runtime
 
+    ensure_python_runtime()
     return run(root, args.plan, args.pr, args.stage, args.worktree, args.merge_method)

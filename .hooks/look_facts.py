@@ -21,7 +21,7 @@ TRIGGER = {
     "gap": re.compile(r"(?i)\b(?:touch(?:es|ing)?|no gap)\b"),
 }
 LEAD = (
-    r"(?:(?!(?:not|never|no|nor|but|than|rather|instead|should|must|needs?|do|does|don't|doesn't|"
+    r"(?:(?!(?:not|never|no|nor|off|but|than|rather|instead|should|must|needs?|do|does|don't|doesn't|"
     r"isn't|aren't|wasn't|weren't|can't|cannot|won't|would|could|may|might|without)\b)[\w'’-]+\s+){0,6}"
 )
 CLAIMS = {
@@ -559,7 +559,7 @@ def claimed_state(kind: str, claim: str) -> str:
     """The state that an item of a measured kind claims: `square` for a radius, `centred` for an alignment and `touch` for a gap, when its note opens with that claim (up to six plain words, then the claim word: `chips touch`, `the header line is centred`). A negation or a `should` before the word, and any other note, keeps the old meaning of the kind, so a word inside a sentence never flips the direction of a claim."""
     state, _ = CLAIMS.get(kind, ("", ""))
     form = CLAIM_FORMS.get(kind)
-    return state if state and form and form.match(claim) else ""
+    return state if state and form and form.match(claim.replace("’", "'")) else ""
 
 
 def _held(

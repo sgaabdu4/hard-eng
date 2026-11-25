@@ -1,11 +1,13 @@
 """`look` loads PyYAML the way the other commands do, and never reads the DESIGN.md tokens as none without a word."""
 
 import sys
+from argparse import Namespace
 from pathlib import Path
 from types import ModuleType
 
 import look_facts
 import pytest
+import ship_actions
 import tool_setup
 from conftest import SOURCE
 
@@ -47,3 +49,23 @@ def test_a_design_front_matter_is_never_read_as_no_tokens_without_yaml(
     (tmp_path / "DESIGN.md").write_text(FRONT)
     with pytest.raises(ValueError, match="PyYAML"):
         look_facts.design_tokens(tmp_path)
+
+
+def test_ship_loads_the_yaml_runtime_because_its_look_proof_reads_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deliver
+
+    calls: list[str] = []
+    monkeypatch.setattr(tool_setup, "ensure_python_runtime", lambda: calls.append("."))
+    monkeypatch.setattr(ship_actions, "run", lambda *args: 0)
+    args = Namespace(
+        command="ship",
+        plan="PLAN.md",
+        pr="",
+        stage="ready",
+        worktree="",
+        merge_method="",
+    )
+    assert deliver.deliver(SOURCE, args, lambda: 0) == 0
+    assert calls == ["."]
