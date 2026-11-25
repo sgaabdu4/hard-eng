@@ -69,7 +69,7 @@ N/A — hook code, tests and one skill sentence; no visible UI.
 Result: Pending
 Evidence: Pending
 E2E: N/A — hook code with no visible UI; the measure is proved by real browser captures in the tests above
-Real service: N/A — the reviewer CLIs run behind fakes in the tests, and the coordinator runs the real reviewers after the merge
+Real service: Required — Claude reviewer CLI: one real `look` run on a real `browser capture` of a page, with the ported code; Complete needs Passed
 Retro: Pending
 
 Delivery target: PR
