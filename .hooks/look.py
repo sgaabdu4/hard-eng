@@ -40,8 +40,10 @@ PROMPT = (
     "each rule, `- <rule>: Pass|Fail|N/A. <what you saw>`, one line for each image, "
     "`Image <name>: <one detail that only that image shows>`, and a last line, exactly "
     "`VERDICT: clean` or `VERDICT: findings`. A rule with a fault is a Fail, and then the "
-    "verdict is findings. A Fail line names the element that fails, then ends with "
-    "`Fix: <the change>`; a Fail line with no fix is refused.\n\nRules:\n{rules}"
+    "verdict is findings. A rule with a count puts its count note before the colon: "
+    "`- No clutter (kept: 40, removed: 3): Fail. <what you saw>`. A Fail line names the "
+    "element that fails, then ends with `Fix: <the change>`; a Fail line with no fix is "
+    "refused.\n\nRules:\n{rules}"
 )
 RING_NOTE = (
     "Ignore ONLY these confirmed 3px solid red Hard Eng --ring PR annotation boxes "
@@ -92,6 +94,9 @@ BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "design", "image", "verdict", "record")
 BULLET = re.compile(r"^[-*•]\s+")
 COUNT_NOTE = re.compile(r"([^:(]+?)\s*(\([^)]*\))\s*:\s*(.*)")
+NOTE_AFTER_VERDICT = re.compile(
+    r"(?!Image )([^:(]+): (Pass|Fail|N/A)\s+(\([^()]*[A-Za-z]:\s*\d[^()]*\))\s*[.:—–-]?\s*(\S.*)"
+)
 PLAIN_VERDICT = re.compile(r"(?!Image )([^:]+): (Pass|Fail|N/A)(?:\.|\s[-–])\s*(\S.*)")
 IMAGE_DETAIL = re.compile(r"Image (\S+?\.png)\s*[:—–-]+\s*(.+)")
 IMAGE_LINE = re.compile(r"- image: ([0-9a-f]{64}) read (\S+)")
@@ -223,13 +228,38 @@ def codex_proof(stream: str) -> tuple[dict[str, str], str, str]:
 
 
 def clean_line(line: str) -> str:
-    """A reviewer line in the stored form `Rule: Pass — text`: no bullet or bold marks, a count note such as `(clicks: 2)` moved after the text, and the plain verdict forms `Pass. text` and `Pass - text` set to the stored dash."""
+    """A reviewer line in the stored form `Rule: Pass — text`: no bullet or bold marks, a count note such as `(clicks: 2)`, before the colon or right after the verdict, moved after the text, and the plain verdict forms `Pass. text` and `Pass - text` set to the stored dash."""
     text = line.strip().replace("**", "").replace("`", "")
     text = BULLET.sub("", text)
     found = COUNT_NOTE.match(text)
     text = f"{found[1]}: {found[3]} {found[2]}" if found else text
+    after = NOTE_AFTER_VERDICT.fullmatch(text)
+    if after:
+        return f"{after[1]}: {after[2]} — {after[4]} {after[3]}"
     plain = PLAIN_VERDICT.fullmatch(text)
     return f"{plain[1]}: {plain[2]} — {plain[3]}" if plain else text
+
+
+def answer_lines(raw: list[str]) -> list[str]:
+    """The answer's lines in the stored form, with each rule's block (its rule line and every line below it up to the next rule line or image line) joined into one line."""
+    names = {name for name, _ in usability_rules()}
+    groups: list[list[str]] = []
+    in_rule = False
+    for text in raw:
+        cleaned = clean_line(text)
+        label, verdict, _, _ = split_rule_line(cleaned)
+        if label in names and (
+            verdict.lower() in VERDICT_WORDS or not text[:1].isspace()
+        ):
+            groups.append([text])
+            in_rule = True
+        elif in_rule and not IMAGE_DETAIL.match(cleaned):
+            if cleaned:
+                groups[-1].append(BULLET.sub("", text.strip()))
+        else:
+            groups.append([text])
+            in_rule = False
+    return [clean_line(" ".join(group)) for group in groups]
 
 
 def judged_names(unmeasured: bool = False) -> list[str]:
@@ -265,9 +295,10 @@ def judge(
     """The outcome, the rule lines and the image details of the reviewer's answer."""
     if unread := [name for name in names if not read[name]]:
         return f"not done: the reviewer did not open {', '.join(unread)}", [], {}
-    lines = [clean_line(line) for line in answer.strip().splitlines()]
-    if not lines or lines[-1] not in VERDICTS:
+    raw = answer.strip().splitlines()
+    if not raw or clean_line(raw[-1]) not in VERDICTS:
         return "not done: the reviewer gave no exact VERDICT line", [], {}
+    lines = [*answer_lines(raw[:-1]), clean_line(raw[-1])]
     wanted = judged_names(unmeasured)
     found = {
         split_rule_line(line)[0]: line

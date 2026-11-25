@@ -341,6 +341,96 @@ def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
         assert rules == []
 
 
+def judge_blocks(blocks: dict[str, list[str]]) -> tuple[str, list[str]]:
+    import look
+
+    lines = [
+        line
+        for name in judged_rule_names()
+        for line in blocks.get(name, [f"- {name}: Pass. looked at it"])
+    ]
+    answer = "\n".join(
+        [*lines, "Image image-1.png: a card with a title", "VERDICT: findings"]
+    )
+    outcome, rules, _ = look.judge(answer, ["image-1.png"], {"image-1.png": True})
+    return outcome, rules
+
+
+def test_a_fix_after_a_list_belongs_to_its_rule_block() -> None:
+    outcome, rules = judge_blocks(
+        {
+            "Design system": [
+                "- Design system: Fail. Two things break DESIGN.md:",
+                "  1. The chips have square corners.",
+                "  2. The bars use a colour that is not a token.",
+                "",
+                "  The outline looks right. Fix: round the chips and use a token for the bars.",
+            ]
+        }
+    )
+    assert outcome == "findings"
+    stored = next(line for line in rules if line.startswith("Design system:"))
+    assert stored == (
+        "Design system: Fail — Two things break DESIGN.md: 1. The chips have square "
+        "corners. 2. The bars use a colour that is not a token. The outline looks "
+        "right. Fix: round the chips and use a token for the bars."
+    )
+
+
+def test_a_fail_block_with_no_fix_is_still_refused() -> None:
+    nofix = [
+        "- Hierarchy: Fail. Two filled elements compete:",
+        "  1. A chip.",
+        "  2. A tab.",
+    ]
+    outcome, rules = judge_blocks({"Hierarchy": nofix})
+    assert outcome.startswith("not done: a Fail line names no `Fix: <the change>`")
+    assert rules == []
+    outcome, _ = judge_blocks(
+        {
+            "Hierarchy": nofix,
+            "Spacing": ["- Spacing: Pass. even gaps. Fix: nothing, this is a Pass"],
+        }
+    )
+    assert outcome.startswith("not done: a Fail line names no")
+
+
+def test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon() -> None:
+    expected = (
+        "No clutter: Fail — The note stays. Fix: remove it. (kept: 40, removed: 3)"
+    )
+    for form in (
+        "- No clutter: Fail (kept: 40, removed: 3). The note stays. Fix: remove it.",
+        "- No clutter: Fail (kept: 40, removed: 3) - The note stays. Fix: remove it.",
+        "- No clutter (kept: 40, removed: 3): Fail. The note stays. Fix: remove it.",
+    ):
+        outcome, rules = judge_blocks({"No clutter": [form]})
+        assert outcome == "findings", form
+        stored = next(line for line in rules if line.startswith("No clutter:"))
+        assert stored == expected, form
+
+
+def test_a_count_note_with_no_number_after_the_verdict_is_still_refused() -> None:
+    outcome, rules = judge_blocks(
+        {
+            "No clutter": [
+                "- No clutter: Fail (kept: , removed: ). The note stays. Fix: remove it."
+            ]
+        }
+    )
+    assert outcome.startswith("not done: a rule line or an image detail")
+    assert rules == []
+
+
+def test_the_prompt_shows_the_count_note_before_the_colon(
+    tmp_path: Path, project: Path
+) -> None:
+    _, _, prompt = first_prompt(tmp_path, project)
+    form = prompt.partition("\n\nRules:")[0]
+    assert "`- No clutter (kept: 40, removed: 3): Fail. <what you saw>`" in form
+    assert "—" not in form
+
+
 def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None:
     _, _, prompt = first_prompt(tmp_path, project)
     form = prompt.partition("\n\nRules:")[0]
