@@ -925,7 +925,11 @@ KIND_PAGE = (
     "<div style='margin:14px 0;border-radius:7px;background:#ddd;display:inline-block;padding:8px'>Round seven</div>"
     "<div style='margin:14px 0;border-radius:6px;background:#ddd;display:inline-block;padding:8px'>Round six</div>"
     "<div><button style='width:30px;height:30px;font-size:12px'>Tiny one</button>"
-    "<button style='min-height:44px;min-width:120px;font-size:16px'>Big one</button></div></main>"
+    "<button style='min-height:44px;min-width:120px;font-size:16px'>Big one</button></div>"
+    "<div style='margin:14px 0 0;text-align:center;font-size:14px'>Centred note</div>"
+    "<div style='margin:14px 0 0;font-size:14px'>Left note</div>"
+    "<div style='display:flex;gap:14px;margin:14px 0 0;font-size:14px'><span>Even one</span><span>Even two</span></div>"
+    "<div style='display:flex;gap:14px;margin:14px 0 0;font-size:14px'><span>Light one</span><b>Bold two</b></div></main>"
 )
 KIND_CASES = {
     ("size", "Fine print"): False,
@@ -938,6 +942,10 @@ KIND_CASES = {
     ("radius", "Round six"): True,
     ("tap", "Tiny one"): False,
     ("tap", "Big one"): True,
+    ("align", "Centred note"): True,
+    ("align", "Left note"): False,
+    ("weight", "Even one"): True,
+    ("weight", "Bold two"): False,
 }
 
 
