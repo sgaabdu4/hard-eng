@@ -108,14 +108,16 @@ def become_a_pdf_when(
     monkeypatch: pytest.MonkeyPatch,
     url: str,
     trigger: Callable[[tuple[str, ...], str | None], bool],
-) -> None:
-    """Open the PDF in the session once, right before the first step that `trigger` picks, as a page that turns into a PDF would."""
+) -> list[str]:
+    """Open the PDF in the session once, right before the first step that `trigger` picks, as a page that turns into a PDF would. Returns the verbs of the steps that ran."""
     original = browser.run_tool
     fired: list[bool] = []
+    verbs: list[str] = []
 
     def run(
         tool: str, folder: Path, session: str, *arguments: str, text: str | None = None
     ) -> subprocess.CompletedProcess[str]:
+        verbs.append(arguments[0])
         if not fired and trigger(arguments, text):
             fired.append(True)
             browser.require(original(tool, folder, session, "open", url))
@@ -125,6 +127,7 @@ def become_a_pdf_when(
         return original(tool, folder, session, *arguments, text=text)
 
     monkeypatch.setattr(browser, "run_tool", run)
+    return verbs
 
 
 def drawing(arguments: tuple[str, ...], text: str | None) -> bool:
@@ -146,8 +149,9 @@ def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
     trigger: Callable[[tuple[str, ...], str | None], bool],
 ) -> None:
     page(tmp_path, "plain.html", "<p>Statement</p>")
-    become_a_pdf_when(browser, monkeypatch, f"{pdf_site}/invoice", trigger)
+    verbs = become_a_pdf_when(browser, monkeypatch, f"{pdf_site}/invoice", trigger)
     code = browser.browser_command(
         tmp_path, ["capture", f"{pdf_site}/plain.html", "--session", session()]
     )
     refused_as_a_pdf(tmp_path, code, capsys)
+    assert ("screenshot" in verbs) == (trigger is shooting)
