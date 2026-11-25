@@ -204,10 +204,16 @@ def combined(
 
 
 def earlier_findings(
-    root: Path, head: str, pairs: list[tuple[str, str, str]], judged: list[str]
-) -> list[tuple[str, str]]:
-    """The Fail lines of the newest clean or findings record on this branch for each file name, as (rule, text) items to recheck. A later clean record of a file ends its list. Frame names in a line are set to the names of this run. No line claims that a finding is fixed. `pairs` holds (prompt name, file name, digest)."""
+    root: Path,
+    head: str,
+    pairs: list[tuple[str, str, str]],
+    judged: list[str],
+    measured: dict[str, dict[str, object] | None],
+    tokens: Tokens,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """The Fail lines of the newest clean or findings record on this branch for each file name: the (rule, text) items for the reviewer to recheck, and the (rule, item) Fails that code still finds in the record of this run. A measured item that code finds is decided by code now and is not listed; one that code cannot find stays on the list. A later clean record of a file ends its list. Frame names in a line are set to the names of this run. No line claims that a finding is fixed. `pairs` holds (prompt name, file name, digest)."""
     prefixes = owner_prefixes()
+    owned: dict[tuple[str, str], None] = {}
     current = {file: name for name, file, _ in pairs}
     items: dict[str, tuple[str, list[str]]] = {}
     claimed: set[str] = set()
@@ -245,14 +251,42 @@ def earlier_findings(
         for line in lines:
             label, verdict, text, _ = split_rule_line(line)
             if verdict == "Fail" and label in judged and not text.startswith(prefixes):
-                shown = FRAME.sub(now, line)
-                items.setdefault(shown, (label, []))[1].extend(
-                    name for name in names if name not in items[shown][1]
-                )
-    return [
-        (label, f"{line} (frames: {', '.join(names)})")
-        for line, (label, names) in items.items()
-    ]
+                shown, fails = earlier_split(FRAME.sub(now, line), measured, tokens)
+                owned.update({(label, fail): None for fail in fails})
+                if shown:
+                    items.setdefault(shown, (label, []))[1].extend(
+                        name for name in names if name not in items[shown][1]
+                    )
+    return (
+        [
+            (label, f"{line} (frames: {', '.join(names)})")
+            for line, (label, names) in items.items()
+        ],
+        list(owned),
+    )
+
+
+def earlier_split(
+    line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
+) -> tuple[str, list[str]]:
+    """The text of an earlier Fail line to recheck (its judgement items, other parts and the measured items that code cannot find; empty when none is left), and the item text of each measured item that code still fails now. A measured item that code passes is dropped."""
+    parts, fix = fail_parts(line)
+    kept: list[str] = []
+    fails: list[str] = []
+    touched = False
+    for part in parts:
+        _, item = part_item(part)
+        decided = decide_item(item, measured, tokens) if item else None
+        if item is None or decided is None:
+            kept += [part.strip()] if part.strip() else []
+            continue
+        touched = True
+        if not decided[0]:
+            fails.append(code_item(item, decided[1]))
+    if not touched:
+        return line, []
+    head = line.partition(": Fail")[0]
+    return (f"{head}: Fail — {'; '.join(kept)} {fix}" if kept else ""), fails
 
 
 def _on_branch(root: Path, ancestor: str, head: str) -> bool:
@@ -427,6 +461,10 @@ def decide_item(
     return code_verdict(item.kind, item.element, values, tokens) if values else None
 
 
+def code_item(item: Item, why: str) -> str:
+    return f"{item.frame}: {item.element} [{item.kind}] — code: {why}"
+
+
 def decide_line(
     line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
 ) -> str:
@@ -481,3 +519,24 @@ def with_code_decisions(
         return outcome, rule_lines
     failed = any(split_rule_line(line)[1] == "Fail" for line in decided)
     return ("findings" if failed else "clean"), decided
+
+
+def with_earlier_fails(
+    outcome: str, rule_lines: list[str], fails: list[tuple[str, str]]
+) -> tuple[str, list[str]]:
+    """The rule lines with each earlier measured Fail that code still finds: added to the Fail line of its rule, or turning a Pass line into a Fail line. The outcome is findings when any was added."""
+    lines = list(rule_lines)
+    for rule, text in fails:
+        for index, line in enumerate(lines):
+            label, verdict, _, _ = split_rule_line(line)
+            if label != rule or text.partition(" — code:")[0] in line:
+                continue
+            head = line.partition(f": {verdict}")[0]
+            if verdict == "Fail":
+                parts, fix = fail_parts(line)
+                own = "; ".join([*(p.strip() for p in parts if p.strip()), text])
+                lines[index] = f"{head}: Fail — {own} {fix}"
+            else:
+                lines[index] = f"{head}: Fail — {text} {CODE_FIX}"
+            outcome = "findings"
+    return outcome, lines
