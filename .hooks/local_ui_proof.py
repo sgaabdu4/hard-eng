@@ -28,6 +28,7 @@ from ui_proof import (
     is_native,
     look_base_problem,
     matches,
+    measured_digest_problem,
     merge_base,
     plans_reference_problem,
     reference_problem,
@@ -250,24 +251,14 @@ def _opened_sets_problem(
     min_mtime_ns: int,
     opened: set[str],
 ) -> str | None:
-    items = browser_record_files(evidence)
-    by_image = {str(rec["image"]): (path, rec) for path, rec in items}
-    for stem in dict.fromkeys(
-        _stem(rec)
-        for _, rec in items
-        if rec.get("commit") == head and rec["sha256"] in opened
-    ):
-        problem, _ = capture_set_problem(
-            by_image,
-            stem,
-            head,
-            routes,
-            allow_dirty=dirty_tree,
-            min_mtime_ns=min_mtime_ns,
-        )
-        if problem:
-            return problem
-    return None
+    return measured_digest_problem(
+        evidence,
+        head,
+        sorted(opened),
+        routes,
+        allow_dirty=dirty_tree,
+        min_mtime_ns=min_mtime_ns,
+    )
 
 
 def _single_local_look_problem(
