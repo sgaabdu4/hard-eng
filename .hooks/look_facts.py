@@ -48,7 +48,7 @@ def design_tokens(root: Path | None) -> Tokens:
 
     return Tokens(
         {
-            colour: str(name)
+            colour: name
             for name, value in group("colors").items()
             for colour in colours_in(str(value))
         },
@@ -346,7 +346,7 @@ ROLE_WORDS = frozenset(
 
 def plain(name: str) -> str:
     """The name as words, lowercase, with punctuation and the role words dropped, so `Save button` and `Save` are one name."""
-    words = re.sub(r"[^\w\s]", " ", name.lower()).split()
+    words = re.findall(r"\w+", name.lower())
     return " ".join(word for word in words if word not in ROLE_WORDS)
 
 
