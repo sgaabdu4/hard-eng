@@ -110,6 +110,7 @@ def test_cleanup_removes_task_whose_shallow_submodule_has_no_remote_branch_ref(
     root, shipment = delivered_worktree
     shipment = _with_submodule(shipment, tmp_path)
     inner = shipment.root / "component"
+    git(inner, "checkout", "-q", "--detach")
     for line in git(inner, "for-each-ref", "refs/remotes", "refs/heads").splitlines():
         git(inner, "update-ref", "-d", line.split()[-1])
     assert git(inner, "for-each-ref", "refs/remotes", "refs/heads").strip() == ""

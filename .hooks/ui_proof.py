@@ -262,9 +262,9 @@ def _finding_rules(record: Mapping[str, object]) -> str:
 
 
 def _capture_stems(
-    records: list[dict[str, object]], digest: str, head: str
+    records: list[dict[str, object]], digest: str, head: str, *, allow_dirty: bool = False
 ) -> list[str]:
-    """The capture sets of the image with this digest: those taken at the head from a clean tree, or every set when none was."""
+    """The capture sets of the image with this digest: those taken at the head from a clean tree (from any tree when allow_dirty), or every set when none was."""
     stems = list(
         dict.fromkeys(_stem(item) for item in records if item["sha256"] == digest)
     )
@@ -272,7 +272,7 @@ def _capture_stems(
         stem
         for stem in stems
         if any(
-            item.get("commit") == head and not item.get("dirty")
+            item.get("commit") == head and (allow_dirty or not item.get("dirty"))
             for item in records
             if _stem(item) == stem
         )
@@ -476,7 +476,8 @@ def measured_digest_problem(
     records = [record for _, record in items]
     by_image = {str(record["image"]): (path, record) for path, record in items}
     found = {
-        digest: _capture_stems(records, digest, head) for digest in sorted(set(digests))
+        digest: _capture_stems(records, digest, head, allow_dirty=allow_dirty)
+        for digest in sorted(set(digests))
     }
     if unmatched := [digest[:12] for digest, stems in found.items() if not stems]:
         names = (
