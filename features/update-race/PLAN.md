@@ -39,8 +39,8 @@ Proof that the writer is inside Hard Eng's control: the child starts inside the 
 - [ ] A child left by a project's post-commit hook does not fail the update, and no private folder or worktree stays → `tests/test_update_race.py::test_a_hook_child_in_the_private_worktree_does_not_fail_the_update`.
 - [ ] The same for the check of the update branch → `tests/test_update_race.py::test_the_check_of_the_update_branch_leaves_no_child_in_its_worktree`.
 - [ ] Two session starts at the same moment end with one update commit, one ready result and no failure line, with the same hook child → `tests/test_update_race.py::test_two_session_starts_together_run_one_update_and_print_no_failure`.
-- [ ] A clean update and the running-update reports behave as before → `tests/test_update_runner.py` (existing tests, unchanged).
-- [ ] The tidy keeps its answer about busy worktrees after `open_paths` moved onto `open_files` → `tests/test_tidy.py` (existing tests, unchanged).
+- [ ] A clean update still starts detached, and a running update is reported, not duplicated → `tests/test_update_runner.py::test_start_detaches_worker_without_inherited_pipes` and `tests/test_update_runner.py::test_running_update_is_reported_not_duplicated` (existing, unchanged).
+- [ ] The tidy keeps its answer about busy worktrees after `open_paths` moved onto `open_files` → `tests/test_tidy.py::test_an_unreadable_process_counts_as_unknown_only_for_another_person` (existing, unchanged).
 
 ## Baseline + execution
 
