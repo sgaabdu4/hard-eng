@@ -230,6 +230,43 @@ def test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon() ->
         assert stored == expected, form
 
 
+@pytest.mark.parametrize(
+    "note", ["(kept 13, removed 6)", "(13 kept, 6 removed)", "(kept: 13, removed: 6)"]
+)
+def test_a_count_note_after_the_verdict_may_leave_out_the_colon(note: str) -> None:
+    form = f"- No clutter: Fail {note}. image-1.png: The note stays. Fix: remove it."
+    outcome, rules = judge_blocks({"No clutter": [form]})
+    assert outcome == "findings", form
+    stored = next(line for line in rules if line.startswith("No clutter:"))
+    assert stored == (
+        f"No clutter: Fail — image-1.png: The note stays. Fix: remove it. {note}"
+    )
+
+
+def test_a_recheck_line_after_a_rule_block_is_not_part_of_the_block() -> None:
+    lines = [
+        f"- {name}: Pass. looked at it"
+        if name != "Hierarchy"
+        else "- Hierarchy: Fail. image-1.png: two compete. Fix: tone one down."
+        for name in judged_rule_names()
+    ]
+    answer = "\n".join(
+        [
+            *lines,
+            "Recheck R1: still shown. image-1.png: two compete.",
+            "Image image-1.png: a card with a title",
+            "VERDICT: findings",
+        ]
+    )
+    outcome, rules, _ = look_answer.judge(
+        answer, ["image-1.png"], {"image-1.png": True}, rechecks=["Hierarchy"]
+    )
+    assert outcome == "findings"
+    assert next(line for line in rules if line.startswith("Hierarchy:")) == (
+        "Hierarchy: Fail — image-1.png: two compete. Fix: tone one down."
+    )
+
+
 def test_a_count_note_with_no_number_after_the_verdict_is_still_refused() -> None:
     outcome, rules = judge_blocks(
         {

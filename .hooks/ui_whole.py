@@ -1,8 +1,10 @@
 """HE-UI-SOURCE for the whole project: every UI file under `ui_paths` is judged, old lines included."""
 
+import json
 import re
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 from flutter_screens import flutter_packages
 from generated_marks import generated_sources
@@ -35,6 +37,9 @@ from ui_tokens import (
     token_facts,
     token_findings,
 )
+
+if TYPE_CHECKING:
+    from gate_config import GateConfig
 
 WEB_SUFFIXES = (
     ".css",
@@ -274,18 +279,19 @@ def coverage_findings(
     ]
     skipped = generated_sources(root, names)
     return [
-        f"{name}: {'a stylesheet' if name.endswith(STYLE_SUFFIXES) else 'a component file'} outside ui_paths. Add its folder to ui_paths in hard-eng.gates.json"
+        f"{name}: {'a stylesheet' if name.endswith(STYLE_SUFFIXES) else 'a component file'} outside ui_paths. If users receive it, add its folder to ui_paths in hard-eng.gates.json; if it is only a preview, remove it from git and list its folder in .gitignore"
         for name in names
         if name not in skipped
     ]
 
 
 def setting_findings(
-    texts: dict[str, str], ui_paths: list[str], library: list[str]
+    root: Path, texts: dict[str, str], ui_paths: list[str], library: list[str]
 ) -> list[str]:
     if not library:
+        value = default_library(root, list(texts), ui_paths) or ["<folder>/*"]
         return [
-            "hard-eng.gates.json: ui_library is missing or empty; list the shared library folder"
+            f'hard-eng.gates.json: ui_library is missing or empty. Add shipping "ui_library": {json.dumps(value)}, the folder of the shared parts; screens stay outside it'
         ]
     found: list[str] = []
     for entry in library:
@@ -327,11 +333,28 @@ def default_library(root: Path, names: list[str], ui_paths: list[str]) -> list[s
             and "ui" in (parts := PurePosixPath(name).parts[:-1])
         }
     )
-    if setting_findings(texts, ui_paths, entries) or library_covers_screens(
-        root, texts, ui_paths, entries
-    ):
+    if not entries or setting_findings(root, texts, ui_paths, entries):
         return []
-    return entries
+    return [] if library_covers_screens(root, texts, ui_paths, entries) else entries
+
+
+def add_ui_library(root: Path, config: "GateConfig") -> None:
+    """A first install gives a project with UI paths and no library setting the shared `ui` folders that pass the library rules; an update leaves the key to the project, because a release that does not read it refuses the pushed policy."""
+    from gate_config import repository_files
+
+    shipping = config.get("shipping")
+    paths = shipping.get("ui_paths") if isinstance(shipping, dict) else None
+    if (
+        not isinstance(shipping, dict)
+        or shipping.get("ui_library")
+        or not isinstance(paths, list)
+        or not paths
+    ):
+        return
+    ui_paths = [path for path in paths if isinstance(path, str)]
+    names = [path.relative_to(root).as_posix() for path in repository_files(root)]
+    if library := default_library(root, names, ui_paths):
+        shipping["ui_library"] = list(library)
 
 
 def compared_token_file(name: str, text: str, ui_paths: list[str]) -> bool:
@@ -361,7 +384,7 @@ def ui_findings_whole(
         for part in library_parts(name, text)
     ]
     return (
-        setting_findings(texts, ui_paths, library)
+        setting_findings(root, texts, ui_paths, library)
         + library_covers_screens(root, texts, ui_paths, library)
         + coverage_findings(root, texts, ui_paths)
         + role_findings(parts)

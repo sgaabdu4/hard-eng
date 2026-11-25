@@ -14,7 +14,7 @@ REMOVED_BEFORE = re.compile(rf"(?i)\b({COUNT_LIST})\s+removed\b")
 BULLET = re.compile(r"^[-*•]\s+")
 COUNT_NOTE = re.compile(r"([^:(]+?)\s*(\([^)]*\))\s*:\s*(.*)")
 NOTE_AFTER_VERDICT = re.compile(
-    r"(?!Image )([^:(]+): (Pass|Fail|N/A)\s+(\([^()]*[A-Za-z]:\s*\d[^()]*\))\s*[.:—–-]?\s*(\S.*)"
+    r"(?!Image )([^:(]+): (Pass|Fail|N/A)\s+(\([^()]*(?:[A-Za-z]:?\s*\d|\d\s+[A-Za-z])[^()]*\))\s*[.:—–-]?\s*(\S.*)"
 )
 PLAIN_VERDICT = re.compile(r"(?!Image )([^:]+): (Pass|Fail|N/A)(?:\.|\s[-–])\s*(\S.*)")
 IMAGE_DETAIL = re.compile(r"Image (\S+?\.png)\s*[:—–-]+\s*(.+)")
@@ -49,7 +49,11 @@ def answer_lines(raw: list[str]) -> list[str]:
         ):
             groups.append([text])
             in_rule = True
-        elif in_rule and not IMAGE_DETAIL.match(cleaned):
+        elif (
+            in_rule
+            and not IMAGE_DETAIL.match(cleaned)
+            and not RECHECK_LINE.match(cleaned)
+        ):
             if cleaned:
                 groups[-1].append(BULLET.sub("", text.strip()))
         else:
