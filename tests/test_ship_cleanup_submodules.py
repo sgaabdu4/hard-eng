@@ -53,18 +53,6 @@ def _stash(inner: Path) -> None:
     git(inner, "stash", "push", "-q")
 
 
-def test_cleanup_removes_task_with_a_clean_initialized_submodule(
-    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
-) -> None:
-    root, shipment = delivered_worktree
-    shipment = _with_submodule(shipment, tmp_path)
-    assert not git(shipment.root, "submodule", "status").startswith("-")
-    ship_actions.cleanup(root, shipment)
-    assert not shipment.root.exists()
-    assert git(root, "branch", "--list", shipment.branch).strip() == ""
-    assert ship_actions.remote_branch(root, shipment.remote, shipment.branch) is None
-
-
 @pytest.mark.parametrize(
     "work",
     [_edit_file, _ignored_file, _local_branch_commit, _stash],
@@ -101,13 +89,15 @@ def test_cleanup_preserves_a_submodule_moved_off_the_recorded_commit(
     assert inner.is_dir()
 
 
-def test_cleanup_removes_task_with_uninitialized_submodule(
-    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
+@pytest.mark.parametrize("initialized", [True, False], ids=["initialized", "not"])
+def test_cleanup_removes_task_whose_submodule_holds_nothing_else(
+    delivered_worktree: tuple[Path, Shipment], tmp_path: Path, initialized: bool
 ) -> None:
     root, shipment = delivered_worktree
     shipment = _with_submodule(shipment, tmp_path)
-    git(shipment.root, "submodule", "deinit", "-q", "-f", "component")
-    assert git(shipment.root, "submodule", "status").startswith("-")
+    if not initialized:
+        git(shipment.root, "submodule", "deinit", "-q", "-f", "component")
+    assert git(shipment.root, "submodule", "status").startswith("-") is not initialized
     ship_actions.cleanup(root, shipment)
     assert not shipment.root.exists()
     assert git(root, "branch", "--list", shipment.branch).strip() == ""

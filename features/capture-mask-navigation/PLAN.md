@@ -29,7 +29,7 @@ Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct bef
 - [x] A page that navigates to another HTML page with an email on it after masking, before the frame check, keeps no image and no record → `tests/test_browser_documents.py::test_capture_keeps_no_image_of_a_page_that_navigates_after_it_was_masked[before]`
 - [x] The same navigation while the screenshot is taken keeps no image and no record → `tests/test_browser_documents.py::test_capture_keeps_no_image_of_a_page_that_navigates_after_it_was_masked[during]`
 - [x] A page that does not navigate still captures, also when it changes its route in place → `tests/test_browser_documents.py::test_capture_keeps_the_image_of_a_page_that_changes_its_route_in_place`, `tests/test_browser.py::test_capture_draws_boxes_at_each_width`
-- [x] Cleanup removes a clean, merged task worktree that has an initialized submodule → `tests/test_ship_cleanup_submodules.py::test_cleanup_removes_task_with_a_clean_initialized_submodule`
+- [x] Cleanup removes a clean, merged task worktree that has an initialized submodule → `tests/test_ship_cleanup_submodules.py::test_cleanup_removes_task_whose_submodule_holds_nothing_else[initialized]`
 - [x] Cleanup keeps a worktree whose submodule holds an edit, an ignored file, a local commit, a stash or a moved commit → `tests/test_ship_cleanup_submodules.py::test_cleanup_preserves_work_that_only_the_submodule_holds`, `tests/test_ship_cleanup_submodules.py::test_cleanup_preserves_a_submodule_moved_off_the_recorded_commit`
 - [x] Cleanup reads a policy with keys of a newer release, and the other stages still refuse them → `tests/test_ship_cleanup.py::test_cleanup_reads_a_policy_that_a_newer_release_gave_more_keys`
 

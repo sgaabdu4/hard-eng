@@ -247,7 +247,7 @@ def test_cleanup_reads_a_policy_that_a_newer_release_gave_more_keys(
     root, shipment = delivered_worktree
     held = tmp_path / "newer-policy"
     held.mkdir()
-    policy = {
+    policy: dict[str, object] = {
         "base": "main",
         "checks": ["build"],
         "ui_paths": [],

@@ -7,7 +7,7 @@ import math
 import os
 import re
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -298,7 +298,7 @@ _NEWER_KEYS_OK: ContextVar[bool] = ContextVar("newer_policy_keys_ok", default=Fa
 
 
 @contextmanager
-def reading_newer_policy_keys() -> Iterator[None]:
+def reading_newer_policy_keys() -> Generator[None]:
     """Skip policy keys this release does not know, for a step that proves only a merge, such as cleanup run from a checkout older than the task."""
     token = _NEWER_KEYS_OK.set(True)
     try:
