@@ -20,7 +20,7 @@ from gate_config import GateConfig, parse_config
 TOOL = "agent-browser"
 INIT_SCRIPTS = "AGENT_BROWSER_INIT_SCRIPTS"
 ROUTE_FLAG = "--init-script"
-RELAUNCH = re.compile(r"init-scripts:.*relaunched browser")
+RELAUNCH = re.compile(r"init-scripts: (?!default )\S.*relaunched browser")
 IDLE_LIMIT = "AGENT_BROWSER_IDLE_TIMEOUT_MS"
 IDLE_MS = "300000"
 MAX_SESSIONS = 4
@@ -508,6 +508,8 @@ def limit_sessions(tool: str, folder: Path, session: str) -> None:
         open_names = [str(name) for name in json.loads(done.stdout)["data"]["sessions"]]
     except (ValueError, KeyError, TypeError):
         return
+    if session not in open_names and SESSION_NAME.fullmatch(session):
+        route_file(folder, session).unlink(missing_ok=True)
     if session in open_names or len(open_names) < MAX_SESSIONS:
         return
     closers = "; ".join(
@@ -805,10 +807,10 @@ def dispatch(root: Path, argv: list[str]) -> int:
     folder = output_folder(root)
     session = step_session(argv)
     steps, scripts = split_route_scripts(argv)
-    if scripts:
-        keep_route_scripts(folder, session, scripts)
     tool = ensure_tool()
     limit_sessions(tool, folder, session)
+    if scripts:
+        keep_route_scripts(folder, session, scripts)
     record_action(folder, steps)
     if step_verb(steps) == "close" and SESSION_NAME.fullmatch(session):
         route_file(folder, session).unlink(missing_ok=True)

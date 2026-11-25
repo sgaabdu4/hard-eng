@@ -46,7 +46,7 @@ ITEM_KINDS = {
     "tap": "the control size against its tap floor",
     "weight": "the text weight against the weight of its neighbours in the same row",
     "align": "whether the text is centred in its parent (a claim that it is not); any other alignment claim is judgement",
-    "judgement": "anything else: placement, any other alignment claim, line count, wording",
+    "judgement": "anything else: placement, any other alignment or weight claim, line count, wording",
 }
 MEASURED_KINDS = frozenset(ITEM_KINDS) - {"judgement"}
 FINDING_RULES = {

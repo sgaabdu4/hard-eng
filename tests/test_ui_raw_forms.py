@@ -105,7 +105,8 @@ def test_standalone_and_email_values_equal_a_token_by_value_not_by_text() -> Non
     tokens = token_values(
         {
             "src/theme/tokens.css": "@theme {\n  --spacing-3: 1.75rem;\n  --spacing-4: 12px;\n  --color-brand: #123456;\n}\n"
-        }
+        },
+        ["src/**"],
     )
     page = '<!doctype html><p style="padding: 28px; margin: 0.75rem; color: #123456; width: 29px">x</p>'
     found = file_findings(
@@ -122,7 +123,10 @@ def test_standalone_and_email_values_equal_a_token_by_value_not_by_text() -> Non
 def test_em_and_pt_tokens_compare_as_values() -> None:
     """HE-UI-SOURCE: a token of 1.5em equals 24px and a token of 2pt equals 2pt, so a standalone page may type them."""
     tokens = token_values(
-        {"src/theme/t.css": "@theme {\n  --spacing-a: 1.5em;\n  --spacing-b: 2pt;\n}\n"}
+        {
+            "src/theme/t.css": "@theme {\n  --spacing-a: 1.5em;\n  --spacing-b: 2pt;\n}\n"
+        },
+        ["src/**"],
     )
     page = '<!doctype html><p style="padding: 24px; margin: 2pt; width: 1.5em">x</p>'
     found = file_findings(

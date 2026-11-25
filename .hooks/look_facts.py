@@ -230,14 +230,19 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     near: dict[str, set[str]] = {}
     for gap in _rows(measured, "gaps"):
         first, second = fact_key(gap.get("at")), fact_key(gap.get("to"))
-        if first in weights and second in weights:
+        if gap.get("axis") == "x" and first in weights and second in weights:
             near.setdefault(first, set()).add(second)
             near.setdefault(second, set()).add(first)
     found: list[Fact] = []
     for row in rows:
         name, weight = fact_key(row.get("at")), _num(row.get("weight"))
         others = sorted(near.get(name, set()) - {name})
-        ok = None if not others else all(weights[o] == {weight} for o in others)
+        shared = any(len(weights[key]) > 1 for key in (name, *others))
+        ok = (
+            None
+            if not others or shared
+            else all(weights[o] == {weight} for o in others)
+        )
         found.append(
             Fact(
                 name,
@@ -399,7 +404,7 @@ NOTES = {
 
 
 def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
-    """The measured facts of one image, by element: for each check what it covered, then the facts nearest to its limit first, up to FACT_BYTES; the rest are counted."""
+    """The measured facts of one image, by element: for each check what it covered, then the facts nearest to its limit first, up to FACT_BYTES; the rest are counted, with their keys, so every key that code can decide is shown. Each fact line starts with its key."""
     lines: list[str] = []
     for kind, build in FACTS.items():
         facts = build(measured, tokens)

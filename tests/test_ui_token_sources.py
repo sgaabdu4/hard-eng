@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from test_ui_single_source import build, refusal, reindex
-from ui_tokens import token_facts
+from ui_tokens import token_facts, token_findings
 from whole_project import validate_whole_project
 
 
@@ -38,6 +38,15 @@ def test_a_comment_a_test_file_and_a_generated_file_define_no_token(
     message = refusal(root)
     assert "(text-blue-500)" in message
     assert "emails/welcome.html:1: a colour typed in the file (#3b82f6)" in message
+    (root / "src/theme/notes.scss").write_text(
+        "// @theme { --color-blue-500: #3b82f6; }\n.note { margin: var(--spacing-3); }\n"
+    )
+    assert "(text-blue-500)" in refusal(root)
+    (root / "config").mkdir()
+    (root / "config/theme.ts").write_text('export const brand = "#3b82f6";\n')
+    assert "emails/welcome.html:1: a colour typed in the file (#3b82f6)" in refusal(
+        root
+    )
     (root / "tests/fixtures").mkdir(parents=True)
     (root / "tests/fixtures/theme.css").write_text(
         "@theme {\n  --color-blue-500: #3b82f6;\n}\n"
@@ -100,3 +109,17 @@ def test_a_mixed_stylesheet_gets_a_token_gap_line_that_says_why(tmp_path: Path) 
     )
     reindex(root)
     validate_whole_project(root)
+
+
+def test_a_bare_number_in_an_extra_group_matches_a_token_length_but_is_never_missing() -> (
+    None
+):
+    """HE-UI-SOURCE: a Dart double that DESIGN.md holds as a bare number in its own group matches the token file; a z-index or an opacity there is no missing length; a token length that DESIGN.md lacks is still refused."""
+    design = (
+        "---\ncolors:\n  ink: '#101010'\nlayout:\n  navWidth: 80\n"
+        "zIndex:\n  modal: 50\nopacity:\n  disabled: 0.4\n---\n# Design\n"
+    )
+    dart = "class Layout {\n  static const double navWidth = 80;\n  static const ink = Color(0xFF101010);\n}\n"
+    assert token_findings(design, [dart]) == []
+    found = token_findings(design, [dart + "  static const double railWidth = 72;\n"])
+    assert found == ["a token length 72px is missing from DESIGN.md"]
