@@ -64,5 +64,5 @@ E2E: N/A — CLI shipping check with no interactive journey; the tests build rea
 Real service: N/A — no changed code calls an outside service.
 Retro: `ship --stage delivered` judged a merged PR's look record with the design file of the checkout that ran it, and cleanup asked the user to delete the folder that delivered needs, so a merged UI PR could never pass delivered. The design hash now has one owner that can read a commit, the ship readers pass the PR head, and cleanup treats only Hard Eng's own files in `.hard-eng/` as its own. Escaped bug: found on the base branch; the red tests above are its repro and its fix is in this PR.
 
-Delivery target: PR
+Delivery target: Merge
 Delivery: Pending — checks, challenge, PR to `develop`, CI and merge.
