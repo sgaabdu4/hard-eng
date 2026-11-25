@@ -158,7 +158,8 @@ def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
 
 
 def framing(arguments: tuple[str, ...], text: str | None) -> bool:
-    return arguments[:1] == ("eval",) and "hardEngRead" in (text or "")
+    del text
+    return arguments[:1] == ("eval",) and "hardEngRead" in "".join(arguments)
 
 
 @pytest.mark.parametrize("trigger", [framing, shooting], ids=["before", "during"])

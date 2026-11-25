@@ -152,6 +152,7 @@ const hideAll = (root) => {
   }
 };
 watch(document.body);
+window.hardEngMasked = true;
 const pageHeight = document.documentElement.scrollHeight;
 const fixed = [...document.body.querySelectorAll("*")].flatMap((element) => {
   const style = getComputedStyle(element);
@@ -215,6 +216,9 @@ const unread = (root) => [...root.querySelectorAll("*")].reduce((count, element)
 }, 0);
 return unread(document);
 })()""".replace("READABLE", json.dumps(sorted(READABLE_KINDS)))
+
+
+DOCUMENT_STATE = "[document.contentType, window.hardEngMasked === true]"
 
 
 def browser_roles(config: GateConfig) -> dict[str, dict[str, str]]:
@@ -486,14 +490,21 @@ def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
         )
 
 
-def require_readable_document(tool: str, folder: Path, session: str) -> None:
-    """Refuse a document that the page script cannot read and mask; the browser reports its kind."""
-    kind = json.loads(
-        require(run_tool(tool, folder, session, "eval", "document.contentType"))
+def require_readable_document(
+    tool: str, folder: Path, session: str, masked: bool = False
+) -> None:
+    """Refuse a document that the page script cannot read and mask; the browser reports its kind. With `masked`, also refuse a document that is not the one the page script hid personal data in."""
+    kind, hidden = json.loads(
+        require(run_tool(tool, folder, session, "eval", DOCUMENT_STATE))
     )
     if kind not in READABLE_KINDS:
         raise ValueError(
             f"the document is {kind}, which capture cannot read to hide emails and phones, "
+            "so no image was kept"
+        )
+    if masked and not hidden:
+        raise ValueError(
+            "the page changed to another document after its emails and phones were hidden, "
             "so no image was kept"
         )
 
@@ -558,12 +569,12 @@ def shoot_page(
         )
     ring_boxes = cast(list[dict[str, int]], page_result["boxes"])
     unread_frames(tool, folder, session, width)
-    require_readable_document(tool, folder, session)
+    require_readable_document(tool, folder, session, masked=True)
     image = folder / f"{name}-{width}.png"
     try:
         require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
         unread_frames(tool, folder, session, width)
-        require_readable_document(tool, folder, session)
+        require_readable_document(tool, folder, session, masked=True)
         route = json.loads(
             require(run_tool(tool, folder, session, "eval", "location.pathname"))
         )
