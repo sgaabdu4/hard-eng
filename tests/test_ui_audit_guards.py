@@ -417,11 +417,13 @@ VALUES_PAGE = (
     "<main><h1 style='font-size:24px;font-weight:700;margin:0 0 14px'>Board</h1>"
     "<p style='margin:0 0 14px;color:#767676;font-size:16px'>Grey on white</p>"
     "<p style='margin:0;color:#000;font-size:16px'>Black on white</p>"
-    "<div style='margin-top:14px'><button style='min-height:44px;min-width:120px;font-size:16px'>Go</button></div></main>"
+    "<div style='margin-top:14px'><button style='min-height:44px;min-width:120px;font-size:16px'>Go</button></div>"
+    "<p style='margin:14px 0 0;color:rgba(0,0,0,0.5);font-size:16px'>Half ink</p>"
+    "<p style='margin:14px 0 0'><span style='display:inline-block;padding:2px 8px;background:#e6efe9;color:#2d6a4f;font-size:10.5px;font-weight:600'>Paid</span></p></main>"
 )
 
 
-def test_the_record_holds_the_measured_contrast_gaps_and_sizes(
+def test_the_record_holds_each_element_with_its_facts(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     (tmp_path / "pages/values.html").write_text(
@@ -436,15 +438,49 @@ def test_the_record_holds_the_measured_contrast_gaps_and_sizes(
         plain_step(tmp_path, name, "close")
     record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
     values = record["measured"]
-    ratios = {item["ratio"] for item in values["contrast"]}
-    assert {4.54, 21.0} <= ratios
-    grey = next(item for item in values["contrast"] if item["ratio"] == 4.54)
-    assert (grey["fg"], grey["bg"], grey["px"]) == ("#767676", "#ffffff", 16)
-    assert [14, 14, 14] in [item["gaps"] for item in values["gaps"]]
-    assert {"w": 120, "h": 44} in [
-        {"w": item["w"], "h": item["h"]} for item in values["sizes"]["controls"]
+    texts = {item["at"]: item for item in values["texts"]}
+    grey = texts["Grey on white"]
+    assert (grey["fg"], grey["bg"], grey["px"], grey["ratio"]) == (
+        "#767676",
+        "#ffffff",
+        16,
+        4.54,
+    )
+    assert (grey["weight"], grey["colour"], grey["fill"], grey["under"]) == (
+        400,
+        "767676ff",
+        "",
+        False,
+    )
+    assert texts["Board"]["weight"] == 700
+    assert texts["Half ink"]["colour"] == "00000080"
+    paid = texts["Paid"]
+    assert (
+        paid["px"],
+        paid["weight"],
+        paid["colour"],
+        paid["fill"],
+        paid["under"],
+    ) == (
+        10.5,
+        600,
+        "2d6a4fff",
+        "e6efe9ff",
+        True,
+    )
+    assert {"at": "Board", "to": "Grey on white", "px": 14, "axis": "y"} in values[
+        "gaps"
     ]
-    assert {16, 24} <= set(values["sizes"]["text_px"])
+    go = next(item for item in values["sizes"]["controls"] if item["at"] == "Go")
+    assert (go["w"], go["h"], go["floor"], go["under"], go["exempt"]) == (
+        120,
+        44,
+        44,
+        False,
+        False,
+    )
+    assert "contrast" not in values
+    assert "text_px" not in values["sizes"]
 
 
 def test_the_record_holds_the_corner_radius_of_every_rounded_element(

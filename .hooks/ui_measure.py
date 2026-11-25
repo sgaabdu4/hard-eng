@@ -5,7 +5,6 @@ import json
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
 
 LIMITS = {
     "text_px": 11,
@@ -174,14 +173,17 @@ const inSentence = (el) => {
   }
   return false;
 };
+const factName = (el) => (el.innerText || el.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().slice(0, 30);
+const controlFacts = new Map();
 for (const el of controls) {
   const b = el.getBoundingClientRect();
   const link = isLink(el);
-  if (link && inSentence(el)) continue;
+  const exempt = link && inSentence(el);
   const floor = link && innerWidth >= LIMITS.desktop_px ? LIMITS.link_px : LIMITS.control_px;
-  if (b.width < floor || b.height < floor) {
-    found.push({ rule: "tap-size", at: name(el), w: Math.round(b.width), h: Math.round(b.height) });
-  }
+  const under = !exempt && (b.width < floor || b.height < floor);
+  const fact = { at: factName(el), w: Math.round(b.width), h: Math.round(b.height), floor, under, exempt };
+  controlFacts.set(JSON.stringify(fact), fact);
+  if (under) found.push({ rule: "tap-size", at: name(el), w: fact.w, h: fact.h });
 }
 const pseudoText = (el) => ["::before", "::after"].map((p) => {
   const c = getComputedStyle(el, p).content;
@@ -484,42 +486,45 @@ const solid = (el) => {
   }
   return bg;
 };
-const pairs = new Map();
+const raw8 = (c) => c.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, "0")).join("") + Math.round(c[3] * 255).toString(16).padStart(2, "0");
+const fillOf = (el) => {
+  for (let n = el; n; n = n.parentElement) {
+    const c = getComputedStyle(n).backgroundColor;
+    if (opaque(c)) return raw8(rgb(c));
+  }
+  return "";
+};
+const textFacts = new Map();
 for (const el of texts) {
-  const bg = solid(el);
-  if (!bg) continue;
   const s = getComputedStyle(el);
+  const size = parseFloat(s.fontSize);
   const c = rgb(s.color);
-  const fg = c.slice(0, 3).map((v, i) => v * c[3] + bg[i] * (1 - c[3]));
-  const ratio = Math.round(((Math.max(lum(fg), lum(bg)) + 0.05) / (Math.min(lum(fg), lum(bg)) + 0.05)) * 100) / 100;
-  const px = Math.round(parseFloat(s.fontSize));
-  const key = [hex(fg), hex(bg), px].join();
-  if (!pairs.has(key)) pairs.set(key, { at: name(el), ratio, fg: hex(fg), bg: hex(bg), px });
+  const fact = { at: factName(el), px: Math.round(size * 100) / 100, weight: parseFloat(s.fontWeight) || 400, colour: raw8(c), fill: fillOf(el), under: size < LIMITS.text_px };
+  const bg = solid(el);
+  if (bg) {
+    const fg = c.slice(0, 3).map((v, i) => v * c[3] + bg[i] * (1 - c[3]));
+    fact.ratio = Math.round(((Math.max(lum(fg), lum(bg)) + 0.05) / (Math.min(lum(fg), lum(bg)) + 0.05)) * 100) / 100;
+    fact.fg = hex(fg);
+    fact.bg = hex(bg);
+  }
+  textFacts.set(JSON.stringify(fact), fact);
 }
-const label = (el) => el.tagName.toLowerCase() + (el.id ? "#" + el.id : "");
 const gaps = [];
 const seenGaps = new Set();
 for (const parent of document.body.querySelectorAll("*")) {
-  if (gaps.length >= 20) break;
   const kids = [...parent.children].filter((c) => visible(c) && !["absolute", "fixed"].includes(getComputedStyle(c).position));
   if (kids.length < 2) continue;
-  const boxes = kids.map((c) => c.getBoundingClientRect()).sort((a, b) => a.top - b.top || a.left - b.left);
-  const between = [];
+  const boxes = kids.map((c) => ({ c, b: c.getBoundingClientRect() })).sort((a, z) => a.b.top - z.b.top || a.b.left - z.b.left);
   for (let i = 1; i < boxes.length; i++) {
-    const below = boxes[i].top - boxes[i - 1].bottom, beside = boxes[i].left - boxes[i - 1].right;
-    if (below >= -1) between.push(Math.round(below));
-    else if (beside >= -1) between.push(Math.round(beside));
-  }
-  const key = JSON.stringify(between);
-  if (between.length && !seenGaps.has(key)) {
-    seenGaps.add(key);
-    gaps.push({ at: label(parent), gaps: between });
+    const below = boxes[i].b.top - boxes[i - 1].b.bottom, beside = boxes[i].b.left - boxes[i - 1].b.right;
+    const axis = below >= -1 ? "y" : beside >= -1 ? "x" : "";
+    if (!axis) continue;
+    const gap = { at: factName(boxes[i - 1].c), to: factName(boxes[i].c), px: Math.round(axis === "y" ? below : beside), axis };
+    const key = JSON.stringify(gap);
+    if (!seenGaps.has(key)) { seenGaps.add(key); gaps.push(gap); }
   }
 }
-const sizes = {
-  controls: controls.slice(0, 20).map((el) => { const b = el.getBoundingClientRect(); return { at: name(el), w: Math.round(b.width), h: Math.round(b.height) }; }),
-  text_px: [...new Set(texts.map((el) => Math.round(parseFloat(getComputedStyle(el).fontSize))))].sort((a, b) => a - b),
-};
+const sizes = { controls: [...controlFacts.values()] };
 const radiusOf = (el) => {
   const value = getComputedStyle(el).borderTopLeftRadius;
   if (!parseFloat(value)) return null;
@@ -533,10 +538,11 @@ const radii = [];
 const seenRadii = new Set();
 for (const el of rounded) {
   const r = radiusOf(el);
-  const key = r && r.px + (r.clamped ? "c" : "");
-  if (r && r.px > 0 && radii.length < 20 && !seenRadii.has(key)) { seenRadii.add(key); radii.push({ at: name(el), px: r.px, clamped: r.clamped }); }
+  const fact = r && r.px > 0 ? { at: factName(el), px: r.px, clamped: r.clamped } : null;
+  const key = fact && JSON.stringify(fact);
+  if (fact && !seenRadii.has(key)) { seenRadii.add(key); radii.push(fact); }
 }
-const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes, radii, root_px: parseFloat(getComputedStyle(document.documentElement).fontSize) };
+const measured = { texts: [...textFacts.values()], gaps, sizes, radii, root_px: parseFloat(getComputedStyle(document.documentElement).fontSize) };
 return JSON.stringify({ found, measured });
 })()"""
 
@@ -617,26 +623,3 @@ def write_record(
     record = image.with_suffix(".json")
     record.write_text(json.dumps(payload, indent=2) + "\n")
     return record
-
-
-def measured_text(measured: dict[str, object]) -> str:
-    """The measured values of one image as the one line that the `look` reviewer reads."""
-    parts = []
-    contrast = cast(list[dict[str, object]], measured.get("contrast", []))
-    parts += [
-        f"contrast {item['ratio']}:1 ({item['fg']} on {item['bg']}, {item['px']} px)"
-        for item in contrast
-    ]
-    gaps = cast(list[dict[str, object]], measured.get("gaps", []))
-    parts += [
-        f"gaps {', '.join(str(gap) for gap in cast(list[int], item['gaps']))} px in {item['at']}"
-        for item in gaps
-    ]
-    sizes = cast(dict[str, object], measured.get("sizes", {}))
-    controls = cast(list[dict[str, object]], sizes.get("controls", []))
-    parts += [f"control {item['at']} {item['w']}x{item['h']} px" for item in controls]
-    radii = cast(list[dict[str, object]], measured.get("radii", []))
-    parts += [f"corner radius {item['px']} px ({item['at']})" for item in radii]
-    if text_px := cast(list[int], sizes.get("text_px", [])):
-        parts.append("text sizes " + ", ".join(str(px) for px in text_px) + " px")
-    return "; ".join(parts)

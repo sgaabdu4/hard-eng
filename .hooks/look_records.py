@@ -311,56 +311,18 @@ def stale_problem(
     return "; ".join(stale) or None
 
 
-RADIUS_TOKEN = re.compile(r"(\d*\.?\d+)(px|rem)")
-
-
-def rounded_tokens(design: str) -> list[str]:
-    """The corner radius tokens of the DESIGN.md front matter, as written. A python3 without PyYAML, a missing front matter or a missing group gives an empty list, which means no verdict."""
-    from ui_tokens import FRONT_MATTER
-
-    try:
-        import yaml
-    except ImportError:
-        return []
-    front = FRONT_MATTER.match(design)
-    try:
-        data = yaml.safe_load(front[1]) if front else None
-    except yaml.YAMLError:
-        return []
-    rounded = data.get("rounded") if isinstance(data, dict) else None
-    return (
-        [str(value) for value in rounded.values()] if isinstance(rounded, dict) else []
-    )
-
-
-def radius_scale(tokens: list[str], root_px: float) -> set[int] | None:
-    """The token radii in px, with rem set from the page's own root size; None when a token is any other form (em, clamp, calc, a variable), which the measure cannot hold exactly."""
-    from ui_tokens import half_up
-
-    scale: set[int] = set()
-    for token in tokens:
-        found = RADIUS_TOKEN.fullmatch(token.strip())
-        if not found:
-            return None
-        scale.add(half_up(float(found[1]) * (1 if found[2] == "px" else root_px)))
-    return scale
-
-
 def token_fault(root: Path, digests: list[str]) -> str:
     """The measured corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, a record without the clamp field or the root size, and a token that is not a plain length give no verdict. Text sizes stay with the reviewer, because fluid type and a changed root size make a rendered size inexact."""
     import look
+    from look_facts import design_tokens, length_scale
 
-    try:
-        design = (root / "DESIGN.md").read_text()
-    except OSError:
-        return ""
-    tokens = rounded_tokens(design)
+    tokens = design_tokens(root).rounded
     faults: list[str] = []
     for digest in digests if tokens else []:
         values = look.recorded_measured(root, digest) or {}
         base = values.get("root_px")
         held = (
-            radius_scale(tokens, float(base))
+            length_scale(tokens, float(base))
             if isinstance(base, int | float) and not isinstance(base, bool)
             else None
         )
