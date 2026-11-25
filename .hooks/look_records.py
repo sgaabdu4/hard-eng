@@ -586,8 +586,9 @@ def _scope_changed(
     plan = record.get("plan")
     if not isinstance(plan, str) or not plan:
         return False
+    spec = f"{owner}:{plan}"
     shown = subprocess.run(
-        ["git", "show", f"{owner}:{plan}"], cwd=root, capture_output=True, check=False
+        ["git", "show", spec], cwd=root, capture_output=True, check=False
     )
     try:
         return shown.returncode == 0 and look.bounded_scope(shown.stdout, plan) != scope
