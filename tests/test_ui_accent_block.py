@@ -187,7 +187,7 @@ def test_one_ink_in_two_colour_forms_counts_as_one_colour(
 def test_two_different_inks_still_count_as_two_colours(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    page(tmp_path, ink_at_two_strengths("#2b1b17", "#5a3a10"))
+    page(tmp_path, ink_at_two_strengths(TILE, "#5a3a10"))
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
         assert found[width] == Counter({"accent-colours": 1}), (width, found[width])

@@ -141,6 +141,8 @@ for (const el of controls.filter((c) => (c.tagName === "BUTTON" || c.getAttribut
   groups.set(el.parentElement, [...(groups.get(el.parentElement) || []), el]);
 }
 const colourOf = (el, s) => [ownText(el) ? s.color : "", s.backgroundColor, s.borderTopWidth !== "0px" ? s.borderTopColor : ""];
+const rgbKey = (c) => rgb(c).slice(0, 3).join(",");
+const pageInk = new Set([document.body, document.querySelector("main")].filter(Boolean).map((el) => rgbKey(getComputedStyle(el).color)));
 const pageHeading = document.querySelector("h1");
 const pageLevel = (el) => ["BODY", "MAIN"].includes(el.tagName) || Boolean(pageHeading && el.contains(pageHeading));
 for (const [parent, members] of groups) {
@@ -162,8 +164,9 @@ for (const [parent, members] of groups) {
   const colours = new Set();
   for (const el of [block, ...block.querySelectorAll("*")]) {
     if (!visible(el)) continue;
-    for (const c of colourOf(el, getComputedStyle(el))) {
-      if (c && opaque(c) && hue(rgb(c)) !== null) colours.add(rgb(c).slice(0, 3).join(","));
+    const [text, ...fills] = colourOf(el, getComputedStyle(el));
+    for (const c of [text && pageInk.has(rgbKey(text)) ? "" : text, ...fills]) {
+      if (c && opaque(c) && hue(rgb(c)) !== null) colours.add(rgbKey(c));
     }
   }
   if (colours.size > LIMITS.accent_colours) found.push({ rule: "accent-colours", at: name(block), colours: colours.size });
