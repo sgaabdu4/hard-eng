@@ -59,3 +59,11 @@ def test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bound
     assert len(excerpt.encode()) <= look.DESIGN_BYTE_LIMIT
     assert design.strip() in excerpt
     assert excerpt.endswith("[truncated]")
+
+
+def test_the_ui_refusal_header_says_the_rule_is_intended_and_fixed_in_the_project(
+    tmp_path: Path,
+) -> None:
+    """The first failed check after an update is printed by the new release, so its header carries the line."""
+    message = library_message(tmp_path, ui_library=[])
+    assert "The rule is intended and has no waiver; fix the project" in message
