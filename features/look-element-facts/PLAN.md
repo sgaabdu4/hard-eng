@@ -1,6 +1,6 @@
 # Look: code decides each look Fail item it can measure
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -87,11 +87,11 @@ N/A — hook code and tests; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: `check --plan-stage Ready --base origin/develop` passed (8101 tests, the static gates and the semgrep rules) before the repairs; the focused look tests then passed after each repair and after the rebase on `develop`. Each repair had a test that fails without it. The independent review by another agent ran 5 rounds: rounds 1 to 4 found real faults in the carried tokens, lists of items, old records, gap overlap, order numbers, partial carries and held images (each repaired with a red test) and 3 findings that the plan declines with a reason; round 5 ended clean. CI is the full test proof.
 E2E: N/A — hook code with no app journey; the real browser capture and the fixture runs are the Real service proof.
 Real service: Passed — the Claude reviewer CLI and the real browser capture, on invented fixtures only: (1) Real browser capture: one invented fixture for each kind (size, colour, gap, radius, tap), code gave the same verdict in 5 of 5 captures for each. (2) Real Claude reviewer, this change, one reviewer, 3 invented pages (faulty, fixed, v1), 5 runs each: 15 of 15 ended `findings`, 0 of 15 form refusals; on the faulty page both planted faults were found in 5 of 5 runs, and code gave the same Fails in every run of a page (5 of 5 faulty, 5 of 5 v1); 25k to 44k tokens per run. (3) Union of three reviewers, same pages, 15 runs: 15 of 15 counted 3 of 3, 0 form refusals, 78k to 124k tokens per run (about 4 times), both planted faults found 5 of 5 as with one reviewer, no recall gain; neither mode reached a clean run on the fixed page (it keeps an enabled Approve on an incomplete order, found 5 of 5 by each), so rounds to clean could not be measured; the union raised Fails per run on the fixed page (2 to 4 against 1 to 3) and repeated one fault as several items. The union was left out. The tests of its verify step are kept in `features/look-element-facts/verifier-tests.patch` (they apply to a union build, not to this branch); the verify step was never built. Not checked: the real sealed sets (they need captures in the new measure format), agy, the borderline fixture of the earlier PR, the earlier list against none.
-Retro: Pending
+Retro: Look reviewers stated sizes and colours by eye and were wrong, and a guard that refused such lines matched 0 of 9 stored Fail lines. The record now holds each element with its facts, each Fail item names its image, element and kind, and code decides each tagged item it finds against the floor and the DESIGN.md tokens; the recheck list keeps judgement items. A union of three reviewers cost four times the tokens with no recall gain, so it was left out. Escaped bug: found on the base branch; the red tests of this PR are its repro and the fix is in this PR.
 
 Delivery target: Merge
 
