@@ -1004,3 +1004,35 @@ def test_the_gap_between_inline_neighbours_follows_their_order_on_the_line(
     record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
     pairs = {(gap["at"], gap["to"]): gap["px"] for gap in record["measured"]["gaps"]}
     assert pairs == {("Session", "5"): 6, ("5", "/36"): 6}
+
+
+def test_a_capture_keeps_the_route_init_script_beside_the_hold_script(
+    tmp_path: Path, site: str, browser: ModuleType, capfd: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "pages/counter.html").write_text(
+        "<!doctype html><html lang=en><title>Counter</title><body>"
+        f"{COUNTER_PAGE}</body>"
+    )
+    route = tmp_path / "route-init.js"
+    route.write_text("window.__route = 'route';\n")
+    name = session()
+    plain_step(tmp_path, name, "set", "viewport", "768", "900")
+    try:
+        plain_step(
+            tmp_path, name, "open", "--init-script", str(route), f"{site}/counter.html"
+        )
+        plain_step(tmp_path, name, "set", "viewport", "390", "900")
+        seen = plain_step(
+            tmp_path,
+            name,
+            "eval",
+            "String(window.__route) + '/' + String(Boolean(window.__heHold))",
+        ).strip()
+        assert seen == '"route/true"'
+    finally:
+        plain_step(tmp_path, name, "close")
+    assert browser.browser_command(
+        tmp_path,
+        ["--session", session(), "open", "--init-script", str(tmp_path / "gone.js"), site],
+    ) == 1
+    assert "gone.js" in capfd.readouterr().err
