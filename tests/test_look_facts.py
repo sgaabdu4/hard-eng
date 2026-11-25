@@ -243,3 +243,172 @@ def test_the_prompt_lists_the_kinds_from_the_one_table(
     for kind, covers in ui_measure.ITEM_KINDS.items():
         assert f"[{kind}] {covers}" in prompt
     assert "image-N.png: <element> [<kind>]" in prompt
+
+
+FAULT_AND_PASS = {
+    "size": (
+        "Hint",
+        values(texts=[text_fact("Hint", 10.5, under=True)]),
+        values(texts=[text_fact("Hint", 12)]),
+    ),
+    "colour": (
+        "Hint",
+        values(texts=[text_fact("Hint", colour="767676ff", fg="#767676")]),
+        values(texts=[text_fact("Hint")]),
+    ),
+    "gap": (
+        "Save",
+        values(gaps=[{"at": "Save", "to": "Cancel", "px": 11, "axis": "y"}]),
+        values(gaps=[{"at": "Save", "to": "Cancel", "px": 14, "axis": "y"}]),
+    ),
+    "radius": (
+        "Save",
+        values(radii=[{"at": "Save", "px": 7, "clamped": False}]),
+        values(radii=[{"at": "Save", "px": 6, "clamped": False}]),
+    ),
+    "tap": (
+        "Save",
+        values(sizes={"controls": [control("Save", 60, 30)]}),
+        values(sizes={"controls": [control("Save", 120, 44)]}),
+    ),
+}
+
+
+def tokens_of(tmp_path: Path) -> object:
+    import look_facts
+
+    (tmp_path / "DESIGN.md").write_text(DESIGN)
+    return look_facts.design_tokens(tmp_path)
+
+
+@pytest.mark.parametrize("kind", sorted(FAULT_AND_PASS))
+def test_code_decides_each_measured_kind(kind: str, tmp_path: Path) -> None:
+    import look_facts
+
+    element, fault, held = FAULT_AND_PASS[kind]
+    tokens = tokens_of(tmp_path)
+    failed = look_facts.verdict(kind, f"{element} button", fault, tokens)
+    passed = look_facts.verdict(kind, element, held, tokens)
+    assert failed is not None
+    assert failed[0] is False
+    assert passed is not None
+    assert passed[0] is True
+    assert failed[1] != passed[1]
+
+
+def a_second(
+    rows: list[dict[str, object]], **change: object
+) -> list[dict[str, object]]:
+    return [*rows, {**rows[0], **change}]
+
+
+NEAR_MISSES = {
+    "an element that the record lacks": ("size", "Cancel all", MEASURED),
+    "a longer name that holds the element": (
+        "size",
+        "Save",
+        values(texts=[text_fact("Save all", 10.5, under=True)]),
+    ),
+    "extra words around the name": ("size", "Save button on the right", MEASURED),
+    "a name of two letters": (
+        "size",
+        "Go",
+        values(texts=[text_fact("Go", 10.5, under=True)]),
+    ),
+    "only a role word": ("tap", "button", MEASURED),
+    "two elements with one name and two verdicts": (
+        "size",
+        "Hint",
+        values(
+            texts=[text_fact("Hint", 14), text_fact("Hint", 10.5, under=True)],
+        ),
+    ),
+    "a clamped radius": (
+        "radius",
+        "Save",
+        values(radii=[{"at": "Save", "px": 99, "clamped": True}]),
+    ),
+    "an old record with no facts": ("size", "Save", {"radii": []}),
+    "an unknown kind": ("judgement", "Save", MEASURED),
+}
+
+
+@pytest.mark.parametrize("case", sorted(NEAR_MISSES))
+def test_an_item_that_code_cannot_match_stays_with_the_reviewer(
+    case: str, tmp_path: Path
+) -> None:
+    import look_facts
+
+    kind, element, measured = NEAR_MISSES[case]
+    assert look_facts.verdict(kind, element, measured, tokens_of(tmp_path)) is None
+
+
+def test_an_item_with_no_tokens_to_judge_by_stays_with_the_reviewer(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = look_facts.design_tokens(tmp_path)
+    for kind in ("colour", "gap", "radius"):
+        element, fault, _ = FAULT_AND_PASS[kind]
+        assert look_facts.verdict(kind, element, fault, tokens) is None
+    element, fault, _ = FAULT_AND_PASS["size"]
+    assert look_facts.verdict("size", element, fault, tokens) is not None
+
+
+@pytest.mark.parametrize(("colour", "ok"), [("00000080", True), ("00000081", False)])
+def test_a_colour_token_with_alpha_matches_the_raw_colour(
+    colour: str, ok: bool, tmp_path: Path
+) -> None:
+    import look_facts
+
+    measured = values(
+        texts=[text_fact("Hint", colour=colour, fill="", fg="#808080", bg="#ffffff")]
+    )
+    found = look_facts.verdict("colour", "Hint", measured, tokens_of(tmp_path))
+    assert found is not None
+    assert found[0] is ok
+
+
+def test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass(
+    tmp_path: Path, project: Path
+) -> None:
+    measured = values(
+        texts=[text_fact("Save", 14), text_fact("Hint", 10.5, under=True)]
+    )
+    mixed = (
+        "image-1.png: Save [size]; image-1.png: Hint [size]; "
+        "image-1.png: the card sits left of its title [judgement] Fix: centre it"
+    )
+    record, _ = look_with(tmp_path, project, measured, answer_with(mixed))
+    line = stored_rule(record, "Design system")
+    assert line.startswith("Design system: Fail — ")
+    assert "Save [size]" not in line
+    assert (
+        "image-1.png: Hint [size] — code: text is 10.5 px, under the 11 px floor"
+        in line
+    )
+    assert "the card sits left of its title [judgement]" in line
+    assert line.endswith("Fix: centre it")
+    assert record["outcome"] == "findings"
+
+
+def stored_rule(record: dict[str, object], name: str) -> str:
+    rules = record["rules"]
+    assert isinstance(rules, list)
+    return next(line for line in rules if line.startswith(f"{name}:"))
+
+
+def test_a_line_whose_items_all_pass_in_code_becomes_a_pass(
+    tmp_path: Path, project: Path
+) -> None:
+    measured = values(texts=[text_fact("Save", 14)])
+    record, _ = look_with(
+        tmp_path, project, measured, answer_with("image-1.png: Save [size] Fix: bigger")
+    )
+    line = stored_rule(record, "Design system")
+    assert line.startswith(
+        "Design system: Pass — code checked: image-1.png: Save [size]"
+    )
+    assert "at or over the 11 px floor" in line
+    assert record["outcome"] == "clean"

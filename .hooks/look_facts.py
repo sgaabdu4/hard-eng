@@ -323,3 +323,46 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
         if kind in NOTES:
             lines += _listed(facts, NOTES[kind])
     return "\n".join(lines)
+
+
+ROLE_WORDS = frozenset(
+    [
+        "the",
+        "button",
+        "link",
+        "text",
+        "label",
+        "icon",
+        "badge",
+        "chip",
+        "tab",
+        "field",
+        "input",
+        "heading",
+        "control",
+    ]
+)
+
+
+def plain(name: str) -> str:
+    """The name as words, lowercase, with punctuation and the role words dropped, so `Save button` and `Save` are one name."""
+    words = re.sub(r"[^\w\s]", " ", name.lower()).split()
+    return " ".join(word for word in words if word not in ROLE_WORDS)
+
+
+def verdict(
+    kind: str, element: str, measured: dict[str, object], tokens: Tokens
+) -> tuple[bool, str] | None:
+    """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal one recorded name of three letters or more once role words are dropped, and every fact of that name must give the same verdict; any other case is `not found`, which leaves the item to the reviewer."""
+    wanted = plain(element)
+    build = FACTS.get(kind)
+    if build is None or len(wanted) < 3:
+        return None
+    hits = [
+        fact for fact in build(measured, tokens) if wanted in map(plain, fact.names)
+    ]
+    if not hits or any(fact.ok is None for fact in hits):
+        return None
+    if len({fact.ok for fact in hits}) != 1:
+        return None
+    return bool(hits[0].ok), ", ".join(dict.fromkeys(fact.why for fact in hits))
