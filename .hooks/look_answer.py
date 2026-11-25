@@ -106,16 +106,14 @@ def part_item(part: str) -> tuple[str, Item | None]:
 
 
 def item_problem(rule_lines: list[str]) -> str | None:
-    """Why a Fail line cannot stand: an item with a kind that is not in the table, or a size, ratio or colour stated anywhere but in an item of a measured kind."""
-    from ui_measure import ITEM_KINDS, MEASURED_KINDS
+    """Why a Fail line cannot stand: a size, ratio or colour stated anywhere but in an item of a measured kind. A missing or unknown kind is a judgement item and never refuses the line."""
+    from ui_measure import MEASURED_KINDS
 
     for line in rule_lines:
         if split_rule_line(line)[1] != "Fail":
             continue
         for part in fail_parts(line)[0]:
             prose, item = part_item(part)
-            if item and item.kind and item.kind not in ITEM_KINDS:
-                return f"not done: a Fail item has the kind [{item.kind}], which is not one of {', '.join(ITEM_KINDS)}: {line}"
             states = CLAIM.search(prose) or (
                 None if item and item.kind in MEASURED_KINDS else CLAIM.search(part)
             )
