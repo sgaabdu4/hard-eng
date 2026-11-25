@@ -712,6 +712,35 @@ def test_the_library_index_and_the_token_compare_skip_tests_and_generated_files(
     validate_whole_project(root)
 
 
+def test_a_mixed_stylesheet_gets_a_token_gap_line_that_says_why(tmp_path: Path) -> None:
+    """HE-UI-SOURCE: a stylesheet that holds @theme tokens and other rules is no token file; the finding says why and what passes, and moving the tokens to a stylesheet of custom properties only passes."""
+    root = build(tmp_path, "web-fixed")
+    (root / "src/theme/tokens.css").unlink()
+    (root / "src/styles").mkdir()
+    (root / "src/styles/globals.css").write_text(
+        "@theme {\n  --color-brand: #123456;\n  --spacing-3: 12px;\n}\n"
+        ".card {\n  margin: var(--spacing-3);\n}\n"
+    )
+    (root / "DESIGN.md").write_text(
+        "---\ncolors:\n  brand: '#123456'\nspacing:\n  s3: 12px\n---\n# Fixture\n"
+    )
+    message = refusal(root)
+    assert "the DESIGN.md colour #123456 is missing from the token files" in message
+    assert (
+        "src/styles/globals.css holds @theme tokens and other rules, so it is not a token file"
+        in message
+    )
+    assert "move the tokens to a stylesheet of custom properties only" in message
+    (root / "src/styles/globals.css").write_text(
+        ".card {\n  margin: var(--spacing-3);\n}\n"
+    )
+    (root / "src/theme/tokens.css").write_text(
+        "@theme {\n  --color-brand: #123456;\n  --spacing-3: 12px;\n}\n"
+    )
+    reindex(root)
+    validate_whole_project(root)
+
+
 def test_exemptions_follow_repository_facts(tmp_path: Path) -> None:
     """HE-UI-SOURCE: email templates, standalone pages and PDF builders are judged by what the repository says they are, never by a path list."""
     root = build(

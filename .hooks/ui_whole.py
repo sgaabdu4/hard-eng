@@ -369,6 +369,31 @@ def add_ui_library(root: Path, config: "GateConfig") -> None:
         shipping["ui_library"] = list(library)
 
 
+MIXED_TOKENS = re.compile(r"(?:@theme|:root)[^{}]*\{[^{}]*--[\w-]+\s*:")
+
+
+def mixed_token_note(
+    texts: dict[str, str], ui_paths: list[str], findings: list[str]
+) -> list[str]:
+    """One line before the token findings that name each stylesheet which defines tokens beside other rules: it is no token file, so its tokens are not compared, and the findings read as if no token existed."""
+    if not any("is missing from the token files" in line for line in findings):
+        return []
+    mixed = [
+        name
+        for name, text in texts.items()
+        if name.endswith(STYLE_SUFFIXES)
+        and inside(name, ui_paths)
+        and not token_file(name, text)
+        and MIXED_TOKENS.search(CSS_COMMENT.sub("", text))
+    ]
+    return [
+        f"{name} holds @theme tokens and other rules, so it is not a token file and {DESIGN_NAME} is not compared with it; "
+        "move the tokens to a stylesheet of custom properties only (a :root or @theme block and @import lines), "
+        "and keep the other rules in their own stylesheet"
+        for name in mixed
+    ]
+
+
 def compared_token_file(name: str, text: str, ui_paths: list[str]) -> bool:
     if PurePosixPath(name).name.startswith("tailwind.config."):
         return True
@@ -396,13 +421,15 @@ def ui_findings_whole(
         if inside(name, library)
         for part in library_parts(name, text)
     ]
+    gaps = token_findings(texts.get(DESIGN_NAME), token_texts)
     return (
         setting_findings(root, texts, ui_paths, library)
         + library_covers_screens(root, texts, ui_paths, library)
         + coverage_findings(root, texts, ui_paths)
         + role_findings(parts)
         + index_findings(owned, library)
-        + token_findings(texts.get(DESIGN_NAME), token_texts)
+        + mixed_token_note(owned, ui_paths, gaps)
+        + gaps
         + [
             item
             for name in judged_names(root, texts, ui_paths)
