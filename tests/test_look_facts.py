@@ -202,7 +202,7 @@ def judged(fail: str) -> tuple[str, list[str]]:
         "image-1.png: Save about 13 px Fix: make it bigger",
         "image-1.png: badge #333 [judgement] Fix: use a token",
         "image-1.png: Save at 3:1 [judgement] Fix: more contrast",
-        "image-1.png: Hint is 10 px [weight] Fix: make it bolder",
+        "image-1.png: Hint is 10 px [position] Fix: make it bolder",
         "the label is 12pt; image-1.png: Hint [size] Fix: make it bigger",
     ],
 )
@@ -222,7 +222,7 @@ def test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused(
         "image-1.png: badge #7a5c5c [colour] Fix: use a token",
         "image-1.png: the card sits left of its title [judgement] Fix: centre it",
         "image-1.png: the card Fix: centre it",
-        "image-1.png: Hint [weight] Fix: make it bolder",
+        "image-1.png: Hint [position] Fix: make it bolder",
         "image-1.png: Save [tap] Fix: 44 px control",
         "image-1.png: Order #1042 Reject button [judgement] Fix: outline Reject",
         "image-1.png: Invoice #12345 error banner [judgement] Fix: name the field",
@@ -886,3 +886,82 @@ def test_a_zero_token_is_a_length_and_keeps_the_other_verdicts() -> None:
     assert off_radius[0] is False
     assert off_gap is not None
     assert off_gap[0] is False
+
+
+def counter(weights: tuple[int, int, int]) -> dict[str, object]:
+    names = ("Lesson", "Number", "Total")
+    return values(
+        texts=[
+            text_fact(name, 12, weight=weight)
+            for name, weight in zip(names, weights, strict=True)
+        ],
+        gaps=[
+            {"at": "Lesson", "to": "Number", "px": 8, "axis": "x"},
+            {"at": "Number", "to": "Total", "px": 8, "axis": "x"},
+        ],
+    )
+
+
+def test_code_decides_font_weight_against_its_neighbours(tmp_path: Path) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    same = look_facts.verdict("weight", "Number", counter((600, 600, 600)), tokens)
+    assert same is not None
+    assert same[0] is True
+    assert "equals its neighbours (Lesson, Total)" in same[1]
+    differs = look_facts.verdict("weight", "Number", counter((600, 700, 600)), tokens)
+    assert differs is not None
+    assert differs[0] is False
+    assert "differs from its neighbours (Lesson, Total)" in differs[1]
+    alone = values(texts=[text_fact("Number", 12, weight=700)])
+    assert look_facts.verdict("weight", "Number", alone, tokens) is None
+    old = values(texts=[{"at": "Number", "px": 12}], gaps=counter((1, 1, 1))["gaps"])
+    assert look_facts.verdict("weight", "Number", old, tokens) is None
+
+
+def test_code_decides_text_alignment(tmp_path: Path) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        texts=[
+            text_fact("Intro line", 14, align="start", centred=False),
+            text_fact("Section title", 20, align="center", centred=True),
+            text_fact("Old line", 14),
+        ]
+    )
+    left = look_facts.verdict("align", "Intro line", measured, tokens)
+    assert left is not None
+    assert left[0] is False
+    assert left[1] == "text-align start, not centred in its parent"
+    middle = look_facts.verdict("align", "Section title", measured, tokens)
+    assert middle is not None
+    assert middle[0] is True
+    assert look_facts.verdict("align", "Old line", measured, tokens) is None
+    listed = look_facts.measured_text(measured, tokens)
+    assert "- Intro line: 14 px, weight 400, align start, colour" in listed
+    assert "- Section title: 20 px, weight 400, align center (centred), colour" in listed
+    assert "align: checked for all 2 text elements: 1 not centred in their parent" in listed
+
+
+def test_the_tap_fact_of_a_link_at_its_floor_says_so_and_code_decides_it(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        sizes={
+            "controls": [
+                control("Footer home", 90, 44, floor=44),
+                control("Footer help", 90, 20, floor=44, under=True),
+            ]
+        }
+    )
+    listed = look_facts.measured_text(measured, tokens)
+    assert "- Footer home: 90x44 px, at or over 44 px" in listed
+    assert "- Footer help: 90x20 px, under 44 px" in listed
+    found = look_facts.verdict("tap", "Footer home", measured, tokens)
+    assert found is not None
+    assert found[0] is True

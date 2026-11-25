@@ -44,7 +44,9 @@ ITEM_KINDS = {
     "gap": "the gap between two neighbours against the DESIGN.md spacing tokens",
     "radius": "the corner radius against the DESIGN.md rounded tokens",
     "tap": "the control size against its tap floor",
-    "judgement": "anything else: placement, alignment, weight, line count, wording",
+    "weight": "the text weight against the weight of its neighbours in the same row",
+    "align": "whether the text is centred in its parent (a claim that it is not); any other alignment claim is judgement",
+    "judgement": "anything else: placement, any other alignment claim, line count, wording",
 }
 MEASURED_KINDS = frozenset(ITEM_KINDS) - {"judgement"}
 FINDING_RULES = {
@@ -503,12 +505,22 @@ const fillOf = (el) => {
   }
   return "";
 };
+const centredIn = (el, s) => {
+  const parent = el.parentElement;
+  if (!parent) return false;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const t = range.getBoundingClientRect(), p = parent.getBoundingClientRect(), ps = getComputedStyle(parent);
+  const left = p.left + parseFloat(ps.paddingLeft) + parseFloat(ps.borderLeftWidth);
+  const right = p.right - parseFloat(ps.paddingRight) - parseFloat(ps.borderRightWidth);
+  return Math.abs((t.left + t.right) / 2 - (left + right) / 2) <= 2 && (s.textAlign === "center" || t.width < right - left - 4);
+};
 const textFacts = new Map();
 for (const el of texts) {
   const s = getComputedStyle(el);
   const size = parseFloat(s.fontSize);
   const c = rgb(s.color);
-  const fact = { at: factName(el), px: Math.round(size * 100) / 100, weight: parseFloat(s.fontWeight) || 400, colour: raw8(c), fill: fillOf(el), under: size < LIMITS.text_px };
+  const fact = { at: factName(el), px: Math.round(size * 100) / 100, weight: parseFloat(s.fontWeight) || 400, align: s.textAlign, centred: centredIn(el, s), colour: raw8(c), fill: fillOf(el), under: size < LIMITS.text_px };
   const bg = solid(el);
   if (bg) {
     const fg = c.slice(0, 3).map((v, i) => v * c[3] + bg[i] * (1 - c[3]));

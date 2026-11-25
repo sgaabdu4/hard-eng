@@ -140,7 +140,12 @@ def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 f", colour {_swatch(tokens, row.get('colour'), row.get('fg'))} on "
                 f"{_swatch(tokens, row.get('fill'), row.get('bg'))}, contrast {row.get('ratio')}:1"
             )
-        line = f"{row.get('at')}: {_shown(px)} px, weight {_shown(_num(row.get('weight')))}{pair}"
+        place = (
+            f", align {row['align']}{' (centred)' if row.get('centred') else ''}"
+            if row.get("align") and isinstance(row.get("centred"), bool)
+            else ""
+        )
+        line = f"{row.get('at')}: {_shown(px)} px, weight {_shown(_num(row.get('weight')))}{place}{pair}"
         found.append(
             Fact(
                 (str(row.get("at")),),
@@ -197,12 +202,54 @@ def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 (str(row.get("at")),),
                 not under,
                 min(w, h) - floor,
-                f"{row.get('at')}: {size}"
-                + (f", under {_shown(floor)} px" if under else ""),
+                f"{row.get('at')}: {size}, "
+                + (f"under {_shown(floor)} px" if under else f"at or over {_shown(floor)} px"),
                 f"control is {size}, {'under' if under else 'at or over'} its {_shown(floor)} px floor",
             )
         )
     return found
+
+
+def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+    rows = [row for row in _rows(measured, "texts") if "weight" in row]
+    weights: dict[str, set[float]] = {}
+    for row in rows:
+        weights.setdefault(str(row.get("at")), set()).add(_num(row.get("weight")))
+    near: dict[str, set[str]] = {}
+    for gap in _rows(measured, "gaps"):
+        first, second = str(gap.get("at")), str(gap.get("to"))
+        if first in weights and second in weights:
+            near.setdefault(first, set()).add(second)
+            near.setdefault(second, set()).add(first)
+    found: list[Fact] = []
+    for row in rows:
+        name, weight = str(row.get("at")), _num(row.get("weight"))
+        others = sorted(near.get(name, set()) - {name})
+        ok = None if not others else all(weights[o] == {weight} for o in others)
+        found.append(
+            Fact(
+                (name,),
+                ok,
+                0 if ok is False else 1,
+                "",
+                f"weight {_shown(weight)} {'equals' if ok else 'differs from'} its neighbours ({', '.join(others)})",
+            )
+        )
+    return found
+
+
+def align_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+    return [
+        Fact(
+            (str(row.get("at")),),
+            row["centred"],
+            0 if row["centred"] is False else 1,
+            "",
+            f"text-align {row.get('align')}, {'centred' if row['centred'] else 'not centred'} in its parent",
+        )
+        for row in _rows(measured, "texts")
+        if isinstance(row.get("centred"), bool)
+    ]
 
 
 def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
@@ -254,6 +301,8 @@ FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
     "size": size_facts,
     "colour": colour_facts,
     "tap": tap_facts,
+    "weight": weight_facts,
+    "align": align_facts,
     "gap": gap_facts,
     "radius": radius_facts,
 }
@@ -293,6 +342,16 @@ def _covered(
             f"tap size: checked for all {count} controls: {outside} under their floor "
             f"({LIMITS['control_px']} px; {LIMITS['link_px']} px for a link at {LIMITS['desktop_px']} px and wider)"
         )
+    if kind in ("weight", "align"):
+        counted = sum(fact.ok is not None for fact in facts)
+        what = (
+            "text elements that have a neighbour: {} differ from a neighbour"
+            if kind == "weight"
+            else "text elements: {} not centred in their parent"
+        )
+        if not counted:
+            return f"{kind}: no {kind} facts in this record, so code does not decide {kind}"
+        return f"{kind}: checked for {'all ' if kind == 'align' else ''}{counted} {what.format(outside)}"
     given = {
         "colour": (
             tokens.colours,
