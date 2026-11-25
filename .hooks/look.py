@@ -627,6 +627,13 @@ def kept_verdict(
     return record if same and len(entries) == len(digests) else None
 
 
+def image_files(names: list[str]) -> list[Path]:
+    images = [Path(name) for name in names]
+    if missing := [str(image) for image in images if not image.is_file()]:
+        raise ValueError(f"look: no such image: {', '.join(missing)}")
+    return images
+
+
 def look_command(root: Path, argv: list[str]) -> int:
     import look_dispute
     from look_records import (
@@ -654,9 +661,7 @@ def look_command(root: Path, argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if args.dispute:
         return look_dispute.dispute(root, args)
-    images = [Path(image) for image in args.images]
-    if missing := [str(image) for image in images if not image.is_file()]:
-        raise ValueError(f"look: no such image: {', '.join(missing)}")
+    images = image_files(args.images)
     head = git_text(root, "rev-parse", "HEAD")
     rel_plan, scope, plan_digest = (
         plan_scope(root, Path(args.plan), head) if args.plan else ("", "", "")

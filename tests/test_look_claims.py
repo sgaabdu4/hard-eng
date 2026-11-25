@@ -147,5 +147,9 @@ def test_a_square_control_adds_no_token_fault(
         "---\nrounded:\n  sm: 4px\n  md: 6px\n---\n# Design\n"
     )
     measured = values(radii=[row, {"at": "Card", "px": 6, "clamped": False}])
-    monkeypatch.setattr(look, "recorded_measured", lambda root, digest: measured)
+
+    def recorded(root: Path | None, digest: str) -> dict[str, object]:
+        return measured
+
+    monkeypatch.setattr(look, "recorded_measured", recorded)
     assert look_records.token_fault(tmp_path, ["a" * 64]) == ""

@@ -258,8 +258,9 @@ def test_a_dispute_that_cites_nothing_real_is_refused(
     )
     log.unlink(missing_ok=True)
     own = ["src/form.ts:1-1"]
+    none: list[str] = []
     cases = [
-        ("cite at least one", item, []),
+        ("cite at least one", item, none),
         ("no such file at HEAD", item, ["src/none.ts:1-2"]),
         ("no such file at HEAD", item, ["src/new.ts:1-1"]),
         ("has 3 lines", item, ["src/form.ts:2-9"]),
@@ -286,7 +287,7 @@ def test_a_dispute_on_a_code_item_or_an_owner_line_is_refused(
     write_files(project, {"src/form.ts": FORM, "DESIGN.md": DESIGN})
     commit(project, "sources")
     images = make_images(project, 1)
-    finding = {"rule": "text-size", "at": "Hint", "px": 9}
+    finding: dict[str, object] = {"rule": "text-size", "at": "Hint", "px": 9}
     measured = values(texts=[text_fact("Hint", 10.5, under=True)])
     ui_measure.write_record(
         project, images[0], 1280, [finding], "/kpi", measured=measured
