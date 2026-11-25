@@ -70,7 +70,7 @@ MARKDOWN_HEADER = (
 )
 UI_HEADER = (
     "HE-UI-SOURCE: A screen takes its colours, sizes and base elements from the token files "
-    "and the shared library: use a token or a library part, never a typed value; never suppress it."
+    "and the shared library: use a token or a library part, never a typed value. The rule is intended and has no waiver; fix the project, never suppress it."
 )
 MARKDOWN_NAME = re.compile(r"[\w.+-]+\.md\b")
 NEEDS_NO_LINK = {

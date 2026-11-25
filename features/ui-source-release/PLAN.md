@@ -29,7 +29,7 @@ Authority: Autonomous: the user asked on 2026-11-24 to release Hard Eng with eve
 - [ ] An empty `ui_library` refusal names the key and the value form, and the exact value when one `ui` folder holds the shared parts → `tests/test_ui_library_refusals.py::test_the_empty_library_refusal_names_the_key_and_the_value`.
 - [ ] A stylesheet or component file outside `ui_paths` names both fixes: add its folder to `ui_paths` when users receive it, or remove a preview from git → `tests/test_ui_library_refusals.py::test_a_file_outside_ui_paths_names_both_fixes`.
 - [ ] A library of 2,000 parts passes the index check, and the look excerpt keeps `DESIGN.md` within its byte limit; no refusal and no limit change is needed → `tests/test_ui_library_refusals.py::test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bounded`.
-- [ ] The text of a failed update push says the rule is intended, has no waiver, and is fixed in the project → `tests/test_update_pr_refusal.py::test_a_refused_push_of_the_update_branch_names_the_next_step`.
+- [ ] The header of the HE-UI-SOURCE refusal, which the new release prints at the first failed check after an update, says the rule is intended, has no waiver and is fixed in the project → `tests/test_ui_library_refusals.py::test_the_ui_refusal_header_says_the_rule_is_intended_and_fixed_in_the_project`.
 - [ ] A real update on a project that sits on the old release pushes past the old pre-push check and reports the true list → `tests/test_scaffold_replay.py::test_an_update_leaves_the_ui_library_key_to_the_project` for the update and its replay; the run on the old release's own hooks is in Verification Evidence.
 
 ## Baseline + execution
