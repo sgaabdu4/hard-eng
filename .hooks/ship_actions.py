@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager, nullcontext, suppress
 from pathlib import Path, PurePosixPath
 from xml.parsers.expat import ExpatError
 
@@ -40,6 +40,7 @@ from shipping import (
     load_policy,
     merge_settings,
     pushed_policy,
+    reading_newer_policy_keys,
     verify,
 )
 from submodules import update_submodules
@@ -737,6 +738,35 @@ def unchanged_checkout(shipment: Shipment) -> None:
         raise ValueError("Cleanup preserves commits added after the verified PR")
 
 
+SUBMODULE_STATUS = re.compile(r"^(.)[0-9a-f]+ (.+?)(?: \(.*\))?$")
+
+
+def submodule_work(target: Path) -> list[str]:
+    """Each initialized submodule that holds work no remote has: a moved commit, local commits, a stash, or untracked or ignored files."""
+    kept = []
+    for line in git(target, "submodule", "status", "--recursive").splitlines():
+        found = SUBMODULE_STATUS.match(line)
+        if found is None or found[1] == "-":
+            continue
+        inner = target / found[2]
+        if (
+            found[1] != " "
+            or git(
+                inner, "rev-list", "--branches", "--tags", "HEAD", "--not", "--remotes"
+            ).strip()
+            or git(inner, "stash", "list").strip()
+            or git(
+                inner,
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--ignored=matching",
+            ).strip()
+        ):
+            kept.append(found[2])
+    return kept
+
+
 def cleanup_guard(coordinator: Path, shipment: Shipment) -> None:
     target = shipment.root.resolve()
     if common_directory(coordinator) != common_directory(target):
@@ -757,12 +787,12 @@ def cleanup_guard(coordinator: Path, shipment: Shipment) -> None:
     if sum(record.get("branch") == branch for record in records) != 1:
         raise ValueError("Another worktree uses the task branch")
     unchanged_checkout(shipment)
-    if any(
-        not line.startswith("-")
-        for line in git(target, "submodule", "status", "--recursive").splitlines()
-    ):
+    if kept := submodule_work(target):
         raise ValueError(
-            "Cleanup preserves initialized submodules; use the repository's procedure"
+            "Cleanup preserves submodule work that no remote holds: "
+            + ", ".join(kept)
+            + ". In each, check out the recorded commit, push local commits, and "
+            "delete or move files and stashes that nobody needs. Then run cleanup again."
         )
     if shipment.branch == shipment.base or not shipment.merged_sha:
         raise ValueError("Cleanup requires a merged task branch, never the base")
@@ -909,7 +939,8 @@ def run(
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     if stage in {"ready", "merge"}:
         require_current(target)
-    shipment = verify(target, plan_path, pr_url, proof_stage)
+    with reading_newer_policy_keys() if stage == "cleanup" else nullcontext():
+        shipment = verify(target, plan_path, pr_url, proof_stage)
     if stage in {"ready", "merge"} and (
         note := shipping_note(shipment.root, shipment.head_sha)
     ):
