@@ -7,7 +7,6 @@ import re
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
@@ -590,6 +589,8 @@ def ci_step_notes(root: Path) -> list[str]:
 
 def repair_checkout(root: Path, previous: str) -> str:
     """A setup rerun fixes this checkout's pre-push hook, its gates file and the project files that are missing; the update path owns the rest."""
+    import tempfile
+
     import hook_chain
     import update
     from ci_setup import GATES_FILE, without_workflow_gates
@@ -687,8 +688,11 @@ def candidate_worktree(
     root: Path, revision: str, claim: bool = False
 ) -> Generator[Path]:
     """A detached worktree of the revision in its own temporary folder; `claim` locks it with this process as its owner. A git hook may leave a child that still writes there, so whatever runs inside is stopped before the worktree is removed."""
+    import tempfile
+
     from tidy_guards import stop_inside
 
+    owner = f"hard-eng-update {os.getpid()}"
     with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
         candidate = Path(temporary) / "candidate"
         try:
@@ -713,7 +717,7 @@ def candidate_worktree(
                         "worktree",
                         "lock",
                         "--reason",
-                        f"hard-eng-update {os.getpid()}",
+                        owner,
                         str(candidate),
                     ],
                     cwd=root,

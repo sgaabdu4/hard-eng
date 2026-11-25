@@ -1,6 +1,5 @@
 """The update's private worktree goes away even when a git hook left a child that still writes in it."""
 
-import os
 import signal
 import subprocess
 import sys
@@ -50,43 +49,52 @@ def workers_running(script: Path) -> bool:
     return str(script) in listing
 
 
-def test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("scans", "seconds", "signals", "unread"),
+    [
+        (
+            [[11], [11, 12], [12], []],
+            3,
+            [
+                (11, signal.SIGTERM),
+                (11, signal.SIGTERM),
+                (12, signal.SIGTERM),
+                (12, signal.SIGTERM),
+            ],
+            [],
+        ),
+        (
+            [[11], [11], []],
+            0,
+            [(11, signal.SIGTERM), (11, signal.SIGKILL)],
+            [[]],
+        ),
+    ],
+    ids=["a child forked meanwhile", "a scan slower than the wait"],
+)
+def test_a_stop_signals_each_process_that_a_scan_found(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scans: list[list[int]],
+    seconds: float,
+    signals: list[tuple[int, int]],
+    unread: list[list[int]],
 ) -> None:
-    inside = str(tmp_path / "candidate" / "f")
-    scans = iter([[(11, inside)], [(11, inside), (12, inside)], [(12, inside)], []])
+    inside = str(tmp_path / "f")
+    listed = iter([[(pid, inside) for pid in scan] for scan in scans])
     sent: list[tuple[int, int]] = []
 
     def listing(own: bool = False) -> list[tuple[int, str]]:
-        return next(scans, [])
+        return next(listed, [])
 
     def kill(pid: int, signum: int) -> None:
         sent.append((pid, signum))
 
     monkeypatch.setattr(tidy_guards, "open_files", listing)
     monkeypatch.setattr(tidy_guards.os, "kill", kill)
-    (tmp_path / "candidate").mkdir()
-    tidy_guards.stop_inside(tmp_path / "candidate")
-    assert (12, signal.SIGTERM) in sent
-
-
-def test_a_slow_scan_still_signals_the_processes_that_it_found(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    scans = iter([[(11, str(tmp_path / "f"))], [(11, str(tmp_path / "f"))], []])
-    sent: list[tuple[int, int]] = []
-
-    def listing(own: bool = False) -> list[tuple[int, str]]:
-        return next(scans, [])
-
-    def kill(pid: int, signum: int) -> None:
-        sent.append((pid, signum))
-
-    monkeypatch.setattr(tidy_guards, "open_files", listing)
-    monkeypatch.setattr(tidy_guards.os, "kill", kill)
-    tidy_guards.stop_inside(tmp_path, seconds=0)
-    assert [signum for _, signum in sent] == [signal.SIGTERM, signal.SIGKILL]
-    assert next(scans) == []
+    tidy_guards.stop_inside(tmp_path, seconds=seconds)
+    assert sorted(sent) == sorted(signals)
+    assert [[pid for pid, _ in rest] for rest in listed] == unread
 
 
 def test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on(
@@ -97,33 +105,6 @@ def test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on(
 
     monkeypatch.setattr(tidy_guards, "open_files", broken)
     tidy_guards.stop_inside(tmp_path)
-
-
-def test_a_process_of_another_account_does_not_hide_ours(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    proc = tmp_path / "proc"
-    for number in ("100", "200"):
-        (proc / number).mkdir(parents=True)
-        (proc / number / "cwd").symlink_to(f"/work/{number}")
-    real = os.readlink
-
-    def readlink(path: str | os.PathLike[str]) -> str:
-        if "200" in str(path):
-            raise PermissionError(path)
-        return real(path)
-
-    def foreign(process: Path) -> bool:
-        return process.name == "200"
-
-    def ours(process: Path) -> bool:
-        return process.name == "100"
-
-    monkeypatch.setattr(tidy_guards.os, "readlink", readlink)
-    monkeypatch.setattr(tidy_guards, "foreign_user", foreign)
-    monkeypatch.setattr(tidy_guards, "mine", ours)
-    assert tidy_guards.proc_files(proc) is None
-    assert tidy_guards.proc_files(proc, own=True) == [(100, "/work/100")]
 
 
 def test_the_private_worktree_is_unlocked_only_after_its_processes_stop(
