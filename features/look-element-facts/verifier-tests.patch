@@ -1,0 +1,133 @@
+diff --git a/tests/test_look_union.py b/tests/test_look_union.py
+index 71d7e980..daa05c4e 100644
+--- a/tests/test_look_union.py
++++ b/tests/test_look_union.py
+@@ -1,5 +1,6 @@
+ """look counts three reviewers at once and shows the union of their Fail items."""
+ 
++import json
+ from pathlib import Path
+ 
+ import pytest
+@@ -25,6 +26,7 @@ while True:
+     except FileExistsError:
+         number += 1
+ answer = (folder / f"answer-{{number % {count}}}.txt").read_text()
++(folder / f"argv-{{number}}.json").write_text(json.dumps(sys.argv[1:]))
+ template = Path({template!r}).read_text().splitlines()
+ images = sorted(here.glob("image-*.png"))
+ for line in template:
+@@ -179,3 +181,113 @@ def test_a_reviewer_with_an_empty_or_refused_answer_is_left_out_and_the_run_goes
+     assert record["counted"] == 2
+     assert record["slots"] == 3
+     assert "not done" in str(record["skipped"])
++
++
++ITEM_A = "image-1.png: the card sits left [judgement]"
++ITEM_B = "image-1.png: the title looks small [judgement]"
++
++
++def same_fail() -> str:
++    return lines_with(**{"Design system": f"{ITEM_A}; {ITEM_B} Fix: fix both"})
++
++
++def verified(
++    tmp_path: Path, project: Path, verifier: str, reviewer: str | None = None
++) -> dict[str, object]:
++    answer = reviewer or same_fail()
++    return union_run(tmp_path, project, [answer, answer, answer, verifier])
++
++
++def verifier_answer(*lines: str) -> str:
++    return "\n".join([*lines, "VERDICT: verified"])
++
++
++def test_an_item_the_verifier_marks_not_shown_with_a_cite_drops_and_is_recorded(
++    tmp_path: Path, project: Path, capsys: pytest.CaptureFixture[str]
++) -> None:
++    record = verified(
++        tmp_path,
++        project,
++        verifier_answer(
++            "V1: not shown \u2014 image-1.png top left card: it is centred",
++            "V2: shown \u2014 image-1.png the title is 12 px",
++        ),
++    )
++    line = stored_rule(record, "Design system")
++    assert "the card sits left" not in line
++    assert "the title looks small" in line
++    dropped = record["dropped"]
++    assert isinstance(dropped, list)
++    assert len(dropped) == 1
++    assert "the card sits left" in dropped[0]
++    assert "it is centred" in dropped[0]
++    assert record["outcome"] == "findings"
++    assert "Verifier dropped 1 of 2 items" in capsys.readouterr().out
++
++
++def test_a_line_whose_items_are_all_dropped_becomes_a_pass(
++    tmp_path: Path, project: Path
++) -> None:
++    record = verified(
++        tmp_path,
++        project,
++        verifier_answer(
++            "V1: not shown \u2014 image-1.png card region",
++            "V2: not shown \u2014 DESIGN.md line 2 allows it",
++        ),
++    )
++    assert stored_rule(record, "Design system").startswith("Design system: Pass")
++    assert record["outcome"] == "clean"
++    assert len(record["dropped"]) == 2  # type: ignore[arg-type]
++
++
++@pytest.mark.parametrize(
++    "verifier",
++    [
++        verifier_answer("V1: not shown — looks fine to me", "V2: shown — yes"),
++        verifier_answer("V1: not shown — DESIGN.md line 999", "V2: shown — yes"),
++        "no verdict line",
++        "",
++    ],
++    ids=["no-cite", "line-past-the-file", "no-verdict", "empty"],
++)
++def test_a_verifier_answer_that_cannot_stand_drops_nothing(
++    verifier: str, tmp_path: Path, project: Path
++) -> None:
++    record = verified(tmp_path, project, verifier)
++    line = stored_rule(record, "Design system")
++    assert "the card sits left" in line
++    assert "the title looks small" in line
++    assert not record.get("dropped")
++    assert record["outcome"] == "findings"
++
++
++def test_a_code_decided_item_skips_the_verifier_and_no_item_means_no_call(
++    tmp_path: Path, project: Path
++) -> None:
++    measured = values(texts=[text_fact("Save", 14)])
++    answer = lines_with(
++        **{"Design system": f"image-1.png: Save [size]; {ITEM_A} Fix: fix it"}
++    )
++    import ui_measure
++
++    (project / "DESIGN.md").write_text(DESIGN)
++    commit(project, "design")
++    images = make_images(project, 1)
++    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=measured)
++    install_sequence(
++        tmp_path,
++        [answer, answer, answer, verifier_answer("V1: shown \u2014 image-1.png card")],
++    )
++    run_look(project, "claude", images)
++    prompt = " ".join(json.loads((tmp_path / "sequence/argv-3.json").read_text()))
++    assert "the card sits left" in prompt
++    assert "Save [size]" not in prompt
++    assert "DESIGN.md" in prompt
++
++
++def test_a_run_with_no_judgement_item_makes_no_verifier_call(
++    tmp_path: Path, project: Path
++) -> None:
++    union_run(tmp_path, project, [lines_with()] * 3)
++    assert not (tmp_path / "sequence/claim-3").exists()
