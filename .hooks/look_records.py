@@ -43,12 +43,13 @@ def image_keys(
     design_digest: str,
     digests: list[str],
     unmeasured: bool,
+    tokens: Tokens | None = None,
 ) -> list[str]:
     """One key for each image: its bytes, its ring boxes and measured values, the rules, the design documents and the plan scope that the reviewer reads."""
     import look
 
     names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
-    ringed, values = look.image_inputs(root, names, digests)
+    ringed, values = look.image_inputs(root, names, digests, tokens)
     shared = look.sha256(
         json.dumps(
             [
@@ -106,6 +107,7 @@ def carried_record(
         look.design_hash(root, design_rev),
         [str(item["sha256"]) for item in entries],
         lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
+        look.design_tokens_at(root, design_rev),
     )
     if keys != [item["inputs"] for item in entries]:
         return None
@@ -542,7 +544,7 @@ def with_earlier_fails(
 def changed_input(
     root: Path, head: str, digests: list[str], design_digest: str, scope: str
 ) -> str:
-    """The notice for a clean record of an earlier head that holds one of these images but cannot carry because DESIGN.md or the plan's Outcome + scope changed since; empty when no record qualifies."""
+    """The notice for the newest clean record of an earlier head on this branch that holds one of these images, when it cannot carry because DESIGN.md or the plan's Outcome + scope changed since; empty when that record still matches or none qualifies."""
     wanted = set(digests)
     for path in _newest_paths(root):
         record = _read_record(path)
@@ -570,11 +572,12 @@ def changed_input(
             )
             if differs
         ]
-        if changed:
-            return (
-                f"Hard Eng: look: {' and '.join(changed)} changed since {owner[:12]}, so the "
-                "clean verdict of that head does not carry. All {count} images are reviewed again."
-            )
+        if not changed:
+            return ""
+        return (
+            f"Hard Eng: look: {' and '.join(changed)} changed since {owner[:12]}, so the "
+            "clean verdict of that head does not carry. All {count} images are reviewed again."
+        )
     return ""
 
 

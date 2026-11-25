@@ -99,6 +99,34 @@ def test_a_carried_record_still_backs_the_head_after_the_base_changes_design_md(
     assert ui_proof.look_problem(project, new, block, after, plan_rel, digest) is None
 
 
+def test_a_carried_record_reads_the_tokens_of_its_own_revision_not_the_checkout(
+    tmp_path: Path, project: Path
+) -> None:
+    import look_records
+    import ui_measure
+    from test_look_facts import text_fact, values
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(
+        "---\ncolors:\n  ink: '#1a1a1a'\n---\n# Design\n\n## Overview\nBrand navy.\n"
+    )
+    commit(project, "design")
+    images = make_images(project, 1)
+    measured = values(texts=[text_fact("Save")])
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=measured)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "claude", images)
+    old = git(project, "rev-parse", "HEAD").strip()
+    (project / "notes.txt").write_text("a change that the reviewer never reads\n")
+    commit(project, "unrelated change")
+    new = git(project, "rev-parse", "HEAD").strip()
+    (project / "DESIGN.md").write_text(
+        "---\ncolors:\n  text: '#1a1a1a'\n---\n# Design\n\n## Overview\nBrand navy.\n"
+    )
+    found = look_records.records_for(project, new)
+    assert [record["carried_from"] for record in found] == [old]
+
+
 def test_the_design_hash_of_a_revision_ignores_the_checkout(
     tmp_path: Path, project: Path
 ) -> None:

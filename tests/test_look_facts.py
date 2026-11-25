@@ -200,6 +200,7 @@ def judged(fail: str) -> tuple[str, list[str]]:
         "image-1.png: Hint is 10 px [judgement] Fix: make it bigger",
         "image-1.png: badge #7a5c5c [judgement] Fix: use a token",
         "image-1.png: Save about 13 px Fix: make it bigger",
+        "image-1.png: badge #333 [judgement] Fix: use a token",
         "image-1.png: Save at 3:1 [judgement] Fix: more contrast",
         "image-1.png: Hint is 10 px [weight] Fix: make it bolder",
         "the label is 12pt; image-1.png: Hint [size] Fix: make it bigger",
@@ -223,6 +224,8 @@ def test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused(
         "image-1.png: the card Fix: centre it",
         "image-1.png: Hint [weight] Fix: make it bolder",
         "image-1.png: Save [tap] Fix: 44 px control",
+        "image-1.png: Order #1042 Reject button [judgement] Fix: outline Reject",
+        "image-1.png: Invoice #12345 error banner [judgement] Fix: name the field",
     ],
 )
 def test_a_tagged_item_and_an_untagged_item_without_a_number_stand(fail: str) -> None:
@@ -325,6 +328,16 @@ NEAR_MISSES: dict[str, tuple[str, str, dict[str, object]]] = {
         values(radii=[{"at": "Save", "px": 99, "clamped": True}]),
     ),
     "an old record with no facts": ("size", "Save", values(texts=[])),
+    "an old control with no floor": (
+        "tap",
+        "Cancel",
+        values(sizes={"controls": [{"at": "Cancel", "w": 30, "h": 30}]}),
+    ),
+    "an old gap with no neighbour": (
+        "gap",
+        "section#card",
+        values(gaps=[{"at": "section#card", "gaps": [11, 11]}]),
+    ),
     "an unknown kind": ("judgement", "Save", MEASURED),
 }
 
@@ -478,6 +491,7 @@ def test_an_earlier_item_that_code_cannot_find_is_listed_again(
     earlier = prompt.partition(EARLIER)[2]
     assert "image-1.png: the card sits left [judgement]" in earlier
     assert "image-1.png: Hint [colour]" in earlier
+    assert "must not bring back another earlier finding" in prompt
     assert record["outcome"] == "clean"
 
 
@@ -581,3 +595,65 @@ def test_a_changed_input_is_named_before_all_images_are_reviewed_again(
         "that head does not carry. All 1 images are reviewed again." in out
     )
     assert out.index("does not carry") < out.index("Look review by")
+
+
+LIST = (
+    "Two faults: 1. image-1.png: Save [size] 2. image-1.png: the card sits left "
+    "[judgement] Fix: fix both."
+)
+
+
+def test_a_list_of_items_with_no_semicolon_is_one_part_for_each_item() -> None:
+    import look_answer
+
+    parts, fix = look_answer.fail_parts(f"Design system: Fail — {LIST}")
+    assert len(parts) == 2
+    assert parts[1].startswith("image-1.png: the card sits left")
+    assert fix == "Fix: fix both."
+    outcome, _ = judged(LIST.replace("the card sits left", "badge #7a5c5c"))
+    assert outcome.startswith("not done: a Fail line states #7a5c5c")
+
+
+def test_the_second_item_of_a_list_survives_when_the_first_passes_in_code(
+    tmp_path: Path, project: Path
+) -> None:
+    measured = values(texts=[text_fact("Save", 14)])
+    record, _ = look_with(tmp_path, project, measured, answer_with(LIST))
+    line = stored_rule(record, "Design system")
+    assert line.startswith("Design system: Fail — ")
+    assert "the card sits left [judgement]" in line
+    assert "Save [size]" not in line
+    assert record["outcome"] == "findings"
+
+
+def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_off_the_tokens(tmp_path: Path) -> None:
+    import look_facts
+
+    measured = values(gaps=[{"at": "Save", "to": "Cancel", "px": -1, "axis": "y"}])
+    found = look_facts.verdict("gap", "Save", measured, tokens_of(tmp_path))
+    assert found is not None
+    assert found[0] is True
+
+
+def test_a_notice_is_for_the_images_to_review_and_the_newest_matching_record_ends_it(
+    tmp_path: Path, project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import look
+    from test_look import next_head
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    commit(project, "inputs")
+    images = make_images(project, 2)
+    install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "claude", images)
+    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand crimson.\n")
+    commit(project, "design change")
+    install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "claude", images)
+    images[0].write_bytes(images[0].read_bytes() + b"more")
+    next_head(project)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    capsys.readouterr()
+    look.look_command(project, ["--host", "claude", *map(str, images)])
+    assert "does not carry" not in capsys.readouterr().out

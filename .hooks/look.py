@@ -29,7 +29,7 @@ from look_answer import (
     judged_names,
     recheck_lines,
 )
-from look_facts import Tokens, design_tokens, measured_text
+from look_facts import Tokens, design_tokens, measured_text, tokens_from_text
 from look_records import (
     STORE,
     changed_input,
@@ -567,13 +567,21 @@ def design_hash(root: Path, revision: str = "") -> str:
     return sha256(full.encode())
 
 
+def design_tokens_at(root: Path, revision: str = "") -> Tokens:
+    """The tokens of the DESIGN.md on disk, or as committed at `revision`."""
+    return tokens_from_text(_design_body(root, "DESIGN.md", revision))
+
+
 def image_inputs(
-    root: Path | None, names: list[str], digests: list[str]
+    root: Path | None,
+    names: list[str],
+    digests: list[str],
+    tokens: Tokens | None = None,
 ) -> tuple[dict[str, list[dict[str, int]]], dict[str, str]]:
-    """The ring boxes and the measured values that the reviewer reads for each image."""
+    """The ring boxes and the measured values that the reviewer reads for each image; the tokens are those of the DESIGN.md on disk unless the caller names another revision's."""
     ringed: dict[str, list[dict[str, int]]] = {}
     values: dict[str, str] = {}
-    tokens = design_tokens(root)
+    tokens = tokens or design_tokens(root)
     for name, digest in zip(names, digests, strict=True):
         if boxes := confirmed_ring_boxes(root, digest):
             ringed[name] = boxes
@@ -851,7 +859,13 @@ def look_command(root: Path, argv: list[str]) -> int:
     base, covered = found if found else ({}, set())
     pending = [i for i, d in zip(images, digests, strict=True) if d not in covered]
     if pending and not args.all:
-        notice = changed_input(root, head, digests, design_digest, scope)
+        notice = changed_input(
+            root,
+            head,
+            [d for d in digests if d not in covered],
+            design_digest,
+            scope,
+        )
         if notice:
             print(notice.format(count=len(pending)))
     fresh = (
