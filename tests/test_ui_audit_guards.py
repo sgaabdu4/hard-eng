@@ -452,6 +452,26 @@ def test_each_press_is_measured_apart_from_the_load(
         plain_step(tmp_path, name, "close")
 
 
+LATE_PRESS = f"setTimeout(() => {{ {PRESS} }}, 600)"
+
+
+def test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    buttons = "".join(press_button(name, LATE_PRESS) for name in "abc")
+    board(tmp_path, "late", LOAD_WAVE, buttons)
+    name = session()
+    open_board(tmp_path, site, name, "late")
+    try:
+        for button in "abc":
+            time.sleep(QUIET_SECONDS)
+            plain_step(tmp_path, name, "click", f"#{button}")
+        time.sleep(QUIET_SECONDS)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
 def test_a_four_wave_load_still_fails_after_an_older_action_in_the_session(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
