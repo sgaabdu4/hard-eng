@@ -84,7 +84,8 @@ N/A — hook code and tests; no visible UI.
 
 Result: Pending
 Evidence: Pending.
-Real service: Pending.
+E2E: N/A — hook code with no app journey; the live `look` and the live dispute on a fixture page are the proof.
+Real service: Required — the Claude reviewer CLI: one live `look` on a fixture page, then one live `look --dispute` of a Fail on it, with no `--host` flag.
 Retro: Pending.
 
 Delivery target: Merge
