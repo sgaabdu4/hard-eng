@@ -63,9 +63,13 @@ def _same(recorded: object, wanted: object) -> bool:
 
 
 def carried_record(
-    root: Path, head: str, record: dict[str, object], evidence: Path | None = None
+    root: Path,
+    head: str,
+    record: dict[str, object],
+    evidence: Path | None = None,
+    design_rev: str = "",
 ) -> dict[str, object] | None:
-    """A clean record of another head, set to this head, when each image has the same key now; the browser records come from `evidence`."""
+    """A clean record of another head, set to this head, when each image has the same key now; the browser records come from `evidence`, the design documents from `design_rev` or the disk."""
     images = record.get("images")
     if (
         record.get("outcome") != "clean"
@@ -88,8 +92,8 @@ def carried_record(
     keys = image_keys(
         evidence or root,
         scope,
-        look.design_text(root),
-        look.design_hash(root),
+        look.design_text(root, design_rev),
+        look.design_hash(root, design_rev),
         [str(item["sha256"]) for item in entries],
         lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
     )
@@ -115,7 +119,7 @@ def _newest_earlier(paths: list[Path], head: str, own_sets: set[str]) -> list[Pa
 
 
 def record_files(
-    root: Path, head: str, evidence: Path | None = None
+    root: Path, head: str, evidence: Path | None = None, design_rev: str = ""
 ) -> list[tuple[Path, dict[str, object]]]:
     """The records that back this head: its own, and for each image set without one, the newest clean record of an earlier head whose images all have the same key."""
     paths = _record_paths(evidence or root)
@@ -130,7 +134,9 @@ def record_files(
         record = _read_record(path)
         owned = bool(record) and record.get("head") == path.stem.rpartition("-")[0]
         carried = (
-            carried_record(root, head, record, evidence) if record and owned else None
+            carried_record(root, head, record, evidence, design_rev)
+            if record and owned
+            else None
         )
         if carried:
             found.append((path, carried))
@@ -138,7 +144,7 @@ def record_files(
 
 
 def records_for(root: Path, head: str) -> list[dict[str, object]]:
-    return [record for _, record in record_files(root, head)]
+    return [record for _, record in record_files(root, head, design_rev=head)]
 
 
 def covering_record(

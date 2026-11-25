@@ -338,6 +338,7 @@ def link_local_files(root: Path, checkout: Path) -> None:
 
 
 COMPILED_HOOKS = "!! .hooks/__pycache__/"
+PROOF_FOLDER = "!! .hard-eng/"
 
 
 def placed_by_hard_eng(root: Path, checkout: Path) -> set[str]:
@@ -680,6 +681,23 @@ def kept_groups(kept: list[str]) -> list[str]:
     return list(dict.fromkeys("".join(name.partition("/")[:2]) for name in kept))
 
 
+def other_proof_files(target: Path) -> list[str]:
+    """What `.hard-eng/` holds besides the proof, session and update files that Hard Eng writes; Git lists the ignored folder as one entry."""
+    from update_runner import FAILURE_FILE, LOG_FILE, RESULT_FILE
+
+    own = {
+        "browser",
+        "sessions",
+        "failures.json",
+        *(Path(name).name for name in (FAILURE_FILE, LOG_FILE, RESULT_FILE)),
+    }
+    return [
+        f".hard-eng/{path.name}"
+        for path in sorted((target / ".hard-eng").iterdir())
+        if path.name not in own
+    ]
+
+
 def unchanged_checkout(shipment: Shipment) -> None:
     target = shipment.root.resolve()
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
@@ -699,8 +717,11 @@ def unchanged_checkout(shipment: Shipment) -> None:
     kept = [
         line[3:]
         for line in status.splitlines()
-        if line not in own | {COMPILED_HOOKS} and not line.startswith(folders)
+        if line not in own | {COMPILED_HOOKS, PROOF_FOLDER}
+        and not line.startswith(folders)
     ]
+    if PROOF_FOLDER in status.splitlines():
+        kept += other_proof_files(target)
     for folder in folders:
         kept += changed_copies(main, target, folder[3:])
     if kept:

@@ -849,9 +849,6 @@ def test_look_includes_design_docs_in_prompt_record_and_block(
     head = git(project, "rev-parse", "HEAD").strip()
     after = [images[0].read_bytes()]
     assert ui_proof.look_problem(project, head, block, after) is None
-    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand crimson.\n")
-    problem = ui_proof.look_problem(project, head, block, after)
-    assert problem is not None and "current DESIGN.md" in problem
 
 
 def test_look_refuses_design_system_na_when_design_doc_exists(
