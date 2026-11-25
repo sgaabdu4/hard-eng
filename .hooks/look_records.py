@@ -374,7 +374,7 @@ def stale_problem(
 def token_fault(root: Path, digests: list[str]) -> str:
     """The measured corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, a record without the clamp field or the root size, and a token that is not a plain length give no verdict. Text sizes stay with the reviewer, because fluid type and a changed root size make a rendered size inexact."""
     import look
-    from look_facts import design_tokens, length_scale
+    from look_facts import corners_of, design_tokens, length_scale
 
     tokens = design_tokens(root).rounded
     faults: list[str] = []
@@ -389,10 +389,14 @@ def token_fault(root: Path, digests: list[str]) -> str:
         if held is None:
             continue
         for item in cast(list[dict[str, object]], values.get("radii", [])):
-            px = int(str(item["px"]))
-            text = f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(held)))} px)"
-            if item.get("clamped") is False and px not in held and text not in faults:
-                faults.append(text)
+            for px in sorted({corner for corner in corners_of(item) if corner}):
+                text = f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(held)))} px)"
+                if (
+                    item.get("clamped") is False
+                    and px not in held
+                    and text not in faults
+                ):
+                    faults.append(text)
     return "; ".join(faults) + "; use a token or add it to DESIGN.md" if faults else ""
 
 
@@ -480,7 +484,11 @@ def decide_item(
 ) -> tuple[bool, str] | None:
     """Code's Pass (True) or Fail (False) for an item of a measured kind whose element it finds in the record of that image; None leaves the item to the reviewer."""
     values = measured.get(item.frame)
-    return code_verdict(item.kind, item.element, values, tokens) if values else None
+    return (
+        code_verdict(item.kind, item.element, values, tokens, item.note)
+        if values
+        else None
+    )
 
 
 def code_item(item: Item, why: str) -> str:
