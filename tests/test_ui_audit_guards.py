@@ -198,8 +198,7 @@ SETTLED = (
 )
 LOAD_WAVE = "Promise.all([0,1].map((i) => fetch('/step.json?l=' + i)));"
 PRESS = (
-    "(async () => { (window.pressTimes ||= []).push(performance.timeOrigin + performance.now()); "
-    "await fetch('/session', { method: 'POST' }); "
+    "(async () => { await fetch('/session', { method: 'POST' }); "
     "await fetch('/step.json?p=' + Date.now()); "
     "window.pressed = (window.pressed || 0) + 1; })()"
 )
@@ -281,15 +280,25 @@ def settled(tmp_path: Path, name: str, presses: int = 0) -> None:
     plain_step(tmp_path, name, "eval", script)
 
 
-def press_clicks(tmp_path: Path, browser: ModuleType, name: str, buttons: str) -> None:
-    """Click each button once, each after the page is quiet, then log the action times that the page saw, so the measure does not depend on how fast the click command ran."""
+def press_clicks(tmp_path: Path, name: str, buttons: str) -> None:
+    """Click each button once, each after the page has finished the last press and is quiet."""
     settled(tmp_path, name)
     for count, button in enumerate(buttons, 1):
         plain_step(tmp_path, name, "click", f"#{button}")
         settled(tmp_path, name, count)
-    times = json.loads(plain_step(tmp_path, name, "eval", "window.pressTimes"))
-    browser.actions_file(browser.output_folder(tmp_path), name).write_text(
-        "".join(f"{int(stamp) - 1} click\n" for stamp in times)
+
+
+def past_the_reaction_window(tmp_path: Path, browser: ModuleType, name: str) -> None:
+    """Wait on the page clock until the last logged action is older than the reaction limit, so the fetches of a later step cannot count as its reaction."""
+    last = browser.actions_file(browser.output_folder(tmp_path), name).read_text()
+    stamp = int(last.strip().splitlines()[-1].split(" ", 1)[0])
+    until = stamp + LIMITS["action_reaction_ms"] + 100
+    plain_step(
+        tmp_path,
+        name,
+        "eval",
+        f"(async () => {{ while (performance.timeOrigin + performance.now() < {until}) "
+        "await new Promise((go) => setTimeout(go, 25)); return true; })()",
     )
 
 
@@ -472,13 +481,13 @@ def test_each_press_is_measured_apart_from_the_load(
     name = session()
     open_board(tmp_path, site, name, "presses")
     try:
-        press_clicks(tmp_path, browser, name, "abc")
+        press_clicks(tmp_path, name, "abc")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
 
 
-LATE_PRESS = f"setTimeout(() => {{ {PRESS} }}, 600)"
+LATE_PRESS = f"setTimeout(() => {{ {PRESS} }}, 300)"
 
 
 def test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late(
@@ -489,7 +498,7 @@ def test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late(
     name = session()
     open_board(tmp_path, site, name, "late")
     try:
-        press_clicks(tmp_path, browser, name, "abc")
+        press_clicks(tmp_path, name, "abc")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
@@ -521,7 +530,7 @@ def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
     try:
         settled(tmp_path, name)
         plain_step(tmp_path, name, "click", "body")
-        settled(tmp_path, name)
+        past_the_reaction_window(tmp_path, browser, name)
         plain_step(tmp_path, name, "click", "#go")
         finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 2")]
