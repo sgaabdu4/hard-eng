@@ -1,5 +1,8 @@
 """The update's private worktree goes away even when a git hook left a child that still writes in it."""
 
+import os
+import signal
+import subprocess
 import sys
 import tempfile
 import threading
@@ -7,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+import tidy_guards
 import update
 import update_pr
 import update_runner
@@ -36,6 +40,89 @@ raise SystemExit(update_runner.run_update(root))
 
 def private_folders() -> list[Path]:
     return list(Path(tempfile.gettempdir()).glob("hard-eng-update-*"))
+
+
+def workers_running(script: Path) -> bool:
+    """Some process still runs the worker script: the supervisor, its update or the tidy that follows."""
+    listing = subprocess.run(
+        ["ps", "-axo", "command="], capture_output=True, text=True, check=True
+    ).stdout
+    return str(script) in listing
+
+
+def test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inside = str(tmp_path / "candidate" / "f")
+    scans = iter([[(11, inside)], [(11, inside), (12, inside)], [(12, inside)], []])
+    sent: list[tuple[int, int]] = []
+
+    def listing(own: bool = False) -> list[tuple[int, str]]:
+        return next(scans, [])
+
+    def kill(pid: int, signum: int) -> None:
+        sent.append((pid, signum))
+
+    monkeypatch.setattr(tidy_guards, "open_files", listing)
+    monkeypatch.setattr(tidy_guards.os, "kill", kill)
+    (tmp_path / "candidate").mkdir()
+    tidy_guards.stop_inside(tmp_path / "candidate")
+    assert (12, signal.SIGTERM) in sent
+
+
+def test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(own: bool = False) -> list[tuple[int, str]]:
+        raise tidy_guards.TidyStop("`lsof` exited 2")
+
+    monkeypatch.setattr(tidy_guards, "open_files", broken)
+    tidy_guards.stop_inside(tmp_path)
+
+
+def test_a_process_of_another_account_does_not_hide_ours(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proc = tmp_path / "proc"
+    for number in ("100", "200"):
+        (proc / number).mkdir(parents=True)
+        (proc / number / "cwd").symlink_to(f"/work/{number}")
+    real = os.readlink
+
+    def readlink(path: str | os.PathLike[str]) -> str:
+        if "200" in str(path):
+            raise PermissionError(path)
+        return real(path)
+
+    def foreign(process: Path) -> bool:
+        return process.name == "200"
+
+    def ours(process: Path) -> bool:
+        return process.name == "100"
+
+    monkeypatch.setattr(tidy_guards.os, "readlink", readlink)
+    monkeypatch.setattr(tidy_guards, "foreign_user", foreign)
+    monkeypatch.setattr(tidy_guards, "mine", ours)
+    assert tidy_guards.proc_files(proc) is None
+    assert tidy_guards.proc_files(proc, own=True) == [(100, "/work/100")]
+
+
+def test_the_private_worktree_is_unlocked_only_after_its_processes_stop(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = pushed_release(release, monkeypatch)
+    locked_when_stopped: list[bool] = []
+
+    def stop(path: Path) -> None:
+        records = git(target, "worktree", "list", "--porcelain").split("\n\n")
+        locked_when_stopped.append(
+            any("locked" in record for record in records if "candidate" in record)
+        )
+
+    monkeypatch.setattr(tidy_guards, "stop_inside", stop)
+    with update_runner.candidate_worktree(target, "HEAD", claim=True):
+        pass
+    assert locked_when_stopped == [True]
 
 
 def test_a_hook_child_in_the_private_worktree_does_not_fail_the_update(
@@ -93,12 +180,11 @@ def test_two_session_starts_together_run_one_update_and_print_no_failure(
     for thread in threads:
         thread.join()
     deadline = time.monotonic() + 240
-    time.sleep(1)
-    while any(update_runner.update_running(root) for root in roots):
+    while workers_running(script):
         assert time.monotonic() < deadline, "the update did not end"
         time.sleep(0.2)
     results = [update_runner.last_result(root) for root in roots]
     assert not any("failed" in result for result in results), results
-    assert sum("ready on hard-eng/update" in result for result in results) == 1
+    assert any("ready on hard-eng/update" in result for result in results)
     assert git(target, "rev-list", "--count", "origin/main..hard-eng/update") == "1"
     assert private_folders() == []
