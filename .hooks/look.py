@@ -30,7 +30,12 @@ from look_answer import (
     recheck_lines,
 )
 from look_facts import Tokens, design_tokens, measured_text
-from look_records import STORE, with_code_decisions, with_earlier_fails
+from look_records import (
+    STORE,
+    changed_input,
+    with_code_decisions,
+    with_earlier_fails,
+)
 from models import cli_flags, trusted_base_ref
 from plans import (
     is_plan_path,
@@ -120,6 +125,12 @@ DESIGN_ADDENDUM = (
     "this document: check its colours, surfaces, typography, radii, spacing, Components and "
     "Do's and Don'ts. Mark `Design system: Fail` if any visible element breaks a rule in it, "
     "and do not mark `Design system: N/A` for an app screen.\n\n{design}"
+)
+FINDINGS_NOTE = (
+    "Hard Eng: look: the rules are intended. Fix every Fail the image supports, also on "
+    "parts this change did not touch. A Fail is a reviewer fault only when it contradicts "
+    "a measured value, the markup or a quoted DESIGN.md line; then send that record line "
+    "to the maintainer. No declined, answered or skip line exists."
 )
 BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "design", "image", "verdict", "record")
@@ -418,8 +429,13 @@ def committed_plan(root: Path, plan: Path, head: str) -> tuple[str, bytes]:
 def plan_scope(root: Path, plan: Path, head: str = "HEAD") -> tuple[str, str, str]:
     """Committed repository-relative path, bounded Outcome + scope text, and SHA-256 of a plan."""
     rel, committed = committed_plan(root, plan, head)
+    return rel, bounded_scope(committed, rel), sha256(committed)
+
+
+def bounded_scope(committed: bytes, rel: str) -> str:
+    """The bounded Outcome + scope text of the committed bytes of a plan."""
     scope = extract_outcome_scope(committed.decode("utf-8", errors="replace"), rel)
-    return rel, bound_utf8(scope, MAX_SCOPE_BYTES), sha256(committed)
+    return bound_utf8(scope, MAX_SCOPE_BYTES)
 
 
 def plan_rules(root: Path, plan: Path, head: str) -> dict[str, tuple[str, str]]:
@@ -834,6 +850,10 @@ def look_command(root: Path, argv: list[str]) -> int:
     )
     base, covered = found if found else ({}, set())
     pending = [i for i, d in zip(images, digests, strict=True) if d not in covered]
+    if pending and not args.all:
+        notice = changed_input(root, head, digests, design_digest, scope)
+        if notice:
+            print(notice.format(count=len(pending)))
     fresh = (
         review(
             pending,
@@ -869,6 +889,8 @@ def look_command(root: Path, argv: list[str]) -> int:
     print(f"Record: {path}")
     if record["outcome"] == "clean":
         print(f"Paste this into the PR body:\n{block_text(record)}")
+    elif record["outcome"] == "findings":
+        print(FINDINGS_NOTE)
     return 0 if record["outcome"] == "clean" else 1
 
 

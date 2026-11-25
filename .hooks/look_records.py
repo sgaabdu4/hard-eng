@@ -540,3 +540,62 @@ def with_earlier_fails(
                 lines[index] = f"{head}: Fail — {text} {CODE_FIX}"
             outcome = "findings"
     return outcome, lines
+
+
+def changed_input(
+    root: Path, head: str, digests: list[str], design_digest: str, scope: str
+) -> str:
+    """The notice for a clean record of an earlier head that holds one of these images but cannot carry because DESIGN.md or the plan's Outcome + scope changed since; empty when no record qualifies."""
+    wanted = set(digests)
+    newest = sorted(
+        _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
+    )
+    for path in newest:
+        record = _read_record(path)
+        owner = record.get("head") if record else None
+        entries = (
+            cast(list[dict[str, object]], record.get("images", [])) if record else []
+        )
+        if (
+            record is None
+            or record.get("outcome") != "clean"
+            or not isinstance(owner, str)
+            or owner == head
+            or not wanted & {str(item.get("sha256")) for item in entries}
+            or not _on_branch(root, owner, head)
+        ):
+            continue
+        changed = [
+            name
+            for name, differs in (
+                ("DESIGN.md", record.get("design_doc", "") != design_digest),
+                (
+                    "the plan's Outcome + scope",
+                    _scope_changed(root, record, owner, scope),
+                ),
+            )
+            if differs
+        ]
+        if changed:
+            return (
+                f"Hard Eng: look: {' and '.join(changed)} changed since {owner[:12]}, so the "
+                "clean verdict of that head does not carry. All {count} images are reviewed again."
+            )
+    return ""
+
+
+def _scope_changed(
+    root: Path, record: dict[str, object], owner: str, scope: str
+) -> bool:
+    import look
+
+    plan = record.get("plan")
+    if not isinstance(plan, str) or not plan:
+        return False
+    shown = subprocess.run(
+        ["git", "show", f"{owner}:{plan}"], cwd=root, capture_output=True, check=False
+    )
+    try:
+        return shown.returncode == 0 and look.bounded_scope(shown.stdout, plan) != scope
+    except ValueError:
+        return False
