@@ -16,8 +16,9 @@ CLAIM = re.compile(
 )
 FRAME = re.compile(r"image-\d+\.png")
 CLAIM_NOTES = {
-    "radius": "Start the note with `square` only when you claim that the corners are square; any other note checks the radius against the tokens",
-    "align": "Start the note with `centred` only when you claim that the text is centred; write `not centred` when you claim that it is not",
+    "radius": "Start the note with the claim, such as `square corners`, only when you claim that the corners are square; any other note checks the radius against the tokens",
+    "align": "Start the note with the claim, such as `centred`, only when you claim that the text is centred; write `not centred` when you claim that it is not",
+    "gap": "Start the note with the claim, such as `chips touch`, only when you claim that the neighbours touch; any other note checks the gap against the spacing tokens",
 }
 RECHECK_LINE = re.compile(r"(?i)^recheck\s+R(\d+)\s*:\s*(still shown|gone)\b(.*)")
 NUMBER = re.compile(r"\d+")
