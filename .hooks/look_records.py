@@ -269,64 +269,66 @@ def lacks_record(root: Path | None, digests: list[str]) -> bool:
     return any(digest not in recorded for digest in digests)
 
 
-def design_scales(design: str) -> tuple[set[int], set[int]]:
-    """The text sizes and corner radii, in px, that the front matter of DESIGN.md holds as tokens. A python3 without PyYAML, a missing front matter or a missing group gives an empty set, which means no verdict."""
-    from ui_tokens import FRONT_MATTER, half_up, length_px
+RADIUS_TOKEN = re.compile(r"(\d*\.?\d+)(px|rem|em)")
+
+
+def rounded_tokens(design: str) -> list[str]:
+    """The corner radius tokens of the DESIGN.md front matter, as written. A python3 without PyYAML, a missing front matter or a missing group gives an empty list, which means no verdict."""
+    from ui_tokens import FRONT_MATTER
 
     try:
         import yaml
     except ImportError:
-        return set(), set()
+        return []
     front = FRONT_MATTER.match(design)
     try:
         data = yaml.safe_load(front[1]) if front else None
     except yaml.YAMLError:
-        return set(), set()
-    groups = data if isinstance(data, dict) else {}
-    roles, rounded = groups.get("typography"), groups.get("rounded")
-    sizes = {
-        half_up(px)
-        for style in (roles.values() if isinstance(roles, dict) else [])
-        if isinstance(style, dict)
-        and (px := length_px(str(style.get("fontSize", "")))) is not None
-    }
-    radii = {
-        half_up(px)
-        for value in (rounded.values() if isinstance(rounded, dict) else [])
-        if (px := length_px(str(value))) is not None
-    }
-    return sizes, radii
+        return []
+    rounded = data.get("rounded") if isinstance(data, dict) else None
+    return (
+        [str(value) for value in rounded.values()] if isinstance(rounded, dict) else []
+    )
+
+
+def radius_scale(tokens: list[str], root_px: float) -> set[int] | None:
+    """The token radii in px, with rem and em set from the page's own root size; None when a token is any other form (clamp, calc, a variable), which the measure cannot hold exactly."""
+    from ui_tokens import half_up
+
+    scale: set[int] = set()
+    for token in tokens:
+        found = RADIUS_TOKEN.fullmatch(token.strip())
+        if not found:
+            return None
+        scale.add(half_up(float(found[1]) * (1 if found[2] == "px" else root_px)))
+    return scale
 
 
 def token_fault(root: Path, digests: list[str]) -> str:
-    """The measured text sizes and corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, and a record without the clamp field, give no verdict."""
+    """The measured corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, a record without the clamp field or the root size, and a token that is not a plain length give no verdict. Text sizes stay with the reviewer, because fluid type and a changed root size make a rendered size inexact."""
     import look
 
     try:
         design = (root / "DESIGN.md").read_text()
     except OSError:
         return ""
-    sizes, radii = design_scales(design)
-    texts: set[int] = set()
-    corners: set[int] = set()
-    for digest in digests:
+    tokens = rounded_tokens(design)
+    faults: list[str] = []
+    for digest in digests if tokens else []:
         values = look.recorded_measured(root, digest) or {}
-        measured = cast(dict[str, object], values.get("sizes") or {})
-        texts |= {int(px) for px in cast(list[int], measured.get("text_px", []))}
-        corners |= {
-            int(str(item["px"]))
-            for item in cast(list[dict[str, object]], values.get("radii", []))
-            if item.get("clamped") is False
-        }
-    faults = [
-        f"text size {px} px is in no typography token ({', '.join(map(str, sorted(sizes)))} px)"
-        for px in sorted(texts - sizes)
-        if sizes
-    ] + [
-        f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(radii)))} px)"
-        for px in sorted(corners - radii)
-        if radii
-    ]
+        base = values.get("root_px")
+        held = (
+            radius_scale(tokens, float(base))
+            if isinstance(base, int | float) and not isinstance(base, bool)
+            else None
+        )
+        if held is None:
+            continue
+        for item in cast(list[dict[str, object]], values.get("radii", [])):
+            px = int(str(item["px"]))
+            text = f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(held)))} px)"
+            if item.get("clamped") is False and px not in held and text not in faults:
+                faults.append(text)
     return "; ".join(faults) + "; use a token or add it to DESIGN.md" if faults else ""
 
 

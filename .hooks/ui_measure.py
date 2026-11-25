@@ -533,7 +533,7 @@ for (const el of rounded) {
   const key = r && r.px + (r.clamped ? "c" : "");
   if (r && r.px > 0 && radii.length < 20 && !seenRadii.has(key)) { seenRadii.add(key); radii.push({ at: name(el), px: r.px, clamped: r.clamped }); }
 }
-const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes, radii };
+const measured = { contrast: [...pairs.values()].sort((a, b) => a.ratio - b.ratio).slice(0, 12), gaps, sizes, radii, root_px: parseFloat(getComputedStyle(document.documentElement).fontSize) };
 return JSON.stringify({ found, measured });
 })()"""
 

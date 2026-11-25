@@ -367,8 +367,8 @@ def test_a_code_pass_never_erases_a_reviewer_fail(
 
 
 TOKENS = (
-    "---\nrounded:\n  sm: 4px\n  md: 8px\n"
-    "typography:\n  body:\n    fontSize: 14px\n  title:\n    fontSize: 1.25rem\n---\n"
+    "---\nrounded:\n  sm: 4px\n  md: 0.5rem\n"
+    "typography:\n  body:\n    fontSize: 14px\n---\n"
     "# Design\n\n## Overview\nPlain.\n"
 )
 SIZES = {"controls": [], "text_px": [14, 20, 13]}
@@ -393,19 +393,18 @@ def look_against_tokens(
     return run_look(project, "codex", images)
 
 
-def test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code(
+def test_a_radius_outside_the_tokens_fails_design_system_in_code(
     tmp_path: Path, project: Path
 ) -> None:
-    record = look_against_tokens(
-        tmp_path, project, TOKENS, {"sizes": SIZES, "radii": RADII}
-    )
+    values = {"sizes": SIZES, "radii": RADII, "root_px": 16}
+    record = look_against_tokens(tmp_path, project, TOKENS, values)
     assert record["outcome"] == "findings"
     found = OWNER_LINE.fullmatch(stored(record)["Design system"])
     assert found
     assert (found[2], found[3]) == ("Fail", "measured")
-    assert "text size 13 px" in found[4]
     assert "corner radius 7 px" in found[4]
-    for held in ("text size 14", "text size 20", "radius 8", "radius 11", "radius 5"):
+    assert "text size" not in found[4]
+    for held in ("radius 8", "radius 11", "radius 5"):
         assert held not in found[4]
 
 
@@ -417,6 +416,10 @@ def test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code(
         "no measured values",
         "old record only",
         "no PyYAML",
+        "text size outside the tokens",
+        "root size changed",
+        "no root size",
+        "token that is not a length",
     ],
 )
 def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_reviewer(
@@ -426,22 +429,29 @@ def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_
     values: dict[str, object] = {
         "sizes": {"controls": [], "text_px": [14, 20]},
         "radii": [{"at": "card", "px": 8, "clamped": False}],
+        "root_px": 16,
     }
     if case == "no token group":
         design = (
             "---\ncolors:\n  ink: '#111111'\n---\n# Design\n\n## Overview\nPlain.\n"
         )
-        values = {"sizes": SIZES, "radii": RADII}
+        values = {"sizes": SIZES, "radii": RADII, "root_px": 16}
     if case == "no measured values":
         values = {"contrast": []}
     if case == "old record only":
-        values = {
-            "sizes": {"controls": [], "text_px": [14]},
-            "radii": [{"at": "x", "px": 7}],
-        }
+        values = {"radii": [{"at": "x", "px": 7}], "root_px": 16}
     if case == "no PyYAML":
         monkeypatch.setitem(sys.modules, "yaml", None)
-        values = {"sizes": SIZES, "radii": RADII}
+        values = {"sizes": SIZES, "radii": RADII, "root_px": 16}
+    if case == "text size outside the tokens":
+        values["sizes"] = SIZES
+    if case == "root size changed":
+        values = {"radii": [{"at": "card", "px": 5, "clamped": False}], "root_px": 10}
+    if case == "no root size":
+        values = {"radii": [{"at": "card", "px": 7, "clamped": False}]}
+    if case == "token that is not a length":
+        design = design.replace("sm: 4px", "sm: clamp(1px, 1vw, 8px)")
+        values = {"radii": [{"at": "x", "px": 7, "clamped": False}], "root_px": 16}
     record = look_against_tokens(tmp_path, project, design, values)
     assert record["outcome"] == "clean"
     assert "looked at it" in stored(record)["Design system"]
