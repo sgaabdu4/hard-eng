@@ -430,13 +430,21 @@ def test_an_item_under_two_rules_is_disproved_under_both(
     assert len(cast(list[object], after["disputes"])) == 1
 
 
-def test_a_clean_record_that_rests_on_a_dispute_carries_only_while_the_cited_bytes_hold(
+def cleaned(
     tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> tuple[list[Path], str]:
+    """A head whose only Fail was disproved from a cited line, so its record is clean."""
     item = "image-1.png: the Email label lacks the required asterisk [judgement]"
     images = found(tmp_path, project, monkeypatch, [item])
     install_agent(tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 2")
     assert dispute(project, images, item, ["src/form.ts:2-2"]) == 0
+    return images, item
+
+
+def test_a_clean_record_that_rests_on_a_dispute_carries_only_while_the_cited_bytes_hold(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    images, item = cleaned(tmp_path, project, monkeypatch)
     next_head(project)
     log = install_agent(tmp_path, "claude", 1, full_answer(f"{item} Fix: change it."))
     log.unlink(missing_ok=True)
@@ -451,10 +459,7 @@ def test_a_clean_record_that_rests_on_a_dispute_carries_only_while_the_cited_byt
 def test_the_pr_proof_accepts_a_record_that_a_dispute_cleaned(
     tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    item = "image-1.png: the Email label lacks the required asterisk [judgement]"
-    images = found(tmp_path, project, monkeypatch, [item])
-    install_agent(tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 2")
-    assert dispute(project, images, item, ["src/form.ts:2-2"]) == 0
+    images, _ = cleaned(tmp_path, project, monkeypatch)
     block = look.block_text(stored(project, images))
     head = git(project, "rev-parse", "HEAD")
     assert ui_proof.look_problem(project, head, block, [images[0].read_bytes()]) is None
