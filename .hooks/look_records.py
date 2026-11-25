@@ -8,7 +8,7 @@ from typing import cast
 
 from challenge import store
 from look_answer import KIND_TAG, Item, fail_parts, part_item
-from look_facts import Tokens
+from look_facts import Tokens, claimed_state
 from look_facts import verdict as code_verdict
 from plans import split_rule_line, usability_rules
 
@@ -199,6 +199,13 @@ def combined(
 ) -> dict[str, object]:
     """One record for all images: each covered image keeps its entry from the earlier record, the others come from the new review."""
     record = dict(fresh if fresh is not None else base)
+    held = [
+        entry
+        for entry in cast(list[dict[str, object]], base.get("disputes", []))
+        if entry.get("verdict") == "disproved"
+    ]
+    if fresh is not None and covered and held:
+        record["disputes"] = [*cast(list[object], record.get("disputes", [])), *held]
     kept = {
         str(item["sha256"]): {**item, "carried_from": base.get("head")}
         for item in cast(list[dict[str, object]], base.get("images", []))
@@ -498,7 +505,9 @@ def decide_item(
 
 
 def code_item(item: Item, why: str) -> str:
-    return f"{item.frame}: {item.element} [{item.kind}] — code: {why}"
+    state = claimed_state(item.kind, item.note)
+    claim = f" {state}" if state else ""
+    return f"{item.frame}: {item.element} [{item.kind}]{claim} — code: {why}"
 
 
 def sort_parts(

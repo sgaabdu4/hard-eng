@@ -213,7 +213,7 @@ def test_a_square_claim_is_checked_against_the_corners_of_its_element(
     )
     found = decided(line, tokens)
     assert (
-        "Chip A [radius] — code: corner radius 0 px, square, and 0 is in no rounded token"
+        "Chip A [radius] square — code: corner radius 0 px, square, and 0 is in no rounded token"
         in found
     )
     assert "Chip B" not in found
@@ -288,3 +288,43 @@ def test_a_square_control_adds_no_token_fault(
 
     monkeypatch.setattr(look, "recorded_measured", recorded)
     assert look_records.token_fault(tmp_path, ["a" * 64]) == ""
+
+
+def test_a_code_failed_square_claim_is_still_failed_on_the_next_head(
+    tmp_path: Path,
+) -> None:
+    tokens = tokens_of(tmp_path)
+    first = decided(
+        "Design system: Fail — image-1.png: Chip A [radius] square Fix: round them.",
+        tokens,
+    )
+    assert "Chip A [radius] square — code: corner radius 0 px, square" in first
+    item = first.partition("Fail — ")[2].partition(" Fix:")[0]
+    kept, fails = look_records.earlier_split(
+        f"Design system: Fail — {item} Fix: round them.",
+        {"image-1.png": page()},
+        tokens,
+    )
+    assert fails == [item]
+    assert kept == ""
+
+
+def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -> None:
+    tokens = tokens_from_text(ZERO_DESIGN)
+    measured = values(
+        texts=[text_fact("Header line", 14, align="start", centred=False)],
+        gaps=[{"at": "Year", "to": "Spare", "px": 11, "axis": "x"}],
+        radii=[{"at": "Odd", "px": 7, "corners": [7, 7, 7, 7], "clamped": False}],
+    )
+    for rule, item in (
+        ("Alignment", "Header line [align] isn’t centred"),
+        ("Alignment", "Header line [align] sits off centred"),
+        ("Alignment", "Header line [align] is off centered"),
+        ("Spacing", "Year to Spare [gap] don’t touch"),
+        ("Design system", "Odd [radius] isn’t square"),
+    ):
+        found = decided(
+            f"{rule}: Fail — image-1.png: {item} Fix: change it.", tokens, measured
+        )
+        assert "Pass" not in found, item
+        assert " — code:" in found, item
