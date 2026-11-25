@@ -293,6 +293,25 @@ def _single_local_look_problem(
     return None, opened
 
 
+def _newest_look_problem(
+    clean: list[tuple[int, set[str]]],
+    stray: list[set[str]],
+    route_hashes: list[set[str]],
+    opened_problem: Callable[[set[str]], str | None],
+) -> str | None:
+    """Each route is judged by the newest clean look record that covers it, so a later `look` on the clean captures replaces an earlier one that held strays. A refused record of this head is judged by what it opened."""
+    chosen: list[set[str]] = list(stray)
+    for hashes in route_hashes:
+        covering = [item for item in clean if item[1] & hashes]
+        if not covering:
+            return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
+        chosen.append(max(covering, key=lambda item: item[0])[1])
+    for opened in chosen:
+        if problem := opened_problem(opened):
+            return problem
+    return None
+
+
 def _local_look_problem(
     root: Path,
     evidence: Path,
@@ -311,8 +330,8 @@ def _local_look_problem(
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>`"
     expected_design = look.design_hash(root)
     wanted = [name for name, _ in usability_rules()]
-    covered: set[str] = set()
-    looked: set[str] = set()
+    clean: list[tuple[int, set[str]]] = []
+    stray: list[set[str]] = []
     first_problem: str | None = None
     for path, record in files:
         problem, opened = _single_local_look_problem(
@@ -325,17 +344,16 @@ def _local_look_problem(
             native,
             min_mtime_ns,
         )
-        looked |= opened
-        if problem is None:
-            if native:
-                return None
-            covered |= opened
-        elif first_problem is None:
-            first_problem = problem
-    if not native and route_hashes and all(covered & hashes for hashes in route_hashes):
-        return opened_problem(looked)
-    if not native and covered:
-        return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
+        if problem is not None:
+            first_problem = first_problem or problem
+            if path.stem.rpartition("-")[0] == head and opened:
+                stray.append(opened)
+            continue
+        if native:
+            return None
+        clean.append((path.stat().st_mtime_ns, opened))
+    if clean:
+        return _newest_look_problem(clean, stray, route_hashes, opened_problem)
     return (
         first_problem
         or f"Look review: no clean record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>`"

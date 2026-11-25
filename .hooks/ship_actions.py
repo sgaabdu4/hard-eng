@@ -742,7 +742,7 @@ SUBMODULE_STATUS = re.compile(r"^(.)[0-9a-f]+ (.+?)(?: \(.*\))?$")
 
 
 def submodule_work(target: Path) -> list[str]:
-    """Each initialized submodule that holds work no remote has: a moved commit, local commits, a stash, or untracked or ignored files."""
+    """Each initialized submodule that holds work no remote has: a moved commit, a local branch commit, a stash, or untracked or ignored files. A shallow clone has no remote ref for the recorded commit, so that commit is not tested against the remotes."""
     kept = []
     for line in git(target, "submodule", "status", "--recursive").splitlines():
         found = SUBMODULE_STATUS.match(line)
@@ -751,9 +751,7 @@ def submodule_work(target: Path) -> list[str]:
         inner = target / found[2]
         if (
             found[1] != " "
-            or git(
-                inner, "rev-list", "--branches", "--tags", "HEAD", "--not", "--remotes"
-            ).strip()
+            or git(inner, "rev-list", "--branches", "--not", "--remotes").strip()
             or git(inner, "stash", "list").strip()
             or git(
                 inner,
