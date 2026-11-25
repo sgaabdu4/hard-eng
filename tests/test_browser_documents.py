@@ -103,13 +103,13 @@ def test_capture_replaces_a_pdf_in_a_same_origin_frame(
     assert json.loads(unread) == 0
 
 
-def become_a_pdf_when(
+def open_in_session_when(
     browser: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     url: str,
     trigger: Callable[[tuple[str, ...], str | None], bool],
 ) -> list[str]:
-    """Open the PDF in the session once, right before the first step that `trigger` picks, as a page that turns into a PDF would. Returns the verbs of the steps that ran."""
+    """Open the URL in the session once, right before the first step that `trigger` picks, as a page that navigates away would. Returns the verbs of the steps that ran."""
     original = browser.run_tool
     fired: list[bool] = []
     verbs: list[str] = []
@@ -149,9 +149,52 @@ def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
     trigger: Callable[[tuple[str, ...], str | None], bool],
 ) -> None:
     page(tmp_path, "plain.html", "<p>Statement</p>")
-    verbs = become_a_pdf_when(browser, monkeypatch, f"{pdf_site}/invoice", trigger)
+    verbs = open_in_session_when(browser, monkeypatch, f"{pdf_site}/invoice", trigger)
     code = browser.browser_command(
         tmp_path, ["capture", f"{pdf_site}/plain.html", "--session", session()]
     )
     refused_as_a_pdf(tmp_path, code, capsys)
     assert ("screenshot" in verbs) == (trigger is shooting)
+
+
+def framing(arguments: tuple[str, ...], text: str | None) -> bool:
+    return arguments[:1] == ("eval",) and "hardEngRead" in (text or "")
+
+
+@pytest.mark.parametrize("trigger", [framing, shooting], ids=["before", "during"])
+def test_capture_keeps_no_image_of_a_page_that_navigates_after_it_was_masked(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    trigger: Callable[[tuple[str, ...], str | None], bool],
+) -> None:
+    page(tmp_path, "plain.html", "<p>Statement</p>")
+    page(tmp_path, "account.html", "<p>Mail bob@example.com or +44 7700 900123</p>")
+    verbs = open_in_session_when(browser, monkeypatch, f"{site}/account.html", trigger)
+    code = browser.browser_command(
+        tmp_path, ["capture", f"{site}/plain.html", "--session", session()]
+    )
+    assert code == 1
+    error = capsys.readouterr().err
+    assert "another document" in error
+    assert "no image was kept" in error
+    folder = tmp_path / ".hard-eng/browser"
+    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
+    assert ("screenshot" in verbs) == (trigger is shooting)
+
+
+def test_capture_keeps_the_image_of_a_page_that_changes_its_route_in_place(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    page(
+        tmp_path,
+        "app.html",
+        "<p>Statement</p><script>history.pushState({}, '', '/app/next')</script>",
+    )
+    code = browser.browser_command(
+        tmp_path, ["capture", f"{site}/app.html", "--session", session()]
+    )
+    assert code == 0
+    assert list((tmp_path / ".hard-eng/browser").glob("*.png"))
