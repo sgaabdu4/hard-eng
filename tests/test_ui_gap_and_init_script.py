@@ -3,10 +3,39 @@
 import json
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 from test_browser import plain_step, session
 from test_ui_audit_guards import measured, open_board
+
+
+def captured(
+    tmp_path: Path, site: str, browser: ModuleType, page: str, body: str
+) -> Any:
+    (tmp_path / f"pages/{page}.html").write_text(
+        f"<!doctype html><html lang=en><title>{page}</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{body}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, page)
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    return record["measured"]
+
+
+def assert_no_weight_verdict(tmp_path: Path, found: Any, *keys: str) -> None:
+    import look_facts
+    from test_look_facts import tokens_of
+
+    tokens = tokens_of(tmp_path)
+    for key in keys:
+        assert look_facts.verdict("weight", key, found, tokens) is None
+        assert key not in look_facts.item_keys(found, tokens)["weight"]
+
 
 COUNTER_PAGE = (
     "<main><div style='display:flex;align-items:baseline;gap:6px;font-size:12px'>"
@@ -18,18 +47,8 @@ COUNTER_PAGE = (
 def test_the_gap_between_inline_neighbours_follows_their_order_on_the_line(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    (tmp_path / "pages/counter.html").write_text(
-        "<!doctype html><html lang=en><title>Counter</title>"
-        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{COUNTER_PAGE}</body>"
-    )
-    name = session()
-    open_board(tmp_path, site, name, "counter")
-    try:
-        measured(tmp_path, browser, name)
-    finally:
-        plain_step(tmp_path, name, "close")
-    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
-    pairs = {(gap["at"], gap["to"]): gap["px"] for gap in record["measured"]["gaps"]}
+    found = captured(tmp_path, site, browser, "counter", COUNTER_PAGE)
+    pairs = {(gap["at"], gap["to"]): gap["px"] for gap in found["gaps"]}
     assert pairs == {("Round", "5"): 6, ("5", "/36"): 6}
 
 
@@ -85,20 +104,8 @@ WRAPPED_PAGE = (
 def test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    (tmp_path / "pages/wrapped.html").write_text(
-        "<!doctype html><html lang=en><title>Wrapped</title>"
-        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{WRAPPED_PAGE}</body>"
-    )
-    name = session()
-    open_board(tmp_path, site, name, "wrapped")
-    try:
-        measured(tmp_path, browser, name)
-    finally:
-        plain_step(tmp_path, name, "close")
-    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
-    rows = [
-        row for row in record["measured"]["texts"] if row["at"].startswith("xxxxxxxx")
-    ]
+    found = captured(tmp_path, site, browser, "wrapped", WRAPPED_PAGE)
+    rows = [row for row in found["texts"] if row["at"].startswith("xxxxxxxx")]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", False)]
 
 
@@ -111,20 +118,8 @@ INLINE_PAGE = (
 def test_a_centred_line_with_an_inline_link_is_centred(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    (tmp_path / "pages/inline.html").write_text(
-        "<!doctype html><html lang=en><title>Inline</title>"
-        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{INLINE_PAGE}</body>"
-    )
-    name = session()
-    open_board(tmp_path, site, name, "inline")
-    try:
-        measured(tmp_path, browser, name)
-    finally:
-        plain_step(tmp_path, name, "close")
-    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
-    rows = [
-        row for row in record["measured"]["texts"] if row["at"].startswith("Already")
-    ]
+    found = captured(tmp_path, site, browser, "inline", INLINE_PAGE)
+    rows = [row for row in found["texts"] if row["at"].startswith("Already")]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", True)]
 
 
@@ -140,23 +135,8 @@ REPEAT_PAGE = (
 def test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    import look_facts
-    from test_look_facts import tokens_of
-
-    (tmp_path / "pages/repeat.html").write_text(
-        "<!doctype html><html lang=en><title>Repeat</title>"
-        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{REPEAT_PAGE}</body>"
-    )
-    name = session()
-    open_board(tmp_path, site, name, "repeat")
-    try:
-        measured(tmp_path, browser, name)
-    finally:
-        plain_step(tmp_path, name, "close")
-    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
-    tokens = tokens_of(tmp_path)
-    assert look_facts.verdict("weight", "5", record["measured"], tokens) is None
-    assert "5" not in look_facts.item_keys(record["measured"], tokens)["weight"]
+    found = captured(tmp_path, site, browser, "repeat", REPEAT_PAGE)
+    assert_no_weight_verdict(tmp_path, found, "5")
 
 
 LABEL_PAGE = (
@@ -170,23 +150,8 @@ LABEL_PAGE = (
 def test_an_icon_button_named_like_a_link_gives_no_weight_verdict(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    import look_facts
-    from test_look_facts import tokens_of
-
-    (tmp_path / "pages/label.html").write_text(
-        "<!doctype html><html lang=en><title>Label</title>"
-        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{LABEL_PAGE}</body>"
-    )
-    name = session()
-    open_board(tmp_path, site, name, "label")
-    try:
-        measured(tmp_path, browser, name)
-    finally:
-        plain_step(tmp_path, name, "close")
-    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
-    tokens = tokens_of(tmp_path)
-    for key in ("Dashboard", "Settings"):
-        assert look_facts.verdict("weight", key, record["measured"], tokens) is None
+    found = captured(tmp_path, site, browser, "label", LABEL_PAGE)
+    assert_no_weight_verdict(tmp_path, found, "Dashboard", "Settings")
 
 
 WRAPPER_PAGE = (
@@ -200,20 +165,5 @@ WRAPPER_PAGE = (
 def test_a_wrapper_named_like_a_heading_gives_no_weight_verdict(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    import look_facts
-    from test_look_facts import tokens_of
-
-    (tmp_path / "pages/wrapper.html").write_text(
-        "<!doctype html><html lang=en><title>Wrapper</title>"
-        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{WRAPPER_PAGE}</body>"
-    )
-    name = session()
-    open_board(tmp_path, site, name, "wrapper")
-    try:
-        measured(tmp_path, browser, name)
-    finally:
-        plain_step(tmp_path, name, "close")
-    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
-    tokens = tokens_of(tmp_path)
-    for key in ("Active", "Round 5"):
-        assert look_facts.verdict("weight", key, record["measured"], tokens) is None
+    found = captured(tmp_path, site, browser, "wrapper", WRAPPER_PAGE)
+    assert_no_weight_verdict(tmp_path, found, "Active", "Round 5")
