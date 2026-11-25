@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from challenge import store
-from look_answer import Item, fail_parts, part_item
+from look_answer import KIND_TAG, Item, fail_parts, part_item
 from look_facts import Tokens
 from look_facts import verdict as code_verdict
 from plans import split_rule_line, usability_rules
@@ -236,7 +236,11 @@ def earlier_findings(
         ):
             continue
         entries = cast(list[dict[str, object]], record.get("images", []))
-        then = {str(item.get("name")): str(item.get("file")) for item in entries}
+        then = {
+            str(item.get("name")): str(item.get("file"))
+            for item in entries
+            if "carried_from" not in item
+        }
         files = [
             file for file in current if file not in claimed and file in then.values()
         ]
@@ -255,7 +259,7 @@ def earlier_findings(
         ]
         for line in lines:
             label, verdict, text, _ = split_rule_line(line)
-            live = _without_held(line, then, current)
+            live = _without_held(line, then, {file: current[file] for file in files})
             if (
                 verdict == "Fail"
                 and split_rule_line(live)[1] == "Fail"
@@ -285,9 +289,8 @@ def _without_held(line: str, then: dict[str, str], current: dict[str, str]) -> s
     live = [
         part
         for part in parts
-        if (item := part_item(part)[1]) is None
-        or then.get(item.frame, "") in current
-        or item.frame not in then
+        if not (frames := FRAME.findall(part))
+        or any(frame not in then or then[frame] in current for frame in frames)
     ]
     if len(live) == len(parts):
         return line
@@ -494,7 +497,14 @@ def sort_parts(
         prose, item = part_item(part)
         decided = (
             decide_item(item, measured, tokens)
-            if item and not FRAME.search(prose)
+            if item
+            and not any(
+                (
+                    FRAME.search(prose),
+                    FRAME.search(item.note),
+                    KIND_TAG.search(item.note),
+                )
+            )
             else None
         )
         if item is None or decided is None:
