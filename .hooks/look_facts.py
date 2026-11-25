@@ -211,7 +211,11 @@ def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 not under,
                 min(w, h) - floor,
                 f"{key}: {size}, "
-                + (f"under {_shown(floor)} px" if under else f"at or over {_shown(floor)} px"),
+                + (
+                    f"under {_shown(floor)} px"
+                    if under
+                    else f"at or over {_shown(floor)} px"
+                ),
                 f"control is {size}, {'under' if under else 'at or over'} its {_shown(floor)} px floor",
             )
         )
@@ -293,7 +297,8 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 key,
                 ok,
                 0 if ok is False else px,
-                f"{key}: {px} px" + (" (clamped by its box)" if row.get("clamped") else ""),
+                f"{key}: {px} px"
+                + (" (clamped by its box)" if row.get("clamped") else ""),
                 f"corner radius {px} px {'is' if ok else 'is not'} a rounded token",
             )
         )
@@ -312,9 +317,7 @@ FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
 
 
 def _order(facts: list[Fact]) -> list[Fact]:
-    return sorted(
-        facts, key=lambda fact: (fact.ok is not False, fact.margin, fact.key)
-    )
+    return sorted(facts, key=lambda fact: (fact.ok is not False, fact.margin, fact.key))
 
 
 def _listed(facts: list[Fact], floor_note: str) -> list[str]:
