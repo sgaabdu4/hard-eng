@@ -255,8 +255,14 @@ def earlier_findings(
         ]
         for line in lines:
             label, verdict, text, _ = split_rule_line(line)
-            if verdict == "Fail" and label in judged and not text.startswith(prefixes):
-                shown, fails = earlier_split(FRAME.sub(now, line), measured, tokens)
+            live = _without_held(line, then, current)
+            if (
+                verdict == "Fail"
+                and split_rule_line(live)[1] == "Fail"
+                and label in judged
+                and not text.startswith(prefixes)
+            ):
+                shown, fails = earlier_split(FRAME.sub(now, live), measured, tokens)
                 owned.update({(label, fail): None for fail in fails})
                 if shown:
                     items.setdefault(shown, (label, []))[1].extend(
@@ -269,6 +275,24 @@ def earlier_findings(
         ],
         list(owned),
     )
+
+
+def _without_held(line: str, then: dict[str, str], current: dict[str, str]) -> str:
+    """The Fail line without the items of an image that this run does not hold, since that image has its own clean record; a line with no part left is a Pass line, so no Fail parts reach the list."""
+    parts, fix = fail_parts(line)
+    if split_rule_line(line)[1] != "Fail":
+        return line
+    live = [
+        part
+        for part in parts
+        if (item := part_item(part)[1]) is None
+        or then.get(item.frame, "") in current
+        or item.frame not in then
+    ]
+    if len(live) == len(parts):
+        return line
+    head = line.partition(": Fail")[0]
+    return f"{head}: Fail — {'; '.join(live)} {fix}" if live else f"{head}: Pass"
 
 
 def earlier_split(
@@ -467,8 +491,12 @@ def sort_parts(
     failed: list[str] = []
     passed: list[str] = []
     for part in parts:
-        _, item = part_item(part)
-        decided = decide_item(item, measured, tokens) if item else None
+        prose, item = part_item(part)
+        decided = (
+            decide_item(item, measured, tokens)
+            if item and not FRAME.search(prose)
+            else None
+        )
         if item is None or decided is None:
             kept += [part.strip()] if part.strip() else []
         elif decided[0]:
