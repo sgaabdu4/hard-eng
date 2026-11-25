@@ -457,7 +457,7 @@ def test_a_link_in_a_sentence_is_not_said_to_meet_the_floor(tmp_path: Path) -> N
     assert "at or over" not in listed.partition("tap size")[2].partition("\n")[2]
 
 
-def test_a_name_shared_by_two_elements_is_no_key_and_its_item_is_refused(
+def test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused(
     tmp_path: Path,
 ) -> None:
     import look_facts
@@ -503,7 +503,7 @@ def test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key() -> None:
     assert look_facts.item_keys(measured, tokens)["gap"] == frozenset()
 
 
-def test_each_text_kind_lists_its_own_keys_and_two_elements_of_one_name_get_a_key_each(
+def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
     tmp_path: Path,
 ) -> None:
     import look_facts
