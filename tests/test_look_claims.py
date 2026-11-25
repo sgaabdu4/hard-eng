@@ -51,10 +51,10 @@ def test_a_claim_about_a_keyed_element_must_be_a_measured_item(tmp_path: Path) -
         assert rules == [], item
     named = judged_with_keys(refused[0], page(), tokens)[0]
     assert "image-1.png: Header line [align] <note>" in named
-    assert "Start the note with `centred` only when you claim" in named
+    assert "Start the note with the claim, such as `centred`" in named
     named = judged_with_keys(refused[3], page(), tokens)[0]
     assert "image-1.png: Chip A [radius] <note>" in named
-    assert "Start the note with `square` only when you claim" in named
+    assert "Start the note with the claim, such as `square corners`" in named
     stays = [
         "image-1.png: the page title is centred [judgement] Fix: left-align it",
         "image-1.png: Chip A are filled [judgement] Fix: outline them",
@@ -103,13 +103,103 @@ def test_a_centred_claim_is_checked_in_its_own_direction(tmp_path: Path) -> None
         tokens,
     )
     assert held.startswith("Alignment: Pass — code checked: ")
-    for note in ("should be centred", "isn't centred", "is wrongly centred"):
+    phrase = decided(
+        "Alignment: Fail — image-1.png: Header line [align] the header line is centred Fix: left-align it.",
+        tokens,
+    )
+    assert phrase.startswith("Alignment: Pass — code checked: ")
+    for note in (
+        "should be centred",
+        "isn't centred",
+        "is not centred",
+        "but not centred",
+    ):
         sentence = decided(
             f"Alignment: Fail — image-1.png: Header line [align] {note} Fix: centre it.",
             tokens,
         )
         assert " — code: text-align start, not centred in its parent" in sentence, note
         assert "Pass" not in sentence, note
+
+
+GAPS = values(
+    gaps=[
+        {"at": "Week", "to": "Month", "px": 0, "axis": "x"},
+        {"at": "Month", "to": "Year", "px": 8, "axis": "x"},
+        {"at": "Year", "to": "Spare", "px": 11, "axis": "x"},
+    ]
+)
+
+
+def test_a_touch_claim_is_checked_against_the_gap_of_its_pair(tmp_path: Path) -> None:
+    tokens = tokens_from_text(ZERO_DESIGN.replace("sm: 8px", "sm: 8px\n  odd: 11px"))
+    stands = (
+        "Spacing: Fail — image-1.png: Week to Month [gap] chips touch Fix: space them."
+    )
+    assert decided(stands, tokens, GAPS) == stands
+    apart = decided(
+        "Spacing: Fail — image-1.png: Month to Year [gap] chips touch Fix: join them.",
+        tokens,
+        GAPS,
+    )
+    assert apart.startswith("Spacing: Pass — code checked: ")
+    assert "gap 8 px, the neighbours do not touch" in apart
+    for note in ("the chips touch", "touching"):
+        found = decided(
+            f"Spacing: Fail — image-1.png: Month to Year [gap] {note} Fix: join them.",
+            tokens,
+            GAPS,
+        )
+        assert found.startswith("Spacing: Pass — code checked: "), note
+    for note in ("should touch", "don't touch", "not touching", ""):
+        kept = decided(
+            f"Spacing: Fail — image-1.png: Year to Spare [gap] {note} Fix: use a token.",
+            tokens_from_text(ZERO_DESIGN),
+            GAPS,
+        )
+        assert " — code: gap 11 px is not a spacing token" in kept, note
+    refused = judged_with_keys(
+        "image-1.png: the chips of Week to Month touch [judgement] Fix: space them",
+        GAPS,
+        tokens,
+    )
+    assert refused[0].startswith("not done: "), refused
+    assert "Start the note with the claim" in refused[0]
+
+
+def test_two_elements_with_one_name_get_their_own_keys_and_verdicts(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        radii=[
+            {"at": "Chip", "px": 0, "corners": [0, 0, 0, 0], "clamped": False},
+            {"at": "Chip", "px": 6, "corners": [6, 6, 6, 6], "clamped": False},
+            {"at": "Solo", "px": 6, "corners": [6, 6, 6, 6], "clamped": False},
+        ],
+        texts=[text_fact("Save", 10.5, under=True), text_fact("Save", 14)],
+    )
+    keys = look_facts.item_keys(measured, tokens)
+    assert {"Chip #1", "Chip #2", "Solo"} <= keys["radius"]
+    assert "Chip" not in keys["radius"]
+    assert {"Save #1", "Save #2"} <= keys["size"]
+    square = look_facts.verdict("radius", "Chip #1", measured, tokens, "square")
+    round_ = look_facts.verdict("radius", "Chip #2", measured, tokens, "square")
+    assert square is not None
+    assert square[0] is False
+    assert round_ is not None
+    assert round_[0] is True
+    small = look_facts.verdict("size", "Save #1", measured, tokens)
+    big = look_facts.verdict("size", "Save #2", measured, tokens)
+    assert small is not None
+    assert big is not None
+    assert (small[0], big[0]) == (False, True)
+    assert look_facts.verdict("size", "Save", measured, tokens) is None
+    listed = look_facts.measured_text(measured, tokens)
+    assert "- Save #1: 10.5 px" in listed
+    assert "- Chip #1: 0 px (square)" in listed
 
 
 def test_a_square_claim_is_checked_against_the_corners_of_its_element(

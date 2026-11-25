@@ -13,13 +13,26 @@ LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
 ZERO = re.compile(r"0+(?:\.0+)?")
 UNSAFE_IN_KEY = re.compile(r"[;:\[\]`*\"\s]+")
 NO_NAME = "no name"
-SQUARE = re.compile(r"(?i)\b(?:square|squared|sharp)\b")
-NOT_CENTRED = re.compile(
-    r"(?i)\b(?:not\s+cent(?:red|ered)|uncent(?:red|ered)|off[- ]cent(?:re|er)(?:d)?)\b"
+TRIGGER = {
+    "radius": re.compile(r"(?i)\b(?:square|squared|sharp)\b"),
+    "align": re.compile(
+        r"(?i)\b(?:not\s+cent(?:red|ered)|uncent(?:red|ered)|off[- ]cent(?:re|er)(?:d)?|cent(?:red|ered))\b"
+    ),
+    "gap": re.compile(r"(?i)\b(?:touch(?:es|ing)?|no gap)\b"),
+}
+LEAD = (
+    r"(?:(?!(?:not|never|no|nor|but|than|rather|instead|should|must|needs?|do|does|don't|doesn't|"
+    r"isn't|aren't|wasn't|weren't|can't|cannot|won't|would|could|may|might|without)\b)[\w'’-]+\s+){0,6}"
 )
-CENTRED = re.compile(r"(?i)\bcent(?:red|ered)\b")
-NOTE_SQUARE = re.compile(r"(?i)\s*(?:square|squared|sharp)\b")
-NOTE_CENTRED = re.compile(r"(?i)\s*cent(?:red|ered)\b")
+CLAIMS = {
+    "radius": ("square", r"square|squared|sharp"),
+    "align": ("centred", r"cent(?:red|ered)"),
+    "gap": ("touch", r"touch(?:es|ing)?|no gap"),
+}
+CLAIM_FORMS = {
+    kind: re.compile(rf"(?i)\s*{LEAD}(?:{words})\b")
+    for kind, (_, words) in CLAIMS.items()
+}
 SQUARE_LAST = 1e9
 
 
@@ -47,17 +60,21 @@ def design_tokens(root: Path | None) -> Tokens:
 
 
 def tokens_from_text(text: str) -> Tokens:
-    """The colour, spacing and rounded tokens of the DESIGN.md front matter, as written. A python3 without PyYAML, a missing front matter or a missing group gives an empty list, which means no verdict."""
+    """The colour, spacing and rounded tokens of the DESIGN.md front matter, as written. A missing front matter, a front matter that is not YAML or a missing group gives an empty list, which means no verdict; a python3 without PyYAML refuses, because a front matter that cannot be read must never look like one with no tokens."""
     from ui_tokens import FRONT_MATTER, colours_in
 
     none = Tokens({}, [], [])
-    try:
-        import yaml
-    except ImportError:
+    front = FRONT_MATTER.match(text)
+    if not front:
         return none
     try:
-        front = FRONT_MATTER.match(text)
-        data = yaml.safe_load(front[1]) if front else None
+        import yaml
+    except ImportError as error:
+        raise ValueError(
+            "look: PyYAML is missing, so the DESIGN.md tokens cannot be read; run `python3 .hooks/hard-eng.py look`, which loads it, or install pyyaml"
+        ) from error
+    try:
+        data = yaml.safe_load(front[1])
     except yaml.YAMLError:
         return none
     if not isinstance(data, dict):
@@ -133,6 +150,28 @@ def fact_key(name: object) -> str:
     return UNSAFE_IN_KEY.sub(" ", str(name or "")).strip() or NO_NAME
 
 
+def _named(
+    rows: list[dict[str, object]], namer: Callable[[dict[str, object]], str]
+) -> list[tuple[str, dict[str, object]]]:
+    """Each row with its own key: the name of the element, and ` #1`, ` #2` in record order when several elements of one kind share a name, so a verdict never comes from another element."""
+    names = [namer(row) for row in rows]
+    totals = Counter(names)
+    seen: Counter[str] = Counter()
+    keyed: list[tuple[str, dict[str, object]]] = []
+    for name, row in zip(names, rows, strict=True):
+        seen[name] += 1
+        keyed.append((f"{name} #{seen[name]}" if totals[name] > 1 else name, row))
+    return keyed
+
+
+def _at(row: dict[str, object]) -> str:
+    return fact_key(row.get("at"))
+
+
+def _pair(row: dict[str, object]) -> str:
+    return f"{fact_key(row.get('at'))} to {fact_key(row.get('to'))}"
+
+
 def _token_name(tokens: Tokens, raw: str, blended: str) -> str:
     return tokens.colours.get(raw) or tokens.colours.get(blended + "ff") or ""
 
@@ -146,7 +185,7 @@ def _swatch(tokens: Tokens, raw: object, blended: object) -> str:
 def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     floor = LIMITS["text_px"]
     found: list[Fact] = []
-    for row in _rows(measured, "texts"):
+    for key, row in _named(_rows(measured, "texts"), _at):
         px = _num(row.get("px"))
         under = row.get("under") is True
         pair = ""
@@ -160,7 +199,6 @@ def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
             if row.get("align") and isinstance(row.get("centred"), bool)
             else ""
         )
-        key = fact_key(row.get("at"))
         line = f"{key}: {_shown(px)} px, weight {_shown(_num(row.get('weight')))}{place}{pair}"
         found.append(
             Fact(
@@ -190,11 +228,11 @@ def colour_ok(row: dict[str, object], tokens: Tokens) -> bool | None:
 
 def colour_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     found: list[Fact] = []
-    for row in _rows(measured, "texts"):
+    for key, row in _named(_rows(measured, "texts"), _at):
         ok = colour_ok(row, tokens)
         found.append(
             Fact(
-                fact_key(row.get("at")),
+                key,
                 ok,
                 0 if ok is False else 1,
                 "",
@@ -207,14 +245,13 @@ def colour_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
 
 def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     found: list[Fact] = []
-    for row in _controls(measured):
+    for key, row in _named(_controls(measured), _at):
         if not isinstance(row.get("under"), bool) or "floor" not in row:
             continue
         w, h, floor = _num(row.get("w")), _num(row.get("h")), _num(row.get("floor"))
         under = row.get("under") is True
         exempt = row.get("exempt") is True
         size = f"{_shown(w)}x{_shown(h)} px"
-        key = fact_key(row.get("at"))
         state = (
             f"inline link, exempt from the {_shown(floor)} px floor"
             if exempt
@@ -236,13 +273,13 @@ def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
 
 def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     rows = [
-        row
-        for row in _rows(measured, "texts")
-        if "weight" in row and fact_key(row.get("at")) != NO_NAME
+        (own, row)
+        for own, row in _named(_rows(measured, "texts"), _at)
+        if "weight" in row and _at(row) != NO_NAME
     ]
     weights: dict[str, set[float]] = {}
     seen: Counter[str] = Counter()
-    for row in rows:
+    for _, row in rows:
         key = fact_key(row.get("at"))
         seen[key] += max(1, int(_num(row.get("n"))))
         weights.setdefault(key, set()).add(_num(row.get("weight")))
@@ -259,7 +296,7 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
             near.setdefault(first, set()).add(second)
             near.setdefault(second, set()).add(first)
     found: list[Fact] = []
-    for row in rows:
+    for own, row in rows:
         name, weight = fact_key(row.get("at")), _num(row.get("weight"))
         others = sorted(near.get(name, set()) - {name})
         shared = any(seen[key] > 1 for key in (name, *others))
@@ -270,7 +307,7 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
         )
         found.append(
             Fact(
-                name,
+                own,
                 ok,
                 0 if ok is False else 1,
                 "",
@@ -283,26 +320,27 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
 def align_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return [
         Fact(
-            fact_key(row.get("at")),
+            key,
             row["centred"],
             0 if row["centred"] is False else 1,
             "",
             f"text-align {row.get('align')}, {'centred' if row['centred'] else 'not centred'} in its parent",
         )
-        for row in _rows(measured, "texts")
+        for key, row in _named(_rows(measured, "texts"), _at)
         if isinstance(row.get("centred"), bool)
     ]
+
+
+def _gap_rows(measured: dict[str, object]) -> list[dict[str, object]]:
+    return [row for row in _rows(measured, "gaps") if "to" in row and "px" in row]
 
 
 def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     scale = _scale(tokens.spacing, measured)
     found: list[Fact] = []
-    for row in _rows(measured, "gaps"):
-        if "to" not in row or "px" not in row:
-            continue
+    for pair, row in _named(_gap_rows(measured), _pair):
         px = max(0, int(_num(row.get("px"))))
         ok = None if scale is None else px in scale or px == 0
-        pair = f"{fact_key(row.get('at'))} to {fact_key(row.get('to'))}"
         found.append(
             Fact(
                 pair,
@@ -326,12 +364,11 @@ def corners_of(row: dict[str, object]) -> list[int]:
 def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     scale = _scale(tokens.rounded, measured)
     found: list[Fact] = []
-    for row in _rows(measured, "radii"):
+    for key, row in _named(_rows(measured, "radii"), _at):
         px = int(_num(row.get("px")))
         corners = corners_of(row)
-        key = fact_key(row.get("at"))
         if not any(corners):
-            if key != NO_NAME:
+            if not key.startswith(NO_NAME):
                 found.append(
                     Fact(
                         key,
@@ -501,13 +538,8 @@ def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozense
 
 
 def claim_word(kind: str, text: str) -> str:
-    """The word of a claim form that the text holds for this kind, or an empty text. The forms are exact: `square`, `squared` and `sharp` for a radius; `not centred`, `uncentred` and `off-centre` (a claim that the text is not centred) and `centred` for an alignment."""
-    if kind == "radius":
-        found = SQUARE.search(text)
-    elif kind == "align":
-        found = NOT_CENTRED.search(text) or CENTRED.search(text)
-    else:
-        found = None
+    """The word of a claim form that the text holds for this kind, or an empty text: `square`, `squared` or `sharp` for a radius; `centred`, `not centred`, `uncentred` or `off-centre` for an alignment; `touch`, `touches`, `touching` or `no gap` for a gap."""
+    found = TRIGGER[kind].search(text) if kind in TRIGGER else None
     return found[0].lower() if found else ""
 
 
@@ -515,7 +547,7 @@ def claim_in(
     text: str, keys: Mapping[str, frozenset[str]]
 ) -> tuple[str, str, str] | None:
     """The kind, key and claim word of the first claim form in the text that names the exact key of a measured element of that kind."""
-    for kind in ("radius", "align"):
+    for kind in TRIGGER:
         if word := claim_word(kind, text):
             for key in sorted(keys.get(kind, ()), key=len, reverse=True):
                 if re.search(rf"(?<!\w){re.escape(key)}(?!\w)", text, re.IGNORECASE):
@@ -524,23 +556,26 @@ def claim_in(
 
 
 def claimed_state(kind: str, claim: str) -> str:
-    """The state that an item of a measured kind claims: `square` for a radius and `centred` for an alignment, only when its note starts with that word. Any other note, such as `should be centred` or `isn't centred`, keeps the old meaning of the kind, so a word inside a sentence never flips the direction of a claim."""
-    if kind == "radius" and NOTE_SQUARE.match(claim):
-        return "square"
-    if kind == "align" and NOTE_CENTRED.match(claim):
-        return "centred"
-    return ""
+    """The state that an item of a measured kind claims: `square` for a radius, `centred` for an alignment and `touch` for a gap, when its note opens with that claim (up to six plain words, then the claim word: `chips touch`, `the header line is centred`). A negation or a `should` before the word, and any other note, keeps the old meaning of the kind, so a word inside a sentence never flips the direction of a claim."""
+    state, _ = CLAIMS.get(kind, ("", ""))
+    form = CLAIM_FORMS.get(kind)
+    return state if state and form and form.match(claim) else ""
+
+
+def _held(
+    measured: dict[str, object],
+    name: str,
+    namer: Callable[[dict[str, object]], str],
+    element: str,
+) -> list[dict[str, object]]:
+    return [row for key, row in _named(_rows(measured, name), namer) if key == element]
 
 
 def _square(
     element: str, measured: dict[str, object], tokens: Tokens
 ) -> tuple[bool, str] | None:
     """A square claim is disproved by any corner of the element above 0; when every corner is 0 the claim is true, and code Fails the item only when no rounded token is 0."""
-    held = [
-        corners_of(row)
-        for row in _rows(measured, "radii")
-        if fact_key(row.get("at")) == element
-    ]
+    held = [corners_of(row) for row in _held(measured, "radii", _at, element)]
     squares = [not any(corners) for corners in held]
     if not held or (any(squares) and not all(squares)):
         return None
@@ -552,16 +587,35 @@ def _square(
     return False, "corner radius 0 px, square, and 0 is in no rounded token"
 
 
-def _centred(element: str, measured: dict[str, object]) -> tuple[bool, str] | None:
+def _centred(
+    element: str, measured: dict[str, object], tokens: Tokens
+) -> tuple[bool, str] | None:
     """A centred claim is disproved by a text that is measured as not centred; a measured centred text leaves the item with the reviewer."""
     held = [
         row
-        for row in _rows(measured, "texts")
-        if fact_key(row.get("at")) == element and isinstance(row.get("centred"), bool)
+        for row in _held(measured, "texts", _at, element)
+        if isinstance(row.get("centred"), bool)
     ]
     if not held or any(row["centred"] for row in held):
         return None
     return True, f"text-align {held[0].get('align')}, not centred in its parent"
+
+
+def _touch(
+    element: str, measured: dict[str, object], tokens: Tokens
+) -> tuple[bool, str] | None:
+    """A touch claim is disproved by a measured gap above 0; a measured gap of 0 leaves the item with the reviewer."""
+    held = [
+        max(0, int(_num(row.get("px"))))
+        for key, row in _named(_gap_rows(measured), _pair)
+        if key == element
+    ]
+    if not held or not all(held):
+        return None
+    return True, f"gap {held[0]} px, the neighbours do not touch"
+
+
+STATES = {"square": _square, "centred": _centred, "touch": _touch}
 
 
 def verdict(
@@ -572,11 +626,8 @@ def verdict(
     claim: str = "",
 ) -> tuple[bool, str] | None:
     """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal a key of that kind exactly, and every fact of that key must give the same verdict; any other case leaves the item to the reviewer. There is no loose name match, because a wrong match gives a false verdict. A note that states a claim (`square`, `centred`) is compared with the fact in the direction of the claim: a Pass means the claim is disproved."""
-    state = claimed_state(kind, claim)
-    if state == "square":
-        return _square(element, measured, tokens)
-    if state == "centred":
-        return _centred(element, measured)
+    if state := claimed_state(kind, claim):
+        return STATES[state](element, measured, tokens)
     build = FACTS.get(kind)
     if build is None:
         return None
