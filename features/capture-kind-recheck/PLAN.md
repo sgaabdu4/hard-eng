@@ -14,7 +14,7 @@ Sources: N/A — the request is the only source: the coordinator's follow-up of 
 
 Owners: `require_readable_document` in `.hooks/browser.py` owns the document kind; `shoot_page` owns the order of the checks around the screenshot. `tests/test_ui_audit_guards.py` owns the fetch-wave tests.
 Same cause: the review of the join found that `shoot_page` read the kind once, before the measure, so a client-side redirect to a PDF between that check and the screenshot kept an unmasked image; the earlier plan (`features/pdf-proof/PLAN.md`) declined it as far-fetched, and the coordinator ruled that a protected boundary needs the fix. The same call now runs before and after the screenshot, beside the two `unread_frames` calls. The flaky test has one cause in four tests: each one waited a fixed 0.8 s or 2 s on the clock of the test, while the measure compares the action time with the page's own fetch times. When the page handler ran later than the click command returned, the previous press was less than 500 ms quiet and its waves joined the next press. All four now wait on the page (`settled`).
-Single source: `require_readable_document` stays the one owner of the kind and `READABLE_KINDS` the one list; no other reader was added. In the tests, `settled` and `press_clicks` in `tests/test_ui_audit_guards.py` are the one wait; the four copies of `time.sleep` are gone, and `PRESS` records its own start time so the test never uses the time of the click command.
+Single source: `require_readable_document` stays the one owner of the kind and `READABLE_KINDS` the one list; no other reader was added. In the tests, `settled` and `press_clicks` in `tests/test_ui_audit_guards.py` are the one wait; the four copies of `time.sleep` are gone. The action times stay the real ones that `browser.record_action` writes before each click.
 
 ## Decisions + authorization
 
@@ -27,13 +27,13 @@ Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct bef
 - [x] A page that is HTML at the first check and a PDF before the shoot step keeps no image and no record, and the message names `application/pdf` → `tests/test_browser_documents.py::test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf[before]`
 - [x] A page that turns into a PDF while the screenshot is taken keeps no image and no record → `tests/test_browser_documents.py::test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf[during]`
 - [x] An HTML page is captured as before → `tests/test_browser.py::test_capture_draws_boxes_at_each_width`, `tests/test_browser.py::test_measure_records_an_open_session_state`
-- [x] A press whose page answers 600 ms after the click is still measured apart from the load → `tests/test_ui_audit_guards.py::test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late`
+- [x] A press whose page answers 300 ms after the click is still measured apart from the load → `tests/test_ui_audit_guards.py::test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late`
 - [x] The press test no longer depends on time: 30 runs in a row of the four timing tests pass → `tests/test_ui_audit_guards.py::test_each_press_is_measured_apart_from_the_load`, `tests/test_ui_audit_guards.py::test_a_press_that_starts_a_four_wave_chain_fails_at_that_press`, `tests/test_ui_audit_guards.py::test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterfall`
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: On `origin/develop` (4b8f3a45) the two kind tests fail (`assert 0 == 1`: capture keeps images) and the late-answer test fails with the CI message `fetch-waterfall, click 1`. The red tests are committed before each fix (commits 9484b715 and 6c7a2613). The `Review declined:` line about this finding in `features/pdf-proof/PLAN.md` is closed by this change. The existing guard and browser tests pass.
+Evidence: On `origin/develop` (4b8f3a45) the two kind tests fail (`assert 0 == 1`: capture keeps images) and the late-answer test fails with a `fetch-waterfall` finding (the old fixed waits give `load`, three of three runs; CI gave `click 1`), and with a 5000 ms delay, which is past the 1000 ms reaction limit. The red tests are committed before each fix (commits 9484b715 and 6c7a2613). The `Review declined:` line about this finding in `features/pdf-proof/PLAN.md` is closed by this change. The existing guard and browser tests pass.
 Execution: One builder in a worktree off `origin/develop`.
 
 ## Risks + recovery
@@ -54,3 +54,5 @@ Retro: Review finding carried over: a page that becomes a PDF after the first ch
 
 Delivery target: Merge
 Delivery: Pending — required remote proof.
+
+Review declined: a page that is HTML at both kind checks, but a client-side redirect to another HTML page replaces the document after the masking script ran, keeps an unmasked image :: out of scope: the request is the document kind; this case exists on develop and in the first capture step, and it needs the masking script to run again after each navigation, which is a separate change.
