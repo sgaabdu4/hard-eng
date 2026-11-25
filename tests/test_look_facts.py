@@ -811,3 +811,46 @@ def test_a_part_with_a_leading_frame_stays_while_any_of_its_frames_is_in_this_ru
         look_records._without_held(line, then, {"home-375.png": "image-1.png"}) == line
     )
     assert look_records._without_held(line, then, {}) == "Design system: Pass"
+
+
+def test_a_semicolon_before_the_fix_adds_no_part_and_no_ghost_item() -> None:
+    import look_answer
+    import look_records
+
+    line = "Messages: Fail \u2014 image-2.png: error banner blames user [judgement]; Fix: rewrite it."
+    assert len(look_answer.fail_parts(line)[0]) == 1
+    assert look_records._without_held(line, {"image-2.png": "b.png"}, {}) == (
+        "Messages: Pass"
+    )
+
+
+def test_a_carried_clean_record_ends_the_list_of_an_older_findings_record(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+    from test_look import next_head
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(DESIGN)
+    commit(project, "inputs")
+    (image,) = make_images(project, 1)
+    original = image.read_bytes()
+    ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    assert run_look(project, "codex", [image])["outcome"] == "clean"
+    next_head(project)
+    image.write_bytes(original + b"x")
+    ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
+    fail = "image-1.png: the card sits left [judgement] Fix: centre it"
+    install_agent(tmp_path, "claude", 1, answer_with(fail))
+    assert run_look(project, "codex", [image])["outcome"] == "findings"
+    next_head(project)
+    image.write_bytes(original)
+    ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
+    assert run_look(project, "codex", [image])["outcome"] == "clean"
+    next_head(project)
+    image.write_bytes(original + b"y")
+    ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", [image])
+    assert EARLIER not in prompt_of(log)
