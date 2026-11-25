@@ -748,3 +748,9 @@ def test_an_unreadable_process_counts_as_unknown_only_for_another_person(
     monkeypatch.setattr(tidy_guards, "foreign_user", other_person)
     found = tidy_guards.proc_paths(proc)
     assert found == (None if foreign else {"/work/100"})
+
+    def ours(process: Path) -> bool:
+        return process.name == "100"
+
+    monkeypatch.setattr(tidy_guards, "mine", ours)
+    assert tidy_guards.proc_files(proc, own=True) == [(100, "/work/100")]

@@ -38,11 +38,10 @@ Proof that the writer is inside Hard Eng's control: the child starts inside the 
 
 - [x] A child left by a project's post-commit hook does not fail the update, and no private folder or worktree stays → `tests/test_update_race.py::test_a_hook_child_in_the_private_worktree_does_not_fail_the_update`.
 - [x] The same for the check of the update branch → `tests/test_update_race.py::test_the_check_of_the_update_branch_leaves_no_child_in_its_worktree`.
-- [x] Two session starts at the same moment end with one update commit, one ready result and no failure line, with the same hook child → `tests/test_update_race.py::test_two_session_starts_together_run_one_update_and_print_no_failure`.
-- [x] A child that a stopped process forks while the stop runs is stopped too → `tests/test_update_race.py::test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile`.
-- [x] A scan that takes longer than the wait still signals what it found, once per signal → `tests/test_update_race.py::test_a_slow_scan_still_signals_the_processes_that_it_found`.
+- [x] Two session starts at the same moment end with one update commit and no failure line, with the same hook child → `tests/test_update_race.py::test_two_session_starts_together_run_one_update_and_print_no_failure`.
+- [x] A stop signals each process that a scan found, also a child that a stopped process forked meanwhile and what a scan slower than the wait found → `tests/test_update_race.py::test_a_stop_signals_each_process_that_a_scan_found`.
 - [x] A host that cannot list processes still lets the removal go on → `tests/test_update_race.py::test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on`.
-- [x] A process of another account does not hide the update's own processes from the stop → `tests/test_update_race.py::test_a_process_of_another_account_does_not_hide_ours`.
+- [x] A process of another account does not hide the update's own processes from the stop → `tests/test_tidy.py::test_an_unreadable_process_counts_as_unknown_only_for_another_person` (extended with the own-account listing).
 - [x] The private worktree stays locked until its processes are stopped, so an interrupted update leaves it to the stale sweep with its owner → `tests/test_update_race.py::test_the_private_worktree_is_unlocked_only_after_its_processes_stop`.
 - [x] A clean update still starts detached, and a running update is reported, not duplicated → `tests/test_update_runner.py::test_start_detaches_worker_without_inherited_pipes` and `tests/test_update_runner.py::test_running_update_is_reported_not_duplicated` (existing, unchanged).
 - [x] The tidy keeps its answer about busy worktrees after `open_paths` moved onto `open_files` → `tests/test_tidy.py::test_an_unreadable_process_counts_as_unknown_only_for_another_person` (existing, unchanged).
