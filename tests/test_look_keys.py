@@ -409,3 +409,48 @@ def test_the_old_shape_of_the_release_proof_items_is_refused_by_form(
             f"image-1.png: {old} [{kind}] Fix: use a token", RELEASE_PROOF, tokens
         )
         assert outcome.startswith("not done: `image-1.png: "), old
+
+
+def test_weight_ignores_unnamed_and_repeated_keys_and_a_solo_item_has_no_key(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        texts=[
+            text_fact("Round", 12, weight=600),
+            text_fact("5", 12, weight=600),
+            text_fact("Overdue", 12, weight=400),
+            text_fact("5", 12, weight=600),
+            text_fact("", 12, weight=400),
+            text_fact("Dashboard", 12, weight=600),
+            text_fact("Hero title", 12, weight=700),
+        ],
+        gaps=[
+            {"at": "Round", "to": "5", "px": 8, "axis": "x"},
+            {"at": "5", "to": "Overdue", "px": 8, "axis": "x"},
+            {"at": "", "to": "Dashboard", "px": 8, "axis": "x"},
+        ],
+    )
+    assert look_facts.verdict("weight", "5", measured, tokens) is None
+    assert look_facts.verdict("weight", "Dashboard", measured, tokens) is None
+    assert "Hero title" not in look_facts.item_keys(measured, tokens)["weight"]
+    outcome, _ = judged_with_keys(
+        "image-1.png: Hero title [weight] looks like 10 px Fix: bolder",
+        measured,
+        tokens,
+    )
+    assert outcome.startswith("not done: `image-1.png: Hero title [weight]`")
+
+
+def test_a_link_in_a_sentence_is_not_said_to_meet_the_floor(tmp_path: Path) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        sizes={"controls": [control("terms", 100, 18, floor=44, exempt=True)]}
+    )
+    listed = look_facts.measured_text(measured, tokens)
+    assert "- terms: 100x18 px, inline link, exempt from the 44 px floor" in listed
+    assert "at or over" not in listed.partition("tap size")[2].partition("\n")[2]

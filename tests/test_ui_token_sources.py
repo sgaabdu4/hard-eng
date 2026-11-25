@@ -123,3 +123,22 @@ def test_a_bare_number_in_an_extra_group_matches_a_token_length_but_is_never_mis
     assert token_findings(design, [dart]) == []
     found = token_findings(design, [dart + "  static const double railWidth = 72;\n"])
     assert found == ["a token length 72px is missing from DESIGN.md"]
+
+
+def test_font_modifiers_and_role_first_font_properties_are_no_family() -> None:
+    """HE-UI-SOURCE: a Tailwind font modifier and a role-first size, weight or style property add no font family."""
+    css = (
+        '@theme {\n  --font-sans: "Inter", sans-serif;\n'
+        '  --font-sans--font-feature-settings: "cv02", "cv03";\n'
+        '  --font-sans--font-variation-settings: "opsz" 32;\n'
+        "  --font-body-size: .875rem;\n  --font-body-size-fluid: clamp(1rem, 2vw, 1.25rem);\n"
+        "  --font-heading-weight: bold;\n  --font-caption-style: italic;\n}\n"
+    )
+    assert token_facts([css]).families == {"Inter"}
+
+
+def test_a_bare_number_never_hides_an_undocumented_length_with_a_unit() -> None:
+    """HE-UI-SOURCE: a z-index of 50 in DESIGN.md does not excuse a token of 50px in a stylesheet."""
+    design = "---\ncolors:\n  ink: '#101010'\nzIndex:\n  modal: 50\n---\n# Design\n"
+    found = token_findings(design, ["@theme {\n  --spacing-modal: 50px;\n}\n"])
+    assert "a token length 50px is missing from DESIGN.md" in found

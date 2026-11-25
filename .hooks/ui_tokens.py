@@ -30,7 +30,7 @@ DART_LENGTH = re.compile(
 )
 FONT_PROPERTY = "size|weight|style|tracking|letter|leading|line|stretch|variant|feature|variation|kerning"
 CSS_FAMILY = re.compile(
-    rf"(?:--font(?!-(?:{FONT_PROPERTY})\b)[\w-]*|--[\w-]*family[\w-]*|font-family)\s*:\s*([^;]+);"
+    rf"(?:--font(?![\w-]*-(?:{FONT_PROPERTY})\b)[\w-]*|--[\w-]*family[\w-]*|font-family)\s*:\s*([^;]+);"
 )
 CSS_GENERIC_FAMILY = re.compile(
     r"--[\w-]+\s*:\s*([^;]*,\s*(?:sans-serif|serif|monospace|system-ui|cursive|fantasy|ui-[\w-]+))\s*;"
@@ -298,6 +298,16 @@ def unit_lengths(value: object) -> set[float]:
     return {length_px(str(value)) or 0.0} - {0.0} if hit else set()
 
 
+def css_lengths(texts: list[str]) -> set[float]:
+    """The lengths that token files write with a unit."""
+    return {
+        length
+        for text in texts
+        for hit in CSS_LENGTH.finditer(code_of(text))
+        if (length := length_px(hit[0]))
+    }
+
+
 def other_group_lengths(groups: dict[str, dict[object, object]]) -> set[float]:
     """The numbers of a group outside the DESIGN.md format, with or without a unit. A bare number (a Dart double) matches a token length but is never reported as missing from the token files, since an opacity or a z-index is no length."""
     return {
@@ -386,7 +396,9 @@ def token_findings(design: str | None, token_texts: list[str]) -> list[str]:
     ]
     found += [
         f"a token length {length_label(value, token_texts)} is missing from {DESIGN_NAME}"
-        for value in sorted(code.lengths - doc.lengths - bare)
+        for value in sorted(
+            code.lengths - doc.lengths - (bare - css_lengths(token_texts))
+        )
     ]
     found += [
         f"the {DESIGN_NAME} font family {value} is missing from the token files"
