@@ -381,10 +381,10 @@ def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
     assert claude_argv[claude_argv.index("--model") + 1] == "opus"
     assert claude_argv[claude_argv.index("--effort") + 1] == "high"
     (tmp_path / "bin/claude").unlink()
-    import look
+    import look_reviewer
 
-    assert look.reviewer_attempts("agy", project) == [("codex", False)]
-    assert look.reviewer_attempts("codex", project) == [("codex", True)]
+    assert look_reviewer.reviewer_attempts("agy", project) == [("codex", False)]
+    assert look_reviewer.reviewer_attempts("codex", project) == [("codex", True)]
 
 
 def test_look_ignores_uncommitted_shipping_base_edit(
