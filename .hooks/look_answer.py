@@ -13,6 +13,9 @@ REMOVED_AFTER = re.compile(rf"(?i)\bremoved\s*:?\s*({COUNT_LIST})")
 REMOVED_BEFORE = re.compile(rf"(?i)\b({COUNT_LIST})\s+removed\b")
 BULLET = re.compile(r"^[-*•]\s+")
 COUNT_NOTE = re.compile(r"([^:(]+?)\s*(\([^)]*\))\s*:\s*(.*)")
+NOTE_AFTER_VERDICT = re.compile(
+    r"(?!Image )([^:]+): (Pass|Fail|N/A) (\([^)]*\))(?:\.|\s[-–])\s*(\S.*)"
+)
 PLAIN_VERDICT = re.compile(r"(?!Image )([^:]+): (Pass|Fail|N/A)(?:\.|\s[-–])\s*(\S.*)")
 IMAGE_DETAIL = re.compile(r"Image (\S+?\.png)\s*[:—–-]+\s*(.+)")
 VERDICTS = {"VERDICT: clean": "clean", "VERDICT: findings": "findings"}
@@ -20,11 +23,13 @@ VERDICT_OUTCOMES = frozenset(VERDICTS.values())
 
 
 def clean_line(line: str) -> str:
-    """A reviewer line in the stored form `Rule: Pass — text`: no bullet or bold marks, a count note such as `(clicks: 2)` moved after the text, and the plain verdict forms `Pass. text` and `Pass - text` set to the stored dash."""
+    """A reviewer line in the stored form `Rule: Pass — text`: no bullet or bold marks, a count note such as `(clicks: 2)` moved after the text, and a count note after the verdict (`Fail (kept 13, removed 6). text`) moved after the text, and the plain verdict forms `Pass. text` and `Pass - text` set to the stored dash."""
     text = line.strip().replace("**", "").replace("`", "")
     text = BULLET.sub("", text)
     found = COUNT_NOTE.match(text)
     text = f"{found[1]}: {found[3]} {found[2]}" if found else text
+    noted = NOTE_AFTER_VERDICT.fullmatch(text)
+    text = f"{noted[1]}: {noted[2]} — {noted[4]} {noted[3]}" if noted else text
     plain = PLAIN_VERDICT.fullmatch(text)
     return f"{plain[1]}: {plain[2]} — {plain[3]}" if plain else text
 

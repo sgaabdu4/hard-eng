@@ -72,6 +72,16 @@ ZERO = "its own count says 0 removed"
             "",
         ),
         ("No clutter: Pass — kept 34, removed 0", "clean", ""),
+        (
+            "No clutter: Fail (kept 13, removed 6). image-1.png: a repeated status. Fix: drop it",
+            "findings",
+            "",
+        ),
+        (
+            "No clutter: Fail (kept 13, removed 0). image-1.png: a repeated status. Fix: drop it",
+            "not done",
+            ZERO,
+        ),
         ("No clutter: Fail — kept 34, removed: 0. Fix: merge", "not done", ZERO),
         ("No clutter: Fail — too many labels, 0 removed. Fix: merge", "not done", ZERO),
         ("No clutter: Fail — kept 34 removed 0. Fix: merge", "not done", ZERO),
