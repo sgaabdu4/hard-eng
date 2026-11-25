@@ -25,6 +25,12 @@ def _read_record(path: Path) -> dict[str, object] | None:
     return record if isinstance(record, dict) else None
 
 
+def _newest_paths(root: Path) -> list[Path]:
+    return sorted(
+        _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
+    )
+
+
 def _record_paths(root: Path) -> list[Path]:
     folder = store(root, "records", STORE).parent
     return sorted(folder.glob("*-*.json")) if folder.is_dir() else []
@@ -217,10 +223,7 @@ def earlier_findings(
     current = {file: name for name, file, _ in pairs}
     items: dict[str, tuple[str, list[str]]] = {}
     claimed: set[str] = set()
-    newest = sorted(
-        _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
-    )
-    for path in newest:
+    for path in _newest_paths(root):
         record = _read_record(path)
         owner = record.get("head") if record else None
         if (
@@ -270,23 +273,11 @@ def earlier_split(
     line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
 ) -> tuple[str, list[str]]:
     """The text of an earlier Fail line to recheck (its judgement items, other parts and the measured items that code cannot find; empty when none is left), and the item text of each measured item that code still fails now. A measured item that code passes is dropped."""
-    parts, fix = fail_parts(line)
-    kept: list[str] = []
-    fails: list[str] = []
-    touched = False
-    for part in parts:
-        _, item = part_item(part)
-        decided = decide_item(item, measured, tokens) if item else None
-        if item is None or decided is None:
-            kept += [part.strip()] if part.strip() else []
-            continue
-        touched = True
-        if not decided[0]:
-            fails.append(code_item(item, decided[1]))
-    if not touched:
+    kept, passed, failed, fix = sort_parts(line, measured, tokens)
+    if not passed and not failed:
         return line, []
     head = line.partition(": Fail")[0]
-    return (f"{head}: Fail — {'; '.join(kept)} {fix}" if kept else ""), fails
+    return (f"{head}: Fail — {'; '.join(kept)} {fix}" if kept else ""), failed
 
 
 def _on_branch(root: Path, ancestor: str, head: str) -> bool:
@@ -465,10 +456,10 @@ def code_item(item: Item, why: str) -> str:
     return f"{item.frame}: {item.element} [{item.kind}] — code: {why}"
 
 
-def decide_line(
+def sort_parts(
     line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
-) -> str:
-    """A reviewer Fail line with each item that code decides replaced by code's verdict: a Pass item leaves the line, a Fail item stays with code's reason, every other item and part stays. A line with no item left to fail becomes a Pass."""
+) -> tuple[list[str], list[str], list[str], str]:
+    """The parts of a Fail line that code does not decide, the text of each item that code passes, the text of each item that code fails, and the Fix part."""
     parts, fix = fail_parts(line)
     kept: list[str] = []
     failed: list[str] = []
@@ -481,9 +472,15 @@ def decide_line(
         elif decided[0]:
             passed.append(f"{item.frame}: {item.element} [{item.kind}] {decided[1]}")
         else:
-            failed.append(
-                f"{item.frame}: {item.element} [{item.kind}] — code: {decided[1]}"
-            )
+            failed.append(code_item(item, decided[1]))
+    return kept, passed, failed, fix
+
+
+def decide_line(
+    line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
+) -> str:
+    """A reviewer Fail line with each item that code decides replaced by code's verdict: a Pass item leaves the line, a Fail item stays with code's reason, every other item and part stays. A line with no item left to fail becomes a Pass."""
+    kept, passed, failed, fix = sort_parts(line, measured, tokens)
     if not passed and not failed:
         return line
     head = line.partition(": Fail")[0]
@@ -547,10 +544,7 @@ def changed_input(
 ) -> str:
     """The notice for a clean record of an earlier head that holds one of these images but cannot carry because DESIGN.md or the plan's Outcome + scope changed since; empty when no record qualifies."""
     wanted = set(digests)
-    newest = sorted(
-        _record_paths(root), key=lambda path: path.stat().st_mtime_ns, reverse=True
-    )
-    for path in newest:
+    for path in _newest_paths(root):
         record = _read_record(path)
         owner = record.get("head") if record else None
         entries = (
