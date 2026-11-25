@@ -1,6 +1,6 @@
 # Judge a merged UI PR against its own design, and let cleanup remove the proof it needs
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -33,19 +33,19 @@ Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct bef
 
 Cleanup choice: cleanup already runs the delivered check before it removes anything, and Hard Eng owns `.hard-eng/` (captures, sessions, update state). The fault is that the guard counted `.hard-eng/` as foreign ignored work and told the user to delete it first, so the next delivered run had no capture records. Treating the proof, session and update files in `.hard-eng/` as Hard Eng's own is a small change in the one guard; other files there, such as a client report, still block cleanup. The other choice, a new proof store that cleanup cannot remove, changes every reader of `.hard-eng/browser`.
 
-- [ ] A PR whose DESIGN.md changed on the base after its merge still passes the look check → `tests/test_delivered_design.py::test_a_merged_pr_still_passes_after_the_base_changes_design_md`.
-- [ ] A record carried from an earlier head still backs the PR head after the base changes DESIGN.md → `tests/test_delivered_design.py::test_a_carried_record_still_backs_the_head_after_the_base_changes_design_md`.
-- [ ] Near miss: a record that judged another design than the PR head holds still fails → `tests/test_delivered_design.py::test_a_record_that_judged_another_design_than_the_pr_head_still_fails`. It replaces the last three lines of `test_look_includes_design_docs_in_prompt_record_and_block`, which changed DESIGN.md on the disk after the look and expected a failure; that case now passes by design, and the replacement keeps the stale-record protection.
-- [ ] The design hash of a revision reads the commit, and an unknown commit raises → `tests/test_delivered_design.py::test_the_design_hash_of_a_revision_ignores_the_checkout`.
-- [ ] Cleanup removes `.hard-eng/` without asking for its deletion, and still refuses other ignored work → `tests/test_ship_cleanup.py::test_cleanup_removes_the_proof_folder_instead_of_asking_for_its_deletion`.
-- [ ] Cleanup still refuses private files that other skills keep in `.hard-eng/` → `tests/test_ship_cleanup.py::test_cleanup_keeps_private_files_that_other_skills_put_in_the_proof_folder`.
-- [ ] The design hash reads CRLF text the same from the disk and from a commit → `tests/test_delivered_design.py::test_the_design_hash_reads_crlf_text_the_same_from_the_disk_and_a_commit`.
-- [ ] Cleanup removes nothing while delivered does not pass → `tests/test_ship_cleanup.py::test_cleanup_keeps_the_proof_when_delivered_does_not_pass`.
+- [x] A PR whose DESIGN.md changed on the base after its merge still passes the look check → `tests/test_delivered_design.py::test_a_merged_pr_still_passes_after_the_base_changes_design_md`.
+- [x] A record carried from an earlier head still backs the PR head after the base changes DESIGN.md → `tests/test_delivered_design.py::test_a_carried_record_still_backs_the_head_after_the_base_changes_design_md`.
+- [x] Near miss: a record that judged another design than the PR head holds still fails → `tests/test_delivered_design.py::test_a_record_that_judged_another_design_than_the_pr_head_still_fails`. It replaces the last three lines of `test_look_includes_design_docs_in_prompt_record_and_block`, which changed DESIGN.md on the disk after the look and expected a failure; that case now passes by design, and the replacement keeps the stale-record protection.
+- [x] The design hash of a revision reads the commit, and an unknown commit raises → `tests/test_delivered_design.py::test_the_design_hash_of_a_revision_ignores_the_checkout`.
+- [x] Cleanup removes `.hard-eng/` without asking for its deletion, and still refuses other ignored work → `tests/test_ship_cleanup.py::test_cleanup_removes_the_proof_folder_instead_of_asking_for_its_deletion`.
+- [x] Cleanup still refuses private files that other skills keep in `.hard-eng/` → `tests/test_ship_cleanup.py::test_cleanup_keeps_private_files_that_other_skills_put_in_the_proof_folder`.
+- [x] The design hash reads CRLF text the same from the disk and from a commit → `tests/test_delivered_design.py::test_the_design_hash_reads_crlf_text_the_same_from_the_disk_and_a_commit`.
+- [x] Cleanup removes nothing while delivered does not pass → `tests/test_ship_cleanup.py::test_cleanup_keeps_the_proof_when_delivered_does_not_pass`.
 
 ## Baseline + execution
 
 Result: Passed
-Evidence: On `origin/develop` 4b8f3a45 the new tests fail as intended: three design tests and the cleanup test (two fixture variants) fail, the near miss and the delivered-first guard pass. Static gates and the Ready check are recorded in Verification.
+Evidence: On `origin/develop` 4b8f3a45 the first four new tests failed as intended: three design tests and the cleanup test (two fixture variants) failed, the near miss and the delivered-first guard passed. After the first review the CRLF test and the private-file test were added and failed the same way before their fixes. Static gates and the Ready check are recorded in Verification.
 Execution: One builder in a separate worktree of the repository: tests first, then `look.py`, `look_records.py`, `ui_proof.py`, `ship_actions.py`, then challenge and the Complete check.
 
 ## Risks + recovery
@@ -58,11 +58,11 @@ N/A — hook Python logic has no user interface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — focused tests, static gates, challenge and the Complete check.
+Result: Passed
+Evidence: The 74 test files that mention look, ui_proof, ship_actions or shipping ran once on the fix: 3468 passed and 1 failed (the command-input rule found an f-string inside a subprocess call in `look.py`); that was fixed and the focused files then passed (77 passed). `check --static --plan-stage Ready`, ruff format, ruff lint, annotation rules and pyrefly passed. The independent review found three faults in round one (the whole-folder exemption in cleanup, CRLF text read differently from a commit, a local path in the plan); each was fixed and the unpushed history was rewritten, and round three was clean at 2d41b6e1. The Complete check result is in the pull request.
 E2E: N/A — CLI shipping check with no interactive journey; the tests build real git repositories and worktrees.
 Real service: N/A — no changed code calls an outside service.
-Retro: Pending
+Retro: `ship --stage delivered` judged a merged PR's look record with the design file of the checkout that ran it, and cleanup asked the user to delete the folder that delivered needs, so a merged UI PR could never pass delivered. The design hash now has one owner that can read a commit, the ship readers pass the PR head, and cleanup treats only Hard Eng's own files in `.hard-eng/` as its own. Escaped bug: found on the base branch; the red tests above are its repro and its fix is in this PR.
 
 Delivery target: PR
 Delivery: Pending — checks, challenge, PR to `develop`, CI and merge.
