@@ -501,3 +501,87 @@ def test_a_judgement_item_stays_on_the_list_when_a_measured_item_leaves_it(
     assert "image-1.png: the card sits left [judgement]" in earlier
     assert "Hint [colour]" not in earlier
     assert record["outcome"] == "clean"
+
+
+NOTE = "Hard Eng: look: the rules are intended."
+
+
+@pytest.mark.parametrize("outcome", ["findings", "clean", "not done"])
+def test_a_findings_run_ends_with_the_line_about_the_rules(
+    outcome: str, tmp_path: Path, project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import look
+    import ui_measure
+
+    images = make_images(project, 1)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values())
+    answers = {
+        "findings": answer_with(
+            "image-1.png: the card sits left [judgement] Fix: centre it"
+        ),
+        "clean": good_answer(1),
+        "not done": "no verdict line",
+    }
+    install_agent(tmp_path, "claude", 1, answers[outcome])
+    look.look_command(project, ["--host", "codex", *map(str, images)])
+    lines = capsys.readouterr().out.splitlines()
+    if outcome != "findings":
+        assert not any(line.startswith(NOTE) for line in lines)
+        return
+    assert lines[-1].startswith(NOTE)
+    for words in (
+        "also on parts this change did not touch",
+        "contradicts a measured value, the markup or a quoted DESIGN.md line",
+        "send that record line to the maintainer",
+        "No declined, answered or skip line exists",
+    ):
+        assert words in lines[-1]
+    assert len([line for line in lines if line.startswith(NOTE)]) == 1
+
+
+@pytest.mark.parametrize(
+    ("change", "named"),
+    [
+        ("design", "DESIGN.md"),
+        ("plan scope", "the plan's Outcome + scope"),
+        ("ring boxes", ""),
+    ],
+)
+def test_a_changed_input_is_named_before_all_images_are_reviewed_again(
+    change: str,
+    named: str,
+    tmp_path: Path,
+    project: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import look
+    import ui_measure
+    from test_look import full_plan
+    from test_look_carry import clean_look_then_new_head
+
+    images, old, _ = clean_look_then_new_head(tmp_path, project, plan=True)
+    if change == "design":
+        (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    elif change == "plan scope":
+        plan = project / "features/kpi-board/PLAN.md"
+        plan.write_text(full_plan("A KPI board with two cards."))
+    else:
+        box = {"x": 1, "y": 2, "w": 30, "h": 40}
+        ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[box])
+    (project / "notes.txt").write_text(f"{change}\n")
+    commit(project, f"change: {change}")
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    capsys.readouterr()
+    look.look_command(
+        project,
+        ["--host", "claude", "--plan", "features/kpi-board/PLAN.md", *map(str, images)],
+    )
+    out = capsys.readouterr().out
+    if not named:
+        assert "does not carry" not in out
+        return
+    assert (
+        f"Hard Eng: look: {named} changed since {old[:12]}, so the clean verdict of "
+        "that head does not carry. All 1 images are reviewed again." in out
+    )
+    assert out.index("does not carry") < out.index("Look review by")
