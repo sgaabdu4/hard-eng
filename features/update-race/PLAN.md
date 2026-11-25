@@ -1,6 +1,6 @@
 # Stop a hook's child from failing the background update
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -36,16 +36,16 @@ Lock question (brief step 1), answered by real runs: the exclusive lock is taken
 
 Proof that the writer is inside Hard Eng's control: the child starts inside the update's own commits and worktree creation, in a worktree that Hard Eng made and owns. A process of another account cannot be stopped and stays; then the error still shows and is not hidden.
 
-- [ ] A child left by a project's post-commit hook does not fail the update, and no private folder or worktree stays → `tests/test_update_race.py::test_a_hook_child_in_the_private_worktree_does_not_fail_the_update`.
-- [ ] The same for the check of the update branch → `tests/test_update_race.py::test_the_check_of_the_update_branch_leaves_no_child_in_its_worktree`.
-- [ ] Two session starts at the same moment end with one update commit, one ready result and no failure line, with the same hook child → `tests/test_update_race.py::test_two_session_starts_together_run_one_update_and_print_no_failure`.
-- [ ] A child that a stopped process forks while the stop runs is stopped too → `tests/test_update_race.py::test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile`.
-- [ ] A scan that takes longer than the wait still signals what it found, once per signal → `tests/test_update_race.py::test_a_slow_scan_still_signals_the_processes_that_it_found`.
-- [ ] A host that cannot list processes still lets the removal go on → `tests/test_update_race.py::test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on`.
-- [ ] A process of another account does not hide the update's own processes from the stop → `tests/test_update_race.py::test_a_process_of_another_account_does_not_hide_ours`.
-- [ ] The private worktree stays locked until its processes are stopped, so an interrupted update leaves it to the stale sweep with its owner → `tests/test_update_race.py::test_the_private_worktree_is_unlocked_only_after_its_processes_stop`.
-- [ ] A clean update still starts detached, and a running update is reported, not duplicated → `tests/test_update_runner.py::test_start_detaches_worker_without_inherited_pipes` and `tests/test_update_runner.py::test_running_update_is_reported_not_duplicated` (existing, unchanged).
-- [ ] The tidy keeps its answer about busy worktrees after `open_paths` moved onto `open_files` → `tests/test_tidy.py::test_an_unreadable_process_counts_as_unknown_only_for_another_person` (existing, unchanged).
+- [x] A child left by a project's post-commit hook does not fail the update, and no private folder or worktree stays → `tests/test_update_race.py::test_a_hook_child_in_the_private_worktree_does_not_fail_the_update`.
+- [x] The same for the check of the update branch → `tests/test_update_race.py::test_the_check_of_the_update_branch_leaves_no_child_in_its_worktree`.
+- [x] Two session starts at the same moment end with one update commit, one ready result and no failure line, with the same hook child → `tests/test_update_race.py::test_two_session_starts_together_run_one_update_and_print_no_failure`.
+- [x] A child that a stopped process forks while the stop runs is stopped too → `tests/test_update_race.py::test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile`.
+- [x] A scan that takes longer than the wait still signals what it found, once per signal → `tests/test_update_race.py::test_a_slow_scan_still_signals_the_processes_that_it_found`.
+- [x] A host that cannot list processes still lets the removal go on → `tests/test_update_race.py::test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on`.
+- [x] A process of another account does not hide the update's own processes from the stop → `tests/test_update_race.py::test_a_process_of_another_account_does_not_hide_ours`.
+- [x] The private worktree stays locked until its processes are stopped, so an interrupted update leaves it to the stale sweep with its owner → `tests/test_update_race.py::test_the_private_worktree_is_unlocked_only_after_its_processes_stop`.
+- [x] A clean update still starts detached, and a running update is reported, not duplicated → `tests/test_update_runner.py::test_start_detaches_worker_without_inherited_pipes` and `tests/test_update_runner.py::test_running_update_is_reported_not_duplicated` (existing, unchanged).
+- [x] The tidy keeps its answer about busy worktrees after `open_paths` moved onto `open_files` → `tests/test_tidy.py::test_an_unreadable_process_counts_as_unknown_only_for_another_person` (existing, unchanged).
 
 ## Baseline + execution
 
@@ -63,11 +63,11 @@ N/A — hook Python logic has no user interface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — focused tests, static gates, challenge and the Complete check.
+Result: Passed
+Evidence: The new test file and its neighbors (tidy, update runner, update PR) passed: 160 tests before the last review fix, and the new file again after it (8 passed). `check --static --plan-stage Ready`, ruff format, lint, annotations and pyrefly passed. The independent review found five faults in round one and one in round two (each fixed with a test that failed on the earlier code); round three was clean at 8d1a53ef. The Complete check result is in the pull request.
 E2E: N/A — background hook with no interactive journey; the tests start real supervisor and update processes over real git worktrees.
 Real service: N/A — no changed code calls an outside service.
-Retro: Pending
+Retro: Session start printed `Hard Eng update failed: [Errno 66] Directory not empty` because the update removed its private worktree while a child of a git hook still wrote there, and the supervisor stops leftover children only after the update has exited. The lock was not at fault, and a second start already reports that an update is running. `candidate_worktree` is now the one owner of that worktree, and it stops what runs inside before removal. Escaped bug: found on the base branch; the red tests above are its repro.
 
 Delivery target: Merge
 Delivery: Pending — checks, challenge, PR to `develop`, CI and merge.
