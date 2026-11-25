@@ -1,6 +1,7 @@
 """The measured facts of one image, by element: what the reviewer reads, and the checks that code decides."""
 
 import re
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
@@ -203,30 +204,40 @@ def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
             continue
         w, h, floor = _num(row.get("w")), _num(row.get("h")), _num(row.get("floor"))
         under = row.get("under") is True
+        exempt = row.get("exempt") is True
         size = f"{_shown(w)}x{_shown(h)} px"
         key = fact_key(row.get("at"))
+        state = (
+            f"inline link, exempt from the {_shown(floor)} px floor"
+            if exempt
+            else f"{'under' if under else 'at or over'} {_shown(floor)} px"
+        )
         found.append(
             Fact(
                 key,
                 not under,
                 min(w, h) - floor,
-                f"{key}: {size}, "
-                + (
-                    f"under {_shown(floor)} px"
-                    if under
-                    else f"at or over {_shown(floor)} px"
-                ),
-                f"control is {size}, {'under' if under else 'at or over'} its {_shown(floor)} px floor",
+                f"{key}: {size}, {state}",
+                f"control is {size}, exempt from its {_shown(floor)} px floor as a link in a sentence"
+                if exempt
+                else f"control is {size}, {'under' if under else 'at or over'} its {_shown(floor)} px floor",
             )
         )
     return found
 
 
 def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
-    rows = [row for row in _rows(measured, "texts") if "weight" in row]
+    rows = [
+        row
+        for row in _rows(measured, "texts")
+        if "weight" in row and fact_key(row.get("at")) != NO_NAME
+    ]
     weights: dict[str, set[float]] = {}
+    seen: Counter[str] = Counter()
     for row in rows:
-        weights.setdefault(fact_key(row.get("at")), set()).add(_num(row.get("weight")))
+        key = fact_key(row.get("at"))
+        seen[key] += 1
+        weights.setdefault(key, set()).add(_num(row.get("weight")))
     near: dict[str, set[str]] = {}
     for gap in _rows(measured, "gaps"):
         first, second = fact_key(gap.get("at")), fact_key(gap.get("to"))
@@ -237,7 +248,7 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     for row in rows:
         name, weight = fact_key(row.get("at")), _num(row.get("weight"))
         others = sorted(near.get(name, set()) - {name})
-        shared = any(len(weights[key]) > 1 for key in (name, *others))
+        shared = any(seen[key] > 1 for key in (name, *others))
         ok = (
             None
             if not others or shared
@@ -415,9 +426,11 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
 
 
 def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozenset[str]]:
-    """The keys of one image for each measured kind: the exact texts that an item of that kind may name."""
+    """The keys of one image for each measured kind: the exact texts that an item of that kind may name. A fact that code cannot decide has no key, so an item on it is a judgement item."""
     return {
-        kind: frozenset(fact.key for fact in build(measured, tokens))
+        kind: frozenset(
+            fact.key for fact in build(measured, tokens) if fact.ok is not None
+        )
         for kind, build in FACTS.items()
     }
 

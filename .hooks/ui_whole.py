@@ -387,7 +387,7 @@ def mixed_token_note(
         if name.endswith(STYLE_SUFFIXES)
         and inside(name, ui_paths)
         and not token_file(name, text)
-        and MIXED_TOKENS.search(CSS_COMMENT.sub("", text))
+        and MIXED_TOKENS.search(code_of(text))
     ]
     return [
         f"{name} holds @theme tokens and other rules, so it is not a token file and {DESIGN_NAME} is not compared with it; "

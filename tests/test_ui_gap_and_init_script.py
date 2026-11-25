@@ -73,3 +73,30 @@ def test_a_capture_keeps_the_route_init_script_beside_the_hold_script(
         == 1
     )
     assert "gone.js" in capfd.readouterr().err
+
+
+WRAPPED_PAGE = (
+    "<main><div style='width:302px;margin:0 auto;font:10px monospace'>"
+    + "x" * 50
+    + " tail</div></main>"
+)
+
+
+def test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/wrapped.html").write_text(
+        "<!doctype html><html lang=en><title>Wrapped</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{WRAPPED_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "wrapped")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    rows = [
+        row for row in record["measured"]["texts"] if row["at"].startswith("xxxxxxxx")
+    ]
+    assert [(row["align"], row["centred"]) for row in rows] == [("start", False)]

@@ -513,7 +513,10 @@ const centredIn = (el, s) => {
   const t = range.getBoundingClientRect(), p = parent.getBoundingClientRect(), ps = getComputedStyle(parent);
   const left = p.left + parseFloat(ps.paddingLeft) + parseFloat(ps.borderLeftWidth);
   const right = p.right - parseFloat(ps.paddingRight) - parseFloat(ps.borderRightWidth);
-  return Math.abs((t.left + t.right) / 2 - (left + right) / 2) <= 2 && (s.textAlign === "center" || t.width < right - left - 4);
+  const middle = (left + right) / 2;
+  const lines = [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1);
+  if (s.textAlign !== "center" && !lines.every((r) => Math.abs((r.left + r.right) / 2 - middle) <= 2)) return false;
+  return Math.abs((t.left + t.right) / 2 - middle) <= 2 && (s.textAlign === "center" || t.width < right - left - 4);
 };
 const textFacts = new Map();
 for (const el of texts) {
