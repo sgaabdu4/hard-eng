@@ -295,18 +295,20 @@ def _single_local_look_problem(
 
 def _newest_look_problem(
     clean: list[tuple[int, set[str]]],
-    stray: list[set[str]],
+    stray: list[tuple[int, set[str]]],
     route_hashes: list[set[str]],
     opened_problem: Callable[[set[str]], str | None],
 ) -> str | None:
-    """Each route is judged by the newest clean look record that covers it, so a later `look` on the clean captures replaces an earlier one that held strays. A refused record of this head is judged by what it opened."""
-    chosen: list[set[str]] = list(stray)
+    """Each route is judged by the newest clean look record that covers it, so a later `look` on the clean captures replaces an earlier one that held strays. A refused record of this head counts only when it is newer than those."""
+    chosen: list[tuple[int, set[str]]] = []
     for hashes in route_hashes:
         covering = [item for item in clean if item[1] & hashes]
         if not covering:
             return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
-        chosen.append(max(covering, key=lambda item: item[0])[1])
-    for opened in chosen:
+        chosen.append(max(covering, key=lambda item: item[0]))
+    cutoff = min(item[0] for item in chosen)
+    chosen += [item for item in stray if item[0] > cutoff]
+    for _, opened in chosen:
         if problem := opened_problem(opened):
             return problem
     return None
@@ -331,7 +333,7 @@ def _local_look_problem(
     expected_design = look.design_hash(root)
     wanted = [name for name, _ in usability_rules()]
     clean: list[tuple[int, set[str]]] = []
-    stray: list[set[str]] = []
+    stray: list[tuple[int, set[str]]] = []
     first_problem: str | None = None
     for path, record in files:
         problem, opened = _single_local_look_problem(
@@ -347,7 +349,7 @@ def _local_look_problem(
         if problem is not None:
             first_problem = first_problem or problem
             if path.stem.rpartition("-")[0] == head and opened:
-                stray.append(opened)
+                stray.append((path.stat().st_mtime_ns, opened))
             continue
         if native:
             return None

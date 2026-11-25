@@ -799,6 +799,7 @@ def look_command(root: Path, argv: list[str]) -> int:
     lacking = lacks_record(root, digests)
     keys = image_keys(root, scope, design, design_digest, digests, lacking)
     if kept := kept_verdict(root, head, digests, keys):
+        record_path(root, head, digests).touch()
         print(
             f"Hard Eng: look: this head already has a {kept['outcome']} verdict for "
             "these images and inputs; a rerun cannot pick another result. Commit a "
