@@ -32,6 +32,7 @@ Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct bef
 - [ ] A check with no run yet counts the same way → `tests/test_delivered_wait.py::test_delivered_waits_for_a_check_that_is_not_done_and_then_passes`.
 - [ ] A failed check fails at once, with no wait → `tests/test_delivered_wait.py::test_delivered_fails_at_once_on_a_failed_check_and_when_a_waited_check_fails`.
 - [ ] A check that is still not done at the limit fails and names the check and the limit → `tests/test_delivered_wait.py::test_delivered_names_the_check_and_the_limit_when_time_ends`.
+- [ ] A failed check fails at once even when a check listed before it has no run yet or is running → `tests/test_delivered_wait.py::test_delivered_fails_at_once_on_a_failed_check_listed_after_one_that_is_not_done`.
 - [ ] The ready stage still fails at once on a pending check → `tests/test_delivered_wait.py::test_ready_does_not_wait_for_a_pending_check`.
 
 ## Baseline + execution
@@ -53,7 +54,7 @@ N/A — hook Python logic has no user interface.
 Result: Pending
 Evidence: Pending
 E2E: N/A — the tests drive `verify` with a fake clock and a fake GitHub.
-Real service: N/A — no changed code calls an outside service in a test.
+Real service: Passed — GitHub API: the changed wait ran one time, read-only, against the public repository's `develop` merge commit of PR 738. With its real two required checks it returned at once with no wait (1.0 s, two calls to the check-runs and push-runs lists). With one check name that no run has, and a 20 second limit, it polled for 21.2 s and then refused with `required check missing: no-such-check; the time limit of 20 seconds (shipping ci_seconds) ended first`. Fields read from the real runs match the test reply: name, status and conclusion are text, id and the check suite id are numbers, the two times are text, the commit is 40 characters, and `output` is an object. No refusal that the code tells apart by its error was caused, because the wait only retries the one pending refusal, which this run caused. Nothing was written.
 Retro: Pending
 
 Delivery target: Merge
