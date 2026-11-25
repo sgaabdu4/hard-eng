@@ -1,5 +1,6 @@
 """The reviewer's answer: the rule line forms it may write, and the Fail lines that cannot stand."""
 
+import re
 from pathlib import Path
 
 import look_answer
@@ -291,3 +292,22 @@ def test_the_prompt_shows_the_count_note_before_the_colon(
     form = prompt.partition("\n\nRules:")[0]
     assert "`- No clutter (kept: 40, removed: 3): Fail. <what you saw>`" in form
     assert "—" not in form
+
+
+ANSWERS = sorted((FIXTURES / "answers").glob("*.txt"))
+
+
+@pytest.mark.parametrize("path", ANSWERS, ids=[path.stem for path in ANSWERS])
+def test_a_real_reviewer_answer_shape_is_read_as_its_file_name_says(path: Path) -> None:
+    text = path.read_text()
+    frames = sorted(
+        set(re.findall(r"^Image (image-\d+\.png)", text, re.MULTILINE))
+    ) or ["image-1.png"]
+    outcome, rules, _ = look_answer.judge(text, frames, dict.fromkeys(frames, True))
+    expected = path.stem.partition("__")[0].replace("-", " ")
+    if expected == "not done":
+        assert outcome.startswith("not done"), outcome
+        assert rules == []
+    else:
+        assert outcome == expected, outcome
+        assert len(rules) == len(judged_rule_names())
