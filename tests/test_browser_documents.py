@@ -36,6 +36,17 @@ def pdf_site(site: str, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
     yield site
 
 
+def refused_as_a_pdf(
+    tmp_path: Path, code: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert code == 1
+    error = capsys.readouterr().err
+    assert "application/pdf" in error
+    assert "no image was kept" in error
+    folder = tmp_path / ".hard-eng/browser"
+    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
+
+
 def test_capture_keeps_no_image_of_a_pdf_it_cannot_mask(
     tmp_path: Path,
     pdf_site: str,
@@ -45,12 +56,7 @@ def test_capture_keeps_no_image_of_a_pdf_it_cannot_mask(
     code = browser.browser_command(
         tmp_path, ["capture", f"{pdf_site}/invoice", "--session", session()]
     )
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "application/pdf" in error
-    assert "no image was kept" in error
-    folder = tmp_path / ".hard-eng/browser"
-    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
+    refused_as_a_pdf(tmp_path, code, capsys)
 
 
 def test_measure_keeps_no_image_of_a_pdf_in_an_open_session(
@@ -144,9 +150,4 @@ def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
     code = browser.browser_command(
         tmp_path, ["capture", f"{pdf_site}/plain.html", "--session", session()]
     )
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "application/pdf" in error
-    assert "no image was kept" in error
-    folder = tmp_path / ".hard-eng/browser"
-    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
+    refused_as_a_pdf(tmp_path, code, capsys)
