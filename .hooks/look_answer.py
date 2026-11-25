@@ -93,7 +93,7 @@ def fail_parts(line: str) -> tuple[list[str], str]:
     for chunk in text[:cut].split(";"):
         starts = [found.start() for found in ITEM_START.finditer(chunk)]
         edges = [0, *starts[1:], len(chunk)]
-        parts.extend(chunk[a:b] for a, b in pairwise(edges))
+        parts.extend(chunk[a:b] for a, b in pairwise(edges) if chunk[a:b].strip())
     return parts, text[cut:]
 
 

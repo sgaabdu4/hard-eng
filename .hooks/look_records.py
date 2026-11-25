@@ -241,10 +241,12 @@ def earlier_findings(
             for item in entries
             if "carried_from" not in item
         }
-        files = [
-            file for file in current if file not in claimed and file in then.values()
+        recorded = {str(item.get("file")) for item in entries}
+        unclaimed = [
+            file for file in current if file not in claimed and file in recorded
         ]
-        claimed.update(files)
+        claimed.update(unclaimed)
+        files = [file for file in unclaimed if file in then.values()]
         if not files or record.get("outcome") != "findings":
             continue
         names = [current[file] for file in files]
