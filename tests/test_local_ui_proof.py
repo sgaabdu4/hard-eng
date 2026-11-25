@@ -183,6 +183,45 @@ def test_local_complete_check_names_every_opened_image_that_matches_no_capture(
     )
 
 
+def test_local_complete_check_passes_again_after_look_runs_on_the_clean_captures_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root, head, after = looked_at_clean_capture(tmp_path, design=DESIGN)
+    stray_look(root, head, after, [b"scratch-0", b"scratch-1"])
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and problem.startswith("2 After images")
+
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
+def test_local_complete_check_counts_the_dirty_capture_when_an_older_set_has_the_same_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design=DESIGN, commit_work=False)
+    head = git(root, "rev-parse", "HEAD").strip()
+    after = write_clean_browser(root, route="/account")
+    older = root / ".hard-eng/browser/old-390.png"
+    older.write_bytes(after)
+    older.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "image": older.name,
+                "sha256": sha_of(after),
+                "width": 390,
+                "findings": [],
+                "route": "/account",
+                "commit": "0" * 40,
+                "dirty": False,
+            }
+        )
+    )
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
 def test_the_quick_check_never_runs_the_local_ui_proof(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
