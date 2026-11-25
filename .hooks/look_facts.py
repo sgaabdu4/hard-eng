@@ -9,6 +9,7 @@ from ui_measure import LIMITS
 
 FACT_BYTES = 1500
 LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
+ZERO = re.compile(r"0+(?:\.0+)?")
 WORD = re.compile(r"\w+")
 
 
@@ -68,11 +69,14 @@ def tokens_from_text(text: str) -> Tokens:
 
 
 def length_scale(tokens: list[str], root_px: float) -> set[int] | None:
-    """The token lengths in px, with rem set from the page's own root size; None when a token is any other form (em, clamp, calc, a variable), which the measure cannot hold exactly."""
+    """The token lengths in px, with rem set from the page's own root size; None when a token is any other form (em, clamp, calc, a variable); a bare 0 is 0 px, which the measure cannot hold exactly."""
     from ui_tokens import half_up
 
     scale: set[int] = set()
     for token in tokens:
+        if ZERO.fullmatch(token.strip()):
+            scale.add(0)
+            continue
         found = LENGTH.fullmatch(token.strip())
         if not found:
             return None
