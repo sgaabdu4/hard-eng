@@ -479,24 +479,46 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
     assert "Measured values" not in prompt
 
     measured: dict[str, object] = {
-        "contrast": [
-            {"at": "p", "ratio": 6.37, "fg": "#1a1a1a", "bg": "#ffffff", "px": 16}
+        "texts": [
+            {
+                "at": "Intro",
+                "px": 16,
+                "weight": 400,
+                "colour": "1a1a1aff",
+                "fill": "",
+                "under": False,
+                "ratio": 6.37,
+                "fg": "#1a1a1a",
+                "bg": "#ffffff",
+            }
         ],
-        "gaps": [{"at": "main", "axis": "y", "gaps": [14, 14]}],
-        "sizes": {"controls": [{"at": "Go", "w": 120, "h": 44}], "text_px": [16, 24]},
-        "radii": [{"at": "Go", "px": 6}],
+        "gaps": [{"at": "Intro", "to": "Go", "axis": "y", "px": 14}],
+        "sizes": {
+            "controls": [
+                {
+                    "at": "Go",
+                    "w": 120,
+                    "h": 44,
+                    "floor": 44,
+                    "under": False,
+                    "exempt": False,
+                }
+            ]
+        },
+        "radii": [{"at": "Go", "px": 6, "clamped": False}],
     }
     ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=measured)
     ui_measure.write_record(project, images[1], 1280, [])
     run_look(project, "codex", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "corner radius 6 px (Go)" in prompt
+    assert "- Go: 6 px" in prompt
     assert "A measured value beats an eye estimate" in prompt
     assert "never fail a rule against a measured pass" in prompt
-    assert "image-1.png: contrast 6.37:1 (#1a1a1a on #ffffff, 16 px)" in prompt
-    assert "gaps 14, 14 px" in prompt
-    assert "control Go 120x44 px" in prompt
-    assert "image-2.png: contrast" not in prompt
+    assert "image-1.png:\ntext size: checked for all 1 text elements" in prompt
+    assert "contrast 6.37:1" in prompt
+    assert "- Intro to Go: 14 px (y)" in prompt
+    assert "- Go: 120x44 px" in prompt
+    assert "image-2.png:\ntext size" not in prompt
 
     images[0].write_bytes(PNG + b"edited-after-capture")
     run_look(project, "codex", images)

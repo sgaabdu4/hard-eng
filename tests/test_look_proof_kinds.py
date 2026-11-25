@@ -226,7 +226,7 @@ def test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer(
     record = run_look(project, "codex", images)
     prompt = prompt_of(log)
     assert set(BOTH) <= set(prompt_rule_names(prompt))
-    assert "corner radius 6 px (Go)" in prompt
+    assert "- Go: 6 px" in prompt
     for name in BOTH:
         assert "looked at it" in stored(record)[name]
 
