@@ -15,6 +15,10 @@ CLAIM = re.compile(
     r"(?i)\d+(?:\.\d+)?\s*(?:px|pt|rem|em)\b|\d+(?:\.\d+)?\s*:\s*1\b|#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b|#(?=\d*[a-f])[0-9a-f]{4}\b|\b(?:rgb|hsl)a?\("
 )
 FRAME = re.compile(r"image-\d+\.png")
+CLAIM_NOTES = {
+    "radius": "Start the note with `square` only when you claim that the corners are square; any other note checks the radius against the tokens",
+    "align": "Start the note with `centred` only when you claim that the text is centred; write `not centred` when you claim that it is not",
+}
 RECHECK_LINE = re.compile(r"(?i)^recheck\s+R(\d+)\s*:\s*(still shown|gone)\b(.*)")
 NUMBER = re.compile(r"\d+")
 COUNT_LIST = r"\d+(?:\s*/\s*\d+)*"
@@ -155,8 +159,8 @@ def key_problem(item: Item, keys: Keys, line: str) -> str | None:
         kind, key, word = found
         return (
             f"not done: `{item.text}` states a claim about a measured element ({word} about {key}). "
-            f"Write it as `{item.frame}: {key} [{kind}] {word}`, with the key copied exactly, "
-            f"so that code checks the claim against the measured value: {line}"
+            f"Write it as `{item.frame}: {key} [{kind}] <note>`, with the key copied exactly, "
+            f"so that code checks the claim against the measured value. {CLAIM_NOTES[kind]}: {line}"
         )
     return None
 

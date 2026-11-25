@@ -89,7 +89,10 @@ def carried_record(
     ):
         return None
     import look
+    import look_dispute
 
+    if not look_dispute.cites_hold(root, head, record):
+        return None
     plan = record.get("plan")
     try:
         rel, scope, digest = (
@@ -163,6 +166,8 @@ def covering_record(
     root: Path, head: str, wanted: dict[str, str]
 ) -> tuple[dict[str, object], set[str]] | None:
     """The clean record of an earlier head that holds the most images with the wanted key (image digest to key), newest first, and the digests it covers."""
+    import look_dispute
+
     best: tuple[tuple[int, int], dict[str, object], set[str]] | None = None
     for path in _record_paths(root):
         record = _read_record(path)
@@ -170,6 +175,7 @@ def covering_record(
             record is None
             or record.get("outcome") != "clean"
             or record.get("head") == head
+            or not look_dispute.cites_hold(root, head, record)
         ):
             continue
         covered = {
