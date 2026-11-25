@@ -546,6 +546,7 @@ def test_a_second_run_at_the_same_head_keeps_the_first_verdict(
     hashes = [hashlib.sha256(image.read_bytes()).hexdigest() for image in images]
     path = look.record_path(project, head, hashes)
     before = path.read_text()
+    os.utime(path, ns=(1, 1))
     other = "findings" if first == "clean" else "clean"
     log = install_agent(
         tmp_path, "claude", 1, answers[other if other != "not done" else "clean"]
@@ -559,6 +560,7 @@ def test_a_second_run_at_the_same_head_keeps_the_first_verdict(
     out = capsys.readouterr().out
     if kept:
         assert path.read_text() == before
+        assert path.stat().st_mtime_ns > 1
         assert not log.exists()
         assert f"already has a {record['outcome']} verdict" in out
         assert code == (0 if record["outcome"] == "clean" else 1)
