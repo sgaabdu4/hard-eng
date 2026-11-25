@@ -196,6 +196,23 @@ def test_local_complete_check_passes_again_after_look_runs_on_the_clean_captures
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
 
+def test_local_complete_check_ignores_a_refused_look_that_an_older_clean_look_outlasts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design=DESIGN)
+    head = git(root, "rev-parse", "HEAD").strip()
+    wrong = write_clean_browser(root, name="wrong", route="/other")
+    write_look(root, head, wrong, design_doc=look.design_hash(root))
+    after = write_clean_browser(root, name="after", route="/account")
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+    write_look(root, head, wrong, design_doc=look.design_hash(root))
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "wrong-390.png" in problem
+
+
 def test_local_complete_check_counts_the_dirty_capture_when_an_older_set_has_the_same_image(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
