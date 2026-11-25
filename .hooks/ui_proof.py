@@ -262,7 +262,11 @@ def _finding_rules(record: Mapping[str, object]) -> str:
 
 
 def _capture_stems(
-    records: list[dict[str, object]], digest: str, head: str, *, allow_dirty: bool = False
+    records: list[dict[str, object]],
+    digest: str,
+    head: str,
+    *,
+    allow_dirty: bool = False,
 ) -> list[str]:
     """The capture sets of the image with this digest: those taken at the head from a clean tree (from any tree when allow_dirty), or every set when none was."""
     stems = list(
