@@ -657,3 +657,61 @@ def test_a_notice_is_for_the_images_to_review_and_the_newest_matching_record_end
     capsys.readouterr()
     look.look_command(project, ["--host", "claude", *map(str, images)])
     assert "does not carry" not in capsys.readouterr().out
+
+
+def test_an_item_with_leading_frame_names_stays_with_the_reviewer(
+    tmp_path: Path,
+) -> None:
+    import look_records
+
+    measured = {
+        "image-1.png": values(texts=[text_fact("Save", 10.5, under=True)]),
+        "image-2.png": values(texts=[text_fact("Save", 14)]),
+    }
+    line = "Design system: Fail — image-1.png, image-2.png: Save [size] Fix: make it bigger."
+    assert look_records.decide_line(line, measured, tokens_of(tmp_path)) == line
+
+
+def test_an_earlier_measured_item_of_an_image_that_is_not_in_this_run_is_not_listed(
+    tmp_path: Path, project: Path
+) -> None:
+    import look_facts
+    import look_records
+    import ui_measure
+    from test_look import judged_rule_names, next_head
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(DESIGN)
+    commit(project, "inputs")
+    images = make_images(project, 2)
+    off = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676", bg="#fff")])
+    for image in images:
+        ui_measure.write_record(project, image, 1280, [], "/kpi", measured=off)
+    both = "image-1.png: Hint [colour]; image-2.png: Hint [colour] Fix: use ink"
+    answer = answer_with(both).replace(
+        "VERDICT: findings", "Image image-2.png: a card\nVERDICT: findings"
+    )
+    install_agent(tmp_path, "claude", 2, answer)
+    assert run_look(project, "codex", images)["outcome"] == "findings"
+    next_head(project)
+    held = values(texts=[text_fact("Hint")])
+    ui_measure.write_record(project, images[1], 1280, [], "/kpi", measured=held)
+    import hashlib
+
+    digest = hashlib.sha256(images[1].read_bytes()).hexdigest()
+    listed, fails = look_records.earlier_findings(
+        project,
+        git_head(project),
+        [("image-1.png", images[1].name, digest)],
+        judged_rule_names(),
+        {"image-1.png": held},
+        look_facts.design_tokens(project),
+    )
+    assert listed == []
+    assert fails == []
+
+
+def git_head(project: Path) -> str:
+    from conftest import git
+
+    return git(project, "rev-parse", "HEAD").strip()
