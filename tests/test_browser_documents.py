@@ -1,5 +1,6 @@
 import json
-from collections.abc import Generator
+import subprocess
+from collections.abc import Callable, Generator
 from pathlib import Path
 from types import ModuleType
 
@@ -94,3 +95,58 @@ def test_capture_replaces_a_pdf_in_a_same_origin_frame(
         plain_step(tmp_path, name, "close")
     assert json.loads(shown) == "DIV[frame hidden]"
     assert json.loads(unread) == 0
+
+
+def become_a_pdf_when(
+    browser: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+    trigger: Callable[[tuple[str, ...], str | None], bool],
+) -> None:
+    """Open the PDF in the session once, right before the first step that `trigger` picks, as a page that turns into a PDF would."""
+    original = browser.run_tool
+    fired: list[bool] = []
+
+    def run(
+        tool: str, folder: Path, session: str, *arguments: str, text: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        if not fired and trigger(arguments, text):
+            fired.append(True)
+            browser.require(original(tool, folder, session, "open", url))
+            browser.require(
+                original(tool, folder, session, "wait", "--load", "networkidle")
+            )
+        return original(tool, folder, session, *arguments, text=text)
+
+    monkeypatch.setattr(browser, "run_tool", run)
+
+
+def drawing(arguments: tuple[str, ...], text: str | None) -> bool:
+    return arguments[:1] == ("eval",) and "data-he-ring" in (text or "")
+
+
+def shooting(arguments: tuple[str, ...], text: str | None) -> bool:
+    del text
+    return arguments[:1] == ("screenshot",)
+
+
+@pytest.mark.parametrize("trigger", [drawing, shooting], ids=["before", "during"])
+def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
+    tmp_path: Path,
+    pdf_site: str,
+    browser: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    trigger: Callable[[tuple[str, ...], str | None], bool],
+) -> None:
+    page(tmp_path, "plain.html", "<p>Statement</p>")
+    become_a_pdf_when(browser, monkeypatch, f"{pdf_site}/invoice", trigger)
+    code = browser.browser_command(
+        tmp_path, ["capture", f"{pdf_site}/plain.html", "--session", session()]
+    )
+    assert code == 1
+    error = capsys.readouterr().err
+    assert "application/pdf" in error
+    assert "no image was kept" in error
+    folder = tmp_path / ".hard-eng/browser"
+    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
