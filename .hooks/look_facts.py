@@ -18,6 +18,9 @@ NOT_CENTRED = re.compile(
     r"(?i)\b(?:not\s+cent(?:red|ered)|uncent(?:red|ered)|off[- ]cent(?:re|er)(?:d)?)\b"
 )
 CENTRED = re.compile(r"(?i)\bcent(?:red|ered)\b")
+NOTE_SQUARE = re.compile(r"(?i)\s*(?:square|squared|sharp)\b")
+NOTE_CENTRED = re.compile(r"(?i)\s*cent(?:red|ered)\b")
+SQUARE_LAST = 1e9
 
 
 class Tokens(NamedTuple):
@@ -326,13 +329,24 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     for row in _rows(measured, "radii"):
         px = int(_num(row.get("px")))
         corners = corners_of(row)
-        round_corners = {corner for corner in corners if corner}
+        key = fact_key(row.get("at"))
+        if not any(corners):
+            if key != NO_NAME:
+                found.append(
+                    Fact(
+                        key,
+                        True,
+                        SQUARE_LAST,
+                        f"{key}: 0 px (square)",
+                        "corner radius 0 px, square, is not judged against the rounded tokens",
+                    )
+                )
+            continue
         ok = (
             None
             if scale is None or row.get("clamped") is not False
-            else all(corner in scale for corner in round_corners or {0})
+            else all(corner in scale for corner in {c for c in corners if c})
         )
-        key = fact_key(row.get("at"))
         found.append(
             Fact(
                 key,
@@ -340,17 +354,15 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 0 if ok is False else px,
                 f"{key}: {px} px"
                 + (" (clamped by its box)" if row.get("clamped") else "")
-                + _corner_note(px, corners),
+                + _corner_note(corners),
                 f"corner radius {px} px {'is' if ok else 'is not'} a rounded token",
             )
         )
     return found
 
 
-def _corner_note(px: int, corners: list[int]) -> str:
-    if len(set(corners)) > 1:
-        return f" (corners {', '.join(map(str, corners))})"
-    return "" if px else " (square)"
+def _corner_note(corners: list[int]) -> str:
+    return f" (corners {', '.join(map(str, corners))})" if len(set(corners)) > 1 else ""
 
 
 FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
@@ -453,7 +465,13 @@ def _covered(
         return (
             f"{kind}: no {word} tokens in DESIGN.md, so code does not decide {plural}"
         )
-    return f"{kind}: checked for all {count} {things} against {len(held)} {name}: {outside} outside them"
+    squares = sum(fact.margin == SQUARE_LAST for fact in facts)
+    note = (
+        f"; {squares} square, judged only by a claim that the corners are square"
+        if squares
+        else ""
+    )
+    return f"{kind}: checked for all {count - squares} {things} against {len(held)} {name}: {outside} outside them{note}"
 
 
 NOTES = {
@@ -506,10 +524,10 @@ def claim_in(
 
 
 def claimed_state(kind: str, claim: str) -> str:
-    """The state that an item of a measured kind claims in its note: `square` for a radius, `centred` for an alignment, else an empty text, which keeps the old meaning of the kind."""
-    if kind == "radius" and SQUARE.search(claim):
+    """The state that an item of a measured kind claims: `square` for a radius and `centred` for an alignment, only when its note starts with that word. Any other note, such as `should be centred` or `isn't centred`, keeps the old meaning of the kind, so a word inside a sentence never flips the direction of a claim."""
+    if kind == "radius" and NOTE_SQUARE.match(claim):
         return "square"
-    if kind == "align" and not NOT_CENTRED.search(claim) and CENTRED.search(claim):
+    if kind == "align" and NOTE_CENTRED.match(claim):
         return "centred"
     return ""
 

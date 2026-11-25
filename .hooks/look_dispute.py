@@ -49,15 +49,14 @@ class Found(NamedTuple):
     label: str
     parts: list[str]
     fix: str
-    position: int
 
 
 def problem(text: str) -> ValueError:
     return ValueError(f"look: dispute: {text}")
 
 
-def read_cite(root: Path, spec: str) -> Cite:
-    """The cited lines of a file as committed at HEAD, never the working tree."""
+def read_cite(root: Path, spec: str, rev: str = "HEAD") -> Cite:
+    """The cited lines of a file as committed at the commit (HEAD unless a later head is named), never the working tree."""
     found = CITE.fullmatch(spec)
     if not found:
         raise problem(f"cite `{spec}` must be <path>:<from>-<to>")
@@ -69,7 +68,7 @@ def read_cite(root: Path, spec: str) -> Cite:
     if end - start + 1 > MAX_RANGE_LINES:
         raise problem(f"cite `{spec}`: a range holds at most {MAX_RANGE_LINES} lines")
     listed = subprocess.run(
-        ["git", "ls-tree", "HEAD", "--", path],
+        ["git", "ls-tree", rev, "--", path],
         cwd=root,
         capture_output=True,
         text=True,
@@ -80,7 +79,7 @@ def read_cite(root: Path, spec: str) -> Cite:
     if listed[0] not in PLAIN_FILE:
         raise problem(f"cite `{path}`: not a plain file at HEAD")
     shown = subprocess.run(
-        ["git", "show", f"HEAD:{path}"], cwd=root, capture_output=True, check=True
+        ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, check=True
     )
     lines = shown.stdout.decode("utf-8", errors="replace").splitlines(keepends=True)
     if end > len(lines):
@@ -88,20 +87,22 @@ def read_cite(root: Path, spec: str) -> Cite:
     return Cite(path, start, end, "".join(lines[start - 1 : end]))
 
 
-def locate(record: dict[str, object], item: str) -> Found:
-    """The Fail line and part of this head's record that equal the item; a line from an owner check, a part that code decided and a part under `reviewer_fails` are refused."""
-    rules = cast(list[str], record.get("rules", []))
-    for index, line in enumerate(rules):
+def locate(record: dict[str, object], item: str) -> list[Found]:
+    """Each Fail line of this head's record that holds the item (the same item can stand under two rules); a line from an owner check, a part that code decided and a part under `reviewer_fails` are refused."""
+    found: list[Found] = []
+    for index, line in enumerate(cast(list[str], record.get("rules", []))):
         label, verdict, text, _ = split_rule_line(line)
         parts, fix = fail_parts(line) if verdict == "Fail" else ([], "")
-        for position, part in enumerate(parts):
+        for part in parts:
             if " ".join(part.split()) != item:
                 continue
             if text.startswith(owner_prefixes()):
                 raise problem("an owner check decides this line, not a reviewer")
             if " — code:" in part:
                 raise problem("code decides this item (`— code:`); fix the screen")
-            return Found(index, label, parts, fix, position)
+            found.append(Found(index, label, parts, fix))
+    if found:
+        return found
     for line in cast(list[str], record.get("reviewer_fails", [])):
         if any(" ".join(part.split()) == item for part in fail_parts(line)[0]):
             raise problem("an owner check decides this rule, not a reviewer")
@@ -182,13 +183,13 @@ def verdict_of(answer: str, cites: list[Cite], measured: str) -> tuple[str, str]
 
 
 def ask(
-    root: Path, folder_image: Path, frame: str, prompt: str
+    root: Path, host: str | None, folder_image: Path, frame: str, prompt: str
 ) -> tuple[str, str, str]:
     """The reviewer name, its session digest and its answer; the reviewer must have opened the image."""
     with tempfile.TemporaryDirectory(prefix="hard-eng-dispute-") as temporary:
         folder = Path(temporary).resolve()
         shutil.copyfile(folder_image, folder / frame)
-        reviewer, _, result, why, _ = run_first_reviewer(None, folder, prompt, root)
+        reviewer, _, result, why, _ = run_first_reviewer(host, folder, prompt, root)
         if result is None:
             raise ValueError(f"look: dispute {why}")
         proof = claude_proof if reviewer == "claude" else codex_proof
@@ -202,25 +203,46 @@ def ask(
 
 
 def decided(
-    record: dict[str, object], item: str, found: Found, verdict: str, relied: str
+    record: dict[str, object],
+    item: str,
+    founds: list[Found],
+    verdict: str,
+    relied: str,
 ) -> None:
-    """Set the record: a disproved item leaves its line, and a line with no part left becomes a Pass line that names the evidence."""
+    """Set the record: a disproved item leaves each line that holds it, and a line with no part left becomes a Pass line that names the evidence."""
     if verdict == "stands":
         return
-    kept = [part.strip() for part in found.parts if " ".join(part.split()) != item]
     named = (
         "the measured fact"
         if relied == "measured"
         else f"{relied.rpartition(':')[0]} line {relied.rpartition(':')[2]}"
     )
     rules = cast(list[str], record["rules"])
-    rules[found.index] = (
-        f"{found.label}: Fail — {'; '.join(kept)} {found.fix}"
-        if kept
-        else f"{found.label}: Pass — evidence checked: {item}; disproved by {named}"
-    )
+    for found in founds:
+        kept = [part.strip() for part in found.parts if " ".join(part.split()) != item]
+        rules[found.index] = (
+            f"{found.label}: Fail — {'; '.join(kept)} {found.fix}"
+            if kept
+            else f"{found.label}: Pass — evidence checked: {item}; disproved by {named}"
+        )
     failed = any(split_rule_line(line)[1] == "Fail" for line in rules)
     record["outcome"] = "findings" if failed else "clean"
+
+
+def cites_hold(root: Path, head: str, record: dict[str, object]) -> bool:
+    """True when each disproved dispute of the record still has its cited bytes at this head; a clean record that rests on a dispute carries to a later head only while they hold."""
+    for entry in cast(list[dict[str, object]], record.get("disputes", [])):
+        if entry.get("verdict") != "disproved":
+            continue
+        for cite in cast(list[dict[str, object]], entry.get("cites", [])):
+            spec = f"{cite['path']}:{cite['from']}-{cite['to']}"
+            try:
+                now = read_cite(root, spec, head)
+            except ValueError:
+                return False
+            if hashlib.sha256(now.text.encode()).hexdigest() != cite["sha256"]:
+                return False
+    return True
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -241,18 +263,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def dispute_command(root: Path, argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="hard-eng.py look")
-    parser.add_argument("images", nargs="+")
-    add_arguments(parser)
-    args = parser.parse_args(argv)
-    if not args.dispute:
-        raise problem("name the Fail item with --dispute")
-    return dispute(root, args)
-
-
 def dispute(root: Path, args: argparse.Namespace) -> int:
     images = look.image_files(args.images)
+    if args.plan or args.all:
+        raise problem("--plan and --all do not apply to a dispute")
     if not args.cite or len(args.cite) > MAX_CITES:
         raise problem(
             f"cite at least one and at most {MAX_CITES} cites, `--cite <path>:<from>-<to>`"
@@ -282,7 +296,7 @@ def dispute(root: Path, args: argparse.Namespace) -> int:
     prompt = PROMPT.format(
         image=frame, item=item, cites=cites_text(cites), measured=measured
     )
-    reviewer, session, answer = ask(root, image, frame, prompt)
+    reviewer, session, answer = ask(root, args.host, image, frame, prompt)
     verdict, relied = verdict_of(answer, cites, measured)
     decided(record, item, found, verdict, relied)
     record["disputes"] = [
