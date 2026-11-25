@@ -11,6 +11,7 @@ import pytest
 from test_browser import Site, plain_step, session
 from test_ui_quality import pair
 from ui_capture import WIDTHS, capture
+from ui_measure import LIMITS
 
 AUDIT_FAULTS = {
     "competing-same-colour": (
@@ -188,11 +189,19 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
         )
 
 
-QUIET_SECONDS = 0.8
+SETTLED = (
+    "(async () => { for (;;) { const log = window.__heRequests || []; "
+    "const last = Math.max(0, ...log.map((e) => e.end)); "
+    "if ((window.pressed || 0) >= PRESSES && log.every((e) => e.end > 0) "
+    "&& performance.now() - last >= QUIET) return true; "
+    "await new Promise((go) => setTimeout(go, 25)); } })()"
+)
 LOAD_WAVE = "Promise.all([0,1].map((i) => fetch('/step.json?l=' + i)));"
 PRESS = (
-    "(async () => { await fetch('/session', { method: 'POST' }); "
-    "await fetch('/step.json?p=' + Date.now()); })()"
+    "(async () => { (window.pressTimes ||= []).push(performance.timeOrigin + performance.now()); "
+    "await fetch('/session', { method: 'POST' }); "
+    "await fetch('/step.json?p=' + Date.now()); "
+    "window.pressed = (window.pressed || 0) + 1; })()"
 )
 CHAIN = (
     "(async () => { for (let i = 0; i < 4; i++) "
@@ -262,6 +271,26 @@ def finished(tmp_path: Path, name: str) -> None:
             return
         time.sleep(0.5)
     raise AssertionError("the page chain did not finish")
+
+
+def settled(tmp_path: Path, name: str, presses: int = 0) -> None:
+    """Wait on the page itself until `presses` presses have finished and no fetch has run for longer than the quiet limit."""
+    script = SETTLED.replace("PRESSES", str(presses)).replace(
+        "QUIET", str(LIMITS["action_quiet_ms"] + 100)
+    )
+    plain_step(tmp_path, name, "eval", script)
+
+
+def press_clicks(tmp_path: Path, browser: ModuleType, name: str, buttons: str) -> None:
+    """Click each button once, each after the page is quiet, then log the action times that the page saw, so the measure does not depend on how fast the click command ran."""
+    settled(tmp_path, name)
+    for count, button in enumerate(buttons, 1):
+        plain_step(tmp_path, name, "click", f"#{button}")
+        settled(tmp_path, name, count)
+    times = json.loads(plain_step(tmp_path, name, "eval", "window.pressTimes"))
+    browser.actions_file(browser.output_folder(tmp_path), name).write_text(
+        "".join(f"{int(stamp) - 1} click\n" for stamp in times)
+    )
 
 
 def measured(
@@ -443,10 +472,7 @@ def test_each_press_is_measured_apart_from_the_load(
     name = session()
     open_board(tmp_path, site, name, "presses")
     try:
-        for button in "abc":
-            time.sleep(QUIET_SECONDS)
-            plain_step(tmp_path, name, "click", f"#{button}")
-        time.sleep(QUIET_SECONDS)
+        press_clicks(tmp_path, browser, name, "abc")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
@@ -463,10 +489,7 @@ def test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late(
     name = session()
     open_board(tmp_path, site, name, "late")
     try:
-        for button in "abc":
-            time.sleep(QUIET_SECONDS)
-            plain_step(tmp_path, name, "click", f"#{button}")
-        time.sleep(QUIET_SECONDS)
+        press_clicks(tmp_path, browser, name, "abc")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
@@ -496,9 +519,9 @@ def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
     name = session()
     open_board(tmp_path, site, name, "chain")
     try:
-        time.sleep(QUIET_SECONDS)
+        settled(tmp_path, name)
         plain_step(tmp_path, name, "click", "body")
-        time.sleep(2)
+        settled(tmp_path, name)
         plain_step(tmp_path, name, "click", "#go")
         finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 2")]
@@ -514,7 +537,7 @@ def test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterf
     name = session()
     open_board(tmp_path, site, name, "gap")
     try:
-        time.sleep(QUIET_SECONDS)
+        settled(tmp_path, name)
         plain_step(tmp_path, name, verb, "body")
         finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
