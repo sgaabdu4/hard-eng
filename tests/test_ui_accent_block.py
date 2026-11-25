@@ -5,7 +5,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from test_ui_quality import pair
+from test_ui_quality import button, pair
 from ui_capture import WIDTHS, capture
 
 
@@ -38,11 +38,55 @@ def words(*colours: str) -> str:
     )
 
 
+INK = "rgb(43, 27, 23)"
+TILE = "rgb(107, 63, 88)"
+BAR = "rgb(86, 57, 51)"
+
+
+def tile(size: int, fill: str) -> str:
+    return f"<span style='display:inline-block;width:{size}px;height:{size}px;background:{fill}'></span>"
+
+
+def badge(fill: str) -> str:
+    return f"<span style='background:{fill};color:#fff;padding:4px'>Late</span>"
+
+
+def outline(text: str, border: str, label: str) -> str:
+    return (
+        "<button style='min-height:44px;min-width:100px;font-size:16px;"
+        f"background:transparent;color:{text};border:1px solid {border}'>{label}</button>"
+    )
+
+
+PAGE_INK = {
+    "list-row": screen(
+        "<ul style='margin:0;padding:0;list-style:none'><li>"
+        f"<p style='margin:0'>Unit 4 status</p>{tile(22, TILE)}"
+        f"<div>{outline(BAR, BAR, 'Edit')}{outline(INK, '#ccc', 'Close')}</div></li></ul>"
+    ),
+    "panel": screen(
+        f"<section><h2 style='margin:0;color:{INK}'>Pick one</h2>{tile(36, 'rgb(134, 101, 28)')}"
+        f"<div>{outline(INK, '#ccc', 'Yes')}{outline(INK, '#ccc', 'No')}"
+        f"{button(BAR, 'Save')}</div></section>"
+    ),
+}
+
+
 def page(tmp_path: Path, body: str) -> None:
     (tmp_path / "pages/block.html").write_text(
         "<!doctype html><html lang=en><title>Block</title>"
         f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{body}</body>"
     )
+
+
+@pytest.mark.parametrize("body", PAGE_INK.values(), ids=PAGE_INK)
+def test_the_page_ink_text_is_not_an_accent(
+    tmp_path: Path, site: str, browser: ModuleType, body: str
+) -> None:
+    page(tmp_path, body)
+    found = capture(browser, tmp_path, site, "block")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
 
 
 def test_a_tab_bar_in_the_page_container_does_not_count_the_whole_page(
@@ -69,6 +113,18 @@ STILL_COUNTED = {
     "wrapper-in-tab-bar": screen(
         f"<div>{tab('#563933', 'Open')}{tab('#2b1b17', 'Closed')}"
         f"<section>{words('#b00', '#060', '#00b')}</section></div>"
+    ),
+    "three-accents-and-ink": screen(
+        f"<div><p style='margin:0'>Rent due</p>{badge('#b00')}{tile(22, '#060')}"
+        f"{pair('#00b', 'transparent')}</div>"
+    ),
+    "hued-text-not-the-ink": screen(
+        f"<div><p style='margin:0;color:#5a3a10'>Rent due</p>{tile(22, TILE)}"
+        f"{pair(BAR, 'transparent')}</div>"
+    ),
+    "ink-as-a-fill": screen(
+        f"<div><p style='margin:0'>Rent due</p>{tile(22, INK)}{tile(22, TILE)}"
+        f"{pair(BAR, 'transparent')}</div>"
     ),
 }
 
