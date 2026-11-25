@@ -34,19 +34,21 @@ Decisions made here, each with a reason:
 
 ## Acceptance + steps
 
-- [ ] The reviewer sessions run from their own module with the same behavior → `tests/test_look.py::test_look_falls_back_to_a_fresh_same_agent_session`
-- [ ] A claim form about a keyed element is refused as a judgement item and accepted as a measured item; each near miss stays → `tests/test_look_claims.py::test_a_claim_about_a_keyed_element_must_be_a_measured_item`
-- [ ] A claim that text is centred is disproved by a measured start, and left with the reviewer when it is centred; a not-centred claim keeps its meaning → `tests/test_look_claims.py::test_a_centred_claim_is_checked_in_its_own_direction`
-- [ ] A square claim is disproved by a measured radius, kept when all corners are 0, and kept when 0 is a token → `tests/test_look_claims.py::test_a_square_claim_is_checked_against_the_corners_of_its_element`
-- [ ] A square chip group is recorded with its corners at 0 and fails in code; the same group at 6 px passes → `tests/test_ui_corner_facts.py::test_square_chips_are_recorded_and_decided_from_their_own_corners`
-- [ ] A square control adds no token fault → `tests/test_look_claims.py::test_a_square_control_adds_no_token_fault`
-- [ ] The five Fails that the evidence confirms stay after a dispute, and each dispute is recorded → `tests/test_look_dispute.py::test_a_fail_that_stands_stays_and_the_dispute_is_recorded`
-- [ ] The four Fails that cited evidence disproves leave the record, and the head turns clean → `tests/test_look_dispute.py::test_a_disproved_item_leaves_the_record_and_does_not_return_on_a_new_head`
-- [ ] The reviewer gets only the item, the image, the cited bytes and the measured facts → `tests/test_look_dispute.py::test_the_dispute_prompt_holds_only_the_item_the_image_and_the_cited_bytes`
-- [ ] A dispute with a missing file, a missing line, no cite, a working-tree-only edit, a code item or an owner line is refused and changes nothing → `tests/test_look_dispute.py::test_a_dispute_that_cites_nothing_real_is_refused`
-- [ ] An answer that relies on a line outside the cited ranges is not done and changes nothing → `tests/test_look_dispute.py::test_an_answer_that_relies_on_an_uncited_line_changes_nothing`
-- [ ] One decided dispute for each item and head, and a plan line that says declined changes nothing → `tests/test_look_dispute.py::test_a_head_decides_one_dispute_for_each_item_and_a_plan_line_clears_nothing`
-- [ ] The findings note names the dispute route → `tests/test_look_facts.py::test_findings_note_names_the_dispute_route`
+- [x] The reviewer sessions run from their own module with the same behavior → `tests/test_look.py::test_look_falls_back_to_a_fresh_same_agent_session`
+- [x] A claim form about a keyed element is refused as a judgement item and accepted as a measured item; each near miss stays → `tests/test_look_claims.py::test_a_claim_about_a_keyed_element_must_be_a_measured_item`
+- [x] A claim that text is centred is disproved by a measured start, and left with the reviewer when it is centred; a not-centred claim keeps its meaning → `tests/test_look_claims.py::test_a_centred_claim_is_checked_in_its_own_direction`
+- [x] A square claim is disproved by a measured radius, kept when all corners are 0, and kept when 0 is a token → `tests/test_look_claims.py::test_a_square_claim_is_checked_against_the_corners_of_its_element`
+- [x] A square chip group is recorded with its corners at 0 and fails in code; the same group at 6 px passes → `tests/test_ui_corner_facts.py::test_square_chips_are_recorded_and_decided_from_their_own_corners`
+- [x] A square control adds no token fault → `tests/test_look_claims.py::test_a_square_control_adds_no_token_fault`
+- [x] The five Fails that the evidence confirms stay after a dispute, and each dispute is recorded → `tests/test_look_dispute.py::test_a_fail_that_stands_stays_and_the_dispute_is_recorded`
+- [x] Three Fails that cited evidence disproves leave the record, and the head turns clean → `tests/test_look_dispute.py::test_a_disproved_item_leaves_the_record_and_the_head_turns_clean`
+- [x] A disproved item does not return on a new head → `tests/test_look_dispute.py::test_a_disproved_item_does_not_return_on_a_new_head`
+- [x] The reviewer gets only the item, the image, the cited bytes and the measured facts → `tests/test_look_dispute.py::test_the_dispute_prompt_holds_only_the_item_the_image_and_the_cited_bytes`
+- [x] A dispute with a missing file, a missing line, no cite, an untracked file, a symlink, a code item or an owner line is refused and changes nothing → `tests/test_look_dispute.py::test_a_dispute_that_cites_nothing_real_is_refused` and `tests/test_look_dispute.py::test_a_dispute_on_a_code_item_or_an_owner_line_is_refused`
+- [x] An answer that relies on an uncited line is not done and changes nothing → `tests/test_look_dispute.py::test_an_answer_that_relies_on_an_uncited_line_changes_nothing`
+- [x] One decided dispute for each item and head, and a plan line that says declined changes nothing → `tests/test_look_dispute.py::test_a_head_decides_one_dispute_for_each_item_and_a_plan_line_clears_nothing`
+- [x] The look command lists the dispute flags and routes a dispute → `tests/test_look_dispute.py::test_the_look_command_routes_a_dispute_and_lists_its_flags`
+- [x] The findings note names the dispute route → `tests/test_look_facts.py::test_a_findings_run_ends_with_the_line_about_the_rules`
 
 Steps:
 
