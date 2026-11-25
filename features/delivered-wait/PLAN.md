@@ -1,6 +1,6 @@
 # Let delivered wait for the base branch checks
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -28,12 +28,12 @@ Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct bef
 
 ## Acceptance + steps
 
-- [ ] A check that is queued or running at first, then passes, lets delivered pass after it waited → `tests/test_delivered_wait.py::test_delivered_waits_for_a_check_that_is_not_done_and_then_passes`.
-- [ ] A check with no run yet counts the same way → `tests/test_delivered_wait.py::test_delivered_waits_for_a_check_that_is_not_done_and_then_passes`.
-- [ ] A failed check fails at once, with no wait → `tests/test_delivered_wait.py::test_delivered_fails_at_once_on_a_failed_check_and_when_a_waited_check_fails`.
-- [ ] A check that is still not done at the limit fails and names the check and the limit → `tests/test_delivered_wait.py::test_delivered_names_the_check_and_the_limit_when_time_ends`.
-- [ ] A failed check fails at once even when a check listed before it has no run yet or is running → `tests/test_delivered_wait.py::test_delivered_fails_at_once_on_a_failed_check_listed_after_one_that_is_not_done`.
-- [ ] The ready stage still fails at once on a pending check → `tests/test_delivered_wait.py::test_ready_does_not_wait_for_a_pending_check`.
+- [x] A check that is queued or running at first, then passes, lets delivered pass after it waited → `tests/test_delivered_wait.py::test_delivered_waits_for_a_check_that_is_not_done_and_then_passes`.
+- [x] A check with no run yet counts the same way → `tests/test_delivered_wait.py::test_delivered_waits_for_a_check_that_is_not_done_and_then_passes`.
+- [x] A failed check fails at once, with no wait → `tests/test_delivered_wait.py::test_delivered_fails_at_once_on_a_failed_check_and_when_a_waited_check_fails`.
+- [x] A check that is still not done at the limit fails and names the check and the limit → `tests/test_delivered_wait.py::test_delivered_names_the_check_and_the_limit_when_time_ends`.
+- [x] A failed check fails at once even when a check listed before it has no run yet or is running → `tests/test_delivered_wait.py::test_delivered_fails_at_once_on_a_failed_check_listed_after_one_that_is_not_done`.
+- [x] The ready stage still fails at once on a pending check → `tests/test_delivered_wait.py::test_ready_does_not_wait_for_a_pending_check`.
 
 ## Baseline + execution
 
@@ -51,11 +51,11 @@ N/A — hook Python logic has no user interface.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
+Result: Passed
+Evidence: The new test file and its neighbors (shipping, delivered, CI usage, review bypass, ship actions, delivered design) passed: 271 tests. `check --static --plan-stage Ready` passed. The independent review found two faults in round one (a failed check waited behind an earlier unfinished one, and the real service line was N/A); both are fixed, the first with a test that failed on the earlier code. Round two was clean at c777d835. The Complete check result is in the pull request.
 E2E: N/A — the tests drive `verify` with a fake clock and a fake GitHub.
 Real service: Passed — GitHub API: the changed wait ran one time, read-only, against the public repository's `develop` merge commit of PR 738. With its real two required checks it returned at once with no wait (1.0 s). With one check name that no run has, and a 20 second limit, it polled for 21.2 s and then refused with `required check missing: no-such-check; the time limit of 20 seconds (shipping ci_seconds) ended first`. Fields read from the real runs match the test reply: name, status and conclusion are text, id and the check suite id are numbers, the two times are text, the commit is 40 characters, and `output` is an object. No refusal that the code tells apart by its error was caused, because the wait only retries the one pending refusal, which this run caused. Nothing was written.
-Retro: Pending
+Retro: Delivered failed at once on a base check that was still queued or running, so a client wrapped it in a shell loop. `_stage_checks` is now the one owner of that wait, and `_checks` judges every required check before it reports one as pending. Escaped bug: found on the base branch; the red tests above are its repro.
 
 Delivery target: Merge
 Delivery: Pending — tests, checks, challenge, PR to `develop`, CI and merge.
