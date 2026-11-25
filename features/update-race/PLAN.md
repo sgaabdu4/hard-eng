@@ -39,6 +39,10 @@ Proof that the writer is inside Hard Eng's control: the child starts inside the 
 - [ ] A child left by a project's post-commit hook does not fail the update, and no private folder or worktree stays → `tests/test_update_race.py::test_a_hook_child_in_the_private_worktree_does_not_fail_the_update`.
 - [ ] The same for the check of the update branch → `tests/test_update_race.py::test_the_check_of_the_update_branch_leaves_no_child_in_its_worktree`.
 - [ ] Two session starts at the same moment end with one update commit, one ready result and no failure line, with the same hook child → `tests/test_update_race.py::test_two_session_starts_together_run_one_update_and_print_no_failure`.
+- [ ] A child that a stopped process forks while the stop runs is stopped too → `tests/test_update_race.py::test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile`.
+- [ ] A host that cannot list processes still lets the removal go on → `tests/test_update_race.py::test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on`.
+- [ ] A process of another account does not hide the update's own processes from the stop → `tests/test_update_race.py::test_a_process_of_another_account_does_not_hide_ours`.
+- [ ] The private worktree stays locked until its processes are stopped, so an interrupted update leaves it to the stale sweep with its owner → `tests/test_update_race.py::test_the_private_worktree_is_unlocked_only_after_its_processes_stop`.
 - [ ] A clean update still starts detached, and a running update is reported, not duplicated → `tests/test_update_runner.py::test_start_detaches_worker_without_inherited_pipes` and `tests/test_update_runner.py::test_running_update_is_reported_not_duplicated` (existing, unchanged).
 - [ ] The tidy keeps its answer about busy worktrees after `open_paths` moved onto `open_files` → `tests/test_tidy.py::test_an_unreadable_process_counts_as_unknown_only_for_another_person` (existing, unchanged).
 
@@ -50,7 +54,7 @@ Execution: One builder in a separate worktree of the repository: tests first, th
 
 ## Risks + recovery
 
-`stop_inside` stops processes of the same account that hold a file or folder in the private worktree; the worktree is made and owned by the update, so only its own hook children are there. A host with neither `/proc` nor `lsof` cannot list holders, so nothing is stopped and the old behaviour stays (the error is not hidden). Recovery: revert the merge commit on `develop`.
+`stop_inside` stops processes of the same account that hold a file or folder in the private worktree; the worktree is made and owned by the update, so only its own hook children are there. It signals again each pass, so a child forked meanwhile is caught, and it waits 3 seconds for each signal, under the 10 seconds that the supervisor gives an interrupted update. A host with neither `/proc` nor `lsof`, or a failed `lsof`, cannot list holders, so nothing is stopped and the old behaviour stays (the error is not hidden). Recovery: revert the merge commit on `develop`.
 
 ## ux_reference
 

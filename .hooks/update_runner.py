@@ -721,14 +721,14 @@ def candidate_worktree(
                 )
             yield candidate
         finally:
-            if claim:
-                subprocess.run(
-                    ["git", "worktree", "unlock", str(candidate)],
-                    cwd=root,
-                    check=False,
-                )
             if candidate.exists():
                 stop_inside(candidate)
+                if claim:
+                    subprocess.run(
+                        ["git", "worktree", "unlock", str(candidate)],
+                        cwd=root,
+                        check=False,
+                    )
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", str(candidate)],
                     cwd=root,
