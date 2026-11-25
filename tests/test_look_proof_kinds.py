@@ -250,9 +250,9 @@ def test_an_owner_fail_line_is_not_sent_back_as_an_earlier_fix(
     assert stored(first)["Widths"].startswith("Widths: Fail — measured: ")
 
     images[0].write_bytes(PNG + b"fixed")
-    ui_measure.write_record(project, images[0], 390, [], "/kpi")
     (project / "notes.txt").write_text("the page is fixed\n")
     commit(project, "fix the page")
+    ui_measure.write_record(project, images[0], 390, [], "/kpi")
     assert git(project, "rev-parse", "HEAD").strip()
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
@@ -502,6 +502,7 @@ def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
     first = run_look(project, "codex", images)
     assert stored(first)["Design system"].startswith("Design system: Fail — measured:")
     next_head(project)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
     prompt = prompt_of(log)

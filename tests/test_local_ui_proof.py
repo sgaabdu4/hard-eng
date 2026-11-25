@@ -148,6 +148,16 @@ def test_local_complete_check_refuses_missing_browser_and_look_then_passes(
     validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
 
 
+def looked_at_clean_capture(
+    tmp_path: Path, *, design: str, ux: str = REAL_UX
+) -> tuple[Path, str, bytes]:
+    root = web_change_repo(tmp_path, ux=ux, design=design)
+    head = git(root, "rev-parse", "HEAD").strip()
+    after = write_clean_browser(root, route="/account")
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    return root, head, after
+
+
 def stray_look(root: Path, head: str, after: bytes, strays: list[bytes]) -> None:
     images = cast(list[dict[str, object]], look_record(head, after)["images"])
     images += [
@@ -161,10 +171,7 @@ def test_local_complete_check_names_every_opened_image_that_matches_no_capture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clear_ci(monkeypatch)
-    root = web_change_repo(tmp_path, design="# Design\n\n## Overview\nNavy primary.\n")
-    head = git(root, "rev-parse", "HEAD").strip()
-    after = write_clean_browser(root, route="/account")
-    write_look(root, head, after, design_doc=look.design_hash(root))
+    root, head, after = looked_at_clean_capture(tmp_path, design=DESIGN)
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
     strays = [f"scratch-{number}".encode() for number in range(3)]
@@ -182,9 +189,11 @@ def test_the_quick_check_never_runs_the_local_ui_proof(
     clear_ci(monkeypatch)
     root = web_change_repo(tmp_path, design="# Design\n\n## Overview\nNavy primary.\n")
     ran: list[bool] = []
-    monkeypatch.setattr(
-        local_ui_proof, "validate_local_ui_proof", lambda *_: ran.append(True)
-    )
+
+    def record_run(*_arguments: object) -> None:
+        ran.append(True)
+
+    monkeypatch.setattr(local_ui_proof, "validate_local_ui_proof", record_run)
     validate_rules(root, "origin/main", screens=True, full=False, stage="Complete")
     assert ran == []
     validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
@@ -612,10 +621,9 @@ def test_local_complete_check_accepts_a_capture_of_any_listed_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, surface: str
 ) -> None:
     clear_ci(monkeypatch)
-    root = web_change_repo(tmp_path, ux=surface_ux(surface), design=DESIGN)
-    head = git(root, "rev-parse", "HEAD").strip()
-    after = write_clean_browser(root, route="/account")
-    write_look(root, head, after, design_doc=look.design_hash(root))
+    root, _, _ = looked_at_clean_capture(
+        tmp_path, ux=surface_ux(surface), design=DESIGN
+    )
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
 
