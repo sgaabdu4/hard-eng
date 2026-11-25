@@ -148,16 +148,18 @@ def leave_while_capturing(
     pdf_site: str,
     browser: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
-) -> Callable[[str, Trigger], tuple[int, list[str]]]:
+    capsys: pytest.CaptureFixture[str],
+) -> Callable[[str, Trigger, str], list[str]]:
     page(tmp_path, "plain.html", "<p>Statement</p>")
     page(tmp_path, "account.html", "<p>Mail bob@example.com or +44 7700 900123</p>")
 
-    def leave(destination: str, trigger: Trigger) -> tuple[int, list[str]]:
+    def leave(destination: str, trigger: Trigger, reason: str) -> list[str]:
         verbs = open_in_session_when(
             browser, monkeypatch, f"{pdf_site}{destination}", trigger
         )
         argv = ["capture", f"{pdf_site}/plain.html", "--session", session()]
-        return browser.browser_command(tmp_path, argv), verbs
+        refused(tmp_path, browser.browser_command(tmp_path, argv), capsys, reason)
+        return verbs
 
     return leave
 
@@ -169,25 +171,17 @@ def framing(arguments: tuple[str, ...], text: str | None) -> bool:
 
 @pytest.mark.parametrize("trigger", [drawing, shooting], ids=["before", "during"])
 def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
-    tmp_path: Path,
-    leave_while_capturing: Callable[[str, Trigger], tuple[int, list[str]]],
-    capsys: pytest.CaptureFixture[str],
-    trigger: Trigger,
+    leave_while_capturing: Callable[[str, Trigger, str], list[str]], trigger: Trigger
 ) -> None:
-    code, verbs = leave_while_capturing("/invoice", trigger)
-    refused(tmp_path, code, capsys, "application/pdf")
+    verbs = leave_while_capturing("/invoice", trigger, "application/pdf")
     assert ("screenshot" in verbs) == (trigger is shooting)
 
 
 @pytest.mark.parametrize("trigger", [framing, shooting], ids=["before", "during"])
 def test_capture_keeps_no_image_of_a_page_that_navigates_after_it_was_masked(
-    tmp_path: Path,
-    leave_while_capturing: Callable[[str, Trigger], tuple[int, list[str]]],
-    capsys: pytest.CaptureFixture[str],
-    trigger: Trigger,
+    leave_while_capturing: Callable[[str, Trigger, str], list[str]], trigger: Trigger
 ) -> None:
-    code, verbs = leave_while_capturing("/account.html", trigger)
-    refused(tmp_path, code, capsys, "another document")
+    verbs = leave_while_capturing("/account.html", trigger, "another document")
     assert ("screenshot" in verbs) == (trigger is shooting)
 
 
