@@ -560,6 +560,11 @@ def test_agent_command_supports_agy(
 ) -> None:
     assert release_canary.agent_command("agy", tmp_path) == [
         "agy",
+        "--dangerously-skip-permissions",
+        f"--print={release_canary.TASK}",
+    ]
+    assert release_canary.agent_command("claude", tmp_path) == [
+        "claude",
         "-p",
         "--dangerously-skip-permissions",
         release_canary.TASK,
