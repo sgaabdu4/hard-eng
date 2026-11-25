@@ -552,6 +552,31 @@ def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
     _assert_unchanged_routes_and_owners(root, base_plan)
 
 
+def test_local_complete_check_ignores_a_refused_look_that_a_later_clean_look_of_another_route_outlasts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path)
+    base_plan = (root / "PLAN.md").read_text()
+    (root / "PLAN.md").unlink()
+    (root / "features/ui-a").mkdir(parents=True)
+    (root / "features/ui-b").mkdir(parents=True)
+    (root / "features/ui-a/PLAN.md").write_text(base_plan)
+    (root / "features/ui-b/PLAN.md").write_text(
+        base_plan.replace("/account", "/settings")
+    )
+    commit(root, "two routes")
+    head = git(root, "rev-parse", "HEAD").strip()
+
+    first = write_clean_browser(root, name="account", route="/account")
+    write_look(root, head, first)
+    wrong = write_clean_browser(root, name="wrong", route="/other")
+    write_look(root, head, wrong)
+    second = write_clean_browser(root, name="settings", route="/settings")
+    write_look(root, head, second)
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
 def test_local_complete_check_detects_quoted_binary_ui_asset_diff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
