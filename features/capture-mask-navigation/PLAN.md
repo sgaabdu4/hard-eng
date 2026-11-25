@@ -1,6 +1,6 @@
 # Capture refuses a page that changed document after masking, cleanup removes a worktree with clean submodules, and the UI proof names every bad image
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -61,11 +61,11 @@ N/A — hook code and tests; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending the Complete check.
+Result: Passed
+Evidence: The focused files for capture, look, the local UI proof, cleanup and the shipping checks passed on each fix. The static gates (ruff format, lint, complexity, annotations, pyrefly, vulture, deptry) passed. The independent review found five real faults over four rounds, each with a red test first: a shallow submodule blocked cleanup, an older refused `look` or a dirty capture set blocked the local check, a kept `look` verdict kept its old time, and the cutoff used the oldest route. Round four was clean at ff6032d8. A mockup opened in a `look` run counts as an After image for the local check; that case was declined, as the plan says. The Complete check result is in the pull request.
 E2E: N/A — the change is a check inside the capture command and the cleanup guard, proved by the real-browser tests and the real Git tests above.
-Real service: Required — GitHub and Git: `ship --stage cleanup` removes this task's own worktree, which has initialized submodules, and its remote branch from a checkout of develop, after the merge.
-Retro: Pending.
+Real service: Required — GitHub and Git: `ship --stage cleanup` removes this task's own worktree, which has initialized submodules, and its remote branch from a checkout of develop, after the merge. Its result is in the pull request.
+Retro: A capture check that read one document missed a navigation, and cleanup guards that read one checkout missed shallow submodules and newer policy keys. Each check now reads the state it judges, and each new defect has a red test. Escaped bug: found on the base branch; the red tests above are its repro and its fix is in this PR.
 
 Delivery target: Merge
 Delivery: Pending — required remote proof.
