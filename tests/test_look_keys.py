@@ -27,16 +27,19 @@ def test_a_zero_token_is_a_length_and_keeps_the_other_verdicts() -> None:
     assert off_gap[0] is False
 
 
-def counter(weights: tuple[int, int, int]) -> dict[str, object]:
+def counter(
+    weights: tuple[int, int, int], axis: str = "x", twice: bool = False
+) -> dict[str, object]:
     names = ("Lesson", "Number", "Total")
+    texts = [
+        text_fact(name, 12, weight=weight)
+        for name, weight in zip(names, weights, strict=True)
+    ]
     return values(
-        texts=[
-            text_fact(name, 12, weight=weight)
-            for name, weight in zip(names, weights, strict=True)
-        ],
+        texts=[*texts, text_fact("Number", 12, weight=600)] if twice else texts,
         gaps=[
-            {"at": "Lesson", "to": "Number", "px": 8, "axis": "x"},
-            {"at": "Number", "to": "Total", "px": 8, "axis": "x"},
+            {"at": "Lesson", "to": "Number", "px": 8, "axis": axis},
+            {"at": "Number", "to": "Total", "px": 8, "axis": axis},
         ],
     )
 
@@ -53,11 +56,9 @@ def test_code_decides_font_weight_against_its_neighbours(tmp_path: Path) -> None
     assert differs is not None
     assert differs[0] is False
     assert "differs from its neighbours (Lesson, Total)" in differs[1]
-    stacked = counter((600, 700, 600))
-    stacked["gaps"] = [{**gap, "axis": "y"} for gap in stacked["gaps"]]
+    stacked = counter((600, 700, 600), axis="y")
     assert look_facts.verdict("weight", "Number", stacked, tokens) is None
-    twice = counter((600, 700, 600))
-    twice["texts"] = [*twice["texts"], text_fact("Number", 12, weight=600)]
+    twice = counter((600, 700, 600), twice=True)
     assert look_facts.verdict("weight", "Number", twice, tokens) is None
     assert look_facts.verdict("weight", "Lesson", twice, tokens) is None
     alone = values(texts=[text_fact("Number", 12, weight=700)])
