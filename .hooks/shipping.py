@@ -7,6 +7,7 @@ import math
 import os
 import re
 import subprocess
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -64,6 +65,8 @@ class ShippingError(ValueError):
 class PendingCheck(ShippingError):
     """A required check has not concluded yet; it has not failed."""
 
+
+CHECK_POLL_SECONDS = 15
 
 _CONFIG_KEYS = {
     "base",
@@ -635,6 +638,34 @@ def _checks(
             raise ShippingError(f"required check is outside the CI budget: {name}")
 
 
+def _stage_checks(
+    root: Path,
+    repository: str,
+    revision: str,
+    policy: ShippingPolicy,
+    stage: str,
+    branch: str,
+) -> None:
+    """Ready judges the PR head at once; delivered waits while a base check is not done."""
+    if stage != "delivered":
+        return _checks(root, repository, revision, policy, True)
+    limit = policy["ci_seconds"]
+    deadline = time.monotonic() + limit
+    while True:
+        try:
+            return _checks(
+                root, repository, revision, policy, True, push_only=True, branch=branch
+            )
+        except PendingCheck as pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise PendingCheck(
+                    f"{pending}; the time limit of {limit:g} seconds "
+                    "(shipping ci_seconds) ended first"
+                ) from pending
+        time.sleep(min(CHECK_POLL_SECONDS, remaining))
+
+
 def passed_branch_point(root: Path) -> str | None:
     """The shipping-base commit HEAD left, when its required checks passed in CI."""
     from plans import default_branch_point
@@ -902,15 +933,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         )
         if policy["ui_paths"]:
             _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
-        _checks(
-            resolved_root,
-            repository,
-            revision,
-            policy,
-            True,
-            push_only=stage == "delivered",
-            branch=pull.base_ref,
-        )
+        _stage_checks(resolved_root, repository, revision, policy, stage, pull.base_ref)
         if stage == "delivered" and target == "Deploy":
             _delivery(resolved_root, policy, revision, url)
         current = _pull(resolved_root, owner, name, number)
