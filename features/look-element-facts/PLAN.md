@@ -1,0 +1,85 @@
+# Look: code decides each look Fail item it can measure
+
+Status: Ready
+
+## Outcome + scope
+
+`look` sends the reviewer the measured facts of each element by name, with what each check covered. Each Fail item names its image, element and kind. Code decides each measured item whose element it finds. Only judgement items go on the recheck list. `look` ends a findings run with one line about the rules, and names a changed input before it reviews all images again. Non-goals: blocking only on touched parts, non-blocking advice, answered or declined lines, raised limits, skip lists, new measures (weight, line counts, position).
+
+## Sources + coverage
+
+Sources: N/A — the request is the only source: the coordinator's brief of 2026-11-25 and its two added lines.
+
+## Repository context
+
+Owners: `ui_measure.py` (measure script, record, fact text, kind table), `look_records.py` (tokens, code verdicts, earlier items), `look_answer.py` (item parse, refusals), `look.py` (prompt, run flow).
+Same cause: a reviewer states a size or colour by eye and is wrong. `look_px.py` tried to refuse such a line and matched 0 of 9 stored Fail lines. The kind tag replaces it, so `look_px.py` and `tests/test_look_px.py` end here. Its test protected one thing: a hedged px size that the record does not hold is refused. The replacement proof is `test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused` (the same hedged line is refused) and the code verdict tests.
+Single source: the tap and text floors stay in `LIMITS`; the page script writes `under` and `exempt` from the same rule that makes the findings, and Python reads them. Token lengths and colours are read from `DESIGN.md` by one reader in `look_records.py` that also serves the radius check. The item kinds are one table, `ITEM_KINDS` in `ui_measure.py`, which the prompt, the refusal and the verdict read. Searched `.hooks` and `tests` for other readers of `measured`: `browser.py` (only writes), `ui_proof.py` (findings only), `test_ui_audit_guards.py` (changed in the same commit as the record).
+
+## Decisions + authorization
+
+Blockers: None.
+Handoff: Approval
+Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct before the release; client look reviews do not converge.
+Decisions made here, each with a reason:
+1. An item with no tag and no number is a judgement item. The brief refuses only an item that states a number or a hex colour without a measured tag. A line that states a number outside a tagged item is also refused, because prose is where the false sizes came from.
+2. An earlier measured item whose element code cannot find now stays on the recheck list, as the reviewer's. Code decides only what it finds, so no rule gets softer. This is the reading of brief items 3 and 4 together. Maintainer: tell me if an earlier item whose element is gone should drop instead.
+3. The kinds are `size`, `colour`, `gap`, `radius`, `tap` and `judgement`. Weight, line counts and "far from its text" are not owned by code in this change; they stay judgement. The research expected 8 of 19 stable Fails from this change, not 14.
+4. A tag states what code checks: `size` is the rendered text size against the floor, `tap` is the control size against its floor, `colour` is text colour and fill against `DESIGN.md` colour tokens, `gap` is a spacing token, `radius` is a rounded token. A placement fault is `judgement`. The prompt says so.
+5. A name matches an element only when the item's element text, after the words `button`, `link`, `text`, `label`, `icon`, `badge`, `chip`, `tab`, `field`, `input`, `heading` and `control` are removed, equals the record name (3 letters or more), and every record entry of that name gives the same verdict. Any other case is "not found" and the item stays with the reviewer.
+
+## Acceptance + steps
+
+- [ ] The record holds each text element with its name, size, weight and raw colour and fill, each control with its floor and `under`, each gap between named neighbours and each radius, with no cut → `tests/test_ui_audit_guards.py::test_the_record_holds_each_element_with_its_facts`
+- [ ] The prompt names each element with its facts and the colour token → `tests/test_look_facts.py::test_the_prompt_names_each_element_with_its_measured_facts`
+- [ ] The prompt says what each check covered, for example `tap size checked for all 3 controls: 0 under 44 px` → `tests/test_look_facts.py::test_the_prompt_says_what_each_check_covered`
+- [ ] A long list is bounded by one stated byte rule and says how many it left out, in the same order each time → `tests/test_look_facts.py::test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out`
+- [ ] A Fail item that states a size, a colour or a ratio without a measured tag is refused as not done, and an unknown tag is refused → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`
+- [ ] A tagged item, and an untagged item with no number, stand → `tests/test_look_facts.py::test_a_tagged_item_and_an_untagged_item_without_a_number_stand`
+- [ ] The prompt names the kinds and what they cover from the one table → `tests/test_look_facts.py::test_the_prompt_lists_the_kinds_from_the_one_table`
+- [ ] Code decides each measured kind, with one known fault and one known pass for each → `tests/test_look_facts.py::test_code_decides_each_measured_kind`
+- [ ] An ambiguous, short, unknown or unmatched element stays with the reviewer → `tests/test_look_facts.py::test_an_item_that_code_cannot_match_stays_with_the_reviewer`
+- [ ] A colour token with alpha matches the raw colour of the element → `tests/test_look_facts.py::test_a_colour_token_with_alpha_matches_the_raw_colour`
+- [ ] The other items of a line stay, and a line whose items all pass in code becomes a Pass → `tests/test_look_facts.py::test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass`
+- [ ] An earlier measured item is decided by code and not listed; an earlier true colour Fail stays a Fail when the reviewer says nothing; an earlier false item never returns → `tests/test_look_facts.py::test_an_earlier_measured_item_is_decided_by_code_before_the_prompt`
+- [ ] An earlier measured item that code cannot find stays on the recheck list; judgement items stay there → `tests/test_look_facts.py::test_an_earlier_item_that_code_cannot_find_is_listed_again`
+- [ ] A findings run ends with the one line about the rules → `tests/test_look_facts.py::test_a_findings_run_ends_with_the_line_about_the_rules`
+- [ ] A changed DESIGN.md or plan scope is named before the review → `tests/test_look_facts.py::test_a_changed_input_is_named_before_all_images_are_reviewed_again`
+
+Steps:
+
+1. Commit this plan.
+2. For each of the five build items (facts, tags, code verdicts, recheck list, two added lines): red test, see it fail, build, run the focused tests, commit.
+3. Static gates, `check --plan-stage Ready --base origin/develop`, `challenge` to a clean headline at the exact head, `check --plan-stage Complete --base origin/develop` once.
+4. Proof: one fixture for each kind in 5 of 5 real captures; 5 look runs on each sealed copy; the earlier list against none on one set; the borderline fixture 5 times.
+5. PR to `develop`, `pr-text`, CI, `ship --stage ready`, `ship --stage merge`, `ship --stage delivered`.
+
+## Baseline + execution
+
+Result: Passed
+Evidence: 128 focused look tests pass on `origin/develop` `f7f5e167` (`tests/test_look.py`, `test_look_answer.py`, `test_look_carry.py`, `test_look_proof_kinds.py`, `test_look_px.py`).
+Execution: One builder in `fix/look-element-facts`. A fresh reviewer runs `challenge` on the candidate head.
+
+## Risks + recovery
+
+1. Every image key changes once, because the facts text in the prompt changes. A clean record of an old head does not carry; the next run reviews each image again. An old-format browser record has no element facts, so code decides nothing for it and the reviewer decides as before.
+2. A wrong match would let code overrule the reviewer with a false Pass. The match is strict (decision 5) and each near miss has a test.
+3. A reviewer that tags a size claim with the wrong kind gets a code Pass on the wrong fact. The prompt states what each tag checks; a placement fault under `size` finds the element at its floor and passes it.
+4. Recovery: revert the merge on `develop` with a new PR.
+Not checked: the `building-flutter-apps` copy of the hooks; any installed project.
+
+## ux_reference
+
+N/A — hook code and tests; no visible UI.
+
+## Verification
+
+Result: Pending
+Evidence: Pending.
+E2E: N/A — hook code with no app journey; the real browser capture and the sealed real-set runs are the Real service proof.
+Real service: Required — the Claude reviewer CLI and the browser capture: five captures of each fixture kind, five `look` runs on each sealed real set, the earlier list against none on one set, the borderline fixture five times; Complete needs the counts.
+Retro: Pending
+
+Delivery target: Merge
+
+Delivery: Pending — required remote proof.
