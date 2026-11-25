@@ -58,7 +58,11 @@ def test_ship_loads_the_yaml_runtime_because_its_look_proof_reads_tokens(
 
     calls: list[str] = []
     monkeypatch.setattr(tool_setup, "ensure_python_runtime", lambda: calls.append("."))
-    monkeypatch.setattr(ship_actions, "run", lambda *args: 0)
+
+    def run(*arguments: object) -> int:
+        return 0
+
+    monkeypatch.setattr(ship_actions, "run", run)
     args = Namespace(
         command="ship",
         plan="PLAN.md",
