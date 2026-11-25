@@ -77,6 +77,30 @@ def test_delivered_fails_at_once_on_a_failed_check_and_when_a_waited_check_fails
     assert len(clock.slept) == waited
 
 
+@pytest.mark.parametrize("earlier", [None, _RUNNING])
+def test_delivered_fails_at_once_on_a_failed_check_listed_after_one_that_is_not_done(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clock: Clock,
+    earlier: dict[str, object] | None,
+) -> None:
+    fixture = _delivered_fake(tmp_path, monkeypatch, [_running()])
+    real_policy = shipping.load_policy
+
+    def two_checks(
+        root: Path, required: bool = False
+    ) -> shipping.ShippingPolicy | None:
+        policy = real_policy(root, required=required)
+        return policy and {**policy, "checks": ["build", "lint"]}
+
+    monkeypatch.setattr(shipping, "load_policy", two_checks)
+    lint = {**_run_of(_PUSH_SUITE, 2, "failure"), "name": "lint"}
+    _answer(fixture, *([{**_running(), **earlier}] if earlier else []), lint)
+    with pytest.raises(shipping.ShippingError, match="not successful: lint"):
+        _verify(fixture)
+    assert clock.slept == []
+
+
 def test_delivered_names_the_check_and_the_limit_when_time_ends(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: Clock
 ) -> None:

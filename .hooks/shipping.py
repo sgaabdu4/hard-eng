@@ -613,9 +613,11 @@ def _checks(
             by_name[name].append(item)
     base = branch or policy["base"]
     suites = _push_suites(root, repository, revision, base) if push_only else set()
+    waiting: PendingCheck | None = None
     for name, candidates in by_name.items():
         if not candidates:
-            raise PendingCheck(f"required check missing: {name}")
+            waiting = waiting or PendingCheck(f"required check missing: {name}")
+            continue
         run = newest_run(_from_push(candidates, suites))
         if run.get("truncated") is True or (
             isinstance(run.get("output"), dict)
@@ -624,18 +626,27 @@ def _checks(
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
         if run.get("status") != "completed":
-            raise _pending(root, repository, run, policy["ci_seconds"], explain)
-        if run.get("conclusion") == "skipped":
-            raise ShippingError(
-                f"required check was skipped; gate its steps, not the job: {name}"
+            waiting = waiting or _pending(
+                root, repository, run, policy["ci_seconds"], explain
             )
-        if run.get("conclusion") != "success":
-            raise ShippingError(f"required check is not successful: {name}")
-        started = _timestamp(run.get("started_at"), f"check {name}")
-        completed = _timestamp(run.get("completed_at"), f"check {name}")
-        duration = completed - started
-        if duration < 0 or duration > policy["ci_seconds"]:
-            raise ShippingError(f"required check is outside the CI budget: {name}")
+            continue
+        _finished_check(run, name, policy["ci_seconds"])
+    if waiting:
+        raise waiting
+
+
+def _finished_check(run: dict[str, JsonValue], name: str, budget: float) -> None:
+    if run.get("conclusion") == "skipped":
+        raise ShippingError(
+            f"required check was skipped; gate its steps, not the job: {name}"
+        )
+    if run.get("conclusion") != "success":
+        raise ShippingError(f"required check is not successful: {name}")
+    started = _timestamp(run.get("started_at"), f"check {name}")
+    completed = _timestamp(run.get("completed_at"), f"check {name}")
+    duration = completed - started
+    if duration < 0 or duration > budget:
+        raise ShippingError(f"required check is outside the CI budget: {name}")
 
 
 def _stage_checks(
