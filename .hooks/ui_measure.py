@@ -38,6 +38,15 @@ PROOF_KINDS = {
     "Widths": ("measured",),
     "Performance": ("test",),
 }
+ITEM_KINDS = {
+    "size": f"the rendered text size against the {LIMITS['text_px']} px floor",
+    "colour": "the text colour and its fill against the DESIGN.md colour tokens",
+    "gap": "the gap between two neighbours against the DESIGN.md spacing tokens",
+    "radius": "the corner radius against the DESIGN.md rounded tokens",
+    "tap": "the control size against its tap floor",
+    "judgement": "anything else: placement, alignment, weight, line count, wording",
+}
+MEASURED_KINDS = frozenset(ITEM_KINDS) - {"judgement"}
 FINDING_RULES = {
     "competing-buttons": "Hierarchy",
     "accent-colours": "Hierarchy",

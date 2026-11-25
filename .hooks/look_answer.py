@@ -1,10 +1,16 @@
 """The reviewer's answer to a look run: its lines, the rules it decides, and why a line cannot stand."""
 
 import re
+from typing import NamedTuple
 
 from plans import split_rule_line, usability_lines, usability_rules
 
 FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
+ITEM_START = re.compile(r"image-\d+\.png\s*:")
+KIND_TAG = re.compile(r"\[([A-Za-z-]+)\]")
+CLAIM = re.compile(
+    r"(?i)\d+(?:\.\d+)?\s*(?:px|pt|rem|em)\b|\d+(?:\.\d+)?\s*:\s*1\b|#[0-9a-f]{3,8}\b|\b(?:rgb|hsl)a?\("
+)
 FRAME = re.compile(r"image-\d+\.png")
 RECHECK_LINE = re.compile(r"(?i)^recheck\s+R(\d+)\s*:\s*(still shown|gone)\b(.*)")
 NUMBER = re.compile(r"\d+")
@@ -69,12 +75,64 @@ def nothing_removed(line: str) -> bool:
     return bool(counts) and not any(counts)
 
 
-def rule_refusal(
-    rule_lines: list[str], measured: list[dict[str, object]], names: list[str]
-) -> str | None:
-    """Why a Fail line cannot stand: its own count says 0 removed, it names no fix or no frame of the run, or it guesses a px size that the measured values do not hold."""
-    from look_px import px_problem
+class Item(NamedTuple):
+    text: str
+    frame: str
+    element: str
+    kind: str
+    note: str
 
+
+def fail_parts(line: str) -> tuple[list[str], str]:
+    """The `;` parts of a Fail line before its last `Fix:`, and the Fix part."""
+    text = split_rule_line(line)[2]
+    fixes = list(FIX_PART.finditer(text))
+    cut = fixes[-1].start() if fixes else len(text)
+    return text[:cut].split(";"), text[cut:]
+
+
+def part_item(part: str) -> tuple[str, Item | None]:
+    """The words of a part before its item, and its item `image-N.png: <element> [kind]`, if it has one."""
+    found = ITEM_START.search(part)
+    if not found:
+        return part, None
+    text = part[found.start() :].strip()
+    frame, _, rest = text.partition(":")
+    tag = KIND_TAG.search(rest)
+    element = (rest[: tag.start()] if tag else rest).strip()
+    note = rest[tag.end() :].strip(" -:—") if tag else ""
+    kind = tag[1].lower() if tag else ""
+    return part[: found.start()], Item(text, frame.strip(), element, kind, note)
+
+
+def fail_items(line: str) -> list[Item]:
+    return [item for part in fail_parts(line)[0] if (item := part_item(part)[1])]
+
+
+def item_problem(rule_lines: list[str]) -> str | None:
+    """Why a Fail line cannot stand: an item with a kind that is not in the table, or a size, ratio or colour stated anywhere but in an item of a measured kind."""
+    from ui_measure import ITEM_KINDS, MEASURED_KINDS
+
+    for line in rule_lines:
+        if split_rule_line(line)[1] != "Fail":
+            continue
+        for part in fail_parts(line)[0]:
+            prose, item = part_item(part)
+            if item and item.kind and item.kind not in ITEM_KINDS:
+                return f"not done: a Fail item has the kind [{item.kind}], which is not one of {', '.join(ITEM_KINDS)}: {line}"
+            states = CLAIM.search(prose) or (
+                None if item and item.kind in MEASURED_KINDS else CLAIM.search(part)
+            )
+            if states:
+                return (
+                    f"not done: a Fail line states {states[0]} outside an item of a measured kind "
+                    f"({', '.join(sorted(MEASURED_KINDS))}); write `image-N.png: <element> [kind]` or leave the number out: {line}"
+                )
+    return None
+
+
+def rule_refusal(rule_lines: list[str], names: list[str]) -> str | None:
+    """Why a Fail line cannot stand: its own count says 0 removed, it names no fix or no frame of the run, or it states a measured fact outside a measured item."""
     if empty := [
         line
         for line in rule_lines
@@ -94,7 +152,7 @@ def rule_refusal(
         and not any(name in FRAME.findall(line) for name in names)
     ]:
         return f"not done: a Fail line names no frame (image-N.png) of this run: {unframed[0]}"
-    return px_problem(rule_lines, measured)
+    return item_problem(rule_lines)
 
 
 def judged_names(unmeasured: bool = False) -> list[str]:
@@ -125,7 +183,6 @@ def judge(
     read: dict[str, bool],
     *,
     require_design: bool = False,
-    measured: list[dict[str, object]] | None = None,
     unmeasured: bool = False,
     rechecks: list[str] | None = None,
 ) -> tuple[str, list[str], dict[str, str]]:
@@ -163,7 +220,7 @@ def judge(
             {},
         )
     rule_lines = [found[name] for name in wanted]
-    if refusal := rule_refusal(rule_lines, measured or [], names):
+    if refusal := rule_refusal(rule_lines, names):
         return refusal, [], {}
     if refusal := recheck_problem(lines, rule_lines, rechecks or [], names):
         return refusal, [], {}

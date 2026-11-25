@@ -200,7 +200,7 @@ def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) 
         assert forbidden not in prompt, forbidden
     assert all(name in prompt for name in judged_rule_names())
     assert "every frame and element" in prompt
-    assert "`image-N.png: <element>`" in prompt
+    assert "`image-N.png: <element> [<kind>]`" in prompt
     assert project.name not in seen["cwd"]
 
 

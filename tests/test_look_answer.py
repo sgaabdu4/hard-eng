@@ -48,7 +48,12 @@ def test_look_reads_a_real_claude_answer() -> None:
         "not done: a Fail line names no frame"
     )
     framed = answer.replace("Fail — ", "Fail — image-1.png: ")
-    outcome, rules, details = look_answer.judge(framed, ["image-1.png"], read)
+    assert look_answer.judge(framed, ["image-1.png"], read)[0].startswith(
+        "not done: a Fail line states 25 px outside an item"
+    )
+    outcome, rules, details = look_answer.judge(
+        framed.replace("about 25 px lower", "lower"), ["image-1.png"], read
+    )
     assert outcome == "findings"
     assert len(rules) == len(judged_rule_names())
     assert "image-1.png" in details

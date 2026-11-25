@@ -496,7 +496,7 @@ def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
     ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
     answer = good_answer(1).replace(
         "- Design system: Pass — looked at it",
-        "- Design system: Fail — image-1.png: a #ffffff label is no token. Fix: use paper.",
+        "- Design system: Fail — image-1.png: a white label is no token. Fix: use paper.",
     )
     install_agent(tmp_path, "claude", 1, answer)
     first = run_look(project, "codex", images)
@@ -506,5 +506,5 @@ def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
     prompt = prompt_of(log)
-    assert "a #ffffff label is no token" in prompt
+    assert "a white label is no token" in prompt
     assert "measured:" not in prompt.partition("Earlier look findings")[2]

@@ -39,6 +39,7 @@ from plans import (
     usability_rules,
 )
 from process_group import run_in_group
+from ui_measure import ITEM_KINDS
 
 TIMEOUT_SECONDS = 1800
 LOOK_REVIEWERS = ("claude", "codex")
@@ -59,9 +60,14 @@ PROMPT = (
     "verdict is findings. A rule with a count puts its count note before the colon: "
     "`- No clutter (kept: 40, removed: 3): Fail. <what you saw>`. Give a failing rule one "
     "Fail line that names every frame and element that shows the fault, not only the "
-    "first: `image-N.png: <element>` for each one, joined with `;`, then `Fix: <the change>` "
-    "as the last part of the line. Every run on the same images must find the same set. "
-    "A Fail line with no frame or no fix is refused.\n\nRules:\n{rules}"
+    "first: `image-N.png: <element> [<kind>]` for each one, joined with `;`, then `Fix: <the change>` "
+    "as the last part of the line. Give each item the kind whose check covers its fault; "
+    "code decides each item of a measured kind from the measured values, so do not guess "
+    "them by eye. State a px size, a ratio or a colour only in an item of a measured kind. "
+    "Kinds:\n{kinds}\n"
+    "Every run on the same images must find the same set. "
+    "A Fail line with no frame or no fix, or one that states a size, ratio or colour "
+    "outside an item of a measured kind, is refused.\n\nRules:\n{rules}"
 )
 RING_NOTE = (
     "Ignore ONLY these confirmed 3px solid red Hard Eng --ring PR annotation boxes "
@@ -579,7 +585,10 @@ def prompt_for(
         if boxes
     ]
     ring_note = RING_NOTE.format(ringed="; ".join(ring_parts)) if ring_parts else ""
-    text = PROMPT.format(names=", ".join(names), ring_note=ring_note, rules=rules)
+    kinds = "\n".join(f"[{kind}] {covers}" for kind, covers in ITEM_KINDS.items())
+    text = PROMPT.format(
+        names=", ".join(names), ring_note=ring_note, kinds=kinds, rules=rules
+    )
     if design:
         text += DESIGN_ADDENDUM.format(design=design)
     if scope:
@@ -719,7 +728,6 @@ def review(
         names,
         {name: name in times for name in names},
         require_design=bool(design),
-        measured=[m for d in digests if (m := recorded_measured(root, d))],
         unmeasured=unmeasured,
         rechecks=[rule for rule, _ in items],
     )

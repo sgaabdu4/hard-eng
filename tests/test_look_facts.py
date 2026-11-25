@@ -169,3 +169,77 @@ def test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out(
     omitted = 301 - len(listed)
     assert f"{omitted} more not listed, each at or over the 11 px floor" in first
     assert "checked for all 301 text elements: 1 under the 11 px floor" in first
+
+
+def answer_with(fail: str) -> str:
+    from test_look import judged_rule_names
+
+    lines = [
+        f"- Design system: Fail — {fail}"
+        if name == "Design system"
+        else f"- {name}: Pass — looked at it"
+        for name in judged_rule_names()
+    ]
+    return "\n".join([*lines, "Image image-1.png: a card", "VERDICT: findings"])
+
+
+def judged(fail: str) -> tuple[str, list[str]]:
+    import look_answer
+
+    outcome, rules, _ = look_answer.judge(
+        answer_with(fail), ["image-1.png"], {"image-1.png": True}
+    )
+    return outcome, rules
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        "Hint text about 11 px. image-1.png: Hint [judgement] Fix: make it bigger",
+        "image-1.png: Hint is 10 px [judgement] Fix: make it bigger",
+        "image-1.png: badge #7a5c5c [judgement] Fix: use a token",
+        "image-1.png: Save about 13 px Fix: make it bigger",
+        "image-1.png: Save at 3:1 [judgement] Fix: more contrast",
+        "image-1.png: Hint [weight] Fix: make it bolder",
+        "the label is 12pt; image-1.png: Hint [size] Fix: make it bigger",
+    ],
+)
+def test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused(
+    fail: str,
+) -> None:
+    outcome, rules = judged(fail)
+    assert outcome.startswith("not done: a Fail ")
+    assert rules == []
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        "image-1.png: Hint [size]; image-1.png: Save [colour] Fix: use ink",
+        "image-1.png: Hint is 10 px [size] Fix: make it bigger",
+        "image-1.png: badge #7a5c5c [colour] Fix: use a token",
+        "image-1.png: the card sits left of its title [judgement] Fix: centre it",
+        "image-1.png: the card Fix: centre it",
+        "image-1.png: Save [tap] Fix: 44 px control",
+    ],
+)
+def test_a_tagged_item_and_an_untagged_item_without_a_number_stand(fail: str) -> None:
+    outcome, rules = judged(fail)
+    assert outcome == "findings"
+    assert any(line.startswith("Design system: Fail") for line in rules)
+
+
+def test_the_prompt_lists_the_kinds_from_the_one_table(
+    tmp_path: Path, project: Path
+) -> None:
+    import look_facts
+    import ui_measure
+
+    images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    prompt = prompt_of(log)
+    assert set(look_facts.FACTS) == ui_measure.MEASURED_KINDS
+    for kind, covers in ui_measure.ITEM_KINDS.items():
+        assert f"[{kind}] {covers}" in prompt
+    assert "image-N.png: <element> [<kind>]" in prompt
