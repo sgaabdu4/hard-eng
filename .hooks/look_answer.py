@@ -1,6 +1,7 @@
 """The reviewer's answer to a look run: its lines, the rules it decides, and why a line cannot stand."""
 
 import re
+from collections.abc import Mapping
 from itertools import pairwise
 from typing import NamedTuple
 
@@ -111,8 +112,11 @@ def part_item(part: str) -> tuple[str, Item | None]:
     return part[: found.start()], Item(text, frame.strip(), element, kind, note)
 
 
-def item_problem(rule_lines: list[str]) -> str | None:
-    """Why a Fail line cannot stand: a size, ratio or colour stated anywhere but in an item of a measured kind. A missing or unknown kind is a judgement item and never refuses the line."""
+Keys = Mapping[str, Mapping[str, frozenset[str]]]
+
+
+def item_problem(rule_lines: list[str], keys: Keys | None = None) -> str | None:
+    """Why a Fail line cannot stand: a size, ratio or colour stated anywhere but in an item of a measured kind, or, when the keys of the images are given, an item of a measured kind whose element is not a key of its image for that kind. A missing or unknown kind is a judgement item and never refuses the line."""
     from ui_measure import MEASURED_KINDS
 
     for line in rule_lines:
@@ -126,13 +130,26 @@ def item_problem(rule_lines: list[str]) -> str | None:
             if states:
                 return (
                     f"not done: a Fail line states {states[0]} outside an item of a measured kind "
-                    f"({', '.join(sorted(MEASURED_KINDS))}); write `image-N.png: <element> [kind]` or leave the number out: {line}"
+                    f"({', '.join(sorted(MEASURED_KINDS))}); write `image-N.png: <key> [kind]` or leave the number out: {line}"
+                )
+            if (
+                keys is not None
+                and item
+                and item.kind in MEASURED_KINDS
+                and item.element not in keys.get(item.frame, {}).get(item.kind, ())
+            ):
+                return (
+                    f"not done: `{item.frame}: {item.element} [{item.kind}]` names no key of that image for the kind {item.kind}. "
+                    f"Copy one key exactly as the measured values list it, with no other word before the tag, "
+                    f"or tag the item [judgement]: {line}"
                 )
     return None
 
 
-def rule_refusal(rule_lines: list[str], names: list[str]) -> str | None:
-    """Why a Fail line cannot stand: its own count says 0 removed, it names no fix or no frame of the run, or it states a measured fact outside a measured item."""
+def rule_refusal(
+    rule_lines: list[str], names: list[str], keys: Keys | None = None
+) -> str | None:
+    """Why a Fail line cannot stand: its own count says 0 removed, it names no fix or no frame of the run, it states a measured fact outside a measured item, or a measured item has no key."""
     if empty := [
         line
         for line in rule_lines
@@ -152,7 +169,7 @@ def rule_refusal(rule_lines: list[str], names: list[str]) -> str | None:
         and not any(name in FRAME.findall(line) for name in names)
     ]:
         return f"not done: a Fail line names no frame (image-N.png) of this run: {unframed[0]}"
-    return item_problem(rule_lines)
+    return item_problem(rule_lines, keys)
 
 
 def judged_names(unmeasured: bool = False) -> list[str]:
@@ -185,6 +202,7 @@ def judge(
     require_design: bool = False,
     unmeasured: bool = False,
     rechecks: list[str] | None = None,
+    keys: Keys | None = None,
 ) -> tuple[str, list[str], dict[str, str]]:
     """The outcome, the rule lines and the image details of the reviewer's answer."""
     if unread := [name for name in names if not read[name]]:
@@ -220,7 +238,7 @@ def judge(
             {},
         )
     rule_lines = [found[name] for name in wanted]
-    if refusal := rule_refusal(rule_lines, names):
+    if refusal := rule_refusal(rule_lines, names, keys):
         return refusal, [], {}
     if refusal := recheck_problem(lines, rule_lines, rechecks or [], names):
         return refusal, [], {}

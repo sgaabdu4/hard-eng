@@ -10,7 +10,8 @@ from ui_measure import LIMITS
 FACT_BYTES = 1500
 LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
 ZERO = re.compile(r"0+(?:\.0+)?")
-WORD = re.compile(r"\w+")
+UNSAFE_IN_KEY = re.compile(r"[;:\[\]`*\"\s]+")
+NO_NAME = "no name"
 
 
 class Tokens(NamedTuple):
@@ -20,7 +21,7 @@ class Tokens(NamedTuple):
 
 
 class Fact(NamedTuple):
-    names: tuple[str, ...]
+    key: str
     ok: bool | None
     margin: float
     line: str
@@ -118,6 +119,11 @@ def _shown(value: float) -> str:
     return f"{value:g}"
 
 
+def fact_key(name: object) -> str:
+    """The recorded name of an element as the key that the reviewer copies: the characters that the answer form reads (a semicolon, a colon, a bracket, a backtick, an asterisk, a quote and any space run) become one space, so the key survives the form of a Fail line."""
+    return UNSAFE_IN_KEY.sub(" ", str(name or "")).strip() or NO_NAME
+
+
 def _token_name(tokens: Tokens, raw: str, blended: str) -> str:
     return tokens.colours.get(raw) or tokens.colours.get(blended + "ff") or ""
 
@@ -145,10 +151,11 @@ def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
             if row.get("align") and isinstance(row.get("centred"), bool)
             else ""
         )
-        line = f"{row.get('at')}: {_shown(px)} px, weight {_shown(_num(row.get('weight')))}{place}{pair}"
+        key = fact_key(row.get("at"))
+        line = f"{key}: {_shown(px)} px, weight {_shown(_num(row.get('weight')))}{place}{pair}"
         found.append(
             Fact(
-                (str(row.get("at")),),
+                key,
                 not under,
                 px - floor,
                 f"{line}, under the {floor} px floor" if under else line,
@@ -178,7 +185,7 @@ def colour_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
         ok = colour_ok(row, tokens)
         found.append(
             Fact(
-                (str(row.get("at")),),
+                fact_key(row.get("at")),
                 ok,
                 0 if ok is False else 1,
                 "",
@@ -197,12 +204,13 @@ def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
         w, h, floor = _num(row.get("w")), _num(row.get("h")), _num(row.get("floor"))
         under = row.get("under") is True
         size = f"{_shown(w)}x{_shown(h)} px"
+        key = fact_key(row.get("at"))
         found.append(
             Fact(
-                (str(row.get("at")),),
+                key,
                 not under,
                 min(w, h) - floor,
-                f"{row.get('at')}: {size}, "
+                f"{key}: {size}, "
                 + (f"under {_shown(floor)} px" if under else f"at or over {_shown(floor)} px"),
                 f"control is {size}, {'under' if under else 'at or over'} its {_shown(floor)} px floor",
             )
@@ -214,21 +222,21 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     rows = [row for row in _rows(measured, "texts") if "weight" in row]
     weights: dict[str, set[float]] = {}
     for row in rows:
-        weights.setdefault(str(row.get("at")), set()).add(_num(row.get("weight")))
+        weights.setdefault(fact_key(row.get("at")), set()).add(_num(row.get("weight")))
     near: dict[str, set[str]] = {}
     for gap in _rows(measured, "gaps"):
-        first, second = str(gap.get("at")), str(gap.get("to"))
+        first, second = fact_key(gap.get("at")), fact_key(gap.get("to"))
         if first in weights and second in weights:
             near.setdefault(first, set()).add(second)
             near.setdefault(second, set()).add(first)
     found: list[Fact] = []
     for row in rows:
-        name, weight = str(row.get("at")), _num(row.get("weight"))
+        name, weight = fact_key(row.get("at")), _num(row.get("weight"))
         others = sorted(near.get(name, set()) - {name})
         ok = None if not others else all(weights[o] == {weight} for o in others)
         found.append(
             Fact(
-                (name,),
+                name,
                 ok,
                 0 if ok is False else 1,
                 "",
@@ -241,7 +249,7 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
 def align_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return [
         Fact(
-            (str(row.get("at")),),
+            fact_key(row.get("at")),
             row["centred"],
             0 if row["centred"] is False else 1,
             "",
@@ -260,15 +268,10 @@ def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
             continue
         px = max(0, int(_num(row.get("px"))))
         ok = None if scale is None else px in scale or px == 0
-        pair = f"{row.get('at')} to {row.get('to')}"
+        pair = f"{fact_key(row.get('at'))} to {fact_key(row.get('to'))}"
         found.append(
             Fact(
-                (
-                    str(row.get("at")),
-                    str(row.get("to")),
-                    pair,
-                    f"{row.get('at')} and {row.get('to')}",
-                ),
+                pair,
                 ok,
                 0 if ok is False else px,
                 f"{pair}: {px} px ({row.get('axis')})",
@@ -284,13 +287,13 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     for row in _rows(measured, "radii"):
         px = int(_num(row.get("px")))
         ok = None if scale is None or row.get("clamped") is not False else px in scale
+        key = fact_key(row.get("at"))
         found.append(
             Fact(
-                (str(row.get("at")),),
+                key,
                 ok,
                 0 if ok is False else px,
-                f"{row.get('at')}: {px} px"
-                + (" (clamped by its box)" if row.get("clamped") else ""),
+                f"{key}: {px} px" + (" (clamped by its box)" if row.get("clamped") else ""),
                 f"corner radius {px} px {'is' if ok else 'is not'} a rounded token",
             )
         )
@@ -310,7 +313,7 @@ FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
 
 def _order(facts: list[Fact]) -> list[Fact]:
     return sorted(
-        facts, key=lambda fact: (fact.ok is not False, fact.margin, fact.names)
+        facts, key=lambda fact: (fact.ok is not False, fact.margin, fact.key)
     )
 
 
@@ -326,7 +329,8 @@ def _listed(facts: list[Fact], floor_note: str) -> list[str]:
     rest = ordered[len(lines) :]
     if rest:
         why = f", {floor_note}" if all(fact.ok for fact in rest) else ""
-        lines.append(f"{len(rest)} more not listed{why}")
+        keys = " | ".join(dict.fromkeys(fact.key for fact in rest))
+        lines.append(f"{len(rest)} more not listed{why}; their keys: {keys}")
     return lines
 
 
@@ -402,42 +406,22 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
     return "\n".join(lines)
 
 
-ROLE_WORDS = frozenset(
-    [
-        "the",
-        "button",
-        "link",
-        "text",
-        "label",
-        "icon",
-        "badge",
-        "chip",
-        "tab",
-        "field",
-        "input",
-        "heading",
-        "control",
-    ]
-)
-
-
-def plain(name: str) -> str:
-    """The name as words, lowercase, with punctuation and the role words dropped, so `Save button` and `Save` are one name."""
-    words = WORD.findall(name.lower())
-    return " ".join(word for word in words if word not in ROLE_WORDS)
+def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozenset[str]]:
+    """The keys of one image for each measured kind: the exact texts that an item of that kind may name."""
+    return {
+        kind: frozenset(fact.key for fact in build(measured, tokens))
+        for kind, build in FACTS.items()
+    }
 
 
 def verdict(
     kind: str, element: str, measured: dict[str, object], tokens: Tokens
 ) -> tuple[bool, str] | None:
-    """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal one recorded name of three letters or more once role words are dropped, and every fact of that name must give the same verdict; any other case is `not found`, which leaves the item to the reviewer."""
-    wanted = plain(element)
+    """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal a key of that kind exactly, and every fact of that key must give the same verdict; any other case leaves the item to the reviewer. There is no loose name match, because a wrong match gives a false verdict."""
     build = FACTS.get(kind)
-    if build is None or len(wanted) < 3:
+    if build is None:
         return None
-    hits = [
-        fact for fact in build(measured, tokens) if wanted in map(plain, fact.names)
-    ]
+    hits = [fact for fact in build(measured, tokens) if fact.key == element]
     if not hits or any(fact.ok is None for fact in hits):
         return None
     if len({fact.ok for fact in hits}) != 1:

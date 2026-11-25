@@ -247,7 +247,7 @@ def test_the_prompt_lists_the_kinds_from_the_one_table(
     assert set(look_facts.FACTS) == ui_measure.MEASURED_KINDS
     for kind, covers in ui_measure.ITEM_KINDS.items():
         assert f"[{kind}] {covers}" in prompt
-    assert "image-N.png: <element> [<kind>]" in prompt
+    assert "image-N.png: <key> [<kind>]" in prompt
 
 
 FAULT_AND_PASS = {
@@ -262,7 +262,7 @@ FAULT_AND_PASS = {
         values(texts=[text_fact("Hint")]),
     ),
     "gap": (
-        "Save",
+        "Save to Cancel",
         values(gaps=[{"at": "Save", "to": "Cancel", "px": 11, "axis": "y"}]),
         values(gaps=[{"at": "Save", "to": "Cancel", "px": 14, "axis": "y"}]),
     ),
@@ -292,7 +292,7 @@ def test_code_decides_each_measured_kind(kind: str, tmp_path: Path) -> None:
 
     element, fault, held = FAULT_AND_PASS[kind]
     tokens = tokens_of(tmp_path)
-    failed = look_facts.verdict(kind, f"{element} button", fault, tokens)
+    failed = look_facts.verdict(kind, element, fault, tokens)
     passed = look_facts.verdict(kind, element, held, tokens)
     assert failed is not None
     assert failed[0] is False
@@ -309,11 +309,9 @@ NEAR_MISSES: dict[str, tuple[str, str, dict[str, object]]] = {
         values(texts=[text_fact("Save all", 10.5, under=True)]),
     ),
     "extra words around the name": ("size", "Save button on the right", MEASURED),
-    "a name of two letters": (
-        "size",
-        "Go",
-        values(texts=[text_fact("Go", 10.5, under=True)]),
-    ),
+    "a role word beside the key": ("size", "Save button", MEASURED),
+    "the key of another kind": ("gap", "Save", MEASURED),
+    "a number written into the key": ("tap", "Cancel, 60x30 px", MEASURED),
     "only a role word": ("tap", "button", MEASURED),
     "two elements with one name and two verdicts": (
         "size",
@@ -450,6 +448,7 @@ def two_rounds(
 
 
 NO_FACTS = values()
+OFF_TOKEN = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676")])
 EARLIER = "Earlier look findings"
 
 
@@ -458,7 +457,7 @@ def test_an_earlier_measured_item_is_decided_by_code_before_the_prompt(
 ) -> None:
     fail = "image-1.png: Hint [colour] Fix: use ink"
     held = values(texts=[text_fact("Hint")])
-    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, held)
+    record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, held)
     assert EARLIER not in prompt
     assert record["outcome"] == "clean"
 
@@ -467,8 +466,7 @@ def test_an_earlier_true_colour_fail_stays_a_fail_when_the_reviewer_says_nothing
     tmp_path: Path, project: Path
 ) -> None:
     fail = "image-1.png: Hint [colour] Fix: use ink"
-    off = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676")])
-    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, off)
+    record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, OFF_TOKEN)
     assert EARLIER not in prompt
     assert record["outcome"] == "findings"
     line = stored_rule(record, "Design system")
@@ -487,7 +485,7 @@ def test_an_earlier_item_that_code_cannot_find_is_listed_again(
         "VERDICT: clean",
         "Recheck R1: gone image-1.png: the card\nRecheck R2: gone image-1.png: Hint\nVERDICT: clean",
     )
-    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, NO_FACTS, answer)
+    record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, NO_FACTS, answer)
     earlier = prompt.partition(EARLIER)[2]
     assert "image-1.png: the card sits left [judgement]" in earlier
     assert "image-1.png: Hint [colour]" in earlier
@@ -506,7 +504,7 @@ def test_a_judgement_item_stays_on_the_list_when_a_measured_item_leaves_it(
     answer = good_answer(1).replace(
         "VERDICT: clean", "Recheck R1: gone image-1.png: the card\nVERDICT: clean"
     )
-    record, prompt = two_rounds(tmp_path, project, fail, NO_FACTS, held, answer)
+    record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, held, answer)
     earlier = prompt.partition(EARLIER)[2]
     assert "image-1.png: the card sits left [judgement]" in earlier
     assert "Hint [colour]" not in earlier
@@ -632,7 +630,7 @@ def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_off_the_tokens(
     import look_facts
 
     measured = values(gaps=[{"at": "Save", "to": "Cancel", "px": -1, "axis": "y"}])
-    found = look_facts.verdict("gap", "Save", measured, tokens_of(tmp_path))
+    found = look_facts.verdict("gap", "Save to Cancel", measured, tokens_of(tmp_path))
     assert found is not None
     assert found[0] is True
 
@@ -881,7 +879,7 @@ def test_a_zero_token_is_a_length_and_keeps_the_other_verdicts() -> None:
     radius = values(radii=[{"at": "Save", "px": 5, "clamped": False}])
     gap = values(gaps=[{"at": "Save", "to": "Cancel", "px": 5, "axis": "y"}])
     off_radius = look_facts.verdict("radius", "Save", radius, tokens)
-    off_gap = look_facts.verdict("gap", "Save", gap, tokens)
+    off_gap = look_facts.verdict("gap", "Save to Cancel", gap, tokens)
     assert off_radius is not None
     assert off_radius[0] is False
     assert off_gap is not None
@@ -965,3 +963,214 @@ def test_the_tap_fact_of_a_link_at_its_floor_says_so_and_code_decides_it(
     found = look_facts.verdict("tap", "Footer home", measured, tokens)
     assert found is not None
     assert found[0] is True
+
+
+UNSAFE_NAMES = [
+    "Save; draft",
+    "Fix: now",
+    "**bold** `code`",
+    "Tab [new]",
+    '"quoted" name',
+    "Plain",
+    "",
+    "image-2.png: Next",
+    "Overdue tasks: 1",
+]
+
+
+def keyed(measured: dict[str, object], tokens: Tokens) -> dict[str, dict[str, frozenset[str]]]:
+    import look_facts
+
+    return {"image-1.png": look_facts.item_keys(measured, tokens)}
+
+
+def judged_with_keys(
+    fail: str, measured: dict[str, object] | None, tokens: Tokens
+) -> tuple[str, list[str]]:
+    import look_answer
+
+    keys = keyed(measured, tokens) if measured is not None else {"image-1.png": {}}
+    outcome, rules, _ = look_answer.judge(
+        answer_with(fail), ["image-1.png"], {"image-1.png": True}, keys=keys
+    )
+    return outcome, rules
+
+
+def test_a_measured_item_is_decided_from_its_exact_key(tmp_path: Path) -> None:
+    import look_answer
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        texts=[text_fact(name, 10.5, under=True) for name in UNSAFE_NAMES],
+        gaps=[{"at": "Save; draft", "to": "Fix: now", "px": 11, "axis": "y"}],
+    )
+    keys = sorted(look_facts.item_keys(measured, tokens)["size"])
+    assert len(keys) == len(UNSAFE_NAMES)
+    assert "no name" in keys
+    for key in [*keys, "Save draft to Fix now"]:
+        kind = "gap" if " to " in key else "size"
+        outcome, rules = judged_with_keys(
+            f"image-1.png: {key} [{kind}] Fix: change it", measured, tokens
+        )
+        assert outcome == "findings", key
+        parts, _ = look_answer.fail_parts(next(r for r in rules if "Design system" in r))
+        _, item = look_answer.part_item(parts[0])
+        assert item is not None
+        assert item.element == key
+        found = look_facts.verdict(kind, key, measured, tokens)
+        assert found is not None
+        assert found[0] is False
+    assert look_facts.verdict("size", "Save button", measured, tokens) is None
+    assert look_facts.verdict("size", "save draft", measured, tokens) is None
+    listed = look_facts.measured_text(measured, tokens)
+    assert "- Save draft: 10.5 px" in listed
+    assert "- no name: 10.5 px" in listed
+
+
+def test_a_measured_item_with_no_valid_key_is_refused_by_form(tmp_path: Path) -> None:
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        texts=[text_fact("Hint", 14)],
+        gaps=[{"at": "THU 26 Nov", "to": "10:00 GMT", "px": 18, "axis": "y"}],
+    )
+    for fail in (
+        "image-1.png: THU 26 Nov to 10:00 GMT, 18 px [gap] Fix: close it",
+        "image-1.png: Hint button [size] Fix: bigger",
+        "image-1.png: Hint [gap] Fix: close it",
+        "image-1.png: Missing element [colour] Fix: ink",
+    ):
+        outcome, rules = judged_with_keys(fail, measured, tokens)
+        assert outcome.startswith("not done: `image-1.png: "), fail
+        assert "names no key of that image" in outcome
+        assert "[judgement]" in outcome
+        assert rules == []
+    for fail in (
+        "image-1.png: THU 26 Nov to 10 00 GMT [gap] 18 px, not a token Fix: close it",
+        "image-1.png: Hint [size] Fix: bigger",
+        "image-1.png: the card sits left of its title [judgement] Fix: centre it",
+    ):
+        outcome, rules = judged_with_keys(fail, measured, tokens)
+        assert outcome == "findings", fail
+        assert any(line.startswith("Design system: Fail") for line in rules)
+    outcome, rules = judged_with_keys(
+        "image-1.png: Hint [size] Fix: bigger", None, tokens
+    )
+    assert outcome.startswith("not done: `image-1.png: Hint [size]` names no key")
+    outcome, rules = judged_with_keys(
+        "image-1.png: Hint [judgement] Fix: bigger", None, tokens
+    )
+    assert outcome == "findings"
+
+
+def proof_text(
+    name: str, size: float, weight: int, colour: str, fill: str, fg: str, bg: str, **extra: object
+) -> dict[str, object]:
+    return text_fact(
+        name, size, weight=weight, colour=colour, fill=fill, fg=fg, bg=bg, **extra
+    )
+
+
+RELEASE_PROOF = values(
+    texts=[
+        proof_text("Rescheduled from 05:30", 12, 500, "4d6969ff", "e8f0f0ff", "#4d6969", "#e8f0f0"),
+        proof_text("Forms needed", 12, 600, "7a5e3fff", "fff8e1ff", "#7a5e3f", "#fff8e1"),
+        *[
+            proof_text(name, 12, 600, "2d6a4fff", "e6efe9bf", "#2d6a4f", "#ecf3ef", align="start", centred=False)
+            for name in ("Session", "5", "/36")
+        ],
+        proof_text("THU", 12, 700, "2d6a4fff", "e6efe959", "#2d6a4f", "#f6f9f7"),
+        proof_text("26 Nov", 14, 700, "2d6a4fff", "e6efe959", "#2d6a4f", "#f6f9f7"),
+        proof_text("We are improving your tools", 16, 400, "2c3e50ff", "ffffffff", "#2c3e50", "#ffffff"),
+        proof_text("Send notes", 16, 500, "2d6a4fff", "e6efe9ff", "#2d6a4f", "#e6efe9"),
+        proof_text("Guides intro", 14, 400, "1a1a1aff", "e6efe9ff", "#1a1a1a", "#e6efe9", align="start", centred=False),
+        proof_text("Section title", 20, 600, "1a1a1aff", "e6efe9ff", "#1a1a1a", "#e6efe9", align="center", centred=True),
+    ],
+    gaps=[
+        {"at": "Rescheduled from 05:30", "to": "Forms needed", "px": 9, "axis": "x"},
+        {"at": "We are improving your tools", "to": "Send notes", "px": 12, "axis": "y"},
+        {"at": "THU 26 Nov", "to": "10:00 GMT", "px": 18, "axis": "y"},
+        {"at": "Session", "to": "5", "px": 6, "axis": "x"},
+        {"at": "5", "to": "/36", "px": 6, "axis": "x"},
+    ],
+)
+PROOF_FRAMES: dict[str, dict[str, object] | None] = dict.fromkeys(
+    ("image-1.png", "image-2.png", "image-3.png"), RELEASE_PROOF
+)
+
+
+def listed_keys(tokens: Tokens) -> set[str]:
+    import look_facts
+
+    text = look_facts.measured_text(RELEASE_PROOF, tokens)
+    return {line[2:].split(": ", 1)[0] for line in text.splitlines() if line.startswith("- ")}
+
+
+def test_the_real_items_of_the_release_proof_are_decided_from_keys(
+    tmp_path: Path,
+) -> None:
+    import look_records
+
+    tokens = tokens_of(tmp_path)
+    keys = listed_keys(tokens)
+    gap_keys = [
+        "Rescheduled from 05 30 to Forms needed",
+        "We are improving your tools to Send notes",
+        "THU 26 Nov to 10 00 GMT",
+    ]
+    colour_keys = ["Rescheduled from 05 30", "Session", "26 Nov"]
+    assert set(gap_keys) <= keys
+    assert set(colour_keys) <= keys
+    spacing = "Spacing: Fail — " + "; ".join(
+        f"image-{number}.png: {key} [gap] {px} px, not a spacing token"
+        for key, px in zip(gap_keys, (9, 12, 18), strict=True)
+        for number in (1, 2)
+    ) + ". Fix: use a token."
+    colour = "Design system: Fail — " + "; ".join(
+        f"image-{number}.png: {key} [colour] not a token"
+        for key in colour_keys
+        for number in (1, 2, 3)
+    ) + ". Fix: use a token."
+    decided = look_records.decide_line(spacing, PROOF_FRAMES, tokens)
+    assert decided.count(" — code: ") == 6
+    assert "gap 18 px is not a spacing token" in decided
+    decided = look_records.decide_line(colour, PROOF_FRAMES, tokens)
+    assert decided.count(" — code: ") == 9
+    assert "is not in the colour tokens" in decided
+
+
+def test_the_counter_and_the_centred_items_are_decided_by_code(tmp_path: Path) -> None:
+    import look_records
+
+    tokens = tokens_of(tmp_path)
+    assert {"Session to 5", "5 to /36"} <= listed_keys(tokens)
+    counter_line = (
+        "Spacing: Fail — image-1.png: 5 [weight] bolder than Session and /36; "
+        "image-1.png: Session to 5 [gap] uneven against 5 to /36. Fix: even them."
+    )
+    decided = look_records.decide_line(counter_line, PROOF_FRAMES, tokens)
+    assert "5 [weight]" not in decided
+    assert "image-1.png: Session to 5 [gap] — code: gap 6 px is not a spacing token" in decided
+    centred_line = (
+        "Alignment: Fail — image-1.png: Guides intro [align] sits on the left edge; "
+        "image-1.png: Section title [align] not centred. Fix: centre the intro."
+    )
+    decided = look_records.decide_line(centred_line, PROOF_FRAMES, tokens)
+    assert "Guides intro [align] — code: text-align start, not centred in its parent" in decided
+    assert "Section title" not in decided
+
+
+def test_the_old_shape_of_the_release_proof_items_is_refused_by_form(
+    tmp_path: Path,
+) -> None:
+    tokens = tokens_of(tmp_path)
+    for old in (
+        "THU 26 Nov to 10:00 GMT, 18 px",
+        "Moved from badge, ink #4d6969 on fill #e8f0f0, neither is a token",
+        "Session 5 /36 badge fill #ecf3ef, not sage #E6EFE9",
+    ):
+        kind = "gap" if " to " in old else "colour"
+        outcome, _ = judged_with_keys(
+            f"image-1.png: {old} [{kind}] Fix: use a token", RELEASE_PROOF, tokens
+        )
+        assert outcome.startswith("not done: `image-1.png: "), old
