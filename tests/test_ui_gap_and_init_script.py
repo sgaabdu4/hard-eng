@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 from types import ModuleType
-from typing import Any
 
 import pytest
 from test_browser import plain_step, session
@@ -12,7 +11,7 @@ from test_ui_audit_guards import measured, open_board
 
 def captured(
     tmp_path: Path, site: str, browser: ModuleType, page: str, body: str
-) -> Any:
+) -> dict[str, object]:
     (tmp_path / f"pages/{page}.html").write_text(
         f"<!doctype html><html lang=en><title>{page}</title>"
         f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{body}</body>"
@@ -27,7 +26,15 @@ def captured(
     return record["measured"]
 
 
-def assert_no_weight_verdict(tmp_path: Path, found: Any, *keys: str) -> None:
+def rows_of(found: dict[str, object], key: str) -> list[dict[str, str | int | bool]]:
+    value = found[key]
+    assert isinstance(value, list)
+    return value
+
+
+def assert_no_weight_verdict(
+    tmp_path: Path, found: dict[str, object], *keys: str
+) -> None:
     import look_facts
     from test_look_facts import tokens_of
 
@@ -48,7 +55,7 @@ def test_the_gap_between_inline_neighbours_follows_their_order_on_the_line(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     found = captured(tmp_path, site, browser, "counter", COUNTER_PAGE)
-    pairs = {(gap["at"], gap["to"]): gap["px"] for gap in found["gaps"]}
+    pairs = {(gap["at"], gap["to"]): gap["px"] for gap in rows_of(found, "gaps")}
     assert pairs == {("Round", "5"): 6, ("5", "/36"): 6}
 
 
@@ -105,7 +112,7 @@ def test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     found = captured(tmp_path, site, browser, "wrapped", WRAPPED_PAGE)
-    rows = [row for row in found["texts"] if row["at"].startswith("xxxxxxxx")]
+    rows = [row for row in rows_of(found, "texts") if row["at"].startswith("xxxxxxxx")]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", False)]
 
 
@@ -119,7 +126,7 @@ def test_a_centred_line_with_an_inline_link_is_centred(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
     found = captured(tmp_path, site, browser, "inline", INLINE_PAGE)
-    rows = [row for row in found["texts"] if row["at"].startswith("Already")]
+    rows = [row for row in rows_of(found, "texts") if row["at"].startswith("Already")]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", True)]
 
 
