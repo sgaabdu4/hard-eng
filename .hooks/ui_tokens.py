@@ -28,8 +28,9 @@ PX_PER_UNIT = {"px": 1.0, "rem": 16.0, "em": 16.0, "pt": 4 / 3}
 DART_LENGTH = re.compile(
     r"static const (?:double )?\w+\s*=\s*(\d+(?:\.0+)?)\s*;|\b(?:fontSize|size):\s*(\d+(?:\.0+)?)\s*[,)]"
 )
+FONT_PROPERTY = "size|weight|style|tracking|letter|leading|line|stretch|variant|feature|variation|kerning"
 CSS_FAMILY = re.compile(
-    r"(?:--font[\w-]*|--[\w-]*family[\w-]*|font-family)\s*:\s*([^;]+);"
+    rf"(?:--font(?!-(?:{FONT_PROPERTY})\b)[\w-]*|--[\w-]*family[\w-]*|font-family)\s*:\s*([^;]+);"
 )
 CSS_GENERIC_FAMILY = re.compile(
     r"--[\w-]+\s*:\s*([^;]*,\s*(?:sans-serif|serif|monospace|system-ui|cursive|fantasy|ui-[\w-]+))\s*;"

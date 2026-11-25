@@ -870,6 +870,18 @@ def test_dart_string_constants_are_font_families_and_letter_spacing_is_a_length(
     assert "the DESIGN.md length 0.5px is missing from the token files" in missing
 
 
+def test_a_font_property_that_is_not_a_family_adds_no_family() -> None:
+    """HE-UI-SOURCE: --font-size, --font-weight, --font-style and --font-tracking values are no font family, so DESIGN.md need not list `.875rem` or `bold`; a family property still is one."""
+    css = (
+        "@theme {\n  --font-size-sm: .875rem;\n  --font-size-body: clamp(1rem, 2vw, 1.25rem);\n"
+        "  --font-weight-bold: bold;\n  --font-style-italic: italic;\n"
+        "  --font-tracking-tight: -0.02em;\n"
+        '  --font-sans: "Inter", sans-serif;\n  --type-family: Georgia, serif;\n}\n'
+    )
+    assert token_facts([css]).families == {"Inter", "Georgia"}
+    assert token_facts(["--font-display: Lora;\n"]).families == {"Lora"}
+
+
 def test_a_letter_spacing_product_is_no_literal_length() -> None:
     """HE-UI-SOURCE: letterSpacing: 12.5 * 0.02 is an expression, not the length 12.5; a plain literal in a call is read."""
     assert token_facts(["TextStyle(letterSpacing: 12.5 * 0.02)\n"]).lengths == set()
