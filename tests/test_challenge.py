@@ -41,6 +41,19 @@ def fake_cli(
     return log
 
 
+def git_only_path(tmp_path: Path) -> Path:
+    directory = tmp_path / "git-only"
+    directory.mkdir()
+    (directory / "git").symlink_to(
+        next(
+            Path(p) / "git"
+            for p in os.environ["PATH"].split(os.pathsep)
+            if (Path(p) / "git").exists()
+        )
+    )
+    return directory
+
+
 @pytest.fixture
 def branch(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv("CLAUDECODE", raising=False)
@@ -338,15 +351,7 @@ def test_unavailable_reviewer_records_not_done(
 ) -> None:
     big(branch)
     if code is None:
-        (tmp_path / "git-only").mkdir()
-        (tmp_path / "git-only" / "git").symlink_to(
-            next(
-                Path(p) / "git"
-                for p in os.environ["PATH"].split(os.pathsep)
-                if (Path(p) / "git").exists()
-            )
-        )
-        monkeypatch.setenv("PATH", str(tmp_path / "git-only"))
+        monkeypatch.setenv("PATH", str(git_only_path(tmp_path)))
     else:
         fake_cli(tmp_path / "bin", "codex", "", code, error)
         fake_cli(tmp_path / "bin", "agy", "", code, "agy unavailable")
@@ -367,18 +372,28 @@ def test_unavailable_reviewer_records_not_done(
 
 @pytest.mark.parametrize(
     ("code", "output", "error"),
-    [(1, "", "Not signed in"), (0, "Looks fine without exact verdict", "")],
+    [
+        (1, "", "Not signed in"),
+        (0, "Looks fine without exact verdict", ""),
+        (None, "", ""),
+    ],
 )
 def test_challenge_falls_back_to_second_reviewer_when_first_fails(
     branch: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    code: int,
+    code: int | None,
     output: str,
     error: str,
 ) -> None:
     big(branch)
-    fake_cli(tmp_path / "bin", "codex", output, code, error)
+    if code is None:
+        (tmp_path / "bin" / "codex").unlink()
+        monkeypatch.setenv(
+            "PATH", f"{tmp_path / 'bin'}{os.pathsep}{git_only_path(tmp_path)}"
+        )
+    else:
+        fake_cli(tmp_path / "bin", "codex", output, code, error)
     agy_log = fake_cli(tmp_path / "bin", "agy", "Looks solid.\nVERDICT: clean")
     host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
     monkeypatch.setenv("CLAUDECODE", "1")
@@ -387,6 +402,22 @@ def test_challenge_falls_back_to_second_reviewer_when_first_fails(
     assert not host_log.exists()
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "clean")
+    assert "fresh" not in record
+
+
+def test_findings_never_send_the_review_to_another_agent(
+    branch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big(branch)
+    fake_cli(tmp_path / "bin", "codex", "src/a.py:3 breaks\nVERDICT: findings")
+    agy_log = fake_cli(tmp_path / "bin", "agy", "VERDICT: clean")
+    host_log = fake_cli(tmp_path / "bin", "claude", "VERDICT: clean")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    assert challenge.challenge(branch, None, None) == 0
+    assert not agy_log.exists()
+    assert not host_log.exists()
+    record = record_of(branch)
+    assert (record["reviewer"], record["outcome"]) == ("codex", "findings")
     assert "fresh" not in record
 
 
@@ -437,8 +468,7 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
     argv = ran["argv"]
     assert ran["stdin_is_null"]
     assert Path(ran["cwd"]).resolve() != branch.resolve()
-    assert argv[:8] == [
-        "-p",
+    assert argv[:7] == [
         "--model",
         "gemini-4-neon",
         "--effort",
@@ -447,13 +477,17 @@ def test_agy_reviewer_runs_read_only_with_session_settings(
         "--disable-slash-commands",
         "--settings",
     ]
-    settings = json.loads(argv[8])
+    assert "-p" not in argv
+    assert len(argv) == 9
+    assert argv[8].startswith("--print=")
+    settings = json.loads(argv[7])
+    assert settings["agentMode"] == "plan"
     assert settings["toolPermission"] == "proceed-in-sandbox"
     assert settings["enableTerminalSandbox"] is True
     assert "write_file(*)" in settings["permissions"]["deny"]
     assert "mcp(*)" in settings["permissions"]["deny"]
     assert settings["permissions"]["allow"] == [f"read_file({branch.resolve()}/)"]
-    assert str(branch.resolve()) in argv[9]
+    assert str(branch.resolve()) in argv[8]
     record = record_of(branch)
     assert (record["reviewer"], record["outcome"]) == ("agy", "findings")
 
@@ -490,7 +524,7 @@ def test_challenge_honors_local_models_overlay_for_order_and_flags(
     assert challenge.challenge(branch, None, None) == 0
     assert not codex_log.exists()
     argv = json.loads(agy_log.read_text())["argv"]
-    assert argv[:5] == ["-p", "--model", "gemini-4.2-custom", "--effort", "max"]
+    assert argv[:4] == ["--model", "gemini-4.2-custom", "--effort", "max"]
     assert record_of(branch)["reviewer"] == "agy"
 
 
