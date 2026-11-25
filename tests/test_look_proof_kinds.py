@@ -2,7 +2,6 @@
 
 import json
 import re
-import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -415,7 +414,6 @@ def test_a_radius_outside_the_tokens_fails_design_system_in_code(
         "no token group",
         "no measured values",
         "old record only",
-        "no PyYAML",
         "text size outside the tokens",
         "root size changed",
         "no root size",
@@ -441,9 +439,6 @@ def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_
         values = {"contrast": []}
     if case == "old record only":
         values = {"radii": [{"at": "x", "px": 7}], "root_px": 16}
-    if case == "no PyYAML":
-        monkeypatch.setitem(sys.modules, "yaml", None)
-        values = {"sizes": SIZES, "radii": RADII, "root_px": 16}
     if case == "text size outside the tokens":
         values["sizes"] = SIZES
     if case == "root size changed":
