@@ -100,3 +100,60 @@ def test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred(
         row for row in record["measured"]["texts"] if row["at"].startswith("xxxxxxxx")
     ]
     assert [(row["align"], row["centred"]) for row in rows] == [("start", False)]
+
+
+INLINE_PAGE = (
+    "<main><p style='margin:0 auto;width:fit-content;font:14px sans-serif'>"
+    "Already have an account? <a href='/login'>Sign in</a></p></main>"
+)
+
+
+def test_a_centred_line_with_an_inline_link_is_centred(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/inline.html").write_text(
+        "<!doctype html><html lang=en><title>Inline</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{INLINE_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "inline")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    rows = [
+        row for row in record["measured"]["texts"] if row["at"].startswith("Already")
+    ]
+    assert [(row["align"], row["centred"]) for row in rows] == [("start", True)]
+
+
+REPEAT_PAGE = (
+    "<main><div style='display:flex;gap:6px;font-size:12px;font-weight:600'>"
+    "<span>Round</span><span>5</span><span>/36</span></div>"
+    "<div style='display:flex;gap:6px;font-size:12px'>"
+    "<span style='font-weight:600'>5</span>"
+    "<span style='font-weight:400'>Overdue</span></div></main>"
+)
+
+
+def test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    import look_facts
+    from test_look_facts import tokens_of
+
+    (tmp_path / "pages/repeat.html").write_text(
+        "<!doctype html><html lang=en><title>Repeat</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{REPEAT_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "repeat")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    tokens = tokens_of(tmp_path)
+    assert look_facts.verdict("weight", "5", record["measured"], tokens) is None
+    assert "5" not in look_facts.item_keys(record["measured"], tokens)["weight"]

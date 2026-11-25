@@ -50,6 +50,9 @@ Decisions made here, each with a reason:
 - [x] A bare number in an extra group matches a token length and is never reported missing → `tests/test_ui_token_sources.py::test_a_bare_number_in_an_extra_group_matches_a_token_length_but_is_never_missing`
 - [x] A session that the tool no longer lists loses its saved init scripts, and a session opened outside the command still reaches the request delay refusal → `tests/test_browser_init_scripts.py::test_a_session_that_the_tool_no_longer_lists_loses_its_saved_init_scripts`
 - [x] A stylesheet that mixes `@theme` tokens with other rules gets a line that says why and what passes → `tests/test_ui_token_sources.py::test_a_mixed_stylesheet_gets_a_token_gap_line_that_says_why`
+- [x] A centred line with an inline link is centred, whatever the number of text fragments on the line → `tests/test_ui_gap_and_init_script.py::test_a_centred_line_with_an_inline_link_is_centred`
+- [x] A label repeated in two rows with one style gets no weight verdict → `tests/test_ui_gap_and_init_script.py::test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict`
+- [x] A key whose facts disagree has no key, and its item is refused by form → `tests/test_look_keys.py::test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused`
 
 Steps:
 

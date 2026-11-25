@@ -514,16 +514,23 @@ const centredIn = (el, s) => {
   const left = p.left + parseFloat(ps.paddingLeft) + parseFloat(ps.borderLeftWidth);
   const right = p.right - parseFloat(ps.paddingRight) - parseFloat(ps.borderRightWidth);
   const middle = (left + right) / 2;
-  const lines = [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1);
+  const lines = [];
+  for (const r of [...range.getClientRects()].filter((q) => q.width > 1 && q.height > 1).sort((a, z) => a.top - z.top || a.left - z.left)) {
+    const line = lines[lines.length - 1];
+    if (line && r.top < line.bottom - 1) { line.left = Math.min(line.left, r.left); line.right = Math.max(line.right, r.right); line.bottom = Math.max(line.bottom, r.bottom); }
+    else lines.push({ left: r.left, right: r.right, bottom: r.bottom });
+  }
   if (s.textAlign !== "center" && !lines.every((r) => Math.abs((r.left + r.right) / 2 - middle) <= 2)) return false;
   return Math.abs((t.left + t.right) / 2 - middle) <= 2 && (s.textAlign === "center" || t.width < right - left - 4);
 };
 const textFacts = new Map();
+const textNames = new Map();
+for (const el of texts) textNames.set(factName(el), (textNames.get(factName(el)) || 0) + 1);
 for (const el of texts) {
   const s = getComputedStyle(el);
   const size = parseFloat(s.fontSize);
   const c = rgb(s.color);
-  const fact = { at: factName(el), px: Math.round(size * 100) / 100, weight: parseFloat(s.fontWeight) || 400, align: s.textAlign, centred: centredIn(el, s), colour: raw8(c), fill: fillOf(el), under: size < LIMITS.text_px };
+  const fact = { at: factName(el), n: textNames.get(factName(el)), px: Math.round(size * 100) / 100, weight: parseFloat(s.fontWeight) || 400, align: s.textAlign, centred: centredIn(el, s), colour: raw8(c), fill: fillOf(el), under: size < LIMITS.text_px };
   const bg = solid(el);
   if (bg) {
     const fg = c.slice(0, 3).map((v, i) => v * c[3] + bg[i] * (1 - c[3]));

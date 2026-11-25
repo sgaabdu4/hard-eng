@@ -455,3 +455,29 @@ def test_a_link_in_a_sentence_is_not_said_to_meet_the_floor(tmp_path: Path) -> N
     listed = look_facts.measured_text(measured, tokens)
     assert "- terms: 100x18 px, inline link, exempt from the 44 px floor" in listed
     assert "at or over" not in listed.partition("tap size")[2].partition("\n")[2]
+
+
+def test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    measured = values(
+        controls=[control("Edit", 80, 44), control("Edit", 60, 30)],
+        texts=[
+            text_fact("Settings", 14, align="center", centred=True),
+            text_fact("Settings", 14, align="start", centred=False),
+        ],
+    )
+    keys = look_facts.item_keys(measured, tokens)
+    assert look_facts.verdict("tap", "Edit", measured, tokens) is None
+    assert "Edit" not in keys["tap"]
+    assert look_facts.verdict("align", "Settings", measured, tokens) is None
+    assert "Settings" not in keys["align"]
+    outcome, _ = judged_with_keys(
+        "image-1.png: Edit [tap] looks like 10 px Fix: make it bigger",
+        measured,
+        tokens,
+    )
+    assert outcome.startswith("not done: `image-1.png: Edit [tap]`")
