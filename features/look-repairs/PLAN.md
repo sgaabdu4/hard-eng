@@ -1,6 +1,6 @@
 # Look repairs from develop to main, without the whole-project UI scan
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -26,17 +26,17 @@ Authority: Autonomous: the coordinator's hotfix brief of 2026-11-25; the PR is o
 
 ## Acceptance + steps
 
-- [ ] The prompt names each element with its measured facts and says what each check covered → `tests/test_look_facts.py::test_the_prompt_names_each_element_with_its_measured_facts`, `tests/test_look_facts.py::test_the_prompt_says_what_each_check_covered`
-- [ ] A Fail item with a number or colour and no measured tag is refused, and code decides each measured kind from its exact key → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`, `tests/test_look_facts.py::test_code_decides_each_measured_kind`, `tests/test_look_keys.py::test_a_measured_item_is_decided_from_its_exact_key`, `tests/test_look_keys.py::test_a_measured_item_with_no_valid_key_is_refused_by_form`
-- [ ] Code decides font weight and text alignment from the measured facts → `tests/test_look_keys.py::test_code_decides_font_weight_against_its_neighbours`, `tests/test_look_keys.py::test_code_decides_text_alignment`
-- [ ] The record holds each element with its facts and every rounded element's radius, and code decides each kind the same way in five real captures → `tests/test_ui_audit_guards.py::test_the_record_holds_each_element_with_its_facts`, `tests/test_ui_audit_guards.py::test_the_record_holds_the_corner_radius_of_every_rounded_element`, `tests/test_ui_audit_guards.py::test_code_decides_each_kind_the_same_way_in_five_real_captures`
-- [ ] The gap between inline neighbours follows their order on the line, and wrapped left text in a centred box is not centred → `tests/test_ui_gap_and_init_script.py::test_the_gap_between_inline_neighbours_follows_their_order_on_the_line`, `tests/test_ui_gap_and_init_script.py::test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred`
-- [ ] A stale image copy is refused and the newer capture is named → `tests/test_look_stale.py::test_a_stale_copy_is_refused_and_the_newer_capture_is_named`
-- [ ] An earlier measured item is decided by code before the prompt, and an earlier item of a covered image is not listed → `tests/test_look_facts.py::test_an_earlier_measured_item_is_decided_by_code_before_the_prompt`, `tests/test_look_facts.py::test_an_earlier_item_of_an_image_that_a_later_clean_record_covers_is_not_listed`
-- [ ] The reviewer answer shapes of the fixture files are read as their file names say → `tests/test_look_answer.py::test_a_real_reviewer_answer_shape_is_read_as_its_file_name_says`
-- [ ] The Alignment rule line says a field action is an icon inside its field → `tests/test_look.py::test_the_prompt_tells_the_reviewer_a_field_action_is_an_icon_inside_its_field`
-- [ ] `capture` keeps working with the new measure reply → `tests/test_browser.py::test_capture_keeps_no_image_when_the_frame_check_fails`
-- [ ] Proof on separate real projects → N/A — no test can run a separate project from this repository; the coordinator proves it after the merge
+- [x] The prompt names each element with its measured facts and says what each check covered → `tests/test_look_facts.py::test_the_prompt_names_each_element_with_its_measured_facts`, `tests/test_look_facts.py::test_the_prompt_says_what_each_check_covered`
+- [x] A Fail item with a number or colour and no measured tag is refused, and code decides each measured kind from its exact key → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`, `tests/test_look_facts.py::test_code_decides_each_measured_kind`, `tests/test_look_keys.py::test_a_measured_item_is_decided_from_its_exact_key`, `tests/test_look_keys.py::test_a_measured_item_with_no_valid_key_is_refused_by_form`
+- [x] Code decides font weight and text alignment from the measured facts → `tests/test_look_keys.py::test_code_decides_font_weight_against_its_neighbours`, `tests/test_look_keys.py::test_code_decides_text_alignment`
+- [x] The record holds each element with its facts and every rounded element's radius, and code decides each kind the same way in five real captures → `tests/test_ui_audit_guards.py::test_the_record_holds_each_element_with_its_facts`, `tests/test_ui_audit_guards.py::test_the_record_holds_the_corner_radius_of_every_rounded_element`, `tests/test_ui_audit_guards.py::test_code_decides_each_kind_the_same_way_in_five_real_captures`
+- [x] The gap between inline neighbours follows their order on the line, and wrapped left text in a centred box is not centred → `tests/test_ui_gap_and_init_script.py::test_the_gap_between_inline_neighbours_follows_their_order_on_the_line`, `tests/test_ui_gap_and_init_script.py::test_wrapped_left_aligned_text_in_a_centred_box_is_not_centred`
+- [x] A stale image copy is refused and the newer capture is named → `tests/test_look_stale.py::test_a_stale_copy_is_refused_and_the_newer_capture_is_named`
+- [x] An earlier measured item is decided by code before the prompt, and an earlier item of a covered image is not listed → `tests/test_look_facts.py::test_an_earlier_measured_item_is_decided_by_code_before_the_prompt`, `tests/test_look_facts.py::test_an_earlier_item_of_an_image_that_a_later_clean_record_covers_is_not_listed`
+- [x] The reviewer answer shapes of the fixture files are read as their file names say → `tests/test_look_answer.py::test_a_real_reviewer_answer_shape_is_read_as_its_file_name_says`
+- [x] The Alignment rule line says a field action is an icon inside its field → `tests/test_look.py::test_the_prompt_tells_the_reviewer_a_field_action_is_an_icon_inside_its_field`
+- [x] `capture` keeps working with the new measure reply → `tests/test_browser.py::test_capture_keeps_no_image_when_the_frame_check_fails`
+- [x] Proof on separate real projects → N/A — no test can run a separate project from this repository; the coordinator proves it after the merge
 
 Steps:
 
@@ -66,11 +66,12 @@ N/A — hook code, tests and one skill sentence; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending
-E2E: N/A — hook code with no visible UI; the measure is proved by real browser captures in the tests above
-Real service: Required — Claude reviewer CLI: one real `look` run on a real `browser capture` of a page, with the ported code; Complete needs Passed
-Retro: Pending
+Result: Passed
+Evidence: Focused run after the port: 426 tests passed in 409 s (look files, browser, audit guards, gap test, ui quality, local proof, capture match). The Ready check ran the full suite: 7938 tests passed in 599 s and every gate passed except `declarations`, which named `look_answer`, `look_facts` and `ui_tokens` as missing first-party modules; they joined the first-party list and `deptry` then reported no issue. The plans of the earlier look hotfixes named tests that moved to `tests/test_look_answer.py`; their acceptance lines now name the new place. `git diff origin/develop HEAD` over `look.py`, `look_answer.py`, `look_facts.py`, `look_records.py` and the seven look test files is empty. The diff of `ui_measure.py` against develop holds only the request hold, the fetch wave source and the wrapped-label rule. A real `browser capture` of a one-page site wrote records with `measured` (texts, gaps, sizes, radii, root_px) and no findings at three widths.
+E2E: N/A — hook code with no visible UI; the measure runs in real browsers in `tests/test_ui_audit_guards.py` and `tests/test_ui_gap_and_init_script.py`
+Real service: Passed — Claude reviewer CLI: one real `look` run on the three real captures returned a readable answer with no form refusal; the one Fail line carried a kind tag (`[judgement]`) and a `Fix:`; the measured rules came from the browser record (`measured: 0 findings at 390, 768 and 1280`)
+Retro: (1) Fault on `main`: a reviewer states a size, colour or gap by eye and the measure disproves it, and `main` never got develop's repairs because develop also holds the whole-project scan → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`, `tests/test_look_facts.py::test_code_decides_each_measured_kind`. (2) A per-commit pick conflicted at the second commit, since `main` holds hand ports of older develop commits, so the port took the look files whole and cut the leave-outs by hand → the `git diff origin/develop HEAD` check of the look files in Verification above. (3) The `declarations` gate caught three modules missing from the first-party list, fixed at once → the `declarations` gate of `hard-eng.gates.json`, which already runs on each change.
+Not checked: the request hold and route init script (left out on purpose); `design_hash(root, head)` in `ui_proof` (left as `main`); any installed project before the merge.
 
 Delivery target: PR
 Delivery: Pending — the PR to `main` passes `hard-eng`.
