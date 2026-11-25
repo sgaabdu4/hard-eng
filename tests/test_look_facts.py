@@ -540,8 +540,8 @@ def test_a_findings_run_ends_with_the_line_about_the_rules(
     for words in (
         "also on parts this change did not touch",
         "contradicts a measured value, the markup or a quoted DESIGN.md line",
-        "send that record line to the maintainer",
-        "No declined, answered or skip line exists",
+        "then dispute that item: `look <images> --dispute '<item>' --cite <path>:<from>-<to> [--measured <key>]`",
+        "No declined, answered or skip line clears a Fail; only the dispute command does",
     ):
         assert words in lines[-1]
     assert len([line for line in lines if line.startswith(NOTE)]) == 1
