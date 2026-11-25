@@ -4,7 +4,6 @@ import fcntl
 import json
 import shlex
 import subprocess
-import tempfile
 from pathlib import Path
 
 from gate_config import SOURCE_FILE, JsonValue
@@ -15,6 +14,7 @@ from update_runner import (
     UPDATE_BRANCH,
     UPDATE_COMMAND,
     branch_current,
+    candidate_worktree,
     fetch_base,
     installed_revision,
     landed,
@@ -213,29 +213,8 @@ def load_refusal(tree: Path) -> str | None:
 
 
 def tip_refusal(root: Path) -> str | None:
-    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
-        tip = Path(temporary) / "candidate"
-        subprocess.run(
-            [
-                "git",
-                "worktree",
-                "add",
-                "--quiet",
-                "--detach",
-                str(tip),
-                f"refs/heads/{UPDATE_BRANCH}",
-            ],
-            cwd=root,
-            check=True,
-        )
-        try:
-            return load_refusal(tip)
-        finally:
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", str(tip)],
-                cwd=root,
-                check=False,
-            )
+    with candidate_worktree(root, f"refs/heads/{UPDATE_BRANCH}") as tip:
+        return load_refusal(tip)
 
 
 def fix_steps(root: Path) -> str:
