@@ -523,7 +523,13 @@ const seenGaps = new Set();
 for (const parent of document.body.querySelectorAll("*")) {
   const kids = [...parent.children].filter((c) => visible(c) && !["absolute", "fixed"].includes(getComputedStyle(c).position));
   if (kids.length < 2) continue;
-  const boxes = kids.map((c) => ({ c, b: c.getBoundingClientRect() })).sort((a, z) => a.b.top - z.b.top || a.b.left - z.b.left);
+  const rows = [];
+  for (const box of kids.map((c) => ({ c, b: c.getBoundingClientRect() })).sort((a, z) => a.b.top - z.b.top || a.b.left - z.b.left)) {
+    const row = rows[rows.length - 1];
+    if (row && box.b.top < row.bottom - 1) { row.items.push(box); row.bottom = Math.max(row.bottom, box.b.bottom); }
+    else rows.push({ items: [box], bottom: box.b.bottom });
+  }
+  const boxes = rows.flatMap((row) => row.items.sort((a, z) => a.b.left - z.b.left));
   for (let i = 1; i < boxes.length; i++) {
     const below = boxes[i].b.top - boxes[i - 1].b.bottom, beside = boxes[i].b.left - boxes[i - 1].b.right;
     const axis = below >= -1 ? "y" : beside >= -1 ? "x" : "";
