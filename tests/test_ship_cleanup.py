@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -236,3 +237,34 @@ def test_a_leftover_file_in_a_merged_small_task_gets_the_clean_checkout_line(
     (fixture.root / "scratch.txt").write_text("left behind\n")
     with pytest.raises(shipping.ShippingError, match="clean task checkout"):
         shipping.verify(fixture.root, None, _PR_URL, stage)
+
+
+def test_cleanup_reads_a_policy_that_a_newer_release_gave_more_keys(
+    delivered_worktree: tuple[Path, Shipment],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, shipment = delivered_worktree
+    held = tmp_path / "newer-policy"
+    held.mkdir()
+    policy = {
+        "base": "main",
+        "checks": ["build"],
+        "ui_paths": [],
+        "ci_seconds": 180,
+        "pre_push_seconds": 180,
+        "delivery": [],
+        "added_by_a_newer_release": True,
+    }
+    (held / "hard-eng.gates.json").write_text(json.dumps({"shipping": policy}))
+
+    def verify(*_arguments: object) -> Shipment:
+        shipping.load_policy(held)
+        return shipment
+
+    monkeypatch.setattr(ship_actions, "verify", verify)
+    with pytest.raises(shipping.ShippingError, match="unknown or missing keys"):
+        ship_actions.run(root, None, shipment.pr_url, "delivered", None, None)
+    assert shipment.root.exists()
+    ship_actions.run(root, None, shipment.pr_url, "cleanup", str(shipment.root), None)
+    assert not shipment.root.exists()
