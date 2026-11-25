@@ -7,6 +7,9 @@ import math
 import os
 import re
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -291,7 +294,22 @@ def _delivery_entries(value: JsonValue) -> list[Delivery]:
     return commands
 
 
+_NEWER_KEYS_OK: ContextVar[bool] = ContextVar("newer_policy_keys_ok", default=False)
+
+
+@contextmanager
+def reading_newer_policy_keys() -> Iterator[None]:
+    """Skip policy keys this release does not know, for a step that proves only a merge, such as cleanup run from a checkout older than the task."""
+    token = _NEWER_KEYS_OK.set(True)
+    try:
+        yield
+    finally:
+        _NEWER_KEYS_OK.reset(token)
+
+
 def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
+    if _NEWER_KEYS_OK.get():
+        raw = {key: raw[key] for key in raw if key in _CONFIG_KEYS | _OPTIONAL_KEYS}
     if not _CONFIG_KEYS <= set(raw) <= _CONFIG_KEYS | _OPTIONAL_KEYS:
         raise ShippingError("shipping policy has unknown or missing keys")
     base = raw["base"]
