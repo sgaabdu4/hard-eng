@@ -52,7 +52,7 @@ N/A — hook code and tests; no visible UI.
 Result: Pending
 Evidence: Pending the Complete check.
 E2E: N/A — the change is a check inside the capture command and the cleanup guard, proved by the real-browser tests and the real Git tests above.
-Real service: Pending — a real cleanup of this task's own worktree.
+Real service: Required — GitHub and Git: `ship --stage cleanup` removes this task's own worktree, which has initialized submodules, and its remote branch from a checkout of develop, after the merge.
 Retro: Pending.
 
 Delivery target: Merge
