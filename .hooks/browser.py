@@ -433,8 +433,10 @@ def require_readable_document(tool: str, folder: Path, session: str) -> None:
         )
 
 
-def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object]]:
-    """The faults of the page as it is now: the page script and axe, before anything draws on it."""
+def measure_page(
+    tool: str, folder: Path, session: str
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """The faults and the measured values of the page as it is now: the page script and axe, before anything draws on it."""
     from ui_measure import AXE_TAGS, axe_findings, decoration_script, measure_script
 
     reply = require(
@@ -447,13 +449,15 @@ def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object
             text=measure_script(session_actions(folder, session)),
         )
     )
+    page = json.loads(json.loads(reply))
+    measured = cast(dict[str, object], page["measured"])
     audit = require(
         run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
     )
-    found = [*json.loads(json.loads(reply)), *axe_findings(audit)]
+    found = [*page["found"], *axe_findings(audit)]
     contrast = [item for item in found if item["rule"] == "contrast"]
     if not contrast:
-        return found
+        return found, measured
     selectors = [str(item["at"]) for item in contrast]
     reply = require(
         run_tool(
@@ -462,7 +466,8 @@ def measure_page(tool: str, folder: Path, session: str) -> list[dict[str, object
     )
     flags = json.loads(json.loads(reply))
     skipped = [item for item, flag in zip(contrast, flags, strict=True) if flag]
-    return [item for item in found if not any(item is gone for gone in skipped)]
+    kept = [item for item in found if not any(item is gone for gone in skipped)]
+    return kept, measured
 
 
 def shoot_page(
@@ -473,7 +478,7 @@ def shoot_page(
 
     folder = output_folder(root)
     require_readable_document(tool, folder, session)
-    findings = measure_page(tool, folder, session)
+    findings, measured = measure_page(tool, folder, session)
     script = PAGE_SCRIPT.replace("RINGS", json.dumps(rings))
     reply = require(run_tool(tool, folder, session, "eval", "--stdin", text=script))
     page_result = json.loads(json.loads(reply))
@@ -490,7 +495,15 @@ def shoot_page(
         route = json.loads(
             require(run_tool(tool, folder, session, "eval", "location.pathname"))
         )
-        write_record(root, image, width, findings, str(route), ring_boxes=ring_boxes)
+        write_record(
+            root,
+            image,
+            width,
+            findings,
+            str(route),
+            ring_boxes=ring_boxes,
+            measured=measured,
+        )
     except BaseException:
         image.unlink(missing_ok=True)
         image.with_suffix(".json").unlink(missing_ok=True)

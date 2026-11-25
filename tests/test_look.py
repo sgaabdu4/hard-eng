@@ -166,6 +166,13 @@ def test_look_refuses_an_unopened_image(
     ]
 
 
+def next_head(project: Path) -> None:
+    """A new commit that changes no input of the reviewer, so a rerun is not the same head."""
+    count = len(list(project.glob("head-*.txt")))
+    (project / f"head-{count}.txt").write_text("another head\n")
+    commit(project, f"head {count}")
+
+
 def test_look_reads_codex_image_views_from_the_session_file(
     tmp_path: Path, project: Path
 ) -> None:
@@ -175,8 +182,11 @@ def test_look_reads_codex_image_views_from_the_session_file(
     assert record["outcome"] == "clean"
     assert record["reviewer"] == "codex"
     assert all(item["read"] for item in listed(record, "images"))
+    next_head(project)
     install_agent(tmp_path, "codex", 0, good_answer(2))
-    assert str(run_look(project, "claude", images)["outcome"]).startswith("not done")
+    assert str(
+        run_look(project, "claude", images, extra=["--all"])["outcome"]
+    ).startswith("not done")
 
 
 def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) -> None:
@@ -189,7 +199,19 @@ def test_look_prompt_holds_only_images_and_rules(tmp_path: Path, project: Path) 
     for forbidden in (str(project), "PLAN", "diff", "Pass line", "after-0", "builder"):
         assert forbidden not in prompt, forbidden
     assert all(name in prompt for name in judged_rule_names())
+    assert "every frame and element" in prompt
+    assert "`image-N.png: <key> [<kind>]`" in prompt
     assert project.name not in seen["cwd"]
+
+
+def test_the_prompt_tells_the_reviewer_a_field_action_is_an_icon_inside_its_field(
+    tmp_path: Path, project: Path
+) -> None:
+    images = make_images(project, 1)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "icon inside that field, not a button beside it" in prompt
 
 
 def test_look_falls_back_to_a_fresh_same_agent_session(
@@ -316,121 +338,6 @@ def test_look_reads_the_rule_lines_and_image_lines_a_reviewer_actually_writes(
     assert "image-1.png" in cast(dict[str, str], record["details"])
 
 
-@pytest.mark.parametrize("separator", [". ", " - ", " — "])
-def test_look_reads_each_rule_line_form_and_refuses_a_line_with_no_verdict(
-    separator: str,
-) -> None:
-    import look
-
-    names = judged_rule_names()
-    image = ["Image image-1.png: a card with a title", "VERDICT: clean"]
-    read = {"image-1.png": True}
-
-    def rule_lines(answer: list[str]) -> tuple[str, list[str]]:
-        outcome, rules, _ = look.judge("\n".join(answer), ["image-1.png"], read)
-        return outcome, rules
-
-    given = [f"- {name}: Pass{separator}looked at it" for name in names]
-    assert rule_lines([*given, *image]) == (
-        "clean",
-        [f"{name}: Pass — looked at it" for name in names],
-    )
-    for broken in (f"- {names[0]}: looked at it", f"- {names[0]}: Pass."):
-        outcome, rules = rule_lines([broken, *given[1:], *image])
-        assert outcome.startswith("not done"), broken
-        assert rules == []
-
-
-def judge_blocks(blocks: dict[str, list[str]]) -> tuple[str, list[str]]:
-    import look
-
-    lines = [
-        line
-        for name in judged_rule_names()
-        for line in blocks.get(name, [f"- {name}: Pass. looked at it"])
-    ]
-    answer = "\n".join(
-        [*lines, "Image image-1.png: a card with a title", "VERDICT: findings"]
-    )
-    outcome, rules, _ = look.judge(answer, ["image-1.png"], {"image-1.png": True})
-    return outcome, rules
-
-
-def test_a_fix_after_a_list_belongs_to_its_rule_block() -> None:
-    outcome, rules = judge_blocks(
-        {
-            "Design system": [
-                "- Design system: Fail. Two things break DESIGN.md:",
-                "  1. The chips have square corners.",
-                "  2. The bars use a colour that is not a token.",
-                "",
-                "  The outline looks right. Fix: round the chips and use a token for the bars.",
-            ]
-        }
-    )
-    assert outcome == "findings"
-    stored = next(line for line in rules if line.startswith("Design system:"))
-    assert stored == (
-        "Design system: Fail — Two things break DESIGN.md: 1. The chips have square "
-        "corners. 2. The bars use a colour that is not a token. The outline looks "
-        "right. Fix: round the chips and use a token for the bars."
-    )
-
-
-def test_a_fail_block_with_no_fix_is_still_refused() -> None:
-    nofix = [
-        "- Hierarchy: Fail. Two filled elements compete:",
-        "  1. A chip.",
-        "  2. A tab.",
-    ]
-    outcome, rules = judge_blocks({"Hierarchy": nofix})
-    assert outcome.startswith("not done: a Fail line names no `Fix: <the change>`")
-    assert rules == []
-    outcome, _ = judge_blocks(
-        {
-            "Hierarchy": nofix,
-            "Spacing": ["- Spacing: Pass. even gaps. Fix: nothing, this is a Pass"],
-        }
-    )
-    assert outcome.startswith("not done: a Fail line names no")
-
-
-def test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon() -> None:
-    expected = (
-        "No clutter: Fail — The note stays. Fix: remove it. (kept: 40, removed: 3)"
-    )
-    for form in (
-        "- No clutter: Fail (kept: 40, removed: 3). The note stays. Fix: remove it.",
-        "- No clutter: Fail (kept: 40, removed: 3) - The note stays. Fix: remove it.",
-        "- No clutter (kept: 40, removed: 3): Fail. The note stays. Fix: remove it.",
-    ):
-        outcome, rules = judge_blocks({"No clutter": [form]})
-        assert outcome == "findings", form
-        stored = next(line for line in rules if line.startswith("No clutter:"))
-        assert stored == expected, form
-
-
-def test_a_count_note_with_no_number_after_the_verdict_is_still_refused() -> None:
-    outcome, rules = judge_blocks(
-        {
-            "No clutter": [
-                "- No clutter: Fail (kept: , removed: ). The note stays. Fix: remove it."
-            ]
-        }
-    )
-    assert outcome.startswith("not done: a rule line or an image detail")
-    assert rules == []
-
-
-def test_the_prompt_shows_the_count_note_before_the_colon(
-    tmp_path: Path, project: Path
-) -> None:
-    _, _, prompt = first_prompt(tmp_path, project)
-    form = prompt.partition("\n\nRules:")[0]
-    assert "`- No clutter (kept: 40, removed: 3): Fail. <what you saw>`" in form
-    assert "—" not in form
-
-
 def test_the_prompt_form_needs_no_em_dash(tmp_path: Path, project: Path) -> None:
     _, _, prompt = first_prompt(tmp_path, project)
     form = prompt.partition("\n\nRules:")[0]
@@ -465,8 +372,9 @@ def test_look_passes_models_json_flags_and_supports_agy_host_fallback(
         "service_tier=default",
     ]
     (tmp_path / "bin/codex").unlink()
+    next_head(project)
     claude_log = install_agent(tmp_path, "claude", 1, good_answer(1))
-    record = run_look(project, "agy", images)
+    record = run_look(project, "agy", images, extra=["--all"])
     assert record["reviewer"] == "claude"
     assert record["fresh_same_agent"] is False
     claude_argv = json.loads(claude_log.read_text())["argv"]
@@ -519,16 +427,6 @@ def test_look_ignores_uncommitted_shipping_base_edit(
     ]
 
 
-def test_look_reads_a_real_claude_answer() -> None:
-    import look
-
-    answer = (FIXTURES / "claude-answer.txt").read_text()
-    outcome, rules, details = look.judge(answer, ["image-1.png"], {"image-1.png": True})
-    assert outcome == "findings"
-    assert len(rules) == len(judged_rule_names())
-    assert "image-1.png" in details
-
-
 def first_prompt(tmp_path: Path, project: Path) -> tuple[list[Path], Path, str]:
     images = make_images(project, 2)
     log = install_agent(tmp_path, "claude", 2, good_answer(2))
@@ -572,36 +470,126 @@ def test_look_prompt_ignores_ring_outlines_only_for_confirmed_ring_captures(
     assert "--ring" not in " ".join(json.loads(log.read_text())["argv"])
 
 
-@pytest.mark.parametrize(
-    ("line", "outcome", "reason"),
-    [
-        ("Design system: Fail — There are three problems.", "not done", "Fix:"),
-        ("Design system: Fail — A new colour. Fix:", "not done", "Fix:"),
-        ("Design system: Fail — A new colour. Fix: use the token.", "findings", ""),
-    ],
-)
-def test_a_fail_line_that_cannot_stand_is_refused(
-    tmp_path: Path, project: Path, line: str, outcome: str, reason: str
+def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
+    tmp_path: Path, project: Path
 ) -> None:
-    record = look_with_line(tmp_path, project, line, outcome)
-    assert str(record["outcome"]).startswith(outcome)
-    assert reason in str(record["outcome"])
+    import ui_measure
+
+    images, log, prompt = first_prompt(tmp_path, project)
+    assert "Measured values" not in prompt
+
+    measured: dict[str, object] = {
+        "texts": [
+            {
+                "at": "Intro",
+                "px": 16,
+                "weight": 400,
+                "colour": "1a1a1aff",
+                "fill": "",
+                "under": False,
+                "ratio": 6.37,
+                "fg": "#1a1a1a",
+                "bg": "#ffffff",
+            }
+        ],
+        "gaps": [{"at": "Intro", "to": "Go", "axis": "y", "px": 14}],
+        "sizes": {
+            "controls": [
+                {
+                    "at": "Go",
+                    "w": 120,
+                    "h": 44,
+                    "floor": 44,
+                    "under": False,
+                    "exempt": False,
+                }
+            ]
+        },
+        "radii": [{"at": "Go", "px": 6, "clamped": False}],
+    }
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=measured)
+    ui_measure.write_record(project, images[1], 1280, [])
+    run_look(project, "codex", images)
+    prompt = " ".join(json.loads(log.read_text())["argv"])
+    assert "- Go: 6 px" in prompt
+    assert "A measured value beats an eye estimate" in prompt
+    assert "never fail a rule against a measured pass" in prompt
+    assert "image-1.png:\ntext size: checked for all 1 text elements" in prompt
+    assert "contrast 6.37:1" in prompt
+    assert "- Intro to Go: 14 px (y)" in prompt
+    assert "- Go: 120x44 px" in prompt
+    assert "image-2.png:\ntext size" not in prompt
+
+    images[0].write_bytes(PNG + b"edited-after-capture")
+    run_look(project, "codex", images)
+    assert "6.37:1" not in " ".join(json.loads(log.read_text())["argv"])
 
 
-def look_with_line(
-    tmp_path: Path, project: Path, line: str, outcome: str
-) -> dict[str, object]:
-    """A run whose reviewer gives `line` for its rule and Pass for every other rule."""
-    images = make_images(project, 1)
-    rule = line.partition(":")[0].partition(" (")[0]
+FAULT = "- Hierarchy: Fail — image-1.png: two filled buttons. Fix: outline one."
+
+
+def findings_for_one_image() -> str:
     rules = [
-        line if name == rule else f"- {name}: Pass — looked at it"
+        FAULT.removeprefix("- ") if name == "Hierarchy" else f"{name}: Pass — ok"
         for name, _ in usability_rules()
     ]
-    verdict = "VERDICT: clean" if outcome == "clean" else "VERDICT: findings"
-    answer = "\n".join([*rules, "Image image-1.png: a card with a title", verdict])
-    install_agent(tmp_path, "claude", 1, answer)
-    return run_look(project, "codex", images)
+    return "\n".join([*rules, "Image image-1.png: a card", "VERDICT: findings"])
+
+
+@pytest.mark.parametrize(
+    ("first", "second_flags", "kept"),
+    [
+        ("clean", [], True),
+        ("findings", [], True),
+        ("clean", ["--all"], True),
+        ("not done", [], False),
+        ("clean", ["--changed-design"], False),
+    ],
+)
+def test_a_second_run_at_the_same_head_keeps_the_first_verdict(
+    tmp_path: Path,
+    project: Path,
+    capsys: pytest.CaptureFixture[str],
+    first: str,
+    second_flags: list[str],
+    kept: bool,
+) -> None:
+    import look
+
+    images = make_images(project, 1)
+    answers = {
+        "clean": good_answer(1),
+        "findings": findings_for_one_image(),
+        "not done": "no verdict line",
+    }
+    install_agent(tmp_path, "claude", 1, answers[first])
+    record = run_look(project, "codex", images)
+    head = git(project, "rev-parse", "HEAD").strip()
+    hashes = [hashlib.sha256(image.read_bytes()).hexdigest() for image in images]
+    path = look.record_path(project, head, hashes)
+    before = path.read_text()
+    os.utime(path, ns=(1, 1))
+    other = "findings" if first == "clean" else "clean"
+    log = install_agent(
+        tmp_path, "claude", 1, answers[other if other != "not done" else "clean"]
+    )
+    log.unlink()
+    flags = [flag for flag in second_flags if flag == "--all"]
+    if "--changed-design" in second_flags:
+        (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand navy.\n")
+    capsys.readouterr()
+    code = look.look_command(project, ["--host", "codex", *flags, *map(str, images)])
+    out = capsys.readouterr().out
+    if kept:
+        assert path.read_text() == before
+        assert path.stat().st_mtime_ns > 1
+        assert not log.exists()
+        assert f"already has a {record['outcome']} verdict" in out
+        assert code == (0 if record["outcome"] == "clean" else 1)
+        assert ("Look review:" in out) == (record["outcome"] == "clean")
+    else:
+        assert log.exists()
+        assert path.read_text() != before
 
 
 def full_plan(
@@ -885,9 +873,6 @@ def test_look_includes_design_docs_in_prompt_record_and_block(
     head = git(project, "rev-parse", "HEAD").strip()
     after = [images[0].read_bytes()]
     assert ui_proof.look_problem(project, head, block, after) is None
-    (project / "DESIGN.md").write_text("# Design\n\n## Overview\nBrand crimson.\n")
-    problem = ui_proof.look_problem(project, head, block, after)
-    assert problem is not None and "current DESIGN.md" in problem
 
 
 def test_look_refuses_design_system_na_when_design_doc_exists(

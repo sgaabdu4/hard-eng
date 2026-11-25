@@ -215,6 +215,102 @@ def measured(
     return [(item["rule"], item.get("at")) for item in record["findings"]]
 
 
+VALUES_PAGE = (
+    "<main><h1 style='font-size:24px;font-weight:700;margin:0 0 14px'>Board</h1>"
+    "<p style='margin:0 0 14px;color:#767676;font-size:16px'>Grey on white</p>"
+    "<p style='margin:0;color:#000;font-size:16px'>Black on white</p>"
+    "<div style='margin-top:14px'><button style='min-height:44px;min-width:120px;font-size:16px'>Go</button></div>"
+    "<p style='margin:14px 0 0;color:rgba(0,0,0,0.5);font-size:16px'>Half ink</p>"
+    "<p style='margin:14px 0 0'><span style='display:inline-block;padding:2px 8px;background:#e6efe9;color:#2d6a4f;font-size:10.5px;font-weight:600'>Paid</span></p></main>"
+)
+
+
+def test_the_record_holds_each_element_with_its_facts(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/values.html").write_text(
+        "<!doctype html><html lang=en><title>Values</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{VALUES_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "values")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    values = record["measured"]
+    texts = {item["at"]: item for item in values["texts"]}
+    grey = texts["Grey on white"]
+    assert (grey["fg"], grey["bg"], grey["px"], grey["ratio"]) == (
+        "#767676",
+        "#ffffff",
+        16,
+        4.54,
+    )
+    assert (grey["weight"], grey["colour"], grey["fill"], grey["under"]) == (
+        400,
+        "767676ff",
+        "",
+        False,
+    )
+    assert texts["Board"]["weight"] == 700
+    assert texts["Half ink"]["colour"] == "00000080"
+    paid = texts["Paid"]
+    assert (
+        paid["px"],
+        paid["weight"],
+        paid["colour"],
+        paid["fill"],
+        paid["under"],
+    ) == (
+        10.5,
+        600,
+        "2d6a4fff",
+        "e6efe9ff",
+        True,
+    )
+    assert {"at": "Board", "to": "Grey on white", "px": 14, "axis": "y"} in values[
+        "gaps"
+    ]
+    go = next(item for item in values["sizes"]["controls"] if item["at"] == "Go")
+    assert (go["w"], go["h"], go["floor"], go["under"], go["exempt"]) == (
+        120,
+        44,
+        44,
+        False,
+        False,
+    )
+    assert "contrast" not in values
+    assert "text_px" not in values["sizes"]
+
+
+def test_the_record_holds_the_corner_radius_of_every_rounded_element(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/radii.html").write_text(
+        "<!doctype html><html lang=en><title>Radii</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style><body><main>"
+        "<h1 style='font-size:24px;margin:0 0 14px'>Radii</h1>"
+        "<button style='min-height:44px;min-width:120px;font-size:16px;border-radius:6px'>Go</button>"
+        "<p style='margin:14px 0'><span style='display:inline-block;padding:2px 8px;background:#dde;border-radius:4px;font-size:14px'>New</span></p>"
+        "<div style='height:30px;border-radius:12px;background:#eee'></div>"
+        "<div style='width:40px;height:40px;border-radius:8px;overflow:hidden'></div>"
+        "<p style='margin:14px 0'><span style='display:inline-block;padding:2px 12px;background:#cde;border-radius:9999px;font-size:14px'>Pill</span></p></main></body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "radii")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    radii = {(item["at"], item["px"]) for item in record["measured"]["radii"]}
+    assert {("Go", 6), ("New", 4)} <= radii
+    assert {6, 4, 12, 8} <= {px for _, px in radii}
+    assert max(px for _, px in radii) < 100
+
+
 def test_each_press_is_measured_apart_from_the_load(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
@@ -600,3 +696,74 @@ def test_bundle_font_isolation_generated_wrapper_and_text_initial_reset(
         '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n'
     )
     assert "outside loaded @font-face font-weight ranges" in refused(mono_sep)
+
+
+KIND_TOKENS = (
+    "---\ncolors:\n  ink: '#1a1a1a'\n  mint: '#e6efe9'\nspacing:\n  sm: 8px\n  md: 14px\n"
+    "rounded:\n  sm: 4px\n  md: 6px\n---\n# Design\n\n## Overview\nPlain.\n"
+)
+KIND_PAGE = (
+    "<main><h1 style='font-size:24px;margin:0 0 14px'>Kinds</h1>"
+    "<p style='margin:0 0 14px;font-size:10px'>Fine print</p>"
+    "<p style='margin:0 0 14px;font-size:14px'>Body copy</p>"
+    "<p style='margin:0 0 14px;font-size:14px;color:#767676'>Off token</p>"
+    "<div style='margin:0 0 14px;font-size:14px;background:#e6efe9;color:#1a1a1a;display:inline-block'>On token</div>"
+    "<section><div>Alpha block</div><div style='margin-top:11px'>Beta block</div></section>"
+    "<section style='margin-top:14px'><div>Gamma block</div><div style='margin-top:14px'>Delta block</div></section>"
+    "<div style='margin:14px 0;border-radius:7px;background:#ddd;display:inline-block;padding:8px'>Round seven</div>"
+    "<div style='margin:14px 0;border-radius:6px;background:#ddd;display:inline-block;padding:8px'>Round six</div>"
+    "<div><button style='width:30px;height:30px;font-size:12px'>Tiny one</button>"
+    "<button style='min-height:44px;min-width:120px;font-size:16px'>Big one</button></div>"
+    "<div style='margin:14px 0 0;text-align:center;font-size:14px'>Centred note</div>"
+    "<div style='margin:14px 0 0;font-size:14px'>Left note</div>"
+    "<div style='display:flex;gap:14px;margin:14px 0 0;font-size:14px'><span>Even one</span><span>Even two</span></div>"
+    "<div style='display:flex;gap:14px;margin:14px 0 0;font-size:14px'><span>Light one</span><b>Bold two</b></div></main>"
+)
+KIND_CASES = {
+    ("size", "Fine print"): False,
+    ("size", "Body copy"): True,
+    ("colour", "Off token"): False,
+    ("colour", "On token"): True,
+    ("gap", "Alpha block to Beta block"): False,
+    ("gap", "Gamma block to Delta block"): True,
+    ("radius", "Round seven"): False,
+    ("radius", "Round six"): True,
+    ("tap", "Tiny one"): False,
+    ("tap", "Big one"): True,
+    ("align", "Centred note"): True,
+    ("align", "Left note"): False,
+    ("weight", "Even one"): True,
+    ("weight", "Bold two"): False,
+}
+
+
+def test_code_decides_each_kind_the_same_way_in_five_real_captures(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    import look_facts
+
+    (tmp_path / "DESIGN.md").write_text(KIND_TOKENS)
+    tokens = look_facts.design_tokens(tmp_path)
+    (tmp_path / "pages/kinds.html").write_text(
+        "<!doctype html><html lang=en><title>Kinds</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{KIND_PAGE}</body>"
+    )
+    runs = []
+    for _ in range(5):
+        name = session()
+        open_board(tmp_path, site, name, "kinds")
+        try:
+            measured(tmp_path, browser, name)
+        finally:
+            plain_step(tmp_path, name, "close")
+        record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+        runs.append(
+            {
+                case: look_facts.verdict(case[0], case[1], record["measured"], tokens)
+                for case in KIND_CASES
+            }
+        )
+    assert all(run == runs[0] for run in runs)
+    assert {
+        case: found[0] if found else None for case, found in runs[0].items()
+    } == KIND_CASES

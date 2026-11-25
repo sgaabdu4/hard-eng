@@ -1,0 +1,13 @@
+- Mistake-proof: Pass. looked at it
+- Least effort: Pass. looked at it
+- Observe: Pass. looked at it
+- Undo: Pass. looked at it
+- No clutter: Pass. looked at it
+- Hierarchy: Pass. looked at it
+- Alignment: Pass. looked at it
+- Spacing: Pass. looked at it
+- Design system: Pass. looked at it
+- Messages: Fail. The banner blames the user. image-1.png: banner text [judgement]; image-2.png: banner text [judgement]. Fix: name the field.
+Image image-1.png: a card with a title
+Image image-2.png: a card with a title
+VERDICT: findings

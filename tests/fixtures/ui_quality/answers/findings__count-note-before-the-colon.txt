@@ -1,0 +1,12 @@
+- Mistake-proof: Pass. looked at it
+- Least effort: Pass. looked at it
+- Observe: Pass. looked at it
+- Undo: Pass. looked at it
+- No clutter (kept: 40, removed: 3): Fail. image-1.png: The note stays [judgement]. Fix: remove it.
+- Hierarchy: Pass. looked at it
+- Alignment: Pass. looked at it
+- Spacing: Pass. looked at it
+- Design system: Pass. looked at it
+- Messages: Pass. looked at it
+Image image-1.png: a card with a title
+VERDICT: findings
