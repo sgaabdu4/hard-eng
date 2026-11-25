@@ -53,6 +53,7 @@ Decisions made here, each with a reason:
 - [x] A centred line with an inline link is centred, whatever the number of text fragments on the line → `tests/test_ui_gap_and_init_script.py::test_a_centred_line_with_an_inline_link_is_centred`
 - [x] A label repeated in two rows with one style gets no weight verdict → `tests/test_ui_gap_and_init_script.py::test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict`
 - [x] A key whose facts disagree has no key, and its item is refused by form → `tests/test_look_keys.py::test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused`
+- [x] A listed fact that code cannot decide says it has no key, so a reviewer does not copy it into a measured item → `tests/test_look_keys.py::test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key`
 
 Steps:
 

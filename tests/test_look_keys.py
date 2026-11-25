@@ -464,7 +464,7 @@ def test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused(
 
     tokens = tokens_of(tmp_path)
     measured = values(
-        controls=[control("Edit", 80, 44), control("Edit", 60, 30)],
+        sizes={"controls": [control("Edit", 80, 44), control("Edit", 60, 30)]},
         texts=[
             text_fact("Settings", 14, align="center", centred=True),
             text_fact("Settings", 14, align="start", centred=False),
@@ -481,3 +481,23 @@ def test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused(
         tokens,
     )
     assert outcome.startswith("not done: `image-1.png: Edit [tap]`")
+
+
+def test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key() -> None:
+    import look_facts
+
+    tokens = look_facts.tokens_from_text(
+        "---\ncolors:\n  ink: '#1a1a1a'\n---\n# Design\n"
+    )
+    measured = values(
+        gaps=[{"at": "Place order", "to": "Cancel", "px": 4, "axis": "x"}],
+        sizes={"controls": [control("Place order", 96, 32)]},
+    )
+    listed = look_facts.measured_text(measured, tokens).splitlines()
+    gap = [line for line in listed if line.startswith("- Place order to Cancel")]
+    tap = [line for line in listed if line.startswith("- Place order:")]
+    assert len(gap) == 1
+    assert "no key" in gap[0]
+    assert len(tap) == 1
+    assert "no key" not in tap[0]
+    assert look_facts.item_keys(measured, tokens)["gap"] == frozenset()
