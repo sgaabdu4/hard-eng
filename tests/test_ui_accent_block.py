@@ -79,14 +79,24 @@ def page(tmp_path: Path, body: str) -> None:
     )
 
 
-@pytest.mark.parametrize("body", PAGE_INK.values(), ids=PAGE_INK)
-def test_the_page_ink_text_is_not_an_accent(
-    tmp_path: Path, site: str, browser: ModuleType, body: str
+def found_at_every_width(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    body: str,
+    expected: Counter[str],
 ) -> None:
     page(tmp_path, body)
     found = capture(browser, tmp_path, site, "block")
     for width in WIDTHS:
-        assert found[width] == Counter(), (width, found[width])
+        assert found[width] == expected, (width, found[width])
+
+
+@pytest.mark.parametrize("body", PAGE_INK.values(), ids=PAGE_INK)
+def test_the_page_ink_text_is_not_an_accent(
+    tmp_path: Path, site: str, browser: ModuleType, body: str
+) -> None:
+    found_at_every_width(tmp_path, site, browser, body, Counter())
 
 
 def test_a_tab_bar_in_the_page_container_does_not_count_the_whole_page(
@@ -133,10 +143,7 @@ STILL_COUNTED = {
 def test_accent_colours_around_a_button_group_still_count(
     tmp_path: Path, site: str, browser: ModuleType, body: str
 ) -> None:
-    page(tmp_path, body)
-    found = capture(browser, tmp_path, site, "block")
-    for width in WIDTHS:
-        assert found[width] == Counter({"accent-colours": 1}), (width, found[width])
+    found_at_every_width(tmp_path, site, browser, body, Counter({"accent-colours": 1}))
 
 
 def ink_at_two_strengths(ink: str, faded: str) -> str:
