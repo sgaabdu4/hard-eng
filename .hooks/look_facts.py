@@ -9,6 +9,7 @@ from ui_measure import LIMITS
 
 FACT_BYTES = 1500
 LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
+WORD = re.compile(r"\w+")
 
 
 class Tokens(NamedTuple):
@@ -346,7 +347,7 @@ ROLE_WORDS = frozenset(
 
 def plain(name: str) -> str:
     """The name as words, lowercase, with punctuation and the role words dropped, so `Save button` and `Save` are one name."""
-    words = re.findall(r"\w+", name.lower())
+    words = WORD.findall(name.lower())
     return " ".join(word for word in words if word not in ROLE_WORDS)
 
 
