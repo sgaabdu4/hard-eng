@@ -131,8 +131,9 @@ DESIGN_ADDENDUM = (
 FINDINGS_NOTE = (
     "Hard Eng: look: the rules are intended. Fix every Fail the image supports, also on "
     "parts this change did not touch. A Fail is a reviewer fault only when it contradicts "
-    "a measured value, the markup or a quoted DESIGN.md line; then send that record line "
-    "to the maintainer. No declined, answered or skip line exists."
+    "a measured value, the markup or a quoted DESIGN.md line; then dispute that item: "
+    "`look <images> --dispute '<item>' --cite <path>:<from>-<to> [--measured <key>]`. "
+    "No declined, answered or skip line clears a Fail; only the dispute command does."
 )
 BLOCK_HEAD = "Look review:"
 BLOCK_KEYS = ("reviewer", "session", "design", "image", "verdict", "record")
@@ -627,6 +628,7 @@ def kept_verdict(
 
 
 def look_command(root: Path, argv: list[str]) -> int:
+    import look_dispute
     from look_records import (
         combined,
         covering_record,
@@ -648,7 +650,10 @@ def look_command(root: Path, argv: list[str]) -> int:
         action="store_true",
         help="Send every image to the reviewer, also the unchanged ones",
     )
+    look_dispute.add_arguments(parser)
     args = parser.parse_args(argv)
+    if args.dispute:
+        return look_dispute.dispute(root, args)
     images = [Path(image) for image in args.images]
     if missing := [str(image) for image in images if not image.is_file()]:
         raise ValueError(f"look: no such image: {', '.join(missing)}")
