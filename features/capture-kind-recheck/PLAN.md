@@ -33,7 +33,7 @@ Authority: Autonomous: the user asked on 2026-11-24 to make Hard Eng correct bef
 ## Baseline + execution
 
 Result: Passed
-Evidence: On `origin/develop` (4b8f3a45) the two kind tests fail (`assert 0 == 1`: capture keeps images) and the late-answer test fails with the CI message `fetch-waterfall, click 1`. They are commits 9484b715 and the one after the fix commit, before the fixes. The existing guard and browser tests pass.
+Evidence: On `origin/develop` (4b8f3a45) the two kind tests fail (`assert 0 == 1`: capture keeps images) and the late-answer test fails with the CI message `fetch-waterfall, click 1`. The red tests are committed before each fix (commits 9484b715 and 6c7a2613). The `Review declined:` line about this finding in `features/pdf-proof/PLAN.md` is closed by this change. The existing guard and browser tests pass.
 Execution: One builder in a worktree off `origin/develop`.
 
 ## Risks + recovery
