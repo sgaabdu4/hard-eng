@@ -575,11 +575,11 @@ def test_a_changed_input_is_named_before_all_images_are_reviewed_again(
     elif change == "plan scope":
         plan = project / "features/kpi-board/PLAN.md"
         plan.write_text(full_plan("A KPI board with two cards."))
-    else:
-        box = {"x": 1, "y": 2, "w": 30, "h": 40}
-        ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[box])
     (project / "notes.txt").write_text(f"{change}\n")
     commit(project, f"change: {change}")
+    if change == "ring boxes":
+        box = {"x": 1, "y": 2, "w": 30, "h": 40}
+        ui_measure.write_record(project, images[0], 1280, [], "/kpi", ring_boxes=[box])
     install_agent(tmp_path, "claude", 1, good_answer(1))
     capsys.readouterr()
     look.look_command(
@@ -735,12 +735,15 @@ def test_a_carried_image_does_not_hide_the_failing_image_that_shares_its_name(
     install_agent(tmp_path, "claude", 1, good_answer(1))
     assert run_look(project, "codex", [held])["outcome"] == "clean"
     next_head(project)
+    ui_measure.write_record(project, held, 1280, [], "/kpi", measured=values())
+    ui_measure.write_record(project, failing, 1280, [], "/kpi", measured=off)
     install_agent(
         tmp_path, "claude", 1, answer_with("image-1.png: Hint [colour] Fix: use ink")
     )
     assert run_look(project, "codex", [failing, held])["outcome"] == "findings"
     next_head(project)
     failing.write_bytes(failing.read_bytes() + b"x")
+    ui_measure.write_record(project, held, 1280, [], "/kpi", measured=values())
     ui_measure.write_record(project, failing, 1280, [], "/kpi", measured=off)
     install_agent(tmp_path, "claude", 1, good_answer(1))
     record = run_look(project, "codex", [failing, held])
@@ -770,12 +773,16 @@ def test_an_earlier_item_of_an_image_that_a_later_clean_record_covers_is_not_lis
     install_agent(tmp_path, "claude", 2, answer)
     assert run_look(project, "codex", images)["outcome"] == "findings"
     next_head(project)
+    for image in images:
+        ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
     gone = good_answer(1).replace(
         "VERDICT: clean", "Recheck R1: gone image-1.png: the card\nVERDICT: clean"
     )
     install_agent(tmp_path, "claude", 1, gone)
     assert run_look(project, "codex", images[:1])["outcome"] == "clean"
     next_head(project)
+    for image in images:
+        ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
     log = install_agent(tmp_path, "claude", 2, good_answer(2))
     run_look(project, "codex", images, extra=["--all"])
     earlier = prompt_of(log).partition(EARLIER)[2]
