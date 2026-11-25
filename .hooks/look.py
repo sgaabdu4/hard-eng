@@ -30,7 +30,7 @@ from look_answer import (
     recheck_lines,
 )
 from look_facts import Tokens, design_tokens, measured_text
-from look_records import STORE
+from look_records import STORE, with_code_decisions
 from models import cli_flags, trusted_base_ref
 from plans import (
     is_plan_path,
@@ -733,6 +733,16 @@ def review(
     )
     if outcome.startswith("not done"):
         record["answer"] = answer
+    else:
+        outcome, rule_lines = with_code_decisions(
+            outcome,
+            rule_lines,
+            {
+                name: recorded_measured(root, digest)
+                for name, digest in zip(names, digests, strict=True)
+            },
+            design_tokens(root),
+        )
     record.update(
         outcome=outcome,
         rules=rule_lines,

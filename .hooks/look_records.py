@@ -7,9 +7,13 @@ from pathlib import Path
 from typing import cast
 
 from challenge import store
+from look_answer import Item, fail_parts, part_item
+from look_facts import Tokens
+from look_facts import verdict as code_verdict
 from plans import split_rule_line, usability_rules
 
 STORE = "look"
+CODE_FIX = "Fix: bring each item to its measured limit"
 FRAME = re.compile(r"image-\d+\.png")
 
 
@@ -413,3 +417,67 @@ def with_owner_lines(
     record["rules"] = [owned.get(name) or own[name] for name, _ in usability_rules()]
     if any(split_rule_line(line)[1] == "Fail" for line in owned.values()):
         record["outcome"] = "findings"
+
+
+def decide_item(
+    item: Item, measured: dict[str, dict[str, object] | None], tokens: Tokens
+) -> tuple[bool, str] | None:
+    """Code's Pass (True) or Fail (False) for an item of a measured kind whose element it finds in the record of that image; None leaves the item to the reviewer."""
+    values = measured.get(item.frame)
+    return code_verdict(item.kind, item.element, values, tokens) if values else None
+
+
+def decide_line(
+    line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
+) -> str:
+    """A reviewer Fail line with each item that code decides replaced by code's verdict: a Pass item leaves the line, a Fail item stays with code's reason, every other item and part stays. A line with no item left to fail becomes a Pass."""
+    parts, fix = fail_parts(line)
+    kept: list[str] = []
+    failed: list[str] = []
+    passed: list[str] = []
+    for part in parts:
+        _, item = part_item(part)
+        decided = decide_item(item, measured, tokens) if item else None
+        if item is None or decided is None:
+            kept += [part.strip()] if part.strip() else []
+        elif decided[0]:
+            passed.append(f"{item.frame}: {item.element} [{item.kind}] {decided[1]}")
+        else:
+            failed.append(
+                f"{item.frame}: {item.element} [{item.kind}] — code: {decided[1]}"
+            )
+    if not passed and not failed:
+        return line
+    head = line.partition(": Fail")[0]
+    if not any(kept) and not failed:
+        return f"{head}: Pass — code checked: {'; '.join(passed)}"
+    own = "; ".join((*kept, *failed))
+    return f"{head}: Fail — {own} {fix if kept else CODE_FIX}"
+
+
+def decide_lines(
+    rule_lines: list[str],
+    measured: dict[str, dict[str, object] | None],
+    tokens: Tokens,
+) -> list[str]:
+    """The reviewer's rule lines with the measured items that code decides replaced by code's verdict."""
+    return [
+        decide_line(line, measured, tokens)
+        if split_rule_line(line)[1] == "Fail"
+        else line
+        for line in rule_lines
+    ]
+
+
+def with_code_decisions(
+    outcome: str,
+    rule_lines: list[str],
+    measured: dict[str, dict[str, object] | None],
+    tokens: Tokens,
+) -> tuple[str, list[str]]:
+    """The outcome and the rule lines after code decides the measured items: findings while a Fail line remains, else clean."""
+    decided = decide_lines(rule_lines, measured, tokens)
+    if decided == rule_lines:
+        return outcome, rule_lines
+    failed = any(split_rule_line(line)[1] == "Fail" for line in decided)
+    return ("findings" if failed else "clean"), decided
