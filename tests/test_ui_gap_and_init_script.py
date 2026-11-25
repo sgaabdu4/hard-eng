@@ -187,3 +187,33 @@ def test_an_icon_button_named_like_a_link_gives_no_weight_verdict(
     tokens = tokens_of(tmp_path)
     for key in ("Dashboard", "Settings"):
         assert look_facts.verdict("weight", key, record["measured"], tokens) is None
+
+
+WRAPPER_PAGE = (
+    "<main><div style='display:flex;gap:12px;font-size:14px'>"
+    "<div style='display:flex;gap:4px'><span>Round</span><span>5</span></div>"
+    "<span>Active</span></div>"
+    "<h2 style='font-size:14px;margin:0;font-weight:700'>Round 5</h2></main>"
+)
+
+
+def test_a_wrapper_named_like_a_heading_gives_no_weight_verdict(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    import look_facts
+    from test_look_facts import tokens_of
+
+    (tmp_path / "pages/wrapper.html").write_text(
+        "<!doctype html><html lang=en><title>Wrapper</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{WRAPPER_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "wrapper")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    tokens = tokens_of(tmp_path)
+    for key in ("Active", "Round 5"):
+        assert look_facts.verdict("weight", key, record["measured"], tokens) is None

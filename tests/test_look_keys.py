@@ -526,3 +526,22 @@ def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
     assert len(align) == 1
     assert "Heading" in align[0]
     assert "Settings" not in align[0]
+
+
+def test_a_failing_key_leads_the_colour_keys_even_on_a_long_page(
+    tmp_path: Path,
+) -> None:
+    import look_facts
+
+    tokens = tokens_of(tmp_path)
+    names = [f"Label number {number:02d} of the list" for number in range(40)]
+    measured = values(
+        texts=[
+            *(text_fact(name, 14) for name in names),
+            text_fact("Zed total", 14, colour="767676ff", fg="#767676"),
+        ]
+    )
+    listed = look_facts.measured_text(measured, tokens).splitlines()
+    colour = [line for line in listed if line.startswith("colour keys:")]
+    assert len(colour) == 1
+    assert colour[0].startswith("colour keys: Zed total | ")

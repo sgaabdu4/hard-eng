@@ -9,7 +9,7 @@ from typing import NamedTuple
 from ui_measure import LIMITS
 
 FACT_BYTES = 1500
-KEY_BYTES = 500
+KEY_BYTES = 1000
 LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
 ZERO = re.compile(r"0+(?:\.0+)?")
 UNSAFE_IN_KEY = re.compile(r"[;:\[\]`*\"\s]+")
@@ -355,7 +355,8 @@ def _keyed(facts: list[Fact]) -> frozenset[str]:
 def _key_line(kind: str, facts: list[Fact]) -> str:
     shown: list[str] = []
     used = 0
-    keys = sorted(_keyed(facts))
+    keyed = _keyed(facts)
+    keys = [key for key in dict.fromkeys(f.key for f in _order(facts)) if key in keyed]
     for key in keys:
         used += len(key.encode()) + 3
         if used > KEY_BYTES:
