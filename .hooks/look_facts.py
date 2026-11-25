@@ -27,7 +27,16 @@ class Fact(NamedTuple):
 
 
 def design_tokens(root: Path | None) -> Tokens:
-    """The colour, spacing and rounded tokens of the DESIGN.md front matter, as written. A missing file, a python3 without PyYAML, a missing front matter or a missing group gives an empty list, which means no verdict."""
+    """The tokens of the DESIGN.md on disk; a missing file gives no tokens."""
+    try:
+        text = (root / "DESIGN.md").read_text() if root else ""
+    except OSError:
+        text = ""
+    return tokens_from_text(text)
+
+
+def tokens_from_text(text: str) -> Tokens:
+    """The colour, spacing and rounded tokens of the DESIGN.md front matter, as written. A python3 without PyYAML, a missing front matter or a missing group gives an empty list, which means no verdict."""
     from ui_tokens import FRONT_MATTER, colours_in
 
     none = Tokens({}, [], [])
@@ -36,9 +45,9 @@ def design_tokens(root: Path | None) -> Tokens:
     except ImportError:
         return none
     try:
-        front = FRONT_MATTER.match((root / "DESIGN.md").read_text()) if root else None
+        front = FRONT_MATTER.match(text)
         data = yaml.safe_load(front[1]) if front else None
-    except (OSError, yaml.YAMLError):
+    except yaml.YAMLError:
         return none
     if not isinstance(data, dict):
         return none
@@ -174,6 +183,8 @@ def colour_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
 def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     found: list[Fact] = []
     for row in _controls(measured):
+        if not isinstance(row.get("under"), bool) or "floor" not in row:
+            continue
         w, h, floor = _num(row.get("w")), _num(row.get("h")), _num(row.get("floor"))
         under = row.get("under") is True
         size = f"{_shown(w)}x{_shown(h)} px"
@@ -194,7 +205,9 @@ def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     scale = _scale(tokens.spacing, measured)
     found: list[Fact] = []
     for row in _rows(measured, "gaps"):
-        px = int(_num(row.get("px")))
+        if "to" not in row or "px" not in row:
+            continue
+        px = max(0, int(_num(row.get("px"))))
         ok = None if scale is None else px in scale or px == 0
         pair = f"{row.get('at')} to {row.get('to')}"
         found.append(

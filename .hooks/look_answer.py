@@ -1,6 +1,7 @@
 """The reviewer's answer to a look run: its lines, the rules it decides, and why a line cannot stand."""
 
 import re
+from itertools import pairwise
 from typing import NamedTuple
 
 from plans import split_rule_line, usability_lines, usability_rules
@@ -9,7 +10,7 @@ FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
 ITEM_START = re.compile(r"image-\d+\.png\s*:")
 KIND_TAG = re.compile(r"\[([A-Za-z-]+)\]")
 CLAIM = re.compile(
-    r"(?i)\d+(?:\.\d+)?\s*(?:px|pt|rem|em)\b|\d+(?:\.\d+)?\s*:\s*1\b|#[0-9a-f]{3,8}\b|\b(?:rgb|hsl)a?\("
+    r"(?i)\d+(?:\.\d+)?\s*(?:px|pt|rem|em)\b|\d+(?:\.\d+)?\s*:\s*1\b|#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b|#(?=\d*[a-f])[0-9a-f]{4}\b|\b(?:rgb|hsl)a?\("
 )
 FRAME = re.compile(r"image-\d+\.png")
 RECHECK_LINE = re.compile(r"(?i)^recheck\s+R(\d+)\s*:\s*(still shown|gone)\b(.*)")
@@ -84,11 +85,16 @@ class Item(NamedTuple):
 
 
 def fail_parts(line: str) -> tuple[list[str], str]:
-    """The `;` parts of a Fail line before its last `Fix:`, and the Fix part."""
+    """The parts of a Fail line before its last `Fix:`, and the Fix part. A new part starts at each `;` and at each item after the first of a chunk, so a list with no `;` is still one item for each part."""
     text = split_rule_line(line)[2]
     fixes = list(FIX_PART.finditer(text))
     cut = fixes[-1].start() if fixes else len(text)
-    return text[:cut].split(";"), text[cut:]
+    parts: list[str] = []
+    for chunk in text[:cut].split(";"):
+        starts = [found.start() for found in ITEM_START.finditer(chunk)]
+        edges = [0, *starts[1:], len(chunk)]
+        parts.extend(chunk[a:b] for a, b in pairwise(edges))
+    return parts, text[cut:]
 
 
 def part_item(part: str) -> tuple[str, Item | None]:
