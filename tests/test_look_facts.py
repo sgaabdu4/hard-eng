@@ -626,7 +626,9 @@ def test_the_second_item_of_a_list_survives_when_the_first_passes_in_code(
     assert record["outcome"] == "findings"
 
 
-def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_off_the_tokens(tmp_path: Path) -> None:
+def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_off_the_tokens(
+    tmp_path: Path,
+) -> None:
     import look_facts
 
     measured = values(gaps=[{"at": "Save", "to": "Cancel", "px": -1, "axis": "y"}])
@@ -715,3 +717,97 @@ def git_head(project: Path) -> str:
     from conftest import git
 
     return git(project, "rev-parse", "HEAD").strip()
+
+
+def test_a_carried_image_does_not_hide_the_failing_image_that_shares_its_name(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+    from test_look import next_head
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(DESIGN)
+    commit(project, "inputs")
+    held, failing = make_images(project, 2)
+    off = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676", bg="#fff")])
+    ui_measure.write_record(project, held, 1280, [], "/kpi", measured=values())
+    ui_measure.write_record(project, failing, 1280, [], "/kpi", measured=off)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    assert run_look(project, "codex", [held])["outcome"] == "clean"
+    next_head(project)
+    install_agent(
+        tmp_path, "claude", 1, answer_with("image-1.png: Hint [colour] Fix: use ink")
+    )
+    assert run_look(project, "codex", [failing, held])["outcome"] == "findings"
+    next_head(project)
+    failing.write_bytes(failing.read_bytes() + b"x")
+    ui_measure.write_record(project, failing, 1280, [], "/kpi", measured=off)
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    record = run_look(project, "codex", [failing, held])
+    assert record["outcome"] == "findings"
+    assert "Hint [colour] — code:" in stored_rule(record, "Design system")
+
+
+def test_an_earlier_item_of_an_image_that_a_later_clean_record_covers_is_not_listed(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+    from test_look import next_head
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(DESIGN)
+    commit(project, "inputs")
+    images = make_images(project, 2)
+    for image in images:
+        ui_measure.write_record(project, image, 1280, [], "/kpi", measured=values())
+    both = (
+        "image-1.png: the card sits left [judgement]; "
+        "image-2.png: the card sits right [judgement] Fix: centre it"
+    )
+    answer = answer_with(both).replace(
+        "VERDICT: findings", "Image image-2.png: a card\nVERDICT: findings"
+    )
+    install_agent(tmp_path, "claude", 2, answer)
+    assert run_look(project, "codex", images)["outcome"] == "findings"
+    next_head(project)
+    gone = good_answer(1).replace(
+        "VERDICT: clean", "Recheck R1: gone image-1.png: the card\nVERDICT: clean"
+    )
+    install_agent(tmp_path, "claude", 1, gone)
+    assert run_look(project, "codex", images[:1])["outcome"] == "clean"
+    next_head(project)
+    log = install_agent(tmp_path, "claude", 2, good_answer(2))
+    run_look(project, "codex", images, extra=["--all"])
+    earlier = prompt_of(log).partition(EARLIER)[2]
+    assert "the card sits right" in earlier
+    assert "the card sits left" not in earlier
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Design system: Fail — image-1.png: Save [size], Cancel [tap] Fix: fix both.",
+        "Design system: Fail — image-1.png: Save [size] (also image-2.png) Fix: bigger.",
+    ],
+)
+def test_an_item_that_names_more_than_one_item_or_frame_stays_with_the_reviewer(
+    line: str, tmp_path: Path
+) -> None:
+    import look_records
+
+    ok = values(texts=[text_fact("Save", 14)], sizes={"controls": [control("Cancel")]})
+    measured = {"image-1.png": ok, "image-2.png": ok}
+    assert look_records.decide_line(line, measured, tokens_of(tmp_path)) == line
+
+
+def test_a_part_with_a_leading_frame_stays_while_any_of_its_frames_is_in_this_run() -> (
+    None
+):
+    import look_records
+
+    line = "Design system: Fail — image-1.png, image-2.png: Save [size] Fix: bigger."
+    then = {"image-1.png": "home-375.png", "image-2.png": "home-1280.png"}
+    assert (
+        look_records._without_held(line, then, {"home-375.png": "image-1.png"}) == line
+    )
+    assert look_records._without_held(line, then, {}) == "Design system: Pass"
