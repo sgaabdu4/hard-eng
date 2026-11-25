@@ -420,6 +420,7 @@ def test_a_radius_outside_the_tokens_fails_design_system_in_code(
         "root size changed",
         "no root size",
         "token that is not a length",
+        "em token",
     ],
 )
 def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_reviewer(
@@ -452,6 +453,9 @@ def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_
     if case == "token that is not a length":
         design = design.replace("sm: 4px", "sm: clamp(1px, 1vw, 8px)")
         values = {"radii": [{"at": "x", "px": 7, "clamped": False}], "root_px": 16}
+    if case == "em token":
+        design = design.replace("sm: 4px", "sm: 0.5em")
+        values = {"radii": [{"at": "x", "px": 7, "clamped": False}], "root_px": 16}
     record = look_against_tokens(tmp_path, project, design, values)
     assert record["outcome"] == "clean"
     assert "looked at it" in stored(record)["Design system"]
@@ -474,3 +478,29 @@ def test_the_prompt_says_that_code_decides_the_measured_rules(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
     assert "Code already decides the measure findings" in prompt_of(log)
+
+
+def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    (project / ".gitignore").write_text(".hard-eng/\n")
+    (project / "DESIGN.md").write_text(TOKENS)
+    commit(project, "inputs")
+    images = make_images(project, 1)
+    values = {"radii": [{"at": "badge", "px": 7, "clamped": False}], "root_px": 16}
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
+    answer = good_answer(1).replace(
+        "- Design system: Pass — looked at it",
+        "- Design system: Fail — image-1.png: a #ffffff label is no token. Fix: use paper.",
+    )
+    install_agent(tmp_path, "claude", 1, answer)
+    first = run_look(project, "codex", images)
+    assert stored(first)["Design system"].startswith("Design system: Fail — measured:")
+    next_head(project)
+    log = install_agent(tmp_path, "claude", 1, good_answer(1))
+    run_look(project, "codex", images)
+    prompt = prompt_of(log)
+    assert "a #ffffff label is no token" in prompt
+    assert "measured:" not in prompt.partition("Earlier look findings")[2]
