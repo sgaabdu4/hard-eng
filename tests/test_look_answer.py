@@ -7,6 +7,7 @@ import pytest
 from plans import usability_rules
 from test_look import (
     FIXTURES,
+    first_prompt,
     install_agent,
     judged_rule_names,
     look_project,
@@ -157,3 +158,131 @@ def test_a_fail_line_must_name_the_frame_it_shows(
     assert str(record["outcome"]).startswith(outcome)
     if outcome == "not done":
         assert "names no frame" in str(record["outcome"])
+
+
+def judge_blocks(blocks: dict[str, list[str]]) -> tuple[str, list[str]]:
+    lines = [
+        line
+        for name in judged_rule_names()
+        for line in blocks.get(name, [f"- {name}: Pass. looked at it"])
+    ]
+    answer = "\n".join(
+        [*lines, "Image image-1.png: a card with a title", "VERDICT: findings"]
+    )
+    outcome, rules, _ = look_answer.judge(
+        answer, ["image-1.png"], {"image-1.png": True}
+    )
+    return outcome, rules
+
+
+def test_a_fix_after_a_list_belongs_to_its_rule_block() -> None:
+    outcome, rules = judge_blocks(
+        {
+            "Design system": [
+                "- Design system: Fail. image-1.png: Two things break DESIGN.md:",
+                "  1. The chips have square corners.",
+                "  2. The bars use a colour that is not a token.",
+                "",
+                "  The outline looks right. Fix: round the chips and use a token for the bars.",
+            ]
+        }
+    )
+    assert outcome == "findings"
+    stored = next(line for line in rules if line.startswith("Design system:"))
+    assert stored == (
+        "Design system: Fail — image-1.png: Two things break DESIGN.md: 1. The chips "
+        "have square corners. 2. The bars use a colour that is not a token. The outline "
+        "looks right. Fix: round the chips and use a token for the bars."
+    )
+
+
+def test_a_fail_block_with_no_fix_is_still_refused() -> None:
+    nofix = [
+        "- Hierarchy: Fail. image-1.png: Two filled elements compete:",
+        "  1. A chip.",
+        "  2. A tab.",
+    ]
+    outcome, rules = judge_blocks({"Hierarchy": nofix})
+    assert outcome.startswith("not done: a Fail line names no `Fix: <the change>`")
+    assert rules == []
+    outcome, _ = judge_blocks(
+        {
+            "Hierarchy": nofix,
+            "Spacing": ["- Spacing: Pass. even gaps. Fix: nothing, this is a Pass"],
+        }
+    )
+    assert outcome.startswith("not done: a Fail line names no")
+
+
+def test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon() -> None:
+    expected = (
+        "No clutter: Fail — image-1.png: The note stays. Fix: remove it. "
+        "(kept: 40, removed: 3)"
+    )
+    for form in (
+        "- No clutter: Fail (kept: 40, removed: 3). image-1.png: The note stays. Fix: remove it.",
+        "- No clutter: Fail (kept: 40, removed: 3) - image-1.png: The note stays. Fix: remove it.",
+        "- No clutter (kept: 40, removed: 3): Fail. image-1.png: The note stays. Fix: remove it.",
+    ):
+        outcome, rules = judge_blocks({"No clutter": [form]})
+        assert outcome == "findings", form
+        stored = next(line for line in rules if line.startswith("No clutter:"))
+        assert stored == expected, form
+
+
+@pytest.mark.parametrize(
+    "note", ["(kept 13, removed 6)", "(13 kept, 6 removed)", "(kept: 13, removed: 6)"]
+)
+def test_a_count_note_after_the_verdict_may_leave_out_the_colon(note: str) -> None:
+    form = f"- No clutter: Fail {note}. image-1.png: The note stays. Fix: remove it."
+    outcome, rules = judge_blocks({"No clutter": [form]})
+    assert outcome == "findings", form
+    stored = next(line for line in rules if line.startswith("No clutter:"))
+    assert stored == (
+        f"No clutter: Fail — image-1.png: The note stays. Fix: remove it. {note}"
+    )
+
+
+def test_a_recheck_line_after_a_rule_block_is_not_part_of_the_block() -> None:
+    lines = [
+        f"- {name}: Pass. looked at it"
+        if name != "Hierarchy"
+        else "- Hierarchy: Fail. image-1.png: two compete. Fix: tone one down."
+        for name in judged_rule_names()
+    ]
+    answer = "\n".join(
+        [
+            *lines,
+            "Recheck R1: still shown. image-1.png: two compete.",
+            "Image image-1.png: a card with a title",
+            "VERDICT: findings",
+        ]
+    )
+    outcome, rules, _ = look_answer.judge(
+        answer, ["image-1.png"], {"image-1.png": True}, rechecks=["Hierarchy"]
+    )
+    assert outcome == "findings"
+    assert next(line for line in rules if line.startswith("Hierarchy:")) == (
+        "Hierarchy: Fail — image-1.png: two compete. Fix: tone one down."
+    )
+
+
+def test_a_count_note_with_no_number_after_the_verdict_is_still_refused() -> None:
+    outcome, rules = judge_blocks(
+        {
+            "No clutter": [
+                "- No clutter: Fail (kept: , removed: ). image-1.png: The note stays. Fix: remove it."
+            ]
+        }
+    )
+    assert outcome.startswith("not done: a rule line or an image detail")
+    assert rules == []
+
+
+def test_the_prompt_shows_the_count_note_before_the_colon(
+    tmp_path: Path, project: Path
+) -> None:
+    _, _, prompt = first_prompt(tmp_path, project)
+    form = prompt.partition("\n\nRules:")[0]
+    assert "`- No clutter (kept: 40, removed: 3): Fail. <what you saw>`" in form
+    assert "—" not in form

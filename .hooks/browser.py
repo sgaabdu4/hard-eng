@@ -37,6 +37,7 @@ TIMEOUT = 600
 STEP_TIMEOUT = 300
 REFRESH_SECONDS = 24 * 60 * 60
 WIDTHS = (390, 768, 1280)
+READABLE_KINDS = frozenset({"text/html", "application/xhtml+xml", "text/plain"})
 SHARED = (
     "Each agent keeps its own browser session: pass --session NAME, and never "
     "`close --all`, because parallel agents share the tool."
@@ -129,7 +130,7 @@ wrap(window);
 const watchFrame = (frame) => {
   let inner = null;
   try { inner = frame.contentDocument; } catch (error) { inner = null; }
-  if (!inner?.body || (inner.URL === "about:blank" && frame.getAttribute("src"))) return replaceFrame(frame);
+  if (!inner?.body || !READABLE.includes(inner.contentType) || (inner.URL === "about:blank" && frame.getAttribute("src"))) return replaceFrame(frame);
   frame.dataset.hardEngRead = "";
   wrap(inner.defaultView);
   if (!frame.hardEngWatched) {
@@ -198,7 +199,7 @@ for (const selector of RINGS) {
   }
 }
 return JSON.stringify({ missing, boxes });
-})()"""
+})()""".replace("READABLE", json.dumps(sorted(READABLE_KINDS)))
 
 
 FRAME_CHECK = """(() => {
@@ -207,10 +208,13 @@ const unread = (root) => [...root.querySelectorAll("*")].reduce((count, element)
   if (element.shadowRoot) count += unread(element.shadowRoot);
   if (!element.matches("iframe,frame")) return count;
   if (!("hardEngRead" in element.dataset)) return count + 1;
-  try { return count + unread(element.contentDocument); } catch (error) { return count + 1; }
+  try {
+    const inner = element.contentDocument;
+    return READABLE.includes(inner.contentType) ? count + unread(inner) : count + 1;
+  } catch (error) { return count + 1; }
 }, 0);
 return unread(document);
-})()"""
+})()""".replace("READABLE", json.dumps(sorted(READABLE_KINDS)))
 
 
 def browser_roles(config: GateConfig) -> dict[str, dict[str, str]]:
@@ -482,6 +486,18 @@ def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
         )
 
 
+def require_readable_document(tool: str, folder: Path, session: str) -> None:
+    """Refuse a document that the page script cannot read and mask; the browser reports its kind."""
+    kind = json.loads(
+        require(run_tool(tool, folder, session, "eval", "document.contentType"))
+    )
+    if kind not in READABLE_KINDS:
+        raise ValueError(
+            f"the document is {kind}, which capture cannot read to hide emails and phones, "
+            "so no image was kept"
+        )
+
+
 def measure_page(
     tool: str, folder: Path, session: str
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
@@ -531,6 +547,7 @@ def shoot_page(
     from ui_measure import write_record
 
     folder = output_folder(root)
+    require_readable_document(tool, folder, session)
     findings, measured = measure_page(tool, folder, session)
     script = PAGE_SCRIPT.replace("RINGS", json.dumps(rings))
     reply = require(run_tool(tool, folder, session, "eval", "--stdin", text=script))
