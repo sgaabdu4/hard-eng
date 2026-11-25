@@ -396,7 +396,7 @@ def look_against_tokens(
 def test_a_radius_outside_the_tokens_fails_design_system_in_code(
     tmp_path: Path, project: Path
 ) -> None:
-    values = {"sizes": SIZES, "radii": RADII, "root_px": 16}
+    values: dict[str, object] = {"sizes": SIZES, "radii": RADII, "root_px": 16}
     record = look_against_tokens(tmp_path, project, TOKENS, values)
     assert record["outcome"] == "findings"
     found = OWNER_LINE.fullmatch(stored(record)["Design system"])
@@ -489,7 +489,10 @@ def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
     (project / "DESIGN.md").write_text(TOKENS)
     commit(project, "inputs")
     images = make_images(project, 1)
-    values = {"radii": [{"at": "badge", "px": 7, "clamped": False}], "root_px": 16}
+    values: dict[str, object] = {
+        "radii": [{"at": "badge", "px": 7, "clamped": False}],
+        "root_px": 16,
+    }
     ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
     answer = good_answer(1).replace(
         "- Design system: Pass — looked at it",

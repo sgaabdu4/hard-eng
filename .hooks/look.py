@@ -734,7 +734,8 @@ def kept_verdict(
     wanted = dict(zip(digests, keys, strict=True))
     entries = record.get("images")
     same = isinstance(entries, list) and all(
-        isinstance(item, dict) and item.get("inputs") == wanted.get(item.get("sha256"))
+        isinstance(item, dict)
+        and item.get("inputs") == wanted.get(str(item.get("sha256")))
         for item in entries
     )
     return record if same and len(entries) == len(digests) else None
