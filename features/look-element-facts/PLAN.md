@@ -36,23 +36,23 @@ Decisions made here, each with a reason:
 
 ## Acceptance + steps
 
-- [ ] The record holds each text element with its name, size, weight and raw colour and fill, each control with its floor and `under`, each gap between named neighbours and each radius, with no cut → `tests/test_ui_audit_guards.py::test_the_record_holds_each_element_with_its_facts`
-- [ ] The prompt names each element with its facts and the colour token → `tests/test_look_facts.py::test_the_prompt_names_each_element_with_its_measured_facts`
-- [ ] The prompt says what each check covered, for example `tap size checked for all 3 controls: 0 under 44 px` → `tests/test_look_facts.py::test_the_prompt_says_what_each_check_covered`
-- [ ] A long list is bounded by one stated byte rule and says how many it left out, in the same order each time → `tests/test_look_facts.py::test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out`
-- [ ] A Fail item that states a size, a colour or a ratio without a measured tag is refused as not done, an unknown tag with such a number is refused too, and an unknown tag with no number stands as judgement → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`
-- [ ] A tagged item, and an untagged item with no number, stand → `tests/test_look_facts.py::test_a_tagged_item_and_an_untagged_item_without_a_number_stand`
-- [ ] The prompt names the kinds and what they cover from the one table → `tests/test_look_facts.py::test_the_prompt_lists_the_kinds_from_the_one_table`
-- [ ] Code decides each measured kind, with one known fault and one known pass for each → `tests/test_look_facts.py::test_code_decides_each_measured_kind`
-- [ ] An ambiguous, short, unknown or unmatched element stays with the reviewer → `tests/test_look_facts.py::test_an_item_that_code_cannot_match_stays_with_the_reviewer`
-- [ ] A colour token with alpha matches the raw colour of the element → `tests/test_look_facts.py::test_a_colour_token_with_alpha_matches_the_raw_colour`
-- [ ] The other items of a line stay, and a line whose items all pass in code becomes a Pass → `tests/test_look_facts.py::test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass`
-- [ ] An earlier measured item is decided by code and not listed; an earlier true colour Fail stays a Fail when the reviewer says nothing; an earlier false item never returns → `tests/test_look_facts.py::test_an_earlier_measured_item_is_decided_by_code_before_the_prompt`
-- [ ] An earlier measured item that code cannot find stays on the recheck list; judgement items stay there → `tests/test_look_facts.py::test_an_earlier_item_that_code_cannot_find_is_listed_again`
-- [ ] A findings run ends with the one line about the rules → `tests/test_look_facts.py::test_a_findings_run_ends_with_the_line_about_the_rules`
-- [ ] Code decides each kind of invented fixture the same way in 5 of 5 real browser captures → `tests/test_ui_audit_guards.py::test_code_decides_each_kind_the_same_way_in_five_real_captures`
-- [ ] A changed DESIGN.md or plan scope is named before the review → `tests/test_look_facts.py::test_a_changed_input_is_named_before_all_images_are_reviewed_again`
-- [ ] Each stored reviewer answer shape is read as its file name says, including the two PR 731 refusals → `tests/test_look_answer.py::test_a_real_reviewer_answer_shape_is_read_as_its_file_name_says`
+- [x] The record holds each text element with its name, size, weight and raw colour and fill, each control with its floor and `under`, each gap between named neighbours and each radius, with no cut → `tests/test_ui_audit_guards.py::test_the_record_holds_each_element_with_its_facts`
+- [x] The prompt names each element with its facts and the colour token → `tests/test_look_facts.py::test_the_prompt_names_each_element_with_its_measured_facts`
+- [x] The prompt says what each check covered, for example `tap size checked for all 3 controls: 0 under 44 px` → `tests/test_look_facts.py::test_the_prompt_says_what_each_check_covered`
+- [x] A long list is bounded by one stated byte rule and says how many it left out, in the same order each time → `tests/test_look_facts.py::test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out`
+- [x] A Fail item that states a size, a colour or a ratio without a measured tag is refused as not done, an unknown tag with such a number is refused too, and an unknown tag with no number stands as judgement → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`
+- [x] A tagged item, and an untagged item with no number, stand → `tests/test_look_facts.py::test_a_tagged_item_and_an_untagged_item_without_a_number_stand`
+- [x] The prompt names the kinds and what they cover from the one table → `tests/test_look_facts.py::test_the_prompt_lists_the_kinds_from_the_one_table`
+- [x] Code decides each measured kind, with one known fault and one known pass for each → `tests/test_look_facts.py::test_code_decides_each_measured_kind`
+- [x] An ambiguous, short, unknown or unmatched element stays with the reviewer → `tests/test_look_facts.py::test_an_item_that_code_cannot_match_stays_with_the_reviewer`
+- [x] A colour token with alpha matches the raw colour of the element → `tests/test_look_facts.py::test_a_colour_token_with_alpha_matches_the_raw_colour`
+- [x] The other items of a line stay, and a line whose items all pass in code becomes a Pass → `tests/test_look_facts.py::test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass`
+- [x] An earlier measured item is decided by code and not listed; an earlier true colour Fail stays a Fail when the reviewer says nothing; an earlier false item never returns → `tests/test_look_facts.py::test_an_earlier_measured_item_is_decided_by_code_before_the_prompt`
+- [x] An earlier measured item that code cannot find stays on the recheck list; judgement items stay there → `tests/test_look_facts.py::test_an_earlier_item_that_code_cannot_find_is_listed_again`
+- [x] A findings run ends with the one line about the rules → `tests/test_look_facts.py::test_a_findings_run_ends_with_the_line_about_the_rules`
+- [x] Code decides each kind of invented fixture the same way in 5 of 5 real browser captures → `tests/test_ui_audit_guards.py::test_code_decides_each_kind_the_same_way_in_five_real_captures`
+- [x] A changed DESIGN.md or plan scope is named before the review → `tests/test_look_facts.py::test_a_changed_input_is_named_before_all_images_are_reviewed_again`
+- [x] Each stored reviewer answer shape is read as its file name says, including the two PR 731 refusals → `tests/test_look_answer.py::test_a_real_reviewer_answer_shape_is_read_as_its_file_name_says`
 
 Steps:
 
