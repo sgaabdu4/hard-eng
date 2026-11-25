@@ -9,6 +9,7 @@ from typing import NamedTuple
 from ui_measure import LIMITS
 
 FACT_BYTES = 1500
+KEY_BYTES = 500
 LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
 ZERO = re.compile(r"0+(?:\.0+)?")
 UNSAFE_IN_KEY = re.compile(r"[;:\[\]`*\"\s]+")
@@ -241,7 +242,13 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     near: dict[str, set[str]] = {}
     for gap in _rows(measured, "gaps"):
         first, second = fact_key(gap.get("at")), fact_key(gap.get("to"))
-        if gap.get("axis") == "x" and first in weights and second in weights:
+        text_pair = gap.get("text") is not False
+        if (
+            text_pair
+            and gap.get("axis") == "x"
+            and first in weights
+            and second in weights
+        ):
             near.setdefault(first, set()).add(second)
             near.setdefault(second, set()).add(first)
     found: list[Fact] = []
@@ -345,6 +352,21 @@ def _keyed(facts: list[Fact]) -> frozenset[str]:
     )
 
 
+def _key_line(kind: str, facts: list[Fact]) -> str:
+    shown: list[str] = []
+    used = 0
+    keys = sorted(_keyed(facts))
+    for key in keys:
+        used += len(key.encode()) + 3
+        if used > KEY_BYTES:
+            break
+        shown.append(key)
+    if not shown:
+        return ""
+    more = f" | {len(keys) - len(shown)} more keys" if len(shown) < len(keys) else ""
+    return f"{kind} keys: {' | '.join(shown)}{more}"
+
+
 def _listed(facts: list[Fact], floor_note: str) -> list[str]:
     lines: list[str] = []
     used = 0
@@ -434,6 +456,8 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
         lines.append(_covered(kind, facts, tokens, measured))
         if kind in NOTES:
             lines += _listed(facts, NOTES[kind])
+        elif keys := _key_line(kind, facts):
+            lines.append(keys)
     return "\n".join(lines)
 
 

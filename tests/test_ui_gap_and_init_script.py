@@ -157,3 +157,33 @@ def test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict(
     tokens = tokens_of(tmp_path)
     assert look_facts.verdict("weight", "5", record["measured"], tokens) is None
     assert "5" not in look_facts.item_keys(record["measured"], tokens)["weight"]
+
+
+LABEL_PAGE = (
+    "<main><header style='display:flex;gap:12px;font-size:14px'>"
+    "<button aria-label='Settings' style='width:20px;height:20px'></button>"
+    "<h1 style='font-size:14px;margin:0;font-weight:700'>Dashboard</h1></header>"
+    "<nav style='font-size:14px'><a href='/s' style='font-weight:400'>Settings</a></nav></main>"
+)
+
+
+def test_an_icon_button_named_like_a_link_gives_no_weight_verdict(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    import look_facts
+    from test_look_facts import tokens_of
+
+    (tmp_path / "pages/label.html").write_text(
+        "<!doctype html><html lang=en><title>Label</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{LABEL_PAGE}</body>"
+    )
+    name = session()
+    open_board(tmp_path, site, name, "label")
+    try:
+        measured(tmp_path, browser, name)
+    finally:
+        plain_step(tmp_path, name, "close")
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    tokens = tokens_of(tmp_path)
+    for key in ("Dashboard", "Settings"):
+        assert look_facts.verdict("weight", key, record["measured"], tokens) is None

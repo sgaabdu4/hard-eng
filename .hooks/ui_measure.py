@@ -541,8 +541,7 @@ for (const el of texts) {
   textFacts.set(JSON.stringify(fact), fact);
 }
 const gaps = [];
-const seenGaps = new Set();
-for (const parent of document.body.querySelectorAll("*")) {
+const seenGaps = new Set();for (const parent of document.body.querySelectorAll("*")) {
   const kids = [...parent.children].filter((c) => visible(c) && !["absolute", "fixed"].includes(getComputedStyle(c).position));
   if (kids.length < 2) continue;
   const rows = [];
@@ -557,6 +556,7 @@ for (const parent of document.body.querySelectorAll("*")) {
     const axis = below >= -1 ? "y" : beside >= -1 ? "x" : "";
     if (!axis) continue;
     const gap = { at: factName(boxes[i - 1].c), to: factName(boxes[i].c), px: Math.round(axis === "y" ? below : beside), axis };
+    if (![boxes[i - 1].c, boxes[i].c].every((c) => (c.innerText || "").trim())) gap.text = false;
     const key = JSON.stringify(gap);
     if (!seenGaps.has(key)) { seenGaps.add(key); gaps.push(gap); }
   }
