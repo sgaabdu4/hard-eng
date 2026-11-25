@@ -451,7 +451,10 @@ def keep_route_scripts(folder: Path, session: str, files: list[str]) -> None:
     if not SESSION_NAME.fullmatch(session):
         raise ValueError("--init-script needs a valid --session name")
     saved = dict.fromkeys(
-        [*route_scripts(folder, session), *(str(Path(name).resolve()) for name in files)]
+        [
+            *route_scripts(folder, session),
+            *(str(Path(name).resolve()) for name in files),
+        ]
     )
     route_file(folder, session).write_text("\n".join(saved) + "\n")
 
@@ -464,7 +467,11 @@ def checkout_space(folder: Path, session: str = "") -> dict[str, str]:
         "AGENT_BROWSER_NAMESPACE": "he-" + digest,
         IDLE_LIMIT: IDLE_MS,
     }
-    scripts = [env.get(INIT_SCRIPTS), *route_scripts(folder, session), hold_script_file()]
+    scripts = [
+        env.get(INIT_SCRIPTS),
+        *route_scripts(folder, session),
+        hold_script_file(),
+    ]
     env[INIT_SCRIPTS] = ",".join(dict.fromkeys(script for script in scripts if script))
     return env
 
