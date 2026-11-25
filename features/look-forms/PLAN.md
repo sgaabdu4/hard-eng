@@ -58,6 +58,8 @@ N/A — hook code and tests; no visible UI.
 ## Verification
 
 Result: Pending
+E2E: N/A — hook code with no app journey; the two real client reviewer answers replay through `look.judge`: main refuses both with the reported messages, this head reads both as findings with 10 rule lines each.
+Real service: Passed — the Claude reviewer CLI: one real `look` review of an invented image with the new prompt returned 10 rule lines in the shown forms with no refusal, and its count notes read into the stored form.
 
 Delivery target: Merge
 Delivery: Pending — `hard-eng` passes on the PR to `main`, the merge on `main`, then the join PR merged into `develop`.
