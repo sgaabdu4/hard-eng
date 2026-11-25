@@ -201,7 +201,7 @@ def judged(fail: str) -> tuple[str, list[str]]:
         "image-1.png: badge #7a5c5c [judgement] Fix: use a token",
         "image-1.png: Save about 13 px Fix: make it bigger",
         "image-1.png: Save at 3:1 [judgement] Fix: more contrast",
-        "image-1.png: Hint [weight] Fix: make it bolder",
+        "image-1.png: Hint is 10 px [weight] Fix: make it bolder",
         "the label is 12pt; image-1.png: Hint [size] Fix: make it bigger",
     ],
 )
@@ -221,6 +221,7 @@ def test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused(
         "image-1.png: badge #7a5c5c [colour] Fix: use a token",
         "image-1.png: the card sits left of its title [judgement] Fix: centre it",
         "image-1.png: the card Fix: centre it",
+        "image-1.png: Hint [weight] Fix: make it bolder",
         "image-1.png: Save [tap] Fix: 44 px control",
     ],
 )
