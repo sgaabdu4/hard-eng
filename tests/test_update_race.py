@@ -70,6 +70,25 @@ def test_a_stop_signals_a_child_that_a_stopped_process_forked_meanwhile(
     assert (12, signal.SIGTERM) in sent
 
 
+def test_a_slow_scan_still_signals_the_processes_that_it_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scans = iter([[(11, str(tmp_path / "f"))], [(11, str(tmp_path / "f"))], []])
+    sent: list[tuple[int, int]] = []
+
+    def listing(own: bool = False) -> list[tuple[int, str]]:
+        return next(scans, [])
+
+    def kill(pid: int, signum: int) -> None:
+        sent.append((pid, signum))
+
+    monkeypatch.setattr(tidy_guards, "open_files", listing)
+    monkeypatch.setattr(tidy_guards.os, "kill", kill)
+    tidy_guards.stop_inside(tmp_path, seconds=0)
+    assert [signum for _, signum in sent] == [signal.SIGTERM, signal.SIGKILL]
+    assert next(scans) == []
+
+
 def test_a_host_that_cannot_list_processes_still_lets_the_removal_go_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
