@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from conftest import commit
+from look_facts import Tokens
 from test_look import good_answer, install_agent, look_project, make_images, run_look
 from test_look_proof_kinds import prompt_of
 
@@ -274,7 +275,7 @@ FAULT_AND_PASS = {
 }
 
 
-def tokens_of(tmp_path: Path) -> object:
+def tokens_of(tmp_path: Path) -> Tokens:
     import look_facts
 
     (tmp_path / "DESIGN.md").write_text(DESIGN)
@@ -296,13 +297,7 @@ def test_code_decides_each_measured_kind(kind: str, tmp_path: Path) -> None:
     assert failed[1] != passed[1]
 
 
-def a_second(
-    rows: list[dict[str, object]], **change: object
-) -> list[dict[str, object]]:
-    return [*rows, {**rows[0], **change}]
-
-
-NEAR_MISSES = {
+NEAR_MISSES: dict[str, tuple[str, str, dict[str, object]]] = {
     "an element that the record lacks": ("size", "Cancel all", MEASURED),
     "a longer name that holds the element": (
         "size",
@@ -328,7 +323,7 @@ NEAR_MISSES = {
         "Save",
         values(radii=[{"at": "Save", "px": 99, "clamped": True}]),
     ),
-    "an old record with no facts": ("size", "Save", {"radii": []}),
+    "an old record with no facts": ("size", "Save", values(texts=[])),
     "an unknown kind": ("judgement", "Save", MEASURED),
 }
 

@@ -105,10 +105,6 @@ def part_item(part: str) -> tuple[str, Item | None]:
     return part[: found.start()], Item(text, frame.strip(), element, kind, note)
 
 
-def fail_items(line: str) -> list[Item]:
-    return [item for part in fail_parts(line)[0] if (item := part_item(part)[1])]
-
-
 def item_problem(rule_lines: list[str]) -> str | None:
     """Why a Fail line cannot stand: an item with a kind that is not in the table, or a size, ratio or colour stated anywhere but in an item of a measured kind."""
     from ui_measure import ITEM_KINDS, MEASURED_KINDS
