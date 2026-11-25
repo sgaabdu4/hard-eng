@@ -306,7 +306,7 @@ def _newest_look_problem(
         if not covering:
             return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
         chosen.append(max(covering, key=lambda item: item[0]))
-    cutoff = min(item[0] for item in chosen)
+    cutoff = max(item[0] for item in chosen)
     chosen += [item for item in stray if item[0] > cutoff]
     for _, opened in chosen:
         if problem := opened_problem(opened):
