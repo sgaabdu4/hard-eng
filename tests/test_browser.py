@@ -856,6 +856,8 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
         del name, session
         if arguments[:1] == ("screenshot",):
             (folder / arguments[-1]).write_bytes(b"image")
+        if arguments == ("eval", "document.contentType"):
+            return subprocess.CompletedProcess(arguments, 0, '"text/html"', "")
         if arguments[:2] == ("eval", browser.FRAME_CHECK):
             checks.append(arguments)
             if len(checks) == 2 and start_fails:
