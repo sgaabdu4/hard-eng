@@ -12,7 +12,14 @@ import time
 from pathlib import Path
 from typing import cast
 
-from challenge import git_text, host_for, reviewers_for, store, without_host_markers
+from challenge import (
+    git_text,
+    host_for,
+    known,
+    reviewers_for,
+    store,
+    without_host_markers,
+)
 from look_answer import (
     VERDICT_OUTCOMES,
     VERDICT_WORDS,
@@ -472,15 +479,28 @@ def recorded_values(root: Path | None, digest: str) -> str:
     return measured_text(values) if values else ""
 
 
-def _raw_design_sections(root: Path) -> list[tuple[str, str]]:
-    sections: list[tuple[str, str]] = []
-    for name in DESIGN_DOC_NAMES:
+def _design_body(root: Path, name: str, revision: str) -> str:
+    if not revision:
         path = root / name
-        if path.is_file():
-            body = path.read_text(errors="replace").strip()
-            if body:
-                sections.append((name, body))
-    return sections
+        return path.read_text(errors="replace").strip() if path.is_file() else ""
+    spec = f"{revision}:{name}"
+    shown = subprocess.run(
+        ["git", "show", spec],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    return shown.stdout.strip() if shown.returncode == 0 else ""
+
+
+def _raw_design_sections(root: Path, revision: str = "") -> list[tuple[str, str]]:
+    """The design documents on disk, or as committed at `revision`, so a later change on the base branch never moves a PR's own design."""
+    if revision and not known(root, revision):
+        raise ValueError(f"commit {revision[:12]} is not in this checkout")
+    bodies = [(name, _design_body(root, name, revision)) for name in DESIGN_DOC_NAMES]
+    return [(name, body) for name, body in bodies if body]
 
 
 def _truncate_utf8(text: str, limit: int) -> str:
@@ -492,9 +512,9 @@ def _truncate_utf8(text: str, limit: int) -> str:
     return clipped.rstrip() + suffix
 
 
-def design_text(root: Path) -> str:
+def design_text(root: Path, revision: str = "") -> str:
     """The repository's design documents for `look`, bounded in UTF-8 bytes with reserved space for each file."""
-    sections = _raw_design_sections(root)
+    sections = _raw_design_sections(root, revision)
     if not sections:
         return ""
     formatted = [f"### {name}\n{body}" for name, body in sections]
@@ -516,9 +536,9 @@ def design_text(root: Path) -> str:
     )
 
 
-def design_hash(root: Path) -> str:
-    """SHA-256 of the full design documents on disk, so edits past the prompt excerpt still invalidate old records."""
-    sections = _raw_design_sections(root)
+def design_hash(root: Path, revision: str = "") -> str:
+    """SHA-256 of the full design documents on disk, or as committed at `revision` (the one owner of a PR's design hash), so edits past the prompt excerpt still invalidate old records."""
+    sections = _raw_design_sections(root, revision)
     if not sections:
         return ""
     full = "\n\n".join(f"### {name}\n{body}" for name, body in sections)

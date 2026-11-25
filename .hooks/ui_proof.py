@@ -561,7 +561,7 @@ def look_record_problem(
 
     if problem := _plan_mismatch(record, plan_rel, plan_digest):
         return problem
-    expected = look.design_hash(root) if root is not None else ""
+    expected = look.design_hash(root, head) if root is not None else ""
     if problem := look_base_problem(
         record, head, expected, [name for name, _ in usability_rules()]
     ):
