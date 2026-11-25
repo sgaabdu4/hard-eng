@@ -10,7 +10,7 @@ from test_ui_audit_guards import measured, open_board
 
 COUNTER_PAGE = (
     "<main><div style='display:flex;align-items:baseline;gap:6px;font-size:12px'>"
-    "<span>Session</span><span style='font-size:13px;font-weight:700'>5</span>"
+    "<span>Round</span><span style='font-size:13px;font-weight:700'>5</span>"
     "<span>/36</span></div></main>"
 )
 
@@ -30,7 +30,7 @@ def test_the_gap_between_inline_neighbours_follows_their_order_on_the_line(
         plain_step(tmp_path, name, "close")
     record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
     pairs = {(gap["at"], gap["to"]): gap["px"] for gap in record["measured"]["gaps"]}
-    assert pairs == {("Session", "5"): 6, ("5", "/36"): 6}
+    assert pairs == {("Round", "5"): 6, ("5", "/36"): 6}
 
 
 def test_a_capture_keeps_the_route_init_script_beside_the_hold_script(

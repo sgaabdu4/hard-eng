@@ -53,6 +53,13 @@ def test_code_decides_font_weight_against_its_neighbours(tmp_path: Path) -> None
     assert differs is not None
     assert differs[0] is False
     assert "differs from its neighbours (Lesson, Total)" in differs[1]
+    stacked = counter((600, 700, 600))
+    stacked["gaps"] = [{**gap, "axis": "y"} for gap in stacked["gaps"]]
+    assert look_facts.verdict("weight", "Number", stacked, tokens) is None
+    twice = counter((600, 700, 600))
+    twice["texts"] = [*twice["texts"], text_fact("Number", 12, weight=600)]
+    assert look_facts.verdict("weight", "Number", twice, tokens) is None
+    assert look_facts.verdict("weight", "Lesson", twice, tokens) is None
     alone = values(texts=[text_fact("Number", 12, weight=700)])
     assert look_facts.verdict("weight", "Number", alone, tokens) is None
     old = values(texts=[{"at": "Number", "px": 12}], gaps=counter((1, 1, 1))["gaps"])
@@ -231,43 +238,43 @@ def proof_text(
 RELEASE_PROOF = values(
     texts=[
         proof_text(
-            "Rescheduled from 05:30",
+            "Rescheduled from 05:45",
             12,
             500,
-            "4d6969ff",
-            "e8f0f0ff",
-            "#4d6969",
-            "#e8f0f0",
+            "4a5a5aff",
+            "eef1f1ff",
+            "#4a5a5a",
+            "#eef1f1",
         ),
         proof_text(
-            "Forms needed", 12, 600, "7a5e3fff", "fff8e1ff", "#7a5e3f", "#fff8e1"
+            "Forms needed", 12, 600, "7a5a3aff", "fff6e0ff", "#7a5a3a", "#fff6e0"
         ),
         *[
             proof_text(
                 name,
                 12,
                 600,
-                "2d6a4fff",
+                "2a6a50ff",
                 "e6efe9bf",
-                "#2d6a4f",
-                "#ecf3ef",
+                "#2a6a50",
+                "#eef3f0",
                 align="start",
                 centred=False,
             )
-            for name in ("Session", "5", "/36")
+            for name in ("Round", "5", "/36")
         ],
-        proof_text("THU", 12, 700, "2d6a4fff", "e6efe959", "#2d6a4f", "#f6f9f7"),
-        proof_text("26 Nov", 14, 700, "2d6a4fff", "e6efe959", "#2d6a4f", "#f6f9f7"),
+        proof_text("THU", 12, 700, "2a6a50ff", "e6efe959", "#2a6a50", "#f7f9f8"),
+        proof_text("26 Nov", 14, 700, "2a6a50ff", "e6efe959", "#2a6a50", "#f7f9f8"),
         proof_text(
-            "We are improving your tools",
+            "A helper sentence",
             16,
             400,
-            "2c3e50ff",
+            "2b3d4fff",
             "ffffffff",
-            "#2c3e50",
+            "#2b3d4f",
             "#ffffff",
         ),
-        proof_text("Send notes", 16, 500, "2d6a4fff", "e6efe9ff", "#2d6a4f", "#e6efe9"),
+        proof_text("Send notes", 16, 500, "2a6a50ff", "e6efe9ff", "#2a6a50", "#e6efe9"),
         proof_text(
             "Guides intro",
             14,
@@ -292,15 +299,15 @@ RELEASE_PROOF = values(
         ),
     ],
     gaps=[
-        {"at": "Rescheduled from 05:30", "to": "Forms needed", "px": 9, "axis": "x"},
+        {"at": "Rescheduled from 05:45", "to": "Forms needed", "px": 9, "axis": "x"},
         {
-            "at": "We are improving your tools",
+            "at": "A helper sentence",
             "to": "Send notes",
             "px": 12,
             "axis": "y",
         },
         {"at": "THU 26 Nov", "to": "10:00 GMT", "px": 18, "axis": "y"},
-        {"at": "Session", "to": "5", "px": 6, "axis": "x"},
+        {"at": "Round", "to": "5", "px": 6, "axis": "x"},
         {"at": "5", "to": "/36", "px": 6, "axis": "x"},
     ],
 )
@@ -328,11 +335,11 @@ def test_the_real_items_of_the_release_proof_are_decided_from_keys(
     tokens = tokens_of(tmp_path)
     keys = listed_keys(tokens)
     gap_keys = [
-        "Rescheduled from 05 30 to Forms needed",
-        "We are improving your tools to Send notes",
+        "Rescheduled from 05 45 to Forms needed",
+        "A helper sentence to Send notes",
         "THU 26 Nov to 10 00 GMT",
     ]
-    colour_keys = ["Rescheduled from 05 30", "Session", "26 Nov"]
+    colour_keys = ["Rescheduled from 05 45", "Round", "26 Nov"]
     assert set(gap_keys) <= keys
     assert set(colour_keys) <= keys
     spacing = (
@@ -365,15 +372,15 @@ def test_the_counter_and_the_centred_items_are_decided_by_code(tmp_path: Path) -
     import look_records
 
     tokens = tokens_of(tmp_path)
-    assert {"Session to 5", "5 to /36"} <= listed_keys(tokens)
+    assert {"Round to 5", "5 to /36"} <= listed_keys(tokens)
     counter_line = (
-        "Spacing: Fail — image-1.png: 5 [weight] bolder than Session and /36; "
-        "image-1.png: Session to 5 [gap] uneven against 5 to /36. Fix: even them."
+        "Spacing: Fail — image-1.png: 5 [weight] bolder than Round and /36; "
+        "image-1.png: Round to 5 [gap] uneven against 5 to /36. Fix: even them."
     )
     decided = look_records.decide_line(counter_line, PROOF_FRAMES, tokens)
     assert "5 [weight]" not in decided
     assert (
-        "image-1.png: Session to 5 [gap] — code: gap 6 px is not a spacing token"
+        "image-1.png: Round to 5 [gap] — code: gap 6 px is not a spacing token"
         in decided
     )
     centred_line = (
@@ -394,8 +401,8 @@ def test_the_old_shape_of_the_release_proof_items_is_refused_by_form(
     tokens = tokens_of(tmp_path)
     for old in (
         "THU 26 Nov to 10:00 GMT, 18 px",
-        "Moved from badge, ink #4d6969 on fill #e8f0f0, neither is a token",
-        "Session 5 /36 badge fill #ecf3ef, not sage #E6EFE9",
+        "A status badge, ink #4a5a5a on fill #eef1f1, neither is a token",
+        "Round 5 /36 badge fill #eef3f0, not mint #E6EFE9",
     ):
         kind = "gap" if " to " in old else "colour"
         outcome, _ = judged_with_keys(

@@ -299,6 +299,7 @@ def unit_lengths(value: object) -> set[float]:
 
 
 def other_group_lengths(groups: dict[str, dict[object, object]]) -> set[float]:
+    """The numbers of a group outside the DESIGN.md format, with or without a unit. A bare number (a Dart double) matches a token length but is never reported as missing from the token files, since an opacity or a z-index is no length."""
     return {
         length
         for group, members in groups.items()
@@ -336,7 +337,6 @@ def design_facts(data: dict[str, object]) -> Facts:
                 named.setdefault(
                     ("s" if group == "spacing" else "r", plain_name(str(name))), set()
                 ).add(f"l{length:g}")
-    lengths |= other_group_lengths(groups)
     lengths |= {
         length
         for group, members in groups.items()
@@ -365,7 +365,11 @@ def token_findings(design: str | None, token_texts: list[str]) -> list[str]:
         data = yaml.safe_load(front[1])
     except yaml.YAMLError:
         return [f"{DESIGN_NAME} front matter is not valid YAML; fix its syntax"]
-    doc = design_facts(data if isinstance(data, dict) else {})
+    values = data if isinstance(data, dict) else {}
+    doc = design_facts(values)
+    bare = other_group_lengths(
+        {key: value for key, value in values.items() if isinstance(value, dict)}
+    )
     code = token_facts(token_texts)
     doc.lengths.discard(0.0)
     found = [
@@ -382,7 +386,7 @@ def token_findings(design: str | None, token_texts: list[str]) -> list[str]:
     ]
     found += [
         f"a token length {length_label(value, token_texts)} is missing from {DESIGN_NAME}"
-        for value in sorted(code.lengths - doc.lengths)
+        for value in sorted(code.lengths - doc.lengths - bare)
     ]
     found += [
         f"the {DESIGN_NAME} font family {value} is missing from the token files"

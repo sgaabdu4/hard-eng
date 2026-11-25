@@ -165,7 +165,7 @@ def defined_colours(texts: dict[str, str]) -> set[str]:
         if PurePosixPath(name).name.startswith("tailwind.config."):
             names |= config_colour_names(text)
         elif name.endswith(STYLE_SUFFIXES):
-            code = CSS_COMMENT.sub("", text)
+            code = code_of(text)
             blocks = (
                 code if token_file(name, text) else "".join(THEME_BLOCK.findall(code))
             )
@@ -173,13 +173,16 @@ def defined_colours(texts: dict[str, str]) -> set[str]:
     return names
 
 
-def token_values(texts: dict[str, str]) -> set[tuple[str, str | float]]:
-    """The colours and lengths of the token files as values, so 28px equals 1.75rem."""
+def token_values(
+    texts: dict[str, str], ui_paths: list[str]
+) -> set[tuple[str, str | float]]:
+    """The colours and lengths of the token files that the DESIGN.md compare reads, as values, so 28px equals 1.75rem."""
     facts = token_facts(
         [
             text
             for name, text in texts.items()
-            if name.endswith(TOKEN_SUFFIXES) and token_file(name, text)
+            if name.endswith(TOKEN_SUFFIXES)
+            and compared_token_file(name, text, ui_paths)
         ]
     )
     values: set[tuple[str, str | float]] = {("c", colour) for colour in facts.colours}
@@ -409,7 +412,7 @@ def ui_findings_whole(
 ) -> list[str]:
     owned = owned_texts(root, texts)
     defined = defined_colours(owned)
-    tokens = token_values(owned)
+    tokens = token_values(owned, ui_paths)
     token_texts = [
         owned[name]
         for name in owned
