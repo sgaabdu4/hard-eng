@@ -236,7 +236,7 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     seen: Counter[str] = Counter()
     for row in rows:
         key = fact_key(row.get("at"))
-        seen[key] += 1
+        seen[key] += max(1, int(_num(row.get("n"))))
         weights.setdefault(key, set()).add(_num(row.get("weight")))
     near: dict[str, set[str]] = {}
     for gap in _rows(measured, "gaps"):
@@ -427,12 +427,15 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
 
 def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozenset[str]]:
     """The keys of one image for each measured kind: the exact texts that an item of that kind may name. A fact that code cannot decide has no key, so an item on it is a judgement item."""
-    return {
-        kind: frozenset(
-            fact.key for fact in build(measured, tokens) if fact.ok is not None
+    keys: dict[str, frozenset[str]] = {}
+    for kind, build in FACTS.items():
+        oks: dict[str, set[bool | None]] = {}
+        for fact in build(measured, tokens):
+            oks.setdefault(fact.key, set()).add(fact.ok)
+        keys[kind] = frozenset(
+            key for key, found in oks.items() if len(found) == 1 and None not in found
         )
-        for kind, build in FACTS.items()
-    }
+    return keys
 
 
 def verdict(
