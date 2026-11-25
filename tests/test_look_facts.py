@@ -666,7 +666,7 @@ def test_an_item_with_leading_frame_names_stays_with_the_reviewer(
 ) -> None:
     import look_records
 
-    measured = {
+    measured: dict[str, dict[str, object] | None] = {
         "image-1.png": values(texts=[text_fact("Save", 10.5, under=True)]),
         "image-2.png": values(texts=[text_fact("Save", 14)]),
     }
@@ -803,7 +803,10 @@ def test_an_item_that_names_more_than_one_item_or_frame_stays_with_the_reviewer(
     import look_records
 
     ok = values(texts=[text_fact("Save", 14)], sizes={"controls": [control("Cancel")]})
-    measured = {"image-1.png": ok, "image-2.png": ok}
+    measured: dict[str, dict[str, object] | None] = {
+        "image-1.png": ok,
+        "image-2.png": ok,
+    }
     assert look_records.decide_line(line, measured, tokens_of(tmp_path)) == line
 
 
