@@ -336,20 +336,32 @@ def _order(facts: list[Fact]) -> list[Fact]:
     return sorted(facts, key=lambda fact: (fact.ok is not False, fact.margin, fact.key))
 
 
+def _keyed(facts: list[Fact]) -> frozenset[str]:
+    oks: dict[str, set[bool | None]] = {}
+    for fact in facts:
+        oks.setdefault(fact.key, set()).add(fact.ok)
+    return frozenset(
+        key for key, found in oks.items() if len(found) == 1 and None not in found
+    )
+
+
 def _listed(facts: list[Fact], floor_note: str) -> list[str]:
     lines: list[str] = []
     used = 0
     ordered = _order(facts)
+    keyed = _keyed(facts)
     for fact in ordered:
-        used += len(fact.line.encode()) + 3
+        shown = fact.line if fact.key in keyed else f"{fact.line} (no key: judgement)"
+        used += len(shown.encode()) + 3
         if used > FACT_BYTES:
             break
-        lines.append(f"- {fact.line}")
+        lines.append(f"- {shown}")
     rest = ordered[len(lines) :]
     if rest:
         why = f", {floor_note}" if all(fact.ok for fact in rest) else ""
-        keys = " | ".join(dict.fromkeys(fact.key for fact in rest))
-        lines.append(f"{len(rest)} more not listed{why}; their keys: {keys}")
+        keys = " | ".join(dict.fromkeys(fact.key for fact in rest if fact.key in keyed))
+        listing = f"their keys: {keys}" if keys else "none of them has a key"
+        lines.append(f"{len(rest)} more not listed{why}; {listing}")
     return lines
 
 
@@ -427,15 +439,7 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
 
 def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozenset[str]]:
     """The keys of one image for each measured kind: the exact texts that an item of that kind may name. A fact that code cannot decide has no key, so an item on it is a judgement item."""
-    keys: dict[str, frozenset[str]] = {}
-    for kind, build in FACTS.items():
-        oks: dict[str, set[bool | None]] = {}
-        for fact in build(measured, tokens):
-            oks.setdefault(fact.key, set()).add(fact.ok)
-        keys[kind] = frozenset(
-            key for key, found in oks.items() if len(found) == 1 and None not in found
-        )
-    return keys
+    return {kind: _keyed(build(measured, tokens)) for kind, build in FACTS.items()}
 
 
 def verdict(
