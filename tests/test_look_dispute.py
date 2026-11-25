@@ -483,7 +483,13 @@ def test_a_record_that_carries_one_image_keeps_the_disputes_it_rests_on(
     record = look_records.combined(
         [images[0], other], [digest, "b" * 64], base, {digest}, fresh
     )
-    assert record["disputes"] == base["disputes"]
+    held = cast(list[dict[str, object]], record["disputes"])
+    assert [
+        {k: v for k, v in entry.items() if k != "carried_from"} for entry in held
+    ] == base["disputes"]
+    assert all(entry["carried_from"] == base["head"] for entry in held)
+    assert not look_dispute.already_decided(record, str(held[0]["item"]))
+    assert look_dispute.already_decided(base, str(held[0]["item"]))
     (project / "src/form.ts").write_text(FORM.replace(">= 0", "> 0"))
     head = commit(project, "the rule changed")
     assert not look_dispute.cites_hold(project, head, record)
