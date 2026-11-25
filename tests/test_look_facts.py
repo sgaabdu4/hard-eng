@@ -864,3 +864,25 @@ def test_a_carried_clean_record_ends_the_list_of_an_older_findings_record(
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", [image])
     assert EARLIER not in prompt_of(log)
+
+
+ZERO_DESIGN = (
+    "---\ncolors:\n  ink: '#1a1a1a'\nspacing:\n  none: 0\n  sm: 8px\n"
+    "rounded:\n  none: 0\n  sm: 4px\n---\n# Design\n"
+)
+
+
+def test_a_zero_token_is_a_length_and_keeps_the_other_verdicts() -> None:
+    import look_facts
+
+    tokens = look_facts.tokens_from_text(ZERO_DESIGN)
+    assert look_facts.length_scale(tokens.rounded, 16) == {0, 4}
+    assert look_facts.length_scale(tokens.spacing, 16) == {0, 8}
+    radius = values(radii=[{"at": "Save", "px": 5, "clamped": False}])
+    gap = values(gaps=[{"at": "Save", "to": "Cancel", "px": 5, "axis": "y"}])
+    off_radius = look_facts.verdict("radius", "Save", radius, tokens)
+    off_gap = look_facts.verdict("gap", "Save", gap, tokens)
+    assert off_radius is not None
+    assert off_radius[0] is False
+    assert off_gap is not None
+    assert off_gap[0] is False
