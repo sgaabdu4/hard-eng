@@ -908,3 +908,66 @@ def test_bundle_font_isolation_generated_wrapper_and_text_initial_reset(
         '@theme {\n  --font-sans: "Inter", sans-serif;\n  --text-heading: 1.5rem;\n  --text-heading--font-weight: 700;\n}\n'
     )
     assert "outside loaded @font-face font-weight ranges" in refused(mono_sep)
+
+
+KIND_TOKENS = (
+    "---\ncolors:\n  ink: '#1a1a1a'\n  mint: '#e6efe9'\nspacing:\n  sm: 8px\n  md: 14px\n"
+    "rounded:\n  sm: 4px\n  md: 6px\n---\n# Design\n\n## Overview\nPlain.\n"
+)
+KIND_PAGE = (
+    "<main><h1 style='font-size:24px;margin:0 0 14px'>Kinds</h1>"
+    "<p style='margin:0 0 14px;font-size:10px'>Fine print</p>"
+    "<p style='margin:0 0 14px;font-size:14px'>Body copy</p>"
+    "<p style='margin:0 0 14px;font-size:14px;color:#767676'>Off token</p>"
+    "<div style='margin:0 0 14px;font-size:14px;background:#e6efe9;color:#1a1a1a;display:inline-block'>On token</div>"
+    "<section><div>Alpha block</div><div style='margin-top:11px'>Beta block</div></section>"
+    "<section style='margin-top:14px'><div>Gamma block</div><div style='margin-top:14px'>Delta block</div></section>"
+    "<div style='margin:14px 0;border-radius:7px;background:#ddd;display:inline-block;padding:8px'>Round seven</div>"
+    "<div style='margin:14px 0;border-radius:6px;background:#ddd;display:inline-block;padding:8px'>Round six</div>"
+    "<div><button style='width:30px;height:30px;font-size:12px'>Tiny one</button>"
+    "<button style='min-height:44px;min-width:120px;font-size:16px'>Big one</button></div></main>"
+)
+KIND_CASES = {
+    ("size", "Fine print"): False,
+    ("size", "Body copy"): True,
+    ("colour", "Off token"): False,
+    ("colour", "On token"): True,
+    ("gap", "Alpha block"): False,
+    ("gap", "Delta block"): True,
+    ("radius", "Round seven"): False,
+    ("radius", "Round six"): True,
+    ("tap", "Tiny one"): False,
+    ("tap", "Big one"): True,
+}
+
+
+def test_code_decides_each_kind_the_same_way_in_five_real_captures(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    import look_facts
+
+    (tmp_path / "DESIGN.md").write_text(KIND_TOKENS)
+    tokens = look_facts.design_tokens(tmp_path)
+    (tmp_path / "pages/kinds.html").write_text(
+        "<!doctype html><html lang=en><title>Kinds</title>"
+        f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{KIND_PAGE}</body>"
+    )
+    runs = []
+    for _ in range(5):
+        name = session()
+        open_board(tmp_path, site, name, "kinds")
+        try:
+            measured(tmp_path, browser, name)
+        finally:
+            plain_step(tmp_path, name, "close")
+        record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+        runs.append(
+            {
+                case: look_facts.verdict(case[0], case[1], record["measured"], tokens)
+                for case in KIND_CASES
+            }
+        )
+    assert all(run == runs[0] for run in runs)
+    assert {
+        case: found[0] if found else None for case, found in runs[0].items()
+    } == KIND_CASES
