@@ -137,10 +137,11 @@ def index_findings(texts: dict[str, str], library: list[str]) -> list[str]:
 
 def write_index(root: Path) -> int:
     from shipping import load_policy
+    from ui_whole import owned_texts
     from whole_project import text_files
 
     policy = load_policy(root)
-    texts = text_files(root)
+    texts = owned_texts(root, text_files(root))
     old = read_index(texts.get(INDEX_NAME, ""))
     (root / INDEX_NAME).write_text(
         index_text(texts, policy["ui_library"] if policy else [], old)

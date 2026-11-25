@@ -70,6 +70,17 @@ def inside(name: str, patterns: list[str]) -> bool:
     return any(fnmatchcase(name, pattern) for pattern in patterns)
 
 
+def owned_texts(root: Path, texts: dict[str, str]) -> dict[str, str]:
+    """The files that a person writes for the project: no tool folder, test or generated file."""
+    names = [
+        name
+        for name in texts
+        if not name.startswith(UNOWNED) and not is_test_path(PurePosixPath(name))
+    ]
+    skipped = generated_sources(root, names)
+    return {name: texts[name] for name in names if name not in skipped}
+
+
 def judged_names(root: Path, texts: dict[str, str], ui_paths: list[str]) -> list[str]:
     names = [
         name
@@ -154,8 +165,9 @@ def defined_colours(texts: dict[str, str]) -> set[str]:
         if PurePosixPath(name).name.startswith("tailwind.config."):
             names |= config_colour_names(text)
         elif name.endswith(STYLE_SUFFIXES):
+            code = CSS_COMMENT.sub("", text)
             blocks = (
-                text if token_file(name, text) else "".join(THEME_BLOCK.findall(text))
+                code if token_file(name, text) else "".join(THEME_BLOCK.findall(code))
             )
             names |= set(THEME_COLOUR.findall(blocks))
     return names
@@ -370,16 +382,17 @@ def compared_token_file(name: str, text: str, ui_paths: list[str]) -> bool:
 def ui_findings_whole(
     root: Path, texts: dict[str, str], ui_paths: list[str], library: list[str]
 ) -> list[str]:
-    defined = defined_colours(texts)
-    tokens = token_values(texts)
+    owned = owned_texts(root, texts)
+    defined = defined_colours(owned)
+    tokens = token_values(owned)
     token_texts = [
-        texts[name]
-        for name in texts
-        if compared_token_file(name, texts[name], ui_paths)
+        owned[name]
+        for name in owned
+        if compared_token_file(name, owned[name], ui_paths)
     ]
     parts = [
         part
-        for name, text in texts.items()
+        for name, text in owned.items()
         if inside(name, library)
         for part in library_parts(name, text)
     ]
@@ -388,7 +401,7 @@ def ui_findings_whole(
         + library_covers_screens(root, texts, ui_paths, library)
         + coverage_findings(root, texts, ui_paths)
         + role_findings(parts)
-        + index_findings(texts, library)
+        + index_findings(owned, library)
         + token_findings(texts.get(DESIGN_NAME), token_texts)
         + [
             item
