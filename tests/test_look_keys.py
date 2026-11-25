@@ -534,14 +534,20 @@ def test_a_failing_key_leads_the_colour_keys_even_on_a_long_page(
     import look_facts
 
     tokens = tokens_of(tmp_path)
-    names = [f"Label number {number:02d} of the list" for number in range(40)]
+    names = [f"Label number {number:02d} of the list" for number in range(70)]
     measured = values(
         texts=[
-            *(text_fact(name, 14) for name in names),
+            *(text_fact(name, 14, align="start", centred=False) for name in names),
             text_fact("Zed total", 14, colour="767676ff", fg="#767676"),
+            text_fact("Zed title", 20, align="center", centred=True),
         ]
     )
     listed = look_facts.measured_text(measured, tokens).splitlines()
     colour = [line for line in listed if line.startswith("colour keys:")]
+    align = [line for line in listed if line.startswith("align keys:")]
     assert len(colour) == 1
     assert colour[0].startswith("colour keys: Zed total | ")
+    assert len(align) == 1
+    assert "Zed title" in align[0]
+    assert "more keys" not in align[0]
+    assert names[-1] in align[0]
