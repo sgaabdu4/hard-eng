@@ -73,15 +73,11 @@ def test_two_session_starts_together_run_one_update_and_print_no_failure(
     script.write_text(
         WORKER.format(hooks=str(SOURCE / ".hooks"), revision=revision, me=str(script))
     )
-    monkeypatch.setattr(
-        update_runner,
-        "update_command",
-        lambda *options: [
-            sys.executable,
-            str(script),
-            "apply" if options else "supervise",
-        ],
-    )
+
+    def command(*options: str) -> list[str]:
+        return [sys.executable, str(script), "apply" if options else "supervise"]
+
+    monkeypatch.setattr(update_runner, "update_command", command)
     other = tmp_path / "other"
     git(target, "worktree", "add", "-q", "--detach", str(other))
     roots = [target, other]
