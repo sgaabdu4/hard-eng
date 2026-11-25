@@ -3,6 +3,7 @@
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -109,36 +110,69 @@ def process_links(process: Path) -> set[str] | None:
     return found
 
 
-def proc_paths(proc: Path = Path("/proc")) -> set[str] | None:
-    found: set[str] = set()
+def proc_files(proc: Path = Path("/proc")) -> list[tuple[int, str]] | None:
+    found: list[tuple[int, str]] = []
     for process in proc.iterdir():
         if process.name.isdigit() and int(process.name) != os.getpid():
             links = process_links(process)
             if links is None:
                 return None
-            found |= links
+            found += [(int(process.name), name) for name in sorted(links)]
     return found
 
 
-def open_paths() -> set[str] | None:
-    """Every path a process has as its folder or open file; None when the host cannot say."""
+def proc_paths(proc: Path = Path("/proc")) -> set[str] | None:
+    files = proc_files(proc)
+    return None if files is None else {name for _, name in files}
+
+
+def open_files() -> list[tuple[int, str]] | None:
+    """Each process (not this one) with a path as its folder or open file, as (process, path); None when the host cannot say."""
     if os.name != "posix":
         return None
     if Path("/proc/self/cwd").exists():
-        return proc_paths()
+        return proc_files()
     if shutil.which("lsof") is None:
         return None
     done = tidy_run(Path("/"), 60, "lsof", "-n", "-P", "-w", "-F", "pn")
     if done.returncode not in {0, 1}:
         raise TidyStop(f"`lsof` exited {done.returncode}")
-    names: set[str] = set()
-    mine = False
+    found: list[tuple[int, str]] = []
+    process = os.getpid()
     for line in done.stdout.splitlines():
         if line.startswith("p"):
-            mine = line[1:] == str(os.getpid())
-        elif line.startswith("n/") and not mine:
-            names.add(line[1:])
-    return names or None
+            process = int(line[1:])
+        elif line.startswith("n/") and process != os.getpid():
+            found.append((process, line[1:]))
+    return found or None
+
+
+def open_paths() -> set[str] | None:
+    """Every path a process has as its folder or open file; None when the host cannot say."""
+    files = open_files()
+    return None if files is None else {name for _, name in files}
+
+
+def stop_inside(path: Path, seconds: float = 10) -> None:
+    """Stop every process of ours that has the folder as its working folder or holds a file in it, so nothing writes there while it is removed. Another account's process cannot be stopped and is left."""
+    left: set[int] = set()
+
+    def holders() -> set[int]:
+        return {
+            process for process, name in open_files() or [] if inside(path, {name})
+        } - left
+
+    for signum in (signal.SIGTERM, signal.SIGKILL):
+        for process in holders():
+            try:
+                os.kill(process, signum)
+            except PermissionError:
+                left.add(process)
+            except ProcessLookupError:
+                continue
+        deadline = time.monotonic() + seconds
+        while holders() and time.monotonic() < deadline:
+            time.sleep(0.1)
 
 
 def fold(path: str | Path) -> str:
