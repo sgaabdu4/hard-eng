@@ -20,6 +20,9 @@ INVOICE = (
 )
 
 
+Trigger = Callable[[tuple[str, ...], str | None], bool]
+
+
 @pytest.fixture
 def pdf_site(site: str, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
     original = Site.do_GET
@@ -36,12 +39,12 @@ def pdf_site(site: str, monkeypatch: pytest.MonkeyPatch) -> Generator[str]:
     yield site
 
 
-def refused_as_a_pdf(
-    tmp_path: Path, code: int, capsys: pytest.CaptureFixture[str]
+def refused(
+    tmp_path: Path, code: int, capsys: pytest.CaptureFixture[str], reason: str
 ) -> None:
     assert code == 1
     error = capsys.readouterr().err
-    assert "application/pdf" in error
+    assert reason in error
     assert "no image was kept" in error
     folder = tmp_path / ".hard-eng/browser"
     assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
@@ -56,7 +59,7 @@ def test_capture_keeps_no_image_of_a_pdf_it_cannot_mask(
     code = browser.browser_command(
         tmp_path, ["capture", f"{pdf_site}/invoice", "--session", session()]
     )
-    refused_as_a_pdf(tmp_path, code, capsys)
+    refused(tmp_path, code, capsys, "application/pdf")
 
 
 def test_measure_keeps_no_image_of_a_pdf_in_an_open_session(
@@ -107,7 +110,7 @@ def open_in_session_when(
     browser: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     url: str,
-    trigger: Callable[[tuple[str, ...], str | None], bool],
+    trigger: Trigger,
 ) -> list[str]:
     """Open the URL in the session once, right before the first step that `trigger` picks, as a page that navigates away would. Returns the verbs of the steps that ran."""
     original = browser.run_tool
@@ -139,22 +142,24 @@ def shooting(arguments: tuple[str, ...], text: str | None) -> bool:
     return arguments[:1] == ("screenshot",)
 
 
-@pytest.mark.parametrize("trigger", [drawing, shooting], ids=["before", "during"])
-def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
+@pytest.fixture
+def leave_while_capturing(
     tmp_path: Path,
     pdf_site: str,
     browser: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    trigger: Callable[[tuple[str, ...], str | None], bool],
-) -> None:
+) -> Callable[[str, Trigger], tuple[int, list[str]]]:
     page(tmp_path, "plain.html", "<p>Statement</p>")
-    verbs = open_in_session_when(browser, monkeypatch, f"{pdf_site}/invoice", trigger)
-    code = browser.browser_command(
-        tmp_path, ["capture", f"{pdf_site}/plain.html", "--session", session()]
-    )
-    refused_as_a_pdf(tmp_path, code, capsys)
-    assert ("screenshot" in verbs) == (trigger is shooting)
+    page(tmp_path, "account.html", "<p>Mail bob@example.com or +44 7700 900123</p>")
+
+    def leave(destination: str, trigger: Trigger) -> tuple[int, list[str]]:
+        verbs = open_in_session_when(
+            browser, monkeypatch, f"{pdf_site}{destination}", trigger
+        )
+        argv = ["capture", f"{pdf_site}/plain.html", "--session", session()]
+        return browser.browser_command(tmp_path, argv), verbs
+
+    return leave
 
 
 def framing(arguments: tuple[str, ...], text: str | None) -> bool:
@@ -162,27 +167,27 @@ def framing(arguments: tuple[str, ...], text: str | None) -> bool:
     return arguments[:1] == ("eval",) and "hardEngRead" in "".join(arguments)
 
 
+@pytest.mark.parametrize("trigger", [drawing, shooting], ids=["before", "during"])
+def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
+    tmp_path: Path,
+    leave_while_capturing: Callable[[str, Trigger], tuple[int, list[str]]],
+    capsys: pytest.CaptureFixture[str],
+    trigger: Trigger,
+) -> None:
+    code, verbs = leave_while_capturing("/invoice", trigger)
+    refused(tmp_path, code, capsys, "application/pdf")
+    assert ("screenshot" in verbs) == (trigger is shooting)
+
+
 @pytest.mark.parametrize("trigger", [framing, shooting], ids=["before", "during"])
 def test_capture_keeps_no_image_of_a_page_that_navigates_after_it_was_masked(
     tmp_path: Path,
-    site: str,
-    browser: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
+    leave_while_capturing: Callable[[str, Trigger], tuple[int, list[str]]],
     capsys: pytest.CaptureFixture[str],
-    trigger: Callable[[tuple[str, ...], str | None], bool],
+    trigger: Trigger,
 ) -> None:
-    page(tmp_path, "plain.html", "<p>Statement</p>")
-    page(tmp_path, "account.html", "<p>Mail bob@example.com or +44 7700 900123</p>")
-    verbs = open_in_session_when(browser, monkeypatch, f"{site}/account.html", trigger)
-    code = browser.browser_command(
-        tmp_path, ["capture", f"{site}/plain.html", "--session", session()]
-    )
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "another document" in error
-    assert "no image was kept" in error
-    folder = tmp_path / ".hard-eng/browser"
-    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
+    code, verbs = leave_while_capturing("/account.html", trigger)
+    refused(tmp_path, code, capsys, "another document")
     assert ("screenshot" in verbs) == (trigger is shooting)
 
 
