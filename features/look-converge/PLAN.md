@@ -1,6 +1,6 @@
 # Make the look review converge
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -32,14 +32,14 @@ Authority: Autonomous. The user asked on 2026-11-24 to make Hard Eng correct bef
 
 ## Acceptance + steps
 
-- [ ] A Fail whose `Fix:` is on an indented continuation line, a sub-bullet or after a blank line is read as having a fix; a Fail with no `Fix:` in its block, or whose only `Fix:` belongs to the next rule, is still refused → `tests/test_look_answer.py::test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole`.
-- [ ] A Fail that persists across two heads is listed as an earlier finding, never as fixed → `tests/test_look_carry.py::test_the_prompt_lists_an_earlier_fail_without_calling_it_fixed`.
-- [ ] A Fail line must name a frame of the run (`image-N.png`) and its element; an answer that names none is refused → `tests/test_look_answer.py::test_a_fail_line_must_name_the_frame_it_shows`.
-- [ ] The next run holds each earlier Fail as a numbered item, also when the image bytes did not change; the answer must say "still shown" or "gone" for each item with a frame, and "still shown" needs a Fail line for the rule → `tests/test_look_carry.py::test_each_earlier_fail_is_rechecked_one_by_one`.
-- [ ] A second run at the same head and inputs keeps the first clean or findings record, prints it again and starts no reviewer; a run that ended `not done`, and a run with other inputs, still run → `tests/test_look.py::test_a_second_run_at_the_same_head_keeps_the_first_verdict`.
-- [ ] A measure finding of a mapped rule (accent count, button groups, edges, secondary text) is a code Fail that the reviewer's Pass cannot overrule; a code Pass never replaces a reviewer Fail → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_its_judged_rule_in_code`.
-- [ ] A measured text size or corner radius that no `DESIGN.md` token holds is a code Fail on Design system; a clamped radius, a token set that is missing and an old record without the clamp field give no verdict → `tests/test_look_proof_kinds.py::test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code`.
-- [ ] 5 `look` runs on one frozen invented fixture give the same Fail set; a run after the fixture's faults are fixed is clean → N/A — real model runs, not a test; the records are in the `Real service:` line.
+- [x] A Fail whose `Fix:` is on an indented continuation line, a sub-bullet or after a blank line is read as having a fix; a Fail with no `Fix:` in its block, or whose only `Fix:` belongs to the next rule, is still refused → `tests/test_look_answer.py::test_a_fail_with_its_fix_on_a_continuation_line_is_read_whole`.
+- [x] A Fail that persists across two heads is listed as an earlier finding, never as fixed → `tests/test_look_carry.py::test_the_prompt_lists_an_earlier_fail_without_calling_it_fixed`.
+- [x] A Fail line must name a frame of the run (`image-N.png`) and its element; an answer that names none is refused → `tests/test_look_answer.py::test_a_fail_line_must_name_the_frame_it_shows`.
+- [x] The next run holds each earlier Fail as a numbered item, also when the image bytes did not change; the answer must say "still shown" or "gone" for each item with a frame, and "still shown" needs a Fail line for the rule → `tests/test_look_carry.py::test_each_earlier_fail_is_rechecked_one_by_one`.
+- [x] A second run at the same head and inputs keeps the first clean or findings record, prints it again and starts no reviewer; a run that ended `not done`, and a run with other inputs, still run → `tests/test_look.py::test_a_second_run_at_the_same_head_keeps_the_first_verdict`.
+- [x] A measure finding of a mapped rule (accent count, button groups, edges, secondary text) is a code Fail that the reviewer's Pass cannot overrule; a code Pass never replaces a reviewer Fail → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_its_judged_rule_in_code`.
+- [x] A measured text size or corner radius that no `DESIGN.md` token holds is a code Fail on Design system; a clamped radius, a token set that is missing and an old record without the clamp field give no verdict → `tests/test_look_proof_kinds.py::test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code`.
+- [x] 5 `look` runs on one frozen invented fixture give the same Fail set; a run after the fixture's faults are fixed is clean → N/A — real model runs, not a test; the records are in the `Real service:` line.
 
 ## Baseline + execution
 
@@ -57,10 +57,10 @@ N/A — no visible screen; the change edits the look review's prompt, parser and
 
 ## Verification
 
-Result: Pending
-Evidence: Pending — red tests fail first, then pass at the final head.
+Result: Passed
+Evidence: 2026-11-25. Red first: the item 1 tests failed (14) on the code of item 2, the item 4 tests failed (3), the item 5 tests failed (8), each before its code. Then `uv run --frozen pytest -q tests/test_look.py tests/test_look_answer.py tests/test_look_carry.py tests/test_look_proof_kinds.py tests/test_look_px.py`: 121 passed. `check --static --plan-stage Ready --base origin/develop` passed.
 E2E: N/A — no user journey of an installed project changes; the real `look` runs are in the `Real service:` line.
-Real service: Required — model reviewers (claude and codex through `look`): 5 runs on one frozen invented fixture with known faults, then one run after the fixes.
-Retro: Pending
+Real service: Passed — model reviewer (`look` ran Claude in each run) on an invented seed-shop page, 3 frames (390, 768, 1280 px), captured by `browser capture`, known faults: two filled buttons, a repeated status and helper text, a blaming error text, an are-you-sure text, a 13 px text and a 7 px radius outside the tokens. Five runs in five worktrees at one commit gave the same Fail set 4 of 5 times (rate 0.8); the same 9 rules failed in runs 1, 2, 3 and 5, and run 4 lacked Undo, a judged rule that the fixture only half shows. Mistake-proof, Messages and the code rules failed 5 of 5. Records (sha256 prefix): 7066f4449369, a5abc40e77cb, c1e86bcc3c83, 78e513449eb9, c0340d649744. Fix rounds on the fixture: the run at 1a6699b6 gave 5 Fails with real remaining faults; the run at 65b8c8e2 held the 5 earlier Fails as items, answered each `gone` with its frame, and found one new real fault (a `#ffffff` label); the run at 5ae0b0b9 was clean (record e8856573edff3a1e). No fixture text or name belongs to a real project.
+Retro: (1) the file-length gate refused `look.py` and `test_look.py` after the change, so the answer reader and its tests moved to `look_answer.py` and `tests/test_look_answer.py` → `tests/test_look_answer.py` holds them; (2) older plans named the moved tests, and the plan check refused them → each older plan now names the new file; (3) three older tests reran at one head and met the new refusal → they commit between runs. None to prevent beyond the push gates.
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
