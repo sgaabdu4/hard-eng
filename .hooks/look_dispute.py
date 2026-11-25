@@ -252,9 +252,7 @@ def dispute_command(root: Path, argv: list[str]) -> int:
 
 
 def dispute(root: Path, args: argparse.Namespace) -> int:
-    images = [Path(image) for image in args.images]
-    if missing := [str(image) for image in images if not image.is_file()]:
-        raise ValueError(f"look: no such image: {', '.join(missing)}")
+    images = look.image_files(args.images)
     if not args.cite or len(args.cite) > MAX_CITES:
         raise problem(
             f"cite at least one and at most {MAX_CITES} cites, `--cite <path>:<from>-<to>`"
@@ -313,11 +311,3 @@ def dispute(root: Path, args: argparse.Namespace) -> int:
     if record["outcome"] == "clean":
         print(f"Paste this into the PR body:\n{look.block_text(record)}")
     return 0 if record["outcome"] == "clean" else 1
-
-
-def dispute_main(root: Path, argv: list[str]) -> int:
-    try:
-        return dispute_command(root, argv)
-    except (ValueError, TypeError, OSError, subprocess.SubprocessError) as error:
-        print(f"Hard Eng: {error}")
-        return 1
