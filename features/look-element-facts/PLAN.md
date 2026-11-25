@@ -40,7 +40,7 @@ Decisions made here, each with a reason:
 - [ ] The prompt names each element with its facts and the colour token → `tests/test_look_facts.py::test_the_prompt_names_each_element_with_its_measured_facts`
 - [ ] The prompt says what each check covered, for example `tap size checked for all 3 controls: 0 under 44 px` → `tests/test_look_facts.py::test_the_prompt_says_what_each_check_covered`
 - [ ] A long list is bounded by one stated byte rule and says how many it left out, in the same order each time → `tests/test_look_facts.py::test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out`
-- [ ] A Fail item that states a size, a colour or a ratio without a measured tag is refused as not done, and an unknown tag is refused → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`
+- [ ] A Fail item that states a size, a colour or a ratio without a measured tag is refused as not done, an unknown tag with such a number is refused too, and an unknown tag with no number stands as judgement → `tests/test_look_facts.py::test_a_fail_item_with_a_number_or_a_colour_and_no_measured_tag_is_refused`
 - [ ] A tagged item, and an untagged item with no number, stand → `tests/test_look_facts.py::test_a_tagged_item_and_an_untagged_item_without_a_number_stand`
 - [ ] The prompt names the kinds and what they cover from the one table → `tests/test_look_facts.py::test_the_prompt_lists_the_kinds_from_the_one_table`
 - [ ] Code decides each measured kind, with one known fault and one known pass for each → `tests/test_look_facts.py::test_code_decides_each_measured_kind`
@@ -77,6 +77,7 @@ Execution: One builder in `fix/look-element-facts`. A fresh reviewer runs `chall
 5. Facts can reach about 6 KB per image.
 6. Recovery: revert the merge on `develop` with a new PR.
 Not checked: the union of three reviewers, which was built and left out (four times the tokens per run, no recall gain on the fixtures, more Fails on the fixed page); the real sealed sets, which need captures in the new measure format; agy as a reviewer; the `building-flutter-apps` copy of the hooks; any installed project.
+Review declined: the review asked to remove `verifier-tests.patch`. The maintainer asked to keep it, with the 30-run numbers, as the start of the next attempt at a union.
 
 ## ux_reference
 
