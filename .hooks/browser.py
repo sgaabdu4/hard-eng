@@ -558,10 +558,12 @@ def shoot_page(
         )
     ring_boxes = cast(list[dict[str, int]], page_result["boxes"])
     unread_frames(tool, folder, session, width)
+    require_readable_document(tool, folder, session)
     image = folder / f"{name}-{width}.png"
     try:
         require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
         unread_frames(tool, folder, session, width)
+        require_readable_document(tool, folder, session)
         route = json.loads(
             require(run_tool(tool, folder, session, "eval", "location.pathname"))
         )
