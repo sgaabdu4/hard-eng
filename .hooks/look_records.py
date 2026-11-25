@@ -228,7 +228,11 @@ def earlier_findings(
             file = table.get(found[0], found[0])
             return current.get(file, file)
 
-        for line in cast(list[str], record.get("rules", [])):
+        lines = [
+            *cast(list[str], record.get("rules", [])),
+            *cast(list[str], record.get("reviewer_fails", [])),
+        ]
+        for line in lines:
             label, verdict, text, _ = split_rule_line(line)
             if verdict == "Fail" and label in judged and not text.startswith(prefixes):
                 shown = FRAME.sub(now, line)
@@ -269,7 +273,7 @@ def lacks_record(root: Path | None, digests: list[str]) -> bool:
     return any(digest not in recorded for digest in digests)
 
 
-RADIUS_TOKEN = re.compile(r"(\d*\.?\d+)(px|rem|em)")
+RADIUS_TOKEN = re.compile(r"(\d*\.?\d+)(px|rem)")
 
 
 def rounded_tokens(design: str) -> list[str]:
@@ -292,7 +296,7 @@ def rounded_tokens(design: str) -> list[str]:
 
 
 def radius_scale(tokens: list[str], root_px: float) -> set[int] | None:
-    """The token radii in px, with rem and em set from the page's own root size; None when a token is any other form (clamp, calc, a variable), which the measure cannot hold exactly."""
+    """The token radii in px, with rem set from the page's own root size; None when a token is any other form (em, clamp, calc, a variable), which the measure cannot hold exactly."""
     from ui_tokens import half_up
 
     scale: set[int] = set()
@@ -395,11 +399,17 @@ def with_owner_lines(
     digests: list[str],
     plan: dict[str, tuple[str, str]] | None,
 ) -> None:
-    """Give the record one line for each Usability rule, in rule order: the reviewer's line for a judged rule, the owner's line for the others. An owner Fail makes the run findings."""
+    """Give the record one line for each Usability rule, in rule order: the reviewer's line for a judged rule, the owner's line for the others. An owner Fail makes the run findings, and the reviewer's own Fail that it replaces stays under `reviewer_fails`, so the next run still rechecks it."""
     if record["outcome"] not in ("clean", "findings"):
         return
     owned = owner_lines(root, head, digests, plan)
     own = {split_rule_line(line)[0]: line for line in cast(list[str], record["rules"])}
+    if replaced := [
+        own[name]
+        for name in owned
+        if name in own and split_rule_line(own[name])[1] == "Fail"
+    ]:
+        record["reviewer_fails"] = replaced
     record["rules"] = [owned.get(name) or own[name] for name, _ in usability_rules()]
     if any(split_rule_line(line)[1] == "Fail" for line in owned.values()):
         record["outcome"] = "findings"
