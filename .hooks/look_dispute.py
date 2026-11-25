@@ -229,6 +229,14 @@ def decided(
     record["outcome"] = "findings" if failed else "clean"
 
 
+def already_decided(record: dict[str, object], item: str) -> bool:
+    """True when this head's own review decided a dispute for the item; a dispute carried from an earlier head does not count."""
+    return any(
+        entry.get("item") == item and "carried_from" not in entry
+        for entry in cast(list[dict[str, object]], record.get("disputes", []))
+    )
+
+
 def cites_hold(root: Path, head: str, record: dict[str, object]) -> bool:
     """True when each disproved dispute of the record still has its cited bytes at this head; a clean record that rests on a dispute carries to a later head only while they hold."""
     for entry in cast(list[dict[str, object]], record.get("disputes", [])):
@@ -283,7 +291,7 @@ def dispute(root: Path, args: argparse.Namespace) -> int:
         raise problem("no findings record at this head for these images; run `look`")
     item = " ".join(args.dispute.split())
     found = locate(record, item)
-    if any(entry.get("item") == item for entry in record.get("disputes", [])):
+    if already_decided(record, item):
         raise problem("this head already decided a dispute for this item")
     claimed = part_item(item)[1]
     if claimed is None:
