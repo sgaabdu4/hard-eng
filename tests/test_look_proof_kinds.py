@@ -422,7 +422,7 @@ def test_a_radius_outside_the_tokens_fails_design_system_in_code(
     ],
 )
 def test_values_that_the_tokens_hold_or_cannot_judge_leave_design_system_to_the_reviewer(
-    tmp_path: Path, project: Path, case: str, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, project: Path, case: str
 ) -> None:
     design = TOKENS
     values: dict[str, object] = {
