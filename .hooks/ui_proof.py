@@ -462,26 +462,51 @@ def capture_set_problem(
     return None, hashes
 
 
-def measured_problem(
-    root: Path, head: str, after: list[bytes], routes: Sequence[str] = ()
+def measured_digest_problem(
+    root: Path,
+    head: str,
+    digests: Sequence[str],
+    routes: Sequence[str] = (),
+    *,
+    allow_dirty: bool = False,
+    min_mtime_ns: int = 0,
 ) -> str | None:
-    """Each After image is a measured capture of the head from a clean tree with no finding, and its name has a record at every width; of several sets with the same image, those taken at the head all count."""
+    """Each After image, by its digest, is a measured capture of the head from a clean tree with no finding, and its name has a record at every width; of several sets with the same image, those taken at the head all count. Every image that matches no capture is named in one message. `ship` and the local check both judge through this."""
     items = browser_record_files(root)
     records = [record for _, record in items]
     by_image = {str(record["image"]): (path, record) for path, record in items}
-    for data in after:
-        digest = sha256(data)
-        stems = _capture_stems(records, digest, head)
-        if not stems:
-            return (
-                f"an After image (sha256 {digest[:12]}) matches no measured capture in .hard-eng/browser; "
-                "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
-            )
+    found = {
+        digest: _capture_stems(records, digest, head) for digest in sorted(set(digests))
+    }
+    if unmatched := [digest[:12] for digest, stems in found.items() if not stems]:
+        names = (
+            f"an After image (sha256 {unmatched[0]}) matches"
+            if len(unmatched) == 1
+            else f"{len(unmatched)} After images (sha256 {', '.join(unmatched)}) match"
+        )
+        return (
+            f"{names} no measured capture in .hard-eng/browser; "
+            "take After images with `browser capture` or `browser measure`, and draw rings only with --ring"
+        )
+    for stems in found.values():
         for stem in stems:
-            problem, _ = capture_set_problem(by_image, stem, head, routes)
+            problem, _ = capture_set_problem(
+                by_image,
+                stem,
+                head,
+                routes,
+                allow_dirty=allow_dirty,
+                min_mtime_ns=min_mtime_ns,
+            )
             if problem:
                 return problem
     return None
+
+
+def measured_problem(
+    root: Path, head: str, after: list[bytes], routes: Sequence[str] = ()
+) -> str | None:
+    return measured_digest_problem(root, head, [sha256(data) for data in after], routes)
 
 
 def _committed_plan_digest(root: Path, head: str, plan: Path | None) -> tuple[str, str]:

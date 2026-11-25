@@ -178,10 +178,15 @@ def test_capture_keeps_no_image_of_a_page_that_turns_into_a_pdf(
 
 
 @pytest.mark.parametrize("trigger", [framing, shooting], ids=["before", "during"])
+@pytest.mark.parametrize(
+    "destination", ["/account.html", "/plain.html"], ids=["other page", "same url"]
+)
 def test_capture_keeps_no_image_of_a_page_that_navigates_after_it_was_masked(
-    leave_while_capturing: Callable[[str, Trigger, str], list[str]], trigger: Trigger
+    leave_while_capturing: Callable[[str, Trigger, str], list[str]],
+    trigger: Trigger,
+    destination: str,
 ) -> None:
-    verbs = leave_while_capturing("/account.html", trigger, "another document")
+    verbs = leave_while_capturing(destination, trigger, "another document")
     assert ("screenshot" in verbs) == (trigger is shooting)
 
 

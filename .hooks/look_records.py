@@ -279,6 +279,38 @@ def lacks_record(root: Path | None, digests: list[str]) -> bool:
     return any(digest not in recorded for digest in digests)
 
 
+def stale_problem(
+    root: Path, images: list[Path], digests: list[str], head: str
+) -> str | None:
+    """Each input image that is a stale copy: its digest has `.hard-eng/browser` capture records and none at the head. An image with no record is a mockup or a native screen and stays allowed."""
+    from ui_proof import browser_record_files
+
+    records = [record for _, record in browser_record_files(root)]
+    stale = []
+    for image, digest in zip(images, digests, strict=True):
+        own = [record for record in records if record["sha256"] == digest]
+        if not own or any(record.get("commit") == head for record in own):
+            continue
+        old = own[0]
+        newer = sorted(
+            str(record["image"])
+            for record in records
+            if record.get("commit") == head
+            and record.get("width") == old.get("width")
+            and record.get("route") == old.get("route")
+        )
+        use = (
+            f"use .hard-eng/browser/{newer[0]}"
+            if newer
+            else "run `browser capture` again at this head"
+        )
+        taken = str(old.get("commit", ""))[:12]
+        stale.append(
+            f"{image} is a stale copy of the capture {old['image']} taken at {taken}, not at the head; {use}"
+        )
+    return "; ".join(stale) or None
+
+
 RADIUS_TOKEN = re.compile(r"(\d*\.?\d+)(px|rem)")
 
 

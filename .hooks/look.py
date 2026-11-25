@@ -768,6 +768,7 @@ def look_command(root: Path, argv: list[str]) -> int:
         covering_record,
         image_keys,
         lacks_record,
+        stale_problem,
         with_owner_lines,
     )
 
@@ -793,6 +794,8 @@ def look_command(root: Path, argv: list[str]) -> int:
     )
     design, design_digest = design_text(root), design_hash(root)
     digests = [sha256(image.read_bytes()) for image in images]
+    if stale := stale_problem(root, images, digests, head):
+        raise ValueError(f"look: {stale}")
     lacking = lacks_record(root, digests)
     keys = image_keys(root, scope, design, design_digest, digests, lacking)
     if kept := kept_verdict(root, head, digests, keys):
