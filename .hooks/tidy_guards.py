@@ -179,7 +179,7 @@ def stop_inside(path: Path, seconds: float = 3) -> None:
 
     for signum in (signal.SIGTERM, signal.SIGKILL):
         deadline = time.monotonic() + seconds
-        while (found := holders()) and time.monotonic() < deadline:
+        while found := holders():
             for process in found:
                 try:
                     os.kill(process, signum)
@@ -188,6 +188,10 @@ def stop_inside(path: Path, seconds: float = 3) -> None:
                 except ProcessLookupError:
                     continue
             time.sleep(0.1)
+            if time.monotonic() >= deadline:
+                break
+        else:
+            return
 
 
 def fold(path: str | Path) -> str:
