@@ -77,7 +77,8 @@ Execution: One builder in `fix/look-element-facts`. A fresh reviewer runs `chall
 5. Facts can reach about 6 KB per image.
 6. Recovery: revert the merge on `develop` with a new PR.
 Not checked: the union of three reviewers, which was built and left out (four times the tokens per run, no recall gain on the fixtures, more Fails on the fixed page); the real sealed sets, which need captures in the new measure format; agy as a reviewer; the `building-flutter-apps` copy of the hooks; any installed project.
-Review declined: the review asked to remove `verifier-tests.patch`. The maintainer asked to keep it, with the 30-run numbers, as the start of the next attempt at a union.
+Review declined: remove `verifier-tests.patch` as dead code :: the maintainer asked to keep it, with the 30-run numbers, as the start of the next attempt at a union.
+Review declined: a semicolon in the prose before a measured item leaves a frame-less prose part on a Fail line :: that prose is a claim of the reviewer with no item for code to measure, so it stays with the reviewer (decisions 1 and 2) and the reviewer can end it with a recheck line.
 
 ## ux_reference
 
