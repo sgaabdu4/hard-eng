@@ -660,6 +660,58 @@ def test_library_index_is_generated_and_compared(tmp_path: Path) -> None:
     assert "UI-LIBRARY.md lists Extra, which no library file holds" in refusal(root)
 
 
+def test_a_comment_a_test_file_and_a_generated_file_define_no_token(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: a colour that only a comment, a test file or a generated file defines is no project token, so a default palette class and an email literal that use it stay refused."""
+    root = build(
+        tmp_path, "web-fixed", ui_paths=["src/**", "emails/**"], ui_library=["src/ui/*"]
+    )
+    (root / "src/screens/Card.tsx").write_text(
+        'export const Card = () => <p className="text-blue-500">x</p>;\n'
+    )
+    (root / "emails").mkdir()
+    (root / "emails/welcome.html").write_text('<p style="color: #3b82f6">x</p>\n')
+    reindex(root)
+    assert "(text-blue-500)" in refusal(root)
+    with (root / "src/theme/tokens.css").open("a") as tokens:
+        tokens.write("/* @theme { --color-blue-500: #3b82f6; } */\n")
+    message = refusal(root)
+    assert "(text-blue-500)" in message
+    assert "emails/welcome.html:1: a colour typed in the file (#3b82f6)" in message
+    (root / "tests/fixtures").mkdir(parents=True)
+    (root / "tests/fixtures/theme.css").write_text(
+        "@theme {\n  --color-blue-500: #3b82f6;\n}\n"
+    )
+    (root / "src/generated.css").write_text("@theme {\n  --color-blue-500: #3b82f6;\n}\n")
+    (root / ".gitattributes").write_text("src/generated.css linguist-generated\n")
+    message = refusal(root)
+    assert "(text-blue-500)" in message
+    assert "emails/welcome.html:1: a colour typed in the file (#3b82f6)" in message
+
+
+def test_the_library_index_and_the_token_compare_skip_tests_and_generated_files(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: a test file or a generated file in the library folder needs no row in UI-LIBRARY.md, and a test fixture's tailwind config is not compared with DESIGN.md."""
+    root = build(tmp_path, "web-fixed")
+    (root / "src/ui/Button.test.tsx").write_text(
+        "export const FakeButton = () => null;\n"
+    )
+    (root / "src/ui/Wrapper.tsx").write_text("export const Wrapper = () => null;\n")
+    (root / ".gitattributes").write_text("src/ui/Wrapper.tsx linguist-generated\n")
+    (root / "tests/fixtures").mkdir(parents=True)
+    (root / "tests/fixtures/tailwind.config.js").write_text(
+        "module.exports = { theme: { colors: { brand: '#abcdef' } } };\n"
+    )
+    validate_whole_project(root)
+    for name in ("src/ui/Button.test.tsx", "src/ui/Wrapper.tsx"):
+        (root / name).write_text(
+            (root / name).read_text() + "export const Extra = () => null;\n"
+        )
+    validate_whole_project(root)
+
+
 def test_exemptions_follow_repository_facts(tmp_path: Path) -> None:
     """HE-UI-SOURCE: email templates, standalone pages and PDF builders are judged by what the repository says they are, never by a path list."""
     root = build(
