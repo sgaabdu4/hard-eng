@@ -2,7 +2,7 @@
 
 import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
@@ -13,6 +13,11 @@ LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
 ZERO = re.compile(r"0+(?:\.0+)?")
 UNSAFE_IN_KEY = re.compile(r"[;:\[\]`*\"\s]+")
 NO_NAME = "no name"
+SQUARE = re.compile(r"(?i)\b(?:square|squared|sharp)\b")
+NOT_CENTRED = re.compile(
+    r"(?i)\b(?:not\s+cent(?:red|ered)|uncent(?:red|ered)|off[- ]cent(?:re|er)(?:d)?)\b"
+)
+CENTRED = re.compile(r"(?i)\bcent(?:red|ered)\b")
 
 
 class Tokens(NamedTuple):
@@ -307,12 +312,26 @@ def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return found
 
 
+def corners_of(row: dict[str, object]) -> list[int]:
+    """The four corner radii of a radius row; a row from an older record holds one radius for all four."""
+    held = row.get("corners")
+    if isinstance(held, list) and len(held) == 4:
+        return [int(_num(corner)) for corner in held]
+    return [int(_num(row.get("px")))] * 4
+
+
 def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     scale = _scale(tokens.rounded, measured)
     found: list[Fact] = []
     for row in _rows(measured, "radii"):
         px = int(_num(row.get("px")))
-        ok = None if scale is None or row.get("clamped") is not False else px in scale
+        corners = corners_of(row)
+        round_corners = {corner for corner in corners if corner}
+        ok = (
+            None
+            if scale is None or row.get("clamped") is not False
+            else all(corner in scale for corner in round_corners or {0})
+        )
         key = fact_key(row.get("at"))
         found.append(
             Fact(
@@ -320,11 +339,18 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 ok,
                 0 if ok is False else px,
                 f"{key}: {px} px"
-                + (" (clamped by its box)" if row.get("clamped") else ""),
+                + (" (clamped by its box)" if row.get("clamped") else "")
+                + _corner_note(px, corners),
                 f"corner radius {px} px {'is' if ok else 'is not'} a rounded token",
             )
         )
     return found
+
+
+def _corner_note(px: int, corners: list[int]) -> str:
+    if len(set(corners)) > 1:
+        return f" (corners {', '.join(map(str, corners))})"
+    return "" if px else " (square)"
 
 
 FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
@@ -456,10 +482,83 @@ def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozense
     return {kind: _keyed(build(measured, tokens)) for kind, build in FACTS.items()}
 
 
-def verdict(
-    kind: str, element: str, measured: dict[str, object], tokens: Tokens
+def claim_word(kind: str, text: str) -> str:
+    """The word of a claim form that the text holds for this kind, or an empty text. The forms are exact: `square`, `squared` and `sharp` for a radius; `not centred`, `uncentred` and `off-centre` (a claim that the text is not centred) and `centred` for an alignment."""
+    if kind == "radius":
+        found = SQUARE.search(text)
+    elif kind == "align":
+        found = NOT_CENTRED.search(text) or CENTRED.search(text)
+    else:
+        found = None
+    return found[0].lower() if found else ""
+
+
+def claim_in(
+    text: str, keys: Mapping[str, frozenset[str]]
+) -> tuple[str, str, str] | None:
+    """The kind, key and claim word of the first claim form in the text that names the exact key of a measured element of that kind."""
+    for kind in ("radius", "align"):
+        if word := claim_word(kind, text):
+            for key in sorted(keys.get(kind, ()), key=len, reverse=True):
+                if re.search(rf"(?<!\w){re.escape(key)}(?!\w)", text, re.IGNORECASE):
+                    return kind, key, word
+    return None
+
+
+def claimed_state(kind: str, claim: str) -> str:
+    """The state that an item of a measured kind claims in its note: `square` for a radius, `centred` for an alignment, else an empty text, which keeps the old meaning of the kind."""
+    if kind == "radius" and SQUARE.search(claim):
+        return "square"
+    if kind == "align" and not NOT_CENTRED.search(claim) and CENTRED.search(claim):
+        return "centred"
+    return ""
+
+
+def _square(
+    element: str, measured: dict[str, object], tokens: Tokens
 ) -> tuple[bool, str] | None:
-    """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal a key of that kind exactly, and every fact of that key must give the same verdict; any other case leaves the item to the reviewer. There is no loose name match, because a wrong match gives a false verdict."""
+    """A square claim is disproved by any corner of the element above 0; when every corner is 0 the claim is true, and code Fails the item only when no rounded token is 0."""
+    held = [
+        corners_of(row)
+        for row in _rows(measured, "radii")
+        if fact_key(row.get("at")) == element
+    ]
+    squares = [not any(corners) for corners in held]
+    if not held or (any(squares) and not all(squares)):
+        return None
+    if not all(squares):
+        return True, f"corner radii {', '.join(map(str, held[0]))} px, not square"
+    scale = _scale(tokens.rounded, measured)
+    if scale is None or 0 in scale:
+        return None
+    return False, "corner radius 0 px, square, and 0 is in no rounded token"
+
+
+def _centred(element: str, measured: dict[str, object]) -> tuple[bool, str] | None:
+    """A centred claim is disproved by a text that is measured as not centred; a measured centred text leaves the item with the reviewer."""
+    held = [
+        row
+        for row in _rows(measured, "texts")
+        if fact_key(row.get("at")) == element and isinstance(row.get("centred"), bool)
+    ]
+    if not held or any(row["centred"] for row in held):
+        return None
+    return True, f"text-align {held[0].get('align')}, not centred in its parent"
+
+
+def verdict(
+    kind: str,
+    element: str,
+    measured: dict[str, object],
+    tokens: Tokens,
+    claim: str = "",
+) -> tuple[bool, str] | None:
+    """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal a key of that kind exactly, and every fact of that key must give the same verdict; any other case leaves the item to the reviewer. There is no loose name match, because a wrong match gives a false verdict. A note that states a claim (`square`, `centred`) is compared with the fact in the direction of the claim: a Pass means the claim is disproved."""
+    state = claimed_state(kind, claim)
+    if state == "square":
+        return _square(element, measured, tokens)
+    if state == "centred":
+        return _centred(element, measured)
     build = FACTS.get(kind)
     if build is None:
         return None

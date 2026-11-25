@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from itertools import pairwise
 from typing import NamedTuple
 
+from look_facts import claim_in
 from plans import split_rule_line, usability_lines, usability_rules
 
 FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
@@ -132,17 +133,31 @@ def item_problem(rule_lines: list[str], keys: Keys | None = None) -> str | None:
                     f"not done: a Fail line states {states[0]} outside an item of a measured kind "
                     f"({', '.join(sorted(MEASURED_KINDS))}); write `image-N.png: <key> [kind]` or leave the number out: {line}"
                 )
-            if (
-                keys is not None
-                and item
-                and item.kind in MEASURED_KINDS
-                and item.element not in keys.get(item.frame, {}).get(item.kind, ())
-            ):
-                return (
-                    f"not done: `{item.frame}: {item.element} [{item.kind}]` names no key of that image for the kind {item.kind}. "
-                    f"Copy one key exactly as the measured values list it, with no other word before the tag, "
-                    f"or tag the item [judgement]: {line}"
-                )
+            if keys is not None and item and (found := key_problem(item, keys, line)):
+                return found
+    return None
+
+
+def key_problem(item: Item, keys: Keys, line: str) -> str | None:
+    """Why an item cannot stand by its key: an item of a measured kind whose element is no key of its image for that kind, or an item of another kind that states a claim form about a measured element, which code must check."""
+    from ui_measure import MEASURED_KINDS
+
+    held = keys.get(item.frame, {})
+    if item.kind in MEASURED_KINDS:
+        if item.element in held.get(item.kind, ()):
+            return None
+        return (
+            f"not done: `{item.frame}: {item.element} [{item.kind}]` names no key of that image for the kind {item.kind}. "
+            f"Copy one key exactly as the measured values list it, with no other word before the tag, "
+            f"or tag the item [judgement]: {line}"
+        )
+    if found := claim_in(f"{item.element} {item.note}", held):
+        kind, key, word = found
+        return (
+            f"not done: `{item.text}` states a claim about a measured element ({word} about {key}). "
+            f"Write it as `{item.frame}: {key} [{kind}] {word}`, with the key copied exactly, "
+            f"so that code checks the claim against the measured value: {line}"
+        )
     return None
 
 

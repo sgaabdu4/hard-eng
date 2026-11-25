@@ -42,10 +42,10 @@ ITEM_KINDS = {
     "size": f"the rendered text size against the {LIMITS['text_px']} px floor",
     "colour": "the text colour and its fill against the DESIGN.md colour tokens",
     "gap": "the gap between two neighbours against the DESIGN.md spacing tokens",
-    "radius": "the corner radius against the DESIGN.md rounded tokens",
+    "radius": "the corner radius against the DESIGN.md rounded tokens; a claim that the corners are square needs the word square in the note after the tag",
     "tap": "the control size against its tap floor",
     "weight": "the text weight against the weight of its neighbours in the same row",
-    "align": "whether the text is centred in its parent (a claim that it is not); any other alignment claim is judgement",
+    "align": "whether the text is centred in its parent: a claim that it is not (the default), or, with the word centred in the note after the tag, a claim that it is; any other alignment claim is judgement",
     "judgement": "anything else: placement, any other alignment or weight claim, line count, wording",
 }
 MEASURED_KINDS = frozenset(ITEM_KINDS) - {"judgement"}
@@ -563,20 +563,25 @@ const textSet = new Set(texts);for (const parent of document.body.querySelectorA
   }
 }
 const sizes = { controls: [...controlFacts.values()] };
-const radiusOf = (el) => {
-  const value = getComputedStyle(el).borderTopLeftRadius;
-  if (!parseFloat(value)) return null;
+const cornersOf = (el) => {
+  const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
   const half = Math.round(Math.min(b.width, b.height) / 2);
-  const declared = value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value));
-  return { px: Math.min(declared, half), clamped: declared >= half };
+  return ["TopLeft", "TopRight", "BottomRight", "BottomLeft"].map((corner) => {
+    const value = s["border" + corner + "Radius"];
+    const declared = value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value) || 0);
+    return { px: Math.min(declared, half), clamped: declared > 0 && declared >= half };
+  });
 };
+const isChip = (el) => { const s = getComputedStyle(el); return ownText(el) && (opaque(s.backgroundColor) || (s.borderTopWidth !== "0px" && s.borderTopStyle !== "none")); };
+const squareHolders = new Set([...controls, ...texts.filter(isChip)]);
 const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter(visible)];
 const radii = [];
 const seenRadii = new Set();
 for (const el of rounded) {
-  const r = radiusOf(el);
-  const fact = r && r.px > 0 ? { at: factName(el), px: r.px, clamped: r.clamped } : null;
+  const corners = cornersOf(el);
+  const px = Math.max(...corners.map((c) => c.px));
+  const fact = px > 0 || squareHolders.has(el) ? { at: factName(el), px, clamped: corners.some((c) => c.clamped), corners: corners.map((c) => c.px) } : null;
   const key = fact && JSON.stringify(fact);
   if (fact && !seenRadii.has(key)) { seenRadii.add(key); radii.push(fact); }
 }
