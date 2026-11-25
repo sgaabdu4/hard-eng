@@ -102,3 +102,16 @@ def test_cleanup_removes_task_whose_submodule_holds_nothing_else(
     assert not shipment.root.exists()
     assert git(root, "branch", "--list", shipment.branch).strip() == ""
     assert ship_actions.remote_branch(root, shipment.remote, shipment.branch) is None
+
+
+def test_cleanup_removes_task_whose_shallow_submodule_has_no_remote_branch_ref(
+    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
+) -> None:
+    root, shipment = delivered_worktree
+    shipment = _with_submodule(shipment, tmp_path)
+    inner = shipment.root / "component"
+    for line in git(inner, "for-each-ref", "refs/remotes", "refs/heads").splitlines():
+        git(inner, "update-ref", "-d", line.split()[-1])
+    assert git(inner, "for-each-ref", "refs/remotes", "refs/heads").strip() == ""
+    ship_actions.cleanup(root, shipment)
+    assert not shipment.root.exists()
