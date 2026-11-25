@@ -9,8 +9,8 @@ Status: Complete
 2. An earlier Fail is listed as an earlier finding with no claim that it was fixed.
 3. A Fail whose `Fix:` sits on an indented line, a sub-bullet or after a blank line in the same rule block counts as having a fix; a block with no `Fix:` is still refused.
 4. A second run at the same head with the same inputs keeps the first clean or findings verdict and is refused.
-5. Rules that the measure record can decide (accent count, button groups, edges, text sizes and corner radii against the `DESIGN.md` tokens) become code verdicts that the reviewer cannot overrule.
-Out of scope: gaps against spacing tokens (the measure holds arbitrary gaps for `space-between` rows and 0 for touching items, so no truthful verdict exists), any other `look` change, and any other project.
+5. Rules that the measure record can decide (accent count, button groups, edges, secondary text and corner radii against the `DESIGN.md` tokens) become code verdicts that the reviewer cannot overrule.
+Out of scope: gaps against spacing tokens (the measure holds arbitrary gaps for `space-between` rows and 0 for touching items) and text sizes against typography tokens (fluid type and a changed root size make a rendered size inexact), so the reviewer keeps both and no truthful code verdict exists; any other `look` change, and any other project.
 
 ## Sources + coverage
 
@@ -38,8 +38,8 @@ Authority: Autonomous. The user asked on 2026-11-24 to make Hard Eng correct bef
 - [x] The next run holds each earlier Fail as a numbered item, also when the image bytes did not change; the answer must say "still shown" or "gone" for each item with a frame, and "still shown" needs a Fail line for the rule → `tests/test_look_carry.py::test_each_earlier_fail_is_rechecked_one_by_one`.
 - [x] A second run at the same head and inputs keeps the first clean or findings record, prints it again and starts no reviewer; a run that ended `not done`, and a run with other inputs, still run → `tests/test_look.py::test_a_second_run_at_the_same_head_keeps_the_first_verdict`.
 - [x] A measure finding of a mapped rule (accent count, button groups, edges, secondary text) is a code Fail that the reviewer's Pass cannot overrule; a code Pass never replaces a reviewer Fail → `tests/test_look_proof_kinds.py::test_a_measure_finding_fails_its_judged_rule_in_code`.
-- [x] A measured text size or corner radius that no `DESIGN.md` token holds is a code Fail on Design system; a clamped radius, a token set that is missing and an old record without the clamp field give no verdict → `tests/test_look_proof_kinds.py::test_a_size_or_radius_outside_the_tokens_fails_design_system_in_code`.
-- [x] 5 `look` runs on one frozen invented fixture give the same Fail set; a run after the fixture's faults are fixed is clean → N/A — real model runs, not a test; the records are in the `Real service:` line.
+- [x] A measured corner radius that no `DESIGN.md` token holds is a code Fail on Design system; a clamped radius, a missing token group, a token that is not a plain length, a text size outside the tokens, and an old record without the clamp field or the root size give no verdict → `tests/test_look_proof_kinds.py::test_a_radius_outside_the_tokens_fails_design_system_in_code`.
+- [x] 5 `look` runs on one frozen invented fixture report the rate of the same Fail set (not a promise of 5 of 5: the reviewer still judges), and each later run holds the earlier Fails as items; a run after the fixture's faults are fixed is clean → N/A — real model runs, not a test; the records are in the `Real service:` line.
 
 ## Baseline + execution
 
@@ -49,7 +49,7 @@ Execution: One builder, this session.
 
 ## Risks + recovery
 
-A stricter parser refuses a real reviewer answer that names no frame; the prompt gives the exact form, and the run is `not done`, never a wrong verdict. A wrong code Fail blocks a project that cannot overrule it, so each code rule decides only what the measure holds exactly: clamped radii, unknown tokens and old records give no verdict, and gaps stay with the reviewer. Recovery: revert the commit of the item.
+A stricter parser refuses a real reviewer answer that names no frame; the prompt gives the exact form, and the run is `not done`, never a wrong verdict. A wrong code Fail blocks a project that cannot overrule it, so each code rule decides only what the measure holds exactly: clamped radii, tokens that are not plain lengths and old records give no verdict, and gaps and text sizes stay with the reviewer. A judged rule that a frame shows only half can still flip between runs; a later run holds each reported Fail as a recheck item, but it cannot hold a Fail that no run reported. Recovery: revert the commit of the item.
 
 ## ux_reference
 
