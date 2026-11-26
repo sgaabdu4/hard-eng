@@ -4,7 +4,7 @@ Status: Complete
 
 ## Outcome + scope
 
-Installed projects on `main` get the `look` repairs that develop holds: element facts with kind tags, exact keys, code verdicts for measured items, weight and align facts, the fixed gap order, the stale image refusal and the earlier-item lists. New on `main` beyond the measured-fact repairs: the kind-tag, key and stale-image refusals, the count guard of `look_answer.py` (the earlier hotfix left it out), and one reviewer rule sentence, the Alignment line about a field action being an icon inside its field (develop `19a9e291`; the coordinator can cut it). Non-goals: the whole-project HE-UI-SOURCE pass and its modules, the strict `AGENTS.md` changes, the request hold and everything that depends on it (route init script, session cap, idle limit), the wrapped-label rule, the masked-document check, the judgement recheck work, and every other develop change.
+Installed projects on `main` get the `look` repairs that develop holds: element facts with kind tags, exact keys, code verdicts for measured items, weight and align facts, the fixed gap order, the stale image refusal and the earlier-item lists. New on `main` beyond the measured-fact repairs: the kind-tag, key and stale-image refusals, the count guard of `look_answer.py` (the earlier hotfix left it out), the measured token refusals of `look_records.py` (a corner radius, gap or colour in no `DESIGN.md` token fails `Design system`, `Spacing` or the colour rule in code), the first verdict kept at a head, a Fail item with a leading frame and the `Recheck` line forms of `look_answer.py`, and two reviewer rule sentences: the Alignment line about a field action being an icon inside its field (develop `19a9e291`) and the Design system line that a value in no token becomes a token first (it replaces `A one-off size or radius needs a reason in the plan`, so the text matches the radius refusal). The coordinator can cut either sentence with its test. Non-goals: the whole-project HE-UI-SOURCE pass and its modules, the strict `AGENTS.md` changes, the request hold and everything that depends on it (route init script, session cap, idle limit), the wrapped-label rule, the masked-document check, the judgement recheck work, and every other develop change.
 
 ## Sources + coverage
 
@@ -23,6 +23,9 @@ Single source: the item kinds stay one table, `ITEM_KINDS` in `ui_measure.py`. F
 Blockers: None.
 Handoff: Approval
 Authority: Autonomous: the coordinator's hotfix brief of 2026-11-25; the PR is opened and not merged.
+
+Review declined: `kept_verdict` locks `look` to the first verdict at a head and ignores a later capture's non-visual findings :: this is the merged develop behaviour (`681c8a3e`, `Keep the first look verdict at a head`), ported unchanged; the ship and local proof still refuse an After capture with findings, so a stale clean verdict cannot pass a head with findings; a change to the lock is a develop change
+Review declined: a semicolon in intro prose before a passing measured item leaves a frameless prose part and keeps the Fail :: that prose is a claim of the reviewer with no item for code to measure, so it stays with the reviewer, who can end it with a recheck line; the same finding was declined on develop in `features/look-element-facts/PLAN.md`
 
 ## Acceptance + steps
 
@@ -56,7 +59,7 @@ Execution: One builder in a new worktree off `origin/main`. A fresh reviewer run
 1. `look.py` is exactly at the 1000 line limit, as on develop. The judgement recheck commits that join later must keep it there or move code out first.
 2. The measure script returns `{found, measured}` and the capture stores `measured`. Old records without `measured` still load: `look` leaves their measured items to the reviewer.
 3. Develop keeps the request hold, so records written on develop and on `main` differ. A record from `main` never carries to develop and the next `look` reviews again. That is safe.
-4. The Alignment sentence is a new reviewer rule that the brief did not list; it came in with its test and can be cut with that test.
+4. The two `ux.md` sentences are new reviewer rules that the brief did not list; each can be cut on its own.
 5. `ui_proof` on `main` still calls `design_hash(root)` for the disk file where develop passes the head. They differ only when `DESIGN.md` changes after the head.
 6. Recovery: revert the merge on `main` with a new hotfix PR.
 Not checked: any installed project before the PR is merged.
