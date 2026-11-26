@@ -31,8 +31,7 @@ COLOUR_NAME = re.compile(
     r")(?![\w-])"
 )
 NOT_A_WORD = re.compile(r"(?:url|var)\([^)]*\)", re.IGNORECASE)
-QUOTED_TEXT = re.compile(r"([\"'`])((?:(?!\1).)*)\1")
-TEMPLATE_HOLE = re.compile(r"\$\{[^}]*\}")
+QUOTED_TEXT = re.compile(r"([\"'`])((?:(?!\1).)*)(?:\1|$)")
 COLOUR_PROPERTY = re.compile(
     r"--[\w-]+|(?:background|border|outline|column-rule)(?:-[a-z]+)*|color|fill|stroke"
     r"|[a-z]+-color|box-shadow|text-shadow|text-decoration|filter"
@@ -66,7 +65,7 @@ NOT_A_COLOUR = re.compile(
 )
 DIGIT = re.compile(r"\d")
 STYLE_OPEN = re.compile(
-    r"style=\{\{|\b\w*[Ss]tyles?\s*[=:]\s*\{|\b(?:sx|css)\s*[=:]\s*\{+|StyleSheet\.create\(\s*\{"
+    r"style=\{\{|\b\w*[Ss]tyles?(?::\s*[^=\n{]+)?\s*[=:]\s*\{|\b(?:sx|css)\s*[=:]\s*\{+|StyleSheet\.create\(\s*\{"
 )
 APPLY = re.compile(r"@apply\b")
 UNIT_NUMBER = r"-?\d*\.?\d+(?:px|rem|em|pt)"
@@ -106,11 +105,9 @@ def kebab(name: str) -> str:
 
 
 def colour_names(value: str, in_style_object: bool) -> list[str]:
-    """The colour names of a value, in any case; in a style object only a quoted string holds one, so a constant such as WHITE is no colour."""
+    """The colour names of a value, in any case; in a style object only a quoted string holds one (an open one runs to the end, where a `${` cut the value), so a constant such as WHITE is no colour."""
     if in_style_object:
-        value = " ".join(
-            TEMPLATE_HOLE.sub(" ", text) for _, text in QUOTED_TEXT.findall(value)
-        )
+        value = " ".join(text for _, text in QUOTED_TEXT.findall(value))
     return COLOUR_NAME.findall(NOT_A_WORD.sub(" ", value).lower())
 
 
@@ -125,7 +122,10 @@ def declaration_hits(line: str, in_style_object: bool) -> list[tuple[str, str]]:
         if colour:
             found += [
                 ("colour", f"{prop}: {word}")
-                for word in colour_names(value, in_style_object)
+                for word in colour_names(
+                    value,
+                    in_style_object and not line[: match.start(1)].endswith("["),
+                )
             ]
         if LENGTH_PROPERTY.fullmatch(prop):
             found += [("size", f"{prop}: {hit[0]}") for hit in LENGTH.finditer(value)]
