@@ -105,13 +105,21 @@ def plan_scope(
         return None, "Deploy" if policy["delivery"] else "Merge"
 
 
-def plan_in(files: list[dict[str, JsonValue]]) -> str | None:
-    """The first plan that the PR adds or changes; a change that needed a plan changes one."""
+def plan_in(
+    root: Path, base_sha: str | None, head_sha: str, files: list[dict[str, JsonValue]]
+) -> str | None:
+    """The first plan that the PR adds or edits; a change that needed a plan changes one. A plan that only repoints test names or changes its layout is no such plan."""
+    from change_size import held_text, plan_text_unchanged
     from plans import is_plan_path
 
     for item in files:
         name = cast(str, item["filename"])
-        if item.get("status") != "removed" and is_plan_path(Path(name)):
+        if item.get("status") == "removed" or not is_plan_path(Path(name)):
+            continue
+        after = held_text(root, head_sha, name)
+        old_name = cast(str, item.get("previous_filename") or name)
+        before = held_text(root, base_sha, old_name) if base_sha else None
+        if after is None or not plan_text_unchanged(before, after):
             return name
     return None
 
@@ -137,7 +145,7 @@ def delivered_files(
     if not (policy["ui_paths"] or unplanned):
         return []
     files = changed_files(root, *identity)
-    if unplanned and (named := plan_in(files)):
+    if unplanned and (named := plan_in(root, pull.base_sha, pull.head_sha, files)):
         raise ShippingError(
             f"--plan is missing: this PR changed {named}; pass --plan {named}"
         )

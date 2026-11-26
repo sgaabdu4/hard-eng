@@ -530,8 +530,18 @@ def reformatted_plans(root: Path, base: str | None, changed: set[str]) -> set[st
     }
 
 
+def plan_text_unchanged(before: str | None, after: str) -> bool:
+    """The same words, or a Complete plan whose only change is the targets after `→` on its checkboxes."""
+    if before is None:
+        return False
+    if plan_words(before) == plan_words(after):
+        return True
+    kept = words_without_acceptance_refs(after)
+    return kept is not None and kept == words_without_acceptance_refs(before)
+
+
 def unedited_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
-    """Changed plan paths whose words equal those that the base and the branch point hold: a formatter wrote them, not a person."""
+    """Changed plan paths whose words equal those that the base and the branch point hold, or that only repoint test names: a formatter or a rename wrote them, not a person."""
     names = [
         name for name in changed if is_plan_path(Path(name)) and (root / name).is_file()
     ]
@@ -544,7 +554,9 @@ def unedited_plans(root: Path, base: str | None, changed: set[str]) -> set[str]:
         name
         for name in names
         if all(
-            held_words(root, reference, name) == plan_words((root / name).read_text())
+            plan_text_unchanged(
+                held_text(root, reference, name), (root / name).read_text()
+            )
             for reference in references
         )
     }
