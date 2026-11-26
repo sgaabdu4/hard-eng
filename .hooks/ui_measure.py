@@ -37,6 +37,26 @@ PROOF_KINDS = {
     "Widths": ("measured",),
     "Performance": ("test",),
 }
+ITEM_KINDS = {
+    "size": f"the rendered text size against the {LIMITS['text_px']} px floor",
+    "colour": "not checked in code: tag a colour item [judgement] and name no colour value",
+    "gap": "a claim that two neighbours touch, which opens its note after the tag with that claim, such as chips touch; any other gap item is judgement",
+    "radius": "a claim that the corners are square, which opens its note after the tag with that claim, such as square corners; any other radius item is judgement",
+    "tap": "the control size against its tap floor",
+    "weight": "a claim that the element is bolder or lighter than named elements, which opens its note after the tag with bolder than or lighter than; a weight that is only unlike a neighbour is judgement",
+    "align": "whether the text is centred in its parent: a claim that it is not (the default), or, when the note after the tag opens with the claim centred, a claim that it is; any other alignment claim is judgement",
+    "judgement": "anything else: placement, any other alignment or weight claim, line count, wording",
+}
+MEASURED_KINDS = frozenset(ITEM_KINDS) - {"judgement"}
+FINDING_RULES = {
+    "competing-buttons": "Hierarchy",
+    "accent-colours": "Hierarchy",
+    "heading-hierarchy": "Hierarchy",
+    "duplicate-buttons": "No clutter",
+    "extra-text": "No clutter",
+    "field-control": "No clutter",
+    "shared-edge": "Alignment",
+}
 DECORATION = '[aria-hidden="true"],[role=img]'
 COLOUR_JS = (
     "const rgb = (() => { const cv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true }); "
@@ -46,11 +66,11 @@ COLOUR_JS = (
     "const a = /\\s*\\/\\s*(\\d*\\.?\\d+)(%?)\\s*\\)$/.exec(c); "
     "cv.clearRect(0, 0, 1, 1); cv.fillStyle = 'rgba(0, 0, 0, 0)'; cv.fillStyle = a ? c.slice(0, a.index) + ')' : c; cv.fillRect(0, 0, 1, 1); const d = cv.getImageData(0, 0, 1, 1).data; "
     "return [d[0], d[1], d[2], byte(d[3] / 255 * (a ? Math.min(1, a[2] ? a[1] / 100 : +a[1]) : 1))]; }; })(); "
+    "const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }; "
 )
 DECORATED_JS = (
     "((el) => { const root = el.closest(DECORATION_JSON); if (!root) return false; "
     "const fill = (c) => { const v = rgb(c); return v.length >= 3 && (v.length < 4 || v[3] > 0.1); }; "
-    "const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }; "
     "const covers = (s, r) => { const q = s.getBoundingClientRect(); return q.left <= r.left + 1 && q.top <= r.top + 1 && q.right >= r.right - 1 && q.bottom >= r.bottom - 1; }; "
     "const behind = (e) => { const r = e.getBoundingClientRect(); for (let n = e; n.parentElement; n = n.parentElement) { for (let s = n.previousElementSibling; s; s = s.previousElementSibling) { const c = getComputedStyle(s).backgroundColor; if (fill(c) && covers(s, r)) return c; } const c = getComputedStyle(n.parentElement).backgroundColor; if (fill(c)) return c; } return 'rgb(255, 255, 255)'; }; "
     "const apart = (c, e) => { if (!fill(c)) return false; const a = lum(rgb(c)), b = lum(rgb(behind(e))); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= LIMITS.frame_ratio; }; "
@@ -114,14 +134,17 @@ const inSentence = (el) => {
   }
   return false;
 };
+const factName = (el) => (el.innerText || el.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().slice(0, 30);
+const controlFacts = new Map();
 for (const el of controls) {
   const b = el.getBoundingClientRect();
   const link = isLink(el);
-  if (link && inSentence(el)) continue;
+  const exempt = link && inSentence(el);
   const floor = link && innerWidth >= LIMITS.desktop_px ? LIMITS.link_px : LIMITS.control_px;
-  if (b.width < floor || b.height < floor) {
-    found.push({ rule: "tap-size", at: name(el), w: Math.round(b.width), h: Math.round(b.height) });
-  }
+  const under = !exempt && (b.width < floor || b.height < floor);
+  const fact = { at: factName(el), w: Math.round(b.width), h: Math.round(b.height), floor, under, exempt };
+  controlFacts.set(JSON.stringify(fact), fact);
+  if (under) found.push({ rule: "tap-size", at: name(el), w: fact.w, h: fact.h });
 }
 const pseudoText = (el) => ["::before", "::after"].map((p) => {
   const c = getComputedStyle(el, p).content;
@@ -391,7 +414,130 @@ for (const entry of shifts) {
 if (cls > LIMITS.cls) {
   found.push({ rule: "layout-shift", at: "page", cls: +cls.toFixed(3) });
 }
-return JSON.stringify(found);
+const hex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const solid = (el) => {
+  let bg = [255, 255, 255];
+  const chain = [];
+  for (let n = el; n; n = n.parentElement) chain.unshift(n);
+  for (const n of chain) {
+    const s = getComputedStyle(n);
+    if (s.backgroundImage !== "none") return null;
+    const c = rgb(s.backgroundColor);
+    bg = bg.map((v, i) => c[i] * c[3] + v * (1 - c[3]));
+  }
+  return bg;
+};
+const raw8 = (c) => c.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, "0")).join("") + Math.round(c[3] * 255).toString(16).padStart(2, "0");
+const fillOf = (el) => {
+  for (let n = el; n; n = n.parentElement) {
+    const c = getComputedStyle(n).backgroundColor;
+    if (opaque(c)) return raw8(rgb(c));
+  }
+  return "";
+};
+const centredIn = (el, s) => {
+  const parent = el.parentElement;
+  if (!parent) return false;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const t = range.getBoundingClientRect(), p = parent.getBoundingClientRect(), ps = getComputedStyle(parent);
+  const left = p.left + parseFloat(ps.paddingLeft) + parseFloat(ps.borderLeftWidth);
+  const right = p.right - parseFloat(ps.paddingRight) - parseFloat(ps.borderRightWidth);
+  const middle = (left + right) / 2;
+  const lines = [];
+  for (const r of [...range.getClientRects()].filter((q) => q.width > 1 && q.height > 1).sort((a, z) => a.top - z.top || a.left - z.left)) {
+    const line = lines[lines.length - 1];
+    if (line && r.top < line.bottom - 1) { line.left = Math.min(line.left, r.left); line.right = Math.max(line.right, r.right); line.bottom = Math.max(line.bottom, r.bottom); }
+    else lines.push({ left: r.left, right: r.right, bottom: r.bottom });
+  }
+  if (s.textAlign !== "center" && !lines.every((r) => Math.abs((r.left + r.right) / 2 - middle) <= 2)) return false;
+  return Math.abs((t.left + t.right) / 2 - middle) <= 2 && (s.textAlign === "center" || t.width < right - left - 4);
+};
+const textFacts = new Map();
+const textNames = new Map();
+for (const el of texts) textNames.set(factName(el), (textNames.get(factName(el)) || 0) + 1);
+for (const el of texts) {
+  const s = getComputedStyle(el);
+  const size = parseFloat(s.fontSize);
+  const c = rgb(s.color);
+  const fact = { at: factName(el), n: textNames.get(factName(el)), px: Math.round(size * 100) / 100, weight: parseFloat(s.fontWeight) || 400, align: s.textAlign, centred: centredIn(el, s), colour: raw8(c), fill: fillOf(el), under: size < LIMITS.text_px };
+  const bg = solid(el);
+  if (bg) {
+    const fg = c.slice(0, 3).map((v, i) => v * c[3] + bg[i] * (1 - c[3]));
+    fact.ratio = Math.round(((Math.max(lum(fg), lum(bg)) + 0.05) / (Math.min(lum(fg), lum(bg)) + 0.05)) * 100) / 100;
+    fact.fg = hex(fg);
+    fact.bg = hex(bg);
+  }
+  textFacts.set(JSON.stringify(fact), fact);
+}
+const gaps = [];
+const seenGaps = new Set();
+const marginOf = (el, side) => {
+  const value = el.computedStyleMap().get("margin-" + side);
+  return value instanceof CSSUnitValue && value.unit === "px" ? value.value : NaN;
+};
+const gapOf = (value) => parseFloat(value) || 0;
+const spaced = (parent, a, b, axis, px) => {
+  const ps = getComputedStyle(parent), as = getComputedStyle(a), bs = getComputedStyle(b);
+  if (as.display.startsWith("table") || bs.display.startsWith("table")) return false;
+  const lined = /flex|grid/.test(ps.display);
+  if (lined && (parseFloat(as.flexGrow) > 0 || parseFloat(bs.flexGrow) > 0)) return false;
+  if (axis === "x") {
+    const own = marginOf(a, "right") + marginOf(b, "left") + (lined ? gapOf(ps.columnGap) : 0);
+    const word = !lined && as.display.startsWith("inline") && bs.display.startsWith("inline") ? gapOf(as.fontSize) * 0.5 : 0;
+    return px >= own - 1 && px <= own + word + 1;
+  }
+  const down = marginOf(a, "bottom"), up = marginOf(b, "top");
+  const margins = lined || down < 0 || up < 0 ? down + up : Math.max(down, up);
+  return Math.abs(px - (margins + (lined ? gapOf(ps.rowGap) : 0))) <= 1;
+};
+const textSet = new Set(texts);
+for (const parent of document.body.querySelectorAll("*")) {
+  const kids = [...parent.children].filter((c) => visible(c) && !["absolute", "fixed"].includes(getComputedStyle(c).position));
+  if (kids.length < 2) continue;
+  const rows = [];
+  for (const box of kids.map((c) => ({ c, b: c.getBoundingClientRect() })).sort((a, z) => a.b.top - z.b.top || a.b.left - z.b.left)) {
+    const row = rows[rows.length - 1];
+    if (row && box.b.top < row.bottom - 1) { row.items.push(box); row.bottom = Math.max(row.bottom, box.b.bottom); }
+    else rows.push({ items: [box], bottom: box.b.bottom });
+  }
+  const boxes = rows.flatMap((row) => row.items.sort((a, z) => a.b.left - z.b.left));
+  for (let i = 1; i < boxes.length; i++) {
+    const below = boxes[i].b.top - boxes[i - 1].b.bottom, beside = boxes[i].b.left - boxes[i - 1].b.right;
+    const axis = below >= -1 ? "y" : beside >= -1 ? "x" : "";
+    if (!axis) continue;
+    const gap = { at: factName(boxes[i - 1].c), to: factName(boxes[i].c), px: Math.round(axis === "y" ? below : beside), axis };
+    if (!spaced(parent, boxes[i - 1].c, boxes[i].c, axis, gap.px)) continue;
+    if (!textSet.has(boxes[i - 1].c) || !textSet.has(boxes[i].c)) gap.text = false;
+    const key = JSON.stringify(gap);
+    if (!seenGaps.has(key)) { seenGaps.add(key); gaps.push(gap); }
+  }
+}
+const sizes = { controls: [...controlFacts.values()] };
+const cornersOf = (el) => {
+  const s = getComputedStyle(el);
+  const b = el.getBoundingClientRect();
+  const half = Math.round(Math.min(b.width, b.height) / 2);
+  return ["TopLeft", "TopRight", "BottomRight", "BottomLeft"].map((corner) => {
+    const value = s["border" + corner + "Radius"];
+    const declared = value.endsWith("%") ? Math.round(Math.min(b.width, b.height) * parseFloat(value) / 100) : Math.round(parseFloat(value) || 0);
+    return { px: Math.min(declared, half), clamped: declared > 0 && declared >= half };
+  });
+};
+const isChip = (el) => { const s = getComputedStyle(el); return ownText(el) && (opaque(s.backgroundColor) || (s.borderTopWidth !== "0px" && s.borderTopStyle !== "none")); };
+const squareHolders = new Set([...controls, ...texts.filter(isChip)]);
+const rounded = [...controls, ...[...document.body.querySelectorAll("*")].filter(visible)];
+const radii = [];
+const seenRadii = new Set();
+for (const el of rounded) {
+  const corners = cornersOf(el);
+  const px = Math.max(...corners.map((c) => c.px));
+  const fact = px > 0 || (squareHolders.has(el) && factName(el)) ? { at: factName(el), px, clamped: corners.some((c) => c.clamped), corners: corners.map((c) => c.px) } : null;
+  const key = fact && JSON.stringify(fact);
+  if (fact && !seenRadii.has(key)) { seenRadii.add(key); radii.push(fact); }
+}
+const measured = { texts: [...textFacts.values()], gaps, sizes, radii, root_px: parseFloat(getComputedStyle(document.documentElement).fontSize) };
+return JSON.stringify({ found, measured });
 })()"""
 
 
@@ -448,6 +594,7 @@ def write_record(
     findings: list[dict[str, object]],
     route: str = "",
     ring_boxes: list[dict[str, int]] | None = None,
+    measured: dict[str, object] | None = None,
 ) -> Path:
     payload: dict[str, object] = {
         "image": image.name,
@@ -459,6 +606,8 @@ def write_record(
     }
     if ring_boxes:
         payload["ring_boxes"] = list(ring_boxes)
+    if measured:
+        payload["measured"] = measured
     record = image.with_suffix(".json")
     record.write_text(json.dumps(payload, indent=2) + "\n")
     return record

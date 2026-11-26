@@ -280,16 +280,23 @@ def _capture_stems(
     return current or stems
 
 
-def measure_verdict(root: Path, head: str, digests: list[str]) -> tuple[str, str]:
-    """The verdict of the browser records of the head on the images with these digests: Fail with the findings, Pass with the widths measured, N/A when no image has a record."""
+def measure_found(
+    root: Path, head: str, digests: list[str]
+) -> list[tuple[Path, dict[str, object]]]:
+    """The browser records of the head for the images with these digests."""
     items = browser_record_files(root)
     records = [record for _, record in items]
     sets = {digest: _capture_stems(records, digest, head) for digest in digests}
-    found = [
+    return [
         (path, record)
         for path, record in items
         if _stem(record) in sets.get(str(record["sha256"]), [])
     ]
+
+
+def measure_verdict(root: Path, head: str, digests: list[str]) -> tuple[str, str]:
+    """The verdict of the browser records of the head on the images with these digests: Fail with the findings, Pass with the widths measured, N/A when no image has a record."""
+    found = measure_found(root, head, digests)
     if not found:
         return "N/A", "no measure record for these images; `browser capture` writes one"
     if failed := [record for _, record in found if record.get("findings")]:

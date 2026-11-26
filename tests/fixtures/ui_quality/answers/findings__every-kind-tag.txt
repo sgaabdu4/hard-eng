@@ -1,0 +1,12 @@
+- Mistake-proof: Pass. looked at it
+- Least effort: Pass. looked at it
+- Observe: Pass. looked at it
+- Undo: Pass. looked at it
+- No clutter: Pass. looked at it
+- Hierarchy: Pass. looked at it
+- Alignment: Pass. looked at it
+- Spacing: Pass. looked at it
+- Design system: Fail. The labels break the tokens. image-1.png: Hint label [size]; image-1.png: Save button [colour]; image-1.png: Save to Cancel [gap]; image-1.png: Save [radius]; image-1.png: Cancel button [tap]; image-1.png: the title sits left [judgement]. Fix: use the tokens.
+- Messages: Pass. looked at it
+Image image-1.png: a card with a title
+VERDICT: findings

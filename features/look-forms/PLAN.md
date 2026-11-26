@@ -25,11 +25,11 @@ Authority: Autonomous: the user asked on 2026-11-24 to put client unblocking fir
 
 ## Acceptance + steps
 
-- [x] A Fail rule line that ends in a colon, followed by a numbered list, a blank line and a paragraph with `Fix:`, is read as one block, and the stored line holds the whole block → `tests/test_look.py::test_a_fix_after_a_list_belongs_to_its_rule_block`
-- [x] A Fail block with no `Fix:` anywhere, or a `Fix:` that sits in another rule's block, is still refused → `tests/test_look.py::test_a_fail_block_with_no_fix_is_still_refused`
-- [x] A count note right after the verdict is stored in the same form as a note before the colon → `tests/test_look.py::test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon`
-- [x] A count note with no number after the verdict is still refused → `tests/test_look.py::test_a_count_note_with_no_number_after_the_verdict_is_still_refused`
-- [x] The prompt shows the count note before the colon → `tests/test_look.py::test_the_prompt_shows_the_count_note_before_the_colon`
+- [x] A Fail rule line that ends in a colon, followed by a numbered list, a blank line and a paragraph with `Fix:`, is read as one block, and the stored line holds the whole block → `tests/test_look_answer.py::test_a_fix_after_a_list_belongs_to_its_rule_block`
+- [x] A Fail block with no `Fix:` anywhere, or a `Fix:` that sits in another rule's block, is still refused → `tests/test_look_answer.py::test_a_fail_block_with_no_fix_is_still_refused`
+- [x] A count note right after the verdict is stored in the same form as a note before the colon → `tests/test_look_answer.py::test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon`
+- [x] A count note with no number after the verdict is still refused → `tests/test_look_answer.py::test_a_count_note_with_no_number_after_the_verdict_is_still_refused`
+- [x] The prompt shows the count note before the colon → `tests/test_look_answer.py::test_the_prompt_shows_the_count_note_before_the_colon`
 
 Steps:
 
@@ -61,7 +61,7 @@ Result: Passed
 Evidence: Red first on `main`: 3 cases fail (fix after a list, note after the verdict, prompt form) and 2 near misses already hold. Green after the fix: 59 tests of `test_look.py`, `test_look_carry.py` and `test_look_proof_kinds.py`. Static gates passed: format, lint, complexity, annotations, types, dead code and duplicates. The Ready check ran twice; every gate passed except `tests`, which hit its 1800 s limit at 97 percent in both runs while the machine load was 300 to 500 from other work; no test failed. The full tests run as the CI shards. `challenge` printed `clean` at the exact head `b2f81488` (Codex was over its usage limit, so a fresh Claude session reviewed).
 E2E: N/A — hook code with no app journey; the two real client reviewer answers replay through `look.judge`: main refuses both with the reported messages, this head reads both as findings with 10 rule lines each.
 Real service: Passed — the Claude reviewer CLI: one real `look` review of an invented image with the new prompt returned 10 rule lines in the shown forms with no refusal, and its count notes read into the stored form.
-Retro: (1) Fault on `main`: `judge` read one physical line as a whole rule, and `clean_line` read the count note in one place only; real reviewer answers have a Fix after a list and a note after the verdict → `tests/test_look.py::test_a_fix_after_a_list_belongs_to_its_rule_block`, `tests/test_look.py::test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon`. (2) The format check reformatted two long lines in my tests, fixed at once → the `format` check of `hard-eng.gates.json`. (3) The full local test gate cannot finish in its limit when other work loads the machine → the sharded CI run is the proof for the test gate.
+Retro: (1) Fault on `main`: `judge` read one physical line as a whole rule, and `clean_line` read the count note in one place only; real reviewer answers have a Fix after a list and a note after the verdict → `tests/test_look_answer.py::test_a_fix_after_a_list_belongs_to_its_rule_block`, `tests/test_look_answer.py::test_a_count_note_after_the_verdict_is_stored_like_one_before_the_colon`. (2) The format check reformatted two long lines in my tests, fixed at once → the `format` check of `hard-eng.gates.json`. (3) The full local test gate cannot finish in its limit when other work loads the machine → the sharded CI run is the proof for the test gate.
 
 Delivery target: Merge
 Delivery: Pending — `hard-eng` passes on the PR to `main`, the merge on `main`, then the join PR merged into `develop`.

@@ -797,6 +797,9 @@ UI_MODULES = (
     "merge_guard",
     "ship_record",
     "plan_controls",
+    "look_answer",
+    "look_facts",
+    "look_records",
 )
 
 
