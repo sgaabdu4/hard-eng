@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-from look_facts import tokens_from_text, verdict
+from look_facts import SQUARE_LAST, radius_facts, tokens_from_text, verdict
 from test_browser import plain_step, session
 from test_ui_audit_guards import measured, open_board
 
@@ -26,6 +26,9 @@ def test_square_chips_are_recorded_and_decided_from_their_own_corners(
         f"<p style='margin:14px 0'>{chip('Square one', '0')}{chip('Square two', '0')}</p>"
         f"<p style='margin:14px 0'>{chip('Round one', '6px')}{chip('Round end', '6px 0 0 6px')}</p>"
         "<button style='min-height:44px;min-width:120px;font-size:16px;border-radius:0'>Go</button>"
+        "<p style='margin:14px 0'><a href='#' style='display:inline-block;min-height:44px;min-width:44px;border-radius:0'>Plain link</a></p>"
+        "<input style='width:120px;height:44px;border-radius:0'>"
+        "<table><tr><td style='background:#eef;padding:4px;border-radius:0'>Cell</td></tr></table>"
         "<div style='height:30px;background:#eee;border-radius:0'></div>"
         "</main></body>"
     )
@@ -46,7 +49,20 @@ def test_square_chips_are_recorded_and_decided_from_their_own_corners(
     assert rows["Round end"]["px"] == 6
     assert len(values["radii"]) == len(rows)
     assert all(item["at"] for item in values["radii"])
+    assert rows["Plain link"]["corners"] == [0, 0, 0, 0]
+    assert rows["Cell"]["corners"] == [0, 0, 0, 0]
     tokens = tokens_from_text(DESIGN)
+    squares = [
+        fact for fact in radius_facts(values, tokens) if fact.margin == SQUARE_LAST
+    ]
+    assert {fact.key for fact in squares} == {
+        "Square one",
+        "Square two",
+        "Go",
+        "Plain link",
+        "Cell",
+    }
+    assert all(fact.ok is True for fact in squares)
     failing = verdict("radius", "Square one", values, tokens, "square")
     assert failing is not None
     assert failing[0] is False

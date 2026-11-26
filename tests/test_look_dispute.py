@@ -7,9 +7,9 @@ from typing import cast
 
 import look
 import look_answer
-import look_dispute
 import pytest
 import ui_measure
+import ui_proof
 from conftest import commit, git
 from plans import usability_rules
 from test_look import install_agent, look_project, make_images, next_head, run_look
@@ -23,9 +23,9 @@ DESIGN_LINES = "# Design\n\nFields marked required carry an asterisk.\nOptional 
 STANDS = "DISPUTE: stands\nRelies on: none"
 
 
-def full_answer(fail: str) -> str:
+def full_answer(fail: str, failing: tuple[str, ...] = ("Design system",)) -> str:
     rules = [
-        f"{name}: Fail — {fail}" if name == "Design system" else f"{name}: Pass — ok"
+        f"{name}: Fail — {fail}" if name in failing else f"{name}: Pass — ok"
         for name, _ in usability_rules()
     ]
     return "\n".join([*rules, "Image image-1.png: a form", "VERDICT: findings"])
@@ -43,13 +43,17 @@ def found(
     monkeypatch: pytest.MonkeyPatch,
     items: list[str],
     files: dict[str, str] | None = None,
+    failing: tuple[str, ...] = ("Design system",),
 ) -> list[Path]:
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
     write_files(project, files or {"src/form.ts": FORM})
     commit(project, "sources")
     images = make_images(project, 1)
     install_agent(
-        tmp_path, "claude", 1, full_answer("; ".join(items) + " Fix: change it.")
+        tmp_path,
+        "claude",
+        1,
+        full_answer("; ".join(items) + " Fix: change it.", failing),
     )
     assert run_look(project, "codex", images)["outcome"] == "findings"
     return images
@@ -72,13 +76,14 @@ def dispute(
     item: str,
     cites: list[str],
     measured: str = "",
+    extra: list[str] | None = None,
 ) -> int:
-    argv = [*map(str, images), "--dispute", item]
+    argv = [*map(str, images), "--dispute", item, *(extra or [])]
     for cite in cites:
         argv += ["--cite", cite]
     if measured:
         argv += ["--measured", measured]
-    return look_dispute.dispute_command(project, argv)
+    return look.look_command(project, argv)
 
 
 def design_line(record: dict[str, object]) -> str:
@@ -86,29 +91,24 @@ def design_line(record: dict[str, object]) -> str:
     return next(line for line in rules if line.startswith("Design system:"))
 
 
-STAY = [
-    "image-1.png: a button label larger than the buttons beside it [judgement]",
-    "image-1.png: a second filled primary button in the row [judgement]",
-    "image-1.png: a warning that says what will happen and no next step [judgement]",
-    "image-1.png: unselected chips filled, the selected chip only outlined [judgement]",
-    "image-1.png: the chips are square in a joined group [judgement]",
-]
+WARNING = (
+    "image-1.png: a warning that says what will happen and no next step [judgement]"
+)
 
 
-@pytest.mark.parametrize("item", STAY)
-def test_a_fail_that_stands_stays_and_the_dispute_is_recorded(
-    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch, item: str
+def test_a_scripted_stands_answer_keeps_the_item_and_records_the_dispute(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    images = found(tmp_path, project, monkeypatch, [item])
+    images = found(tmp_path, project, monkeypatch, [WARNING])
     before = stored(project, images)
     install_agent(tmp_path, "claude", 1, STANDS)
-    assert dispute(project, images, item, ["src/form.ts:1-3"]) == 1
+    assert dispute(project, images, WARNING, ["src/form.ts:1-3"]) == 1
     after = stored(project, images)
     assert after["outcome"] == "findings"
     assert after["rules"] == before["rules"]
     held = cast(list[dict[str, object]], after["disputes"])
     assert len(held) == 1
-    assert held[0]["item"] == item
+    assert held[0]["item"] == WARNING
     assert held[0]["verdict"] == "stands"
     assert held[0]["cites"] == [
         {
@@ -141,11 +141,11 @@ CASES = [
     (
         "image-1.png: dim the option when the request exceeds the balance [judgement]",
         {
-            "features/leave/PLAN.md": "# Leave\n\nSingle source: the days of a month are counted once in the shared calendar module; a form shows the count only.\n"
+            "features/option/PLAN.md": "# Option\n\nSingle source: the days of a month are counted once in the shared calendar module; a form shows the count only.\n"
         },
-        ["features/leave/PLAN.md:3-3"],
+        ["features/option/PLAN.md:3-3"],
         "cite 1 line 3",
-        "features/leave/PLAN.md line 3",
+        "features/option/PLAN.md line 3",
     ),
 ]
 
@@ -210,6 +210,7 @@ def test_the_dispute_prompt_holds_only_the_item_the_image_and_the_cited_bytes(
     look_with(tmp_path, project, measured, answer_with(f"{item} Fix: space them."))
     images = sorted((project / ".hard-eng/browser").glob("after-*.png"))
     log = install_agent(tmp_path, "claude", 1, STANDS)
+    (project / "src/form.ts").write_text("export const rules = {};\n")
     dispute(project, images, item, ["src/form.ts:2-3"], measured="Chip")
     call = json.loads(log.read_text())
     assert call["files"] == ["image-1.png"]
@@ -253,6 +254,7 @@ def test_a_dispute_that_cites_nothing_real_is_refused(
         {"src/form.ts": FORM, "src/big.txt": big},
     )
     (project / "src/new.ts").write_text("untracked\n")
+    (project / "src/form.ts").write_text(FORM + "four\nfive\n")
     log = install_agent(
         tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 1"
     )
@@ -264,6 +266,7 @@ def test_a_dispute_that_cites_nothing_real_is_refused(
         ("no such file at HEAD", item, ["src/none.ts:1-2"]),
         ("no such file at HEAD", item, ["src/new.ts:1-1"]),
         ("has 3 lines", item, ["src/form.ts:2-9"]),
+        ("has 3 lines", item, ["src/form.ts:4-5"]),
         ("at most 120 lines", item, ["src/big.txt:1-130"]),
         ("<path>:<from>-<to>", item, ["src/form.ts"]),
         ("start at 1", item, ["src/form.ts:0-2"]),
@@ -277,6 +280,9 @@ def test_a_dispute_that_cites_nothing_real_is_refused(
     for words, name, cites in cases:
         assert words in refused(project, images, name, cites), (words, cites)
     assert "no measured fact" in refused(project, images, item, own, "Nothing")
+    for flag in (["--all"], ["--plan", "features/x/PLAN.md"]):
+        with pytest.raises(ValueError, match="do not apply to a dispute"):
+            dispute(project, images, item, own, extra=flag)
     assert not log.exists()
 
 
@@ -385,3 +391,70 @@ def test_the_look_command_routes_a_dispute_and_lists_its_flags(
     assert "--dispute" in listed
     assert "--cite" in listed
     assert "--measured" in listed
+
+
+def test_a_dispute_uses_the_host_flag_of_the_look_command(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    item = "image-1.png: the chips are square [judgement]"
+    images = found(tmp_path, project, monkeypatch, [item])
+    monkeypatch.delenv("CODEX_THREAD_ID")
+    log = install_agent(tmp_path, "claude", 1, STANDS)
+    log.unlink(missing_ok=True)
+    with pytest.raises(ValueError, match="Cannot tell whether"):
+        dispute(project, images, item, ["src/form.ts:1-3"])
+    assert not log.exists()
+    assert (
+        dispute(project, images, item, ["src/form.ts:1-3"], extra=["--host", "codex"])
+        == 1
+    )
+    assert log.exists()
+
+
+def test_an_item_under_two_rules_is_disproved_under_both(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    item = "image-1.png: the Email label lacks the required asterisk [judgement]"
+    images = found(
+        tmp_path,
+        project,
+        monkeypatch,
+        [item],
+        failing=("Design system", "Messages"),
+    )
+    install_agent(tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 2")
+    assert dispute(project, images, item, ["src/form.ts:2-2"]) == 0
+    after = stored(project, images)
+    assert after["outcome"] == "clean"
+    assert not any("Fail" in line for line in cast(list[str], after["rules"]))
+    assert len(cast(list[object], after["disputes"])) == 1
+
+
+def test_a_clean_record_that_rests_on_a_dispute_carries_only_while_the_cited_bytes_hold(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    item = "image-1.png: the Email label lacks the required asterisk [judgement]"
+    images = found(tmp_path, project, monkeypatch, [item])
+    install_agent(tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 2")
+    assert dispute(project, images, item, ["src/form.ts:2-2"]) == 0
+    next_head(project)
+    log = install_agent(tmp_path, "claude", 1, full_answer(f"{item} Fix: change it."))
+    log.unlink(missing_ok=True)
+    assert look.look_command(project, ["--host", "codex", *map(str, images)]) == 0
+    assert not log.exists()
+    (project / "src/form.ts").write_text(FORM.replace(">= 0", "> 0"))
+    commit(project, "the rule changed")
+    look.look_command(project, ["--host", "codex", *map(str, images)])
+    assert log.exists()
+
+
+def test_the_pr_proof_accepts_a_record_that_a_dispute_cleaned(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    item = "image-1.png: the Email label lacks the required asterisk [judgement]"
+    images = found(tmp_path, project, monkeypatch, [item])
+    install_agent(tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 2")
+    assert dispute(project, images, item, ["src/form.ts:2-2"]) == 0
+    block = look.block_text(stored(project, images))
+    head = git(project, "rev-parse", "HEAD")
+    assert ui_proof.look_problem(project, head, block, [images[0].read_bytes()]) is None
