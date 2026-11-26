@@ -9,8 +9,6 @@ from typing import NamedTuple
 from ui_measure import LIMITS
 
 FACT_BYTES = 1500
-LENGTH = re.compile(r"(\d*\.?\d+)(px|rem)")
-ZERO = re.compile(r"0+(?:\.0+)?")
 UNSAFE_IN_KEY = re.compile(r"[;:\[\]`*\"\s]+")
 NO_NAME = "no name"
 TRIGGER = {
@@ -33,7 +31,6 @@ CLAIM_FORMS = {
     kind: re.compile(rf"(?i)\s*{LEAD}(?:{words})\b")
     for kind, (_, words) in CLAIMS.items()
 }
-SQUARE_LAST = 1e9
 
 
 class Tokens(NamedTuple):
@@ -95,29 +92,6 @@ def tokens_from_text(text: str) -> Tokens:
     )
 
 
-def length_scale(tokens: list[str], root_px: float) -> set[int] | None:
-    """The token lengths in px, with rem set from the page's own root size; None when a token is any other form (em, clamp, calc, a variable); a bare 0 is 0 px, which the measure cannot hold exactly."""
-    from ui_tokens import half_up
-
-    scale: set[int] = set()
-    for token in tokens:
-        if ZERO.fullmatch(token.strip()):
-            scale.add(0)
-            continue
-        found = LENGTH.fullmatch(token.strip())
-        if not found:
-            return None
-        scale.add(half_up(float(found[1]) * (1 if found[2] == "px" else root_px)))
-    return scale
-
-
-def _scale(tokens: list[str], measured: dict[str, object]) -> set[int] | None:
-    base = measured.get("root_px")
-    if not tokens or not isinstance(base, int | float) or isinstance(base, bool):
-        return None
-    return length_scale(tokens, float(base))
-
-
 def _rows(measured: dict[str, object], key: str) -> list[dict[str, object]]:
     found = measured.get(key)
     return (
@@ -172,16 +146,6 @@ def _pair(row: dict[str, object]) -> str:
     return f"{fact_key(row.get('at'))} to {fact_key(row.get('to'))}"
 
 
-def _token_name(tokens: Tokens, raw: str, blended: str) -> str:
-    return tokens.colours.get(raw) or tokens.colours.get(blended + "ff") or ""
-
-
-def _swatch(tokens: Tokens, raw: object, blended: object) -> str:
-    plain = str(blended or "")
-    name = _token_name(tokens, str(raw), plain.removeprefix("#"))
-    return f"{plain or '#' + str(raw)[:6]} ({'token ' + name if name else 'no token'})"
-
-
 def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     floor = LIMITS["text_px"]
     found: list[Fact] = []
@@ -190,10 +154,7 @@ def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
         under = row.get("under") is True
         pair = ""
         if row.get("fg") and row.get("bg"):
-            pair = (
-                f", colour {_swatch(tokens, row.get('colour'), row.get('fg'))} on "
-                f"{_swatch(tokens, row.get('fill'), row.get('bg'))}, contrast {row.get('ratio')}:1"
-            )
+            pair = f", contrast {row.get('ratio')}:1"
         place = (
             f", align {row['align']}{' (centred)' if row.get('centred') else ''}"
             if row.get("align") and isinstance(row.get("centred"), bool)
@@ -212,35 +173,8 @@ def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return found
 
 
-def _opaque(blended: object) -> str:
-    return str(blended or "").removeprefix("#") + "ff"
-
-
-def colour_ok(row: dict[str, object], tokens: Tokens) -> bool | None:
-    """True when the text colour and the fill are colour tokens, as raw or as blended on the page; None when DESIGN.md has no colour tokens or the row has no colour."""
-    if not tokens.colours or not row.get("colour"):
-        return None
-    held = set(tokens.colours)
-    fill = str(row.get("fill") or "")
-    text = str(row["colour"]) in held or _opaque(row.get("fg")) in held
-    return text and (not fill or fill in held or _opaque(row.get("bg")) in held)
-
-
 def colour_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
-    found: list[Fact] = []
-    for key, row in _named(_rows(measured, "texts"), _at):
-        ok = colour_ok(row, tokens)
-        found.append(
-            Fact(
-                key,
-                ok,
-                0 if ok is False else 1,
-                "",
-                f"text colour {_swatch(tokens, row.get('colour'), row.get('fg'))} on "
-                f"{_swatch(tokens, row.get('fill'), row.get('bg'))} {'is' if ok else 'is not'} in the colour tokens",
-            )
-        )
-    return found
+    return []
 
 
 def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
@@ -336,21 +270,11 @@ def _gap_rows(measured: dict[str, object]) -> list[dict[str, object]]:
 
 
 def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
-    scale = _scale(tokens.spacing, measured)
-    found: list[Fact] = []
-    for pair, row in _named(_gap_rows(measured), _pair):
-        px = max(0, int(_num(row.get("px"))))
-        ok = None if scale is None else px in scale or px == 0
-        found.append(
-            Fact(
-                pair,
-                ok,
-                0 if ok is False else px,
-                f"{pair}: {px} px ({row.get('axis')})",
-                f"gap {px} px {'is' if ok else 'is not'} a spacing token",
-            )
-        )
-    return found
+    return [
+        Fact(pair, True, px, "", f"gap {px} px")
+        for pair, row in _named(_gap_rows(measured), _pair)
+        for px in [max(0, int(_num(row.get("px"))))]
+    ]
 
 
 def corners_of(row: dict[str, object]) -> list[int]:
@@ -362,44 +286,12 @@ def corners_of(row: dict[str, object]) -> list[int]:
 
 
 def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
-    scale = _scale(tokens.rounded, measured)
-    found: list[Fact] = []
-    for key, row in _named(_rows(measured, "radii"), _at):
-        px = int(_num(row.get("px")))
-        corners = corners_of(row)
-        if not any(corners):
-            if not key.startswith(NO_NAME):
-                found.append(
-                    Fact(
-                        key,
-                        None if scale is None else True,
-                        SQUARE_LAST,
-                        f"{key}: 0 px (square)",
-                        "corner radius 0 px, square, is not judged against the rounded tokens",
-                    )
-                )
-            continue
-        ok = (
-            None
-            if scale is None or row.get("clamped") is not False
-            else all(corner in scale for corner in {c for c in corners if c})
-        )
-        found.append(
-            Fact(
-                key,
-                ok,
-                0 if ok is False else px,
-                f"{key}: {px} px"
-                + (" (clamped by its box)" if row.get("clamped") else "")
-                + _corner_note(corners),
-                f"corner radius {px} px {'is' if ok else 'is not'} a rounded token",
-            )
-        )
-    return found
-
-
-def _corner_note(corners: list[int]) -> str:
-    return f" (corners {', '.join(map(str, corners))})" if len(set(corners)) > 1 else ""
+    return [
+        Fact(key, True, px, "", f"corner radius {px} px")
+        for key, row in _named(_rows(measured, "radii"), _at)
+        if not key.startswith(NO_NAME)
+        for px in [int(_num(row.get("px")))]
+    ]
 
 
 FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
@@ -429,7 +321,19 @@ def _keyed(facts: list[Fact]) -> frozenset[str]:
 def _key_line(kind: str, facts: list[Fact]) -> str:
     keyed = _keyed(facts)
     keys = [key for key in dict.fromkeys(f.key for f in _order(facts)) if key in keyed]
-    return f"{kind} keys: {' | '.join(keys)}" if keys else ""
+    shown: list[str] = []
+    used = 0
+    for key in keys:
+        used += len(key.encode()) + 3
+        if kind in CLAIM_ONLY and used > FACT_BYTES:
+            break
+        shown.append(key)
+    more = (
+        f" | {len(keys) - len(shown)} more, the largest values, have no key listed"
+        if len(shown) < len(keys)
+        else ""
+    )
+    return f"{kind} keys: {' | '.join(shown)}{more}" if keys else ""
 
 
 def _listed(facts: list[Fact], floor_note: str) -> list[str]:
@@ -452,9 +356,7 @@ def _listed(facts: list[Fact], floor_note: str) -> list[str]:
     return lines
 
 
-def _covered(
-    kind: str, facts: list[Fact], tokens: Tokens, measured: dict[str, object]
-) -> str:
+def _covered(kind: str, facts: list[Fact]) -> str:
     count, outside = len(facts), sum(fact.ok is False for fact in facts)
     floor = LIMITS["text_px"]
     if kind == "size":
@@ -474,48 +376,17 @@ def _covered(
         if not counted:
             return f"{kind}: no {kind} facts in this record, so code does not decide {kind}"
         return f"{kind}: checked for {'all ' if kind == 'align' else ''}{counted} {what.format(outside)}"
-    given = {
-        "colour": (
-            tokens.colours,
-            "colour",
-            "text elements",
-            "colour tokens",
-            "colour",
-        ),
-        "gap": (
-            _scale(tokens.spacing, measured),
-            "spacing",
-            "gaps",
-            "spacing tokens",
-            "gaps",
-        ),
-        "radius": (
-            _scale(tokens.rounded, measured),
-            "rounded",
-            "corner radii",
-            "rounded tokens",
-            "radii",
-        ),
-    }[kind]
-    held, word, things, name, plural = given
-    if not held:
-        return (
-            f"{kind}: no {word} tokens in DESIGN.md, so code does not decide {plural}"
-        )
-    squares = sum(fact.margin == SQUARE_LAST for fact in facts)
-    note = (
-        f"; {squares} square, judged only by a claim that the corners are square"
-        if squares
-        else ""
-    )
-    return f"{kind}: checked for all {count - squares} {things} against {len(held)} {name}: {outside} outside them{note}"
+    return CLAIM_ONLY[kind].format(count=count)
 
 
 NOTES = {
     "size": f"each at or over the {LIMITS['text_px']} px floor",
     "tap": "each at or over its floor",
-    "gap": "each a spacing token",
-    "radius": "each a rounded token",
+}
+CLAIM_ONLY = {
+    "colour": "colour: code does not decide colours, so a colour item is judgement",
+    "gap": "gap: code checks only a claim that two neighbours touch, for {count} neighbour pairs; a gap value is not checked against DESIGN.md, so any other gap item is judgement",
+    "radius": "radius: code checks only a claim that corners are square, for {count} elements; a corner radius is not checked against DESIGN.md, so any other radius item is judgement",
 }
 
 
@@ -524,7 +395,7 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
     lines: list[str] = []
     for kind, build in FACTS.items():
         facts = build(measured, tokens)
-        lines.append(_covered(kind, facts, tokens, measured))
+        lines.append(_covered(kind, facts))
         if kind in NOTES:
             lines += _listed(facts, NOTES[kind])
         elif keys := _key_line(kind, facts):
@@ -574,17 +445,14 @@ def _held(
 def _square(
     element: str, measured: dict[str, object], tokens: Tokens
 ) -> tuple[bool, str] | None:
-    """A square claim is disproved by any corner of the element above 0; when every corner is 0 the claim is true, and code Fails the item only when no rounded token is 0."""
+    """A square claim is disproved by any corner of the element above 0; when every corner is 0 the claim is true and the item stays with the reviewer."""
     held = [corners_of(row) for row in _held(measured, "radii", _at, element)]
     squares = [not any(corners) for corners in held]
     if not held or (any(squares) and not all(squares)):
         return None
     if not all(squares):
         return True, f"corner radii {', '.join(map(str, held[0]))} px, not square"
-    scale = _scale(tokens.rounded, measured)
-    if scale is None or 0 in scale:
-        return None
-    return False, "corner radius 0 px, square, and 0 is in no rounded token"
+    return None
 
 
 def _centred(
@@ -629,7 +497,7 @@ def verdict(
     if state := claimed_state(kind, claim):
         return STATES[state](element, measured, tokens)
     build = FACTS.get(kind)
-    if build is None:
+    if build is None or kind in CLAIM_ONLY:
         return None
     hits = [fact for fact in build(measured, tokens) if fact.key == element]
     if not hits or any(fact.ok is None for fact in hits):

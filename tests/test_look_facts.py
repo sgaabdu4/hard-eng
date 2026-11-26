@@ -96,18 +96,16 @@ def test_the_prompt_names_each_element_with_its_measured_facts(
 ) -> None:
     _, log = look_with(tmp_path, project, MEASURED)
     prompt = prompt_of(log)
+    assert "- Save: 14 px, weight 600, contrast 11.2:1" in prompt
     assert (
-        "- Save: 14 px, weight 600, colour #1a1a1a (token ink) on #e6efe9 (token mint), contrast 11.2:1"
-        in prompt
+        "- Hint: 10.5 px, weight 400, contrast 4.54:1, under the 11 px floor" in prompt
     )
-    assert (
-        "- Hint: 10.5 px, weight 400, colour #767676 (no token) on #ffffff (no token), contrast 4.54:1, under the 11 px floor"
-        in prompt
-    )
+    assert "no token" not in prompt.partition("Measured values")[2]
     assert "- Save: 120x44 px" in prompt
     assert "- Cancel: 60x30 px, under 44 px" in prompt
-    assert "- Save to Cancel: 14 px (y)" in prompt
-    assert "- Save: 6 px" in prompt
+    assert "gap keys: Save to Cancel" in prompt
+    assert "radius keys: Save" in prompt
+    assert "- Save to Cancel: 14 px" not in prompt
     assert "contrast 11.2:1" not in prompt.partition("Measured values")[0]
 
 
@@ -118,23 +116,17 @@ def test_the_prompt_says_what_each_check_covered(tmp_path: Path, project: Path) 
         "text size: checked for all 2 text elements: 1 under the 11 px floor" in prompt
     )
     assert (
-        "colour: checked for all 2 text elements against 3 colour tokens: 1 outside them"
-        in prompt
+        "colour: code does not decide colours, so a colour item is judgement" in prompt
     )
     assert (
         "tap size: checked for all 2 controls: 1 under their floor "
         "(44 px; 24 px for a link at 1280 px and wider)" in prompt
     )
-    assert (
-        "gap: checked for all 1 gaps against 2 spacing tokens: 0 outside them" in prompt
-    )
-    assert (
-        "radius: checked for all 1 corner radii against 2 rounded tokens: 0 outside them"
-        in prompt
-    )
+    assert "gap: code checks only a claim that two neighbours touch, for 1 " in prompt
+    assert "radius: code checks only a claim that corners are square, for 1 " in prompt
 
 
-def test_a_check_with_no_tokens_says_that_code_does_not_decide_it(
+def test_a_check_that_code_does_not_decide_says_so_with_or_without_tokens(
     tmp_path: Path, project: Path
 ) -> None:
     import ui_measure
@@ -145,10 +137,9 @@ def test_a_check_with_no_tokens_says_that_code_does_not_decide_it(
     run_look(project, "codex", images)
     prompt = prompt_of(log)
     assert (
-        "colour: no colour tokens in DESIGN.md, so code does not decide colour"
-        in prompt
+        "colour: code does not decide colours, so a colour item is judgement" in prompt
     )
-    assert "gap: no spacing tokens in DESIGN.md, so code does not decide gaps" in prompt
+    assert "a gap value is not checked against DESIGN.md" in prompt
     assert "text size: checked for all 2 text elements" in prompt
 
 
@@ -256,6 +247,15 @@ FAULT_AND_PASS = {
         values(texts=[text_fact("Hint", 10.5, under=True)]),
         values(texts=[text_fact("Hint", 12)]),
     ),
+    "tap": (
+        "Save",
+        values(sizes={"controls": [control("Save", 60, 30)]}),
+        values(sizes={"controls": [control("Save", 120, 44)]}),
+    ),
+}
+
+
+NOT_DECIDED = {
     "colour": (
         "Hint",
         values(texts=[text_fact("Hint", colour="767676ff", fg="#767676")]),
@@ -270,11 +270,6 @@ FAULT_AND_PASS = {
         "Save",
         values(radii=[{"at": "Save", "px": 7, "clamped": False}]),
         values(radii=[{"at": "Save", "px": 6, "clamped": False}]),
-    ),
-    "tap": (
-        "Save",
-        values(sizes={"controls": [control("Save", 60, 30)]}),
-        values(sizes={"controls": [control("Save", 120, 44)]}),
     ),
 }
 
@@ -350,31 +345,16 @@ def test_an_item_that_code_cannot_match_stays_with_the_reviewer(
     assert look_facts.verdict(kind, element, measured, tokens_of(tmp_path)) is None
 
 
-def test_an_item_with_no_tokens_to_judge_by_stays_with_the_reviewer(
-    tmp_path: Path,
+@pytest.mark.parametrize("kind", sorted(NOT_DECIDED))
+def test_a_value_that_a_token_list_lacks_is_never_decided_in_code(
+    kind: str, tmp_path: Path
 ) -> None:
     import look_facts
 
-    tokens = look_facts.design_tokens(tmp_path)
-    for kind in ("colour", "gap", "radius"):
-        element, fault, _ = FAULT_AND_PASS[kind]
+    element, fault, held = NOT_DECIDED[kind]
+    for tokens in (tokens_of(tmp_path), Tokens({}, [], [])):
         assert look_facts.verdict(kind, element, fault, tokens) is None
-    element, fault, _ = FAULT_AND_PASS["size"]
-    assert look_facts.verdict("size", element, fault, tokens) is not None
-
-
-@pytest.mark.parametrize(("colour", "ok"), [("00000080", True), ("00000081", False)])
-def test_a_colour_token_with_alpha_matches_the_raw_colour(
-    colour: str, ok: bool, tmp_path: Path
-) -> None:
-    import look_facts
-
-    measured = values(
-        texts=[text_fact("Hint", colour=colour, fill="", fg="#808080", bg="#ffffff")]
-    )
-    found = look_facts.verdict("colour", "Hint", measured, tokens_of(tmp_path))
-    assert found is not None
-    assert found[0] is ok
+        assert look_facts.verdict(kind, element, held, tokens) is None
 
 
 def test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass(
@@ -448,37 +428,37 @@ def two_rounds(
 
 
 NO_FACTS = values()
-OFF_TOKEN = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676")])
+OFF_TOKEN = values(texts=[text_fact("Hint", 10.5, under=True)])
 EARLIER = "Earlier look findings"
 
 
 def test_an_earlier_measured_item_is_decided_by_code_before_the_prompt(
     tmp_path: Path, project: Path
 ) -> None:
-    fail = "image-1.png: Hint [colour] Fix: use ink"
+    fail = "image-1.png: Hint [size] Fix: use ink"
     held = values(texts=[text_fact("Hint")])
     record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, held)
     assert EARLIER not in prompt
     assert record["outcome"] == "clean"
 
 
-def test_an_earlier_true_colour_fail_stays_a_fail_when_the_reviewer_says_nothing(
+def test_an_earlier_true_size_fail_stays_a_fail_when_the_reviewer_says_nothing(
     tmp_path: Path, project: Path
 ) -> None:
-    fail = "image-1.png: Hint [colour] Fix: use ink"
+    fail = "image-1.png: Hint [size] Fix: use ink"
     record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, OFF_TOKEN)
     assert EARLIER not in prompt
     assert record["outcome"] == "findings"
     line = stored_rule(record, "Design system")
-    assert line.startswith("Design system: Fail — image-1.png: Hint [colour] — code: ")
-    assert "is not in the colour tokens" in line
+    assert line.startswith("Design system: Fail — image-1.png: Hint [size] — code: ")
+    assert "under the 11 px floor" in line
 
 
 def test_an_earlier_item_that_code_cannot_find_is_listed_again(
     tmp_path: Path, project: Path
 ) -> None:
     fail = (
-        "image-1.png: Hint [colour]; image-1.png: the card sits left [judgement] "
+        "image-1.png: Hint [size]; image-1.png: the card sits left [judgement] "
         "Fix: use ink"
     )
     answer = good_answer(1).replace(
@@ -488,7 +468,7 @@ def test_an_earlier_item_that_code_cannot_find_is_listed_again(
     record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, NO_FACTS, answer)
     earlier = prompt.partition(EARLIER)[2]
     assert "image-1.png: the card sits left [judgement]" in earlier
-    assert "image-1.png: Hint [colour]" in earlier
+    assert "image-1.png: Hint [size]" in earlier
     assert "must not bring back another earlier finding" in prompt
     assert record["outcome"] == "clean"
 
@@ -497,7 +477,7 @@ def test_a_judgement_item_stays_on_the_list_when_a_measured_item_leaves_it(
     tmp_path: Path, project: Path
 ) -> None:
     fail = (
-        "image-1.png: Hint [colour]; image-1.png: the card sits left [judgement] "
+        "image-1.png: Hint [size]; image-1.png: the card sits left [judgement] "
         "Fix: use ink"
     )
     held = values(texts=[text_fact("Hint")])
@@ -507,7 +487,7 @@ def test_a_judgement_item_stays_on_the_list_when_a_measured_item_leaves_it(
     record, prompt = two_rounds(tmp_path, project, fail, OFF_TOKEN, held, answer)
     earlier = prompt.partition(EARLIER)[2]
     assert "image-1.png: the card sits left [judgement]" in earlier
-    assert "Hint [colour]" not in earlier
+    assert "Hint [size]" not in earlier
     assert record["outcome"] == "clean"
 
 
@@ -624,15 +604,15 @@ def test_the_second_item_of_a_list_survives_when_the_first_passes_in_code(
     assert record["outcome"] == "findings"
 
 
-def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_off_the_tokens(
+def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_for_a_touch_claim(
     tmp_path: Path,
 ) -> None:
     import look_facts
 
     measured = values(gaps=[{"at": "Save", "to": "Cancel", "px": -1, "axis": "y"}])
-    found = look_facts.verdict("gap", "Save to Cancel", measured, tokens_of(tmp_path))
-    assert found is not None
-    assert found[0] is True
+    claim = "chips touch"
+    tokens = tokens_of(tmp_path)
+    assert look_facts.verdict("gap", "Save to Cancel", measured, tokens, claim) is None
 
 
 def test_a_notice_is_for_the_images_to_review_and_the_newest_matching_record_ends_it(
@@ -684,10 +664,10 @@ def test_an_earlier_measured_item_of_an_image_that_is_not_in_this_run_is_not_lis
     (project / "DESIGN.md").write_text(DESIGN)
     commit(project, "inputs")
     images = make_images(project, 2)
-    off = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676", bg="#fff")])
+    off = values(texts=[text_fact("Hint", 10.5, under=True)])
     for image in images:
         ui_measure.write_record(project, image, 1280, [], "/kpi", measured=off)
-    both = "image-1.png: Hint [colour]; image-2.png: Hint [colour] Fix: use ink"
+    both = "image-1.png: Hint [size]; image-2.png: Hint [size] Fix: use ink"
     answer = answer_with(both).replace(
         "VERDICT: findings", "Image image-2.png: a card\nVERDICT: findings"
     )
@@ -727,7 +707,7 @@ def test_a_carried_image_does_not_hide_the_failing_image_that_shares_its_name(
     (project / "DESIGN.md").write_text(DESIGN)
     commit(project, "inputs")
     held, failing = make_images(project, 2)
-    off = values(texts=[text_fact("Hint", colour="767676ff", fg="#767676", bg="#fff")])
+    off = values(texts=[text_fact("Hint", 10.5, under=True)])
     ui_measure.write_record(project, held, 1280, [], "/kpi", measured=values())
     ui_measure.write_record(project, failing, 1280, [], "/kpi", measured=off)
     install_agent(tmp_path, "claude", 1, good_answer(1))
@@ -736,7 +716,7 @@ def test_a_carried_image_does_not_hide_the_failing_image_that_shares_its_name(
     ui_measure.write_record(project, held, 1280, [], "/kpi", measured=values())
     ui_measure.write_record(project, failing, 1280, [], "/kpi", measured=off)
     install_agent(
-        tmp_path, "claude", 1, answer_with("image-1.png: Hint [colour] Fix: use ink")
+        tmp_path, "claude", 1, answer_with("image-1.png: Hint [size] Fix: use ink")
     )
     assert run_look(project, "codex", [failing, held])["outcome"] == "findings"
     next_head(project)
@@ -746,7 +726,7 @@ def test_a_carried_image_does_not_hide_the_failing_image_that_shares_its_name(
     install_agent(tmp_path, "claude", 1, good_answer(1))
     record = run_look(project, "codex", [failing, held])
     assert record["outcome"] == "findings"
-    assert "Hint [colour] — code:" in stored_rule(record, "Design system")
+    assert "Hint [size] — code:" in stored_rule(record, "Design system")
 
 
 def test_an_earlier_item_of_an_image_that_a_later_clean_record_covers_is_not_listed(

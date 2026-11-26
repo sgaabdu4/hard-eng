@@ -225,7 +225,7 @@ def test_a_rule_with_measured_and_judgement_still_goes_to_the_reviewer(
     record = run_look(project, "codex", images)
     prompt = prompt_of(log)
     assert set(BOTH) <= set(prompt_rule_names(prompt))
-    assert "- Go: 6 px" in prompt
+    assert "radius keys: Go" in prompt
     for name in BOTH:
         assert "looked at it" in stored(record)[name]
 
@@ -392,19 +392,13 @@ def look_against_tokens(
     return run_look(project, "codex", images)
 
 
-def test_a_radius_outside_the_tokens_fails_design_system_in_code(
+def test_a_radius_outside_the_tokens_leaves_design_system_to_the_reviewer(
     tmp_path: Path, project: Path
 ) -> None:
     values: dict[str, object] = {"sizes": SIZES, "radii": RADII, "root_px": 16}
     record = look_against_tokens(tmp_path, project, TOKENS, values)
-    assert record["outcome"] == "findings"
-    found = OWNER_LINE.fullmatch(stored(record)["Design system"])
-    assert found
-    assert (found[2], found[3]) == ("Fail", "measured")
-    assert "corner radius 7 px" in found[4]
-    assert "text size" not in found[4]
-    for held in ("radius 8", "radius 11", "radius 5"):
-        assert held not in found[4]
+    assert record["outcome"] == "clean"
+    assert "looked at it" in stored(record)["Design system"]
 
 
 @pytest.mark.parametrize(
@@ -472,7 +466,9 @@ def test_the_prompt_says_that_code_decides_the_measured_rules(
     )
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "codex", images)
-    assert "Code already decides the measure findings" in prompt_of(log)
+    prompt = prompt_of(log)
+    assert "Code already decides the measure findings" in prompt
+    assert "DESIGN.md tokens" not in prompt
 
 
 def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
@@ -488,14 +484,15 @@ def test_a_reviewer_fail_that_a_code_fail_replaces_is_still_rechecked_next_run(
         "radii": [{"at": "badge", "px": 7, "clamped": False}],
         "root_px": 16,
     }
-    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
+    found: list[dict[str, object]] = [{"rule": "competing-buttons", "at": "page"}]
+    ui_measure.write_record(project, images[0], 1280, found, "/kpi", measured=values)
     answer = good_answer(1).replace(
-        "- Design system: Pass — looked at it",
-        "- Design system: Fail — image-1.png: a white label is no token. Fix: use paper.",
+        "- Hierarchy: Pass — looked at it",
+        "- Hierarchy: Fail — image-1.png: a white label is no token. Fix: use paper.",
     )
     install_agent(tmp_path, "claude", 1, answer)
     first = run_look(project, "codex", images)
-    assert stored(first)["Design system"].startswith("Design system: Fail — measured:")
+    assert stored(first)["Hierarchy"].startswith("Hierarchy: Fail — measured:")
     next_head(project)
     ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values)
     log = install_agent(tmp_path, "claude", 1, good_answer(1))

@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import look_records
-import pytest
 from look_facts import Tokens, tokens_from_text
 from test_look_facts import text_fact, tokens_of, values
 from test_look_keys import ZERO_DESIGN, judged_with_keys
@@ -157,7 +156,8 @@ def test_a_touch_claim_is_checked_against_the_gap_of_its_pair(tmp_path: Path) ->
             tokens_from_text(ZERO_DESIGN),
             GAPS,
         )
-        assert " — code: gap 11 px is not a spacing token" in kept, note
+        assert " — code:" not in kept, note
+        assert "Pass" not in kept, note
     refused = judged_with_keys(
         "image-1.png: the chips of Week to Month touch [judgement] Fix: space them",
         GAPS,
@@ -187,8 +187,7 @@ def test_two_elements_with_one_name_get_their_own_keys_and_verdicts(
     assert {"Save #1", "Save #2"} <= keys["size"]
     square = look_facts.verdict("radius", "Chip #1", measured, tokens, "square")
     round_ = look_facts.verdict("radius", "Chip #2", measured, tokens, "square")
-    assert square is not None
-    assert square[0] is False
+    assert square is None
     assert round_ is not None
     assert round_[0] is True
     small = look_facts.verdict("size", "Save #1", measured, tokens)
@@ -199,7 +198,9 @@ def test_two_elements_with_one_name_get_their_own_keys_and_verdicts(
     assert look_facts.verdict("size", "Save", measured, tokens) is None
     listed = look_facts.measured_text(measured, tokens)
     assert "- Save #1: 10.5 px" in listed
-    assert "- Chip #1: 0 px (square)" in listed
+    assert "Chip #1" in next(
+        line for line in listed.splitlines() if line.startswith("radius keys:")
+    )
 
 
 def test_a_square_claim_is_checked_against_the_corners_of_its_element(
@@ -212,37 +213,28 @@ def test_a_square_claim_is_checked_against_the_corners_of_its_element(
         "image-1.png: Chip C [radius] square Fix: round them."
     )
     found = decided(line, tokens)
-    assert (
-        "Chip A [radius] square — code: corner radius 0 px, square, and 0 is in no rounded token"
-        in found
-    )
-    assert "Chip B" not in found
-    assert "Chip C" not in found
-    assert "Other" not in found
-    allowed = decided(line, tokens_from_text(ZERO_DESIGN))
-    assert allowed == (
+    assert found == (
         "Design system: Fail — image-1.png: Chip A [radius] square Fix: round them."
     )
+    assert decided(line, tokens_from_text(ZERO_DESIGN)) == found
     only_b = decided(
         "Design system: Fail — image-1.png: Chip B [radius] square Fix: round them.",
         tokens,
     )
     assert only_b.startswith("Design system: Pass — code checked: ")
     assert "corner radii 6, 6, 6, 6 px, not square" in only_b
-    plain = decided(
-        "Design system: Fail — image-1.png: Chip A [radius] Fix: use a token.", tokens
-    )
-    assert plain.startswith("Design system: Pass — code checked: ")
-    assert "square, is not judged against the rounded tokens" in plain
+    stays = "Design system: Fail — image-1.png: Chip A [radius] Fix: use a token."
+    assert decided(stays, tokens) == stays
     for note in ("should be square", "is not square", "no longer square"):
         sentence = decided(
             f"Design system: Fail — image-1.png: Odd [radius] {note} Fix: use a token.",
             tokens,
         )
-        assert " — code: corner radius 7 px is not a rounded token" in sentence, note
+        assert " — code:" not in sentence, note
+        assert "Pass" not in sentence, note
 
 
-def test_a_square_row_never_counts_as_off_token_and_is_listed_last(
+def test_a_square_row_has_a_key_and_no_value_row_is_listed(
     tmp_path: Path,
 ) -> None:
     import look_facts
@@ -250,63 +242,14 @@ def test_a_square_row_never_counts_as_off_token_and_is_listed_last(
     tokens = tokens_of(tmp_path)
     listed = look_facts.measured_text(page(), tokens).splitlines()
     coverage = next(line for line in listed if line.startswith("radius: "))
-    assert coverage == (
-        "radius: checked for all 4 corner radii against 2 rounded tokens: "
-        "1 outside them; 1 square, judged only by a claim that the corners are square"
+    assert coverage.startswith(
+        "radius: code checks only a claim that corners are square, for "
     )
-    rows = [line for line in listed if line.startswith("- ") and "px" in line]
-    radius_rows = rows[rows.index("- Odd: 7 px") :]
-    assert radius_rows[-1] == "- Chip A: 0 px (square)"
-    assert not any(line.startswith("- no name: 0 px") for line in listed)
+    assert not any(line.startswith("- Chip A") for line in listed)
     keys = look_facts.item_keys(page(), tokens)["radius"]
     assert "Chip A" in keys
     assert "no name" not in keys
-    off = look_facts.verdict("radius", "Chip A", page(), tokens)
-    assert off is not None
-    assert off[0] is True
-
-
-@pytest.mark.parametrize(
-    "row",
-    [
-        {"at": "Go", "px": 0, "corners": [0, 0, 0, 0], "clamped": False},
-        {"at": "Go", "px": 0, "clamped": False},
-    ],
-)
-def test_a_square_control_adds_no_token_fault(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, row: dict[str, object]
-) -> None:
-    import look
-
-    (tmp_path / "DESIGN.md").write_text(
-        "---\nrounded:\n  sm: 4px\n  md: 6px\n---\n# Design\n"
-    )
-    measured = values(radii=[row, {"at": "Card", "px": 6, "clamped": False}])
-
-    def recorded(root: Path | None, digest: str) -> dict[str, object]:
-        return measured
-
-    monkeypatch.setattr(look, "recorded_measured", recorded)
-    assert look_records.token_fault(tmp_path, ["a" * 64]) == ""
-
-
-def test_a_code_failed_square_claim_is_still_failed_on_the_next_head(
-    tmp_path: Path,
-) -> None:
-    tokens = tokens_of(tmp_path)
-    first = decided(
-        "Design system: Fail — image-1.png: Chip A [radius] square Fix: round them.",
-        tokens,
-    )
-    assert "Chip A [radius] square — code: corner radius 0 px, square" in first
-    item = first.partition("Fail — ")[2].partition(" Fix:")[0]
-    kept, fails = look_records.earlier_split(
-        f"Design system: Fail — {item} Fix: round them.",
-        {"image-1.png": page()},
-        tokens,
-    )
-    assert fails == [item]
-    assert kept == ""
+    assert look_facts.verdict("radius", "Chip A", page(), tokens) is None
 
 
 def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -> None:
@@ -327,4 +270,4 @@ def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -
             f"{rule}: Fail — image-1.png: {item} Fix: change it.", tokens, measured
         )
         assert "Pass" not in found, item
-        assert " — code:" in found, item
+        assert (" — code:" in found) == (rule == "Alignment"), item

@@ -387,37 +387,8 @@ def stale_problem(
     return "; ".join(stale) or None
 
 
-def token_fault(root: Path, digests: list[str]) -> str:
-    """The measured corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, a record without the clamp field or the root size, and a token that is not a plain length give no verdict. Text sizes stay with the reviewer, because fluid type and a changed root size make a rendered size inexact."""
-    import look
-    from look_facts import corners_of, design_tokens, length_scale
-
-    tokens = design_tokens(root).rounded
-    faults: list[str] = []
-    for digest in digests if tokens else []:
-        values = look.recorded_measured(root, digest) or {}
-        base = values.get("root_px")
-        held = (
-            length_scale(tokens, float(base))
-            if isinstance(base, int | float) and not isinstance(base, bool)
-            else None
-        )
-        if held is None:
-            continue
-        for item in cast(list[dict[str, object]], values.get("radii", [])):
-            for px in sorted({corner for corner in corners_of(item) if corner}):
-                text = f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(held)))} px)"
-                if (
-                    item.get("clamped") is False
-                    and px not in held
-                    and text not in faults
-                ):
-                    faults.append(text)
-    return "; ".join(faults) + "; use a token or add it to DESIGN.md" if faults else ""
-
-
 def code_fails(root: Path, head: str, digests: list[str]) -> dict[str, str]:
-    """A Fail text for each judged rule that code decides: a measure finding of a rule that owns it, and the token fault of Design system. A rule without a fault is absent, so the reviewer's line for it stands."""
+    """A Fail text for each judged rule that code decides: a measure finding of a rule that owns it. A rule without a fault is absent, so the reviewer's line for it stands."""
     from ui_measure import FINDING_RULES
     from ui_proof import measure_found
 
@@ -435,8 +406,6 @@ def code_fails(root: Path, head: str, digests: list[str]) -> dict[str, str]:
         rule: "; ".join(texts) + "; fix the screen and capture it again"
         for rule, texts in found.items()
     }
-    if fault := token_fault(root, digests):
-        fails["Design system"] = fault
     return fails
 
 

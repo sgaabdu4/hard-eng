@@ -247,7 +247,7 @@ def test_the_dispute_prompt_holds_only_the_item_the_image_and_the_cited_bytes(
         "then `Relies on: cite <n> line <k>`, `Relies on: measured` or `Relies on: none`."
         f"\n\nFail item:\n{item}\n\nCited lines (the repository at HEAD):\n"
         "[cite 1] src/form.ts lines 2-3\n2:   email: (value: string) => value.length >= 0,\n3: };"
-        "\n\nMeasured facts of Chip:\n- radius: corner radius 6 px is a rounded token"
+        "\n\nMeasured facts of Chip:\n- radius: corner radius 6 px"
     )
 
 

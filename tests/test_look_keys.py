@@ -1,4 +1,4 @@
-"""Code decides weight, alignment, the zero token and every measured look item from an exact key; an item with no key is refused by form."""
+"""Code decides weight, alignment and every measured look item from an exact key; an item with no key is refused by form."""
 
 from pathlib import Path
 
@@ -9,22 +9,6 @@ ZERO_DESIGN = (
     "---\ncolors:\n  ink: '#1a1a1a'\nspacing:\n  none: 0\n  sm: 8px\n"
     "rounded:\n  none: 0\n  sm: 4px\n---\n# Design\n"
 )
-
-
-def test_a_zero_token_is_a_length_and_keeps_the_other_verdicts() -> None:
-    import look_facts
-
-    tokens = look_facts.tokens_from_text(ZERO_DESIGN)
-    assert look_facts.length_scale(tokens.rounded, 16) == {0, 4}
-    assert look_facts.length_scale(tokens.spacing, 16) == {0, 8}
-    radius = values(radii=[{"at": "Save", "px": 5, "clamped": False}])
-    gap = values(gaps=[{"at": "Save", "to": "Cancel", "px": 5, "axis": "y"}])
-    off_radius = look_facts.verdict("radius", "Save", radius, tokens)
-    off_gap = look_facts.verdict("gap", "Save to Cancel", gap, tokens)
-    assert off_radius is not None
-    assert off_radius[0] is False
-    assert off_gap is not None
-    assert off_gap[0] is False
 
 
 def counter(
@@ -87,10 +71,8 @@ def test_code_decides_text_alignment(tmp_path: Path) -> None:
     assert middle[0] is True
     assert look_facts.verdict("align", "Old line", measured, tokens) is None
     listed = look_facts.measured_text(measured, tokens)
-    assert "- Intro line: 14 px, weight 400, align start, colour" in listed
-    assert (
-        "- Section title: 20 px, weight 400, align center (centred), colour" in listed
-    )
+    assert "- Intro line: 14 px, weight 400, align start" in listed
+    assert "- Section title: 20 px, weight 400, align center (centred)" in listed
     assert (
         "align: checked for all 2 text elements: 1 not centred in their parent"
         in listed
@@ -177,6 +159,9 @@ def test_a_measured_item_is_decided_from_its_exact_key(tmp_path: Path) -> None:
         assert item is not None
         assert item.element == key
         found = look_facts.verdict(kind, key, measured, tokens)
+        if kind == "gap":
+            assert found is None
+            continue
         assert found is not None
         assert found[0] is False
     assert look_facts.verdict("size", "Save button", measured, tokens) is None
@@ -317,32 +302,22 @@ PROOF_FRAMES: dict[str, dict[str, object] | None] = dict.fromkeys(
 )
 
 
-def listed_keys(tokens: Tokens) -> set[str]:
-    import look_facts
-
-    text = look_facts.measured_text(RELEASE_PROOF, tokens)
-    return {
-        line[2:].split(": ", 1)[0]
-        for line in text.splitlines()
-        if line.startswith("- ")
-    }
-
-
-def test_the_real_items_of_the_release_proof_are_decided_from_keys(
+def test_the_real_items_of_the_release_proof_stay_with_the_reviewer_when_only_a_token_list_is_claimed(
     tmp_path: Path,
 ) -> None:
+    import look_facts
     import look_records
 
     tokens = tokens_of(tmp_path)
-    keys = listed_keys(tokens)
+    keys = look_facts.item_keys(RELEASE_PROOF, tokens)
     gap_keys = [
         "Rescheduled from 05 45 to Forms needed",
         "A helper sentence to Send notes",
         "THU 26 Nov to 10 00 GMT",
     ]
     colour_keys = ["Rescheduled from 05 45", "Round", "26 Nov"]
-    assert set(gap_keys) <= keys
-    assert set(colour_keys) <= keys
+    assert set(gap_keys) <= keys["gap"]
+    assert keys["colour"] == frozenset()
     spacing = (
         "Spacing: Fail — "
         + "; ".join(
@@ -361,29 +336,26 @@ def test_the_real_items_of_the_release_proof_are_decided_from_keys(
         )
         + ". Fix: use a token."
     )
-    decided = look_records.decide_line(spacing, PROOF_FRAMES, tokens)
-    assert decided.count(" — code: ") == 6
-    assert "gap 18 px is not a spacing token" in decided
-    decided = look_records.decide_line(colour, PROOF_FRAMES, tokens)
-    assert decided.count(" — code: ") == 9
-    assert "is not in the colour tokens" in decided
+    assert look_records.decide_line(spacing, PROOF_FRAMES, tokens) == spacing
+    assert look_records.decide_line(colour, PROOF_FRAMES, tokens) == colour
 
 
 def test_the_counter_and_the_centred_items_are_decided_by_code(tmp_path: Path) -> None:
+    import look_facts
     import look_records
 
     tokens = tokens_of(tmp_path)
-    assert {"Round to 5", "5 to /36"} <= listed_keys(tokens)
+    assert {"Round to 5", "5 to /36"} <= look_facts.item_keys(
+        PROOF_FRAMES["image-1.png"] or {}, tokens
+    )["gap"]
     counter_line = (
         "Spacing: Fail — image-1.png: 5 [weight] bolder than Round and /36; "
         "image-1.png: Round to 5 [gap] uneven against 5 to /36. Fix: even them."
     )
     decided = look_records.decide_line(counter_line, PROOF_FRAMES, tokens)
     assert "5 [weight]" not in decided
-    assert (
-        "image-1.png: Round to 5 [gap] — code: gap 6 px is not a spacing token"
-        in decided
-    )
+    assert "image-1.png: Round to 5 [gap] uneven against 5 to /36" in decided
+    assert " — code: gap" not in decided
     centred_line = (
         "Alignment: Fail — image-1.png: Guides intro [align] sits on the left edge; "
         "image-1.png: Section title [align] not centred. Fix: centre the intro."
@@ -483,24 +455,25 @@ def test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused(
     assert outcome.startswith("not done: `image-1.png: Edit [tap]`")
 
 
-def test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key() -> None:
+def test_a_gap_is_listed_by_its_key_only_and_no_colour_has_a_key() -> None:
     import look_facts
 
     tokens = look_facts.tokens_from_text(
         "---\ncolors:\n  ink: '#1a1a1a'\n---\n# Design\n"
     )
     measured = values(
+        texts=[text_fact("Place order", 14)],
         gaps=[{"at": "Place order", "to": "Cancel", "px": 4, "axis": "x"}],
         sizes={"controls": [control("Place order", 96, 32)]},
     )
     listed = look_facts.measured_text(measured, tokens).splitlines()
-    gap = [line for line in listed if line.startswith("- Place order to Cancel")]
+    assert "gap keys: Place order to Cancel" in listed
+    assert not [line for line in listed if line.startswith("- Place order to")]
     tap = [line for line in listed if line.startswith("- Place order:")]
-    assert len(gap) == 1
-    assert "no key" in gap[0]
-    assert len(tap) == 1
-    assert "no key" not in tap[0]
-    assert look_facts.item_keys(measured, tokens)["gap"] == frozenset()
+    assert len(tap) == 2
+    keys = look_facts.item_keys(measured, tokens)
+    assert keys["gap"] == frozenset({"Place order to Cancel"})
+    assert keys["colour"] == frozenset()
 
 
 def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
@@ -530,7 +503,7 @@ def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
     assert " Settings |" not in f" {align[0]} |"
 
 
-def test_a_failing_key_leads_the_colour_keys_even_on_a_long_page(
+def test_a_text_off_every_token_list_gets_no_colour_key_on_a_long_page(
     tmp_path: Path,
 ) -> None:
     import look_facts
@@ -545,10 +518,8 @@ def test_a_failing_key_leads_the_colour_keys_even_on_a_long_page(
         ]
     )
     listed = look_facts.measured_text(measured, tokens).splitlines()
-    colour = [line for line in listed if line.startswith("colour keys:")]
     align = [line for line in listed if line.startswith("align keys:")]
-    assert len(colour) == 1
-    assert colour[0].startswith("colour keys: Zed total | ")
+    assert not [line for line in listed if line.startswith("colour keys:")]
     assert len(align) == 1
     assert "Zed title" in align[0]
     assert "more keys" not in align[0]
