@@ -3,6 +3,7 @@
 import importlib.util
 import os
 import subprocess
+from argparse import Namespace
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -189,3 +190,28 @@ def test_a_missing_uv_is_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(OSError, match="uv"):
         tool_setup.ensure_python_runtime()
+
+
+def test_ship_loads_the_yaml_runtime_before_it_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deliver
+    import ship_actions
+
+    calls: list[str] = []
+    monkeypatch.setattr(tool_setup, "ensure_python_runtime", lambda: calls.append("."))
+
+    def run(*arguments: object) -> int:
+        return 0
+
+    monkeypatch.setattr(ship_actions, "run", run)
+    args = Namespace(
+        command="ship",
+        plan="PLAN.md",
+        pr="",
+        stage="ready",
+        worktree="",
+        merge_method="",
+    )
+    assert deliver.deliver(SOURCE, args, lambda: 0) == 0
+    assert calls == ["."]

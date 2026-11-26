@@ -99,7 +99,7 @@ def test_a_carried_record_still_backs_the_head_after_the_base_changes_design_md(
     assert ui_proof.look_problem(project, new, block, after, plan_rel, digest) is None
 
 
-def test_a_carried_record_reads_the_tokens_of_its_own_revision_not_the_checkout(
+def test_a_carried_record_reads_the_design_of_its_own_revision_not_the_checkout(
     tmp_path: Path, project: Path
 ) -> None:
     import look_records

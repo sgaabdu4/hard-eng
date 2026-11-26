@@ -511,12 +511,12 @@ def test_the_prompt_gives_the_reviewer_the_measured_values_of_each_image(
     ui_measure.write_record(project, images[1], 1280, [])
     run_look(project, "codex", images)
     prompt = " ".join(json.loads(log.read_text())["argv"])
-    assert "- Go: 6 px" in prompt
+    assert "radius keys: Go" in prompt
     assert "A measured value beats an eye estimate" in prompt
     assert "never fail a rule against a measured pass" in prompt
     assert "image-1.png:\ntext size: checked for all 1 text elements" in prompt
     assert "contrast 6.37:1" in prompt
-    assert "- Intro to Go: 14 px (y)" in prompt
+    assert "gap keys: Intro to Go" in prompt
     assert "- Go: 120x44 px" in prompt
     assert "image-2.png:\ntext size" not in prompt
 

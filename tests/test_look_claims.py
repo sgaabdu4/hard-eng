@@ -3,10 +3,8 @@
 from pathlib import Path
 
 import look_records
-import pytest
-from look_facts import Tokens, tokens_from_text
-from test_look_facts import text_fact, tokens_of, values
-from test_look_keys import ZERO_DESIGN, judged_with_keys
+from test_look_facts import text_fact, values
+from test_look_keys import judged_with_keys
 
 CHIPS = [
     {"at": "Chip A", "px": 0, "corners": [0, 0, 0, 0], "clamped": False},
@@ -28,14 +26,11 @@ def page() -> dict[str, object]:
     )
 
 
-def decided(
-    line: str, tokens: Tokens, measured: dict[str, object] | None = None
-) -> str:
-    return look_records.decide_line(line, {"image-1.png": measured or page()}, tokens)
+def decided(line: str, measured: dict[str, object] | None = None) -> str:
+    return look_records.decide_line(line, {"image-1.png": measured or page()})
 
 
 def test_a_claim_about_a_keyed_element_must_be_a_measured_item(tmp_path: Path) -> None:
-    tokens = tokens_of(tmp_path)
     refused = [
         "image-1.png: the Header line is centred [judgement] Fix: left-align it",
         "image-1.png: Header line is not centred [judgement] Fix: centre it",
@@ -45,14 +40,14 @@ def test_a_claim_about_a_keyed_element_must_be_a_measured_item(tmp_path: Path) -
         "image-1.png: Chip A squared off [judgement] Fix: round it",
     ]
     for item in refused:
-        outcome, rules = judged_with_keys(item, page(), tokens)
+        outcome, rules = judged_with_keys(item, page())
         assert outcome.startswith("not done: "), item
         assert "states a claim about a measured element" in outcome, item
         assert rules == [], item
-    named = judged_with_keys(refused[0], page(), tokens)[0]
+    named = judged_with_keys(refused[0], page())[0]
     assert "image-1.png: Header line [align] <note>" in named
     assert "Start the note with the claim, such as `centred`" in named
-    named = judged_with_keys(refused[3], page(), tokens)[0]
+    named = judged_with_keys(refused[3], page())[0]
     assert "image-1.png: Chip A [radius] <note>" in named
     assert "Start the note with the claim, such as `square corners`" in named
     stays = [
@@ -73,39 +68,34 @@ def test_a_claim_about_a_keyed_element_must_be_a_measured_item(tmp_path: Path) -
         "image-1.png: Odd [radius] should be square Fix: round it",
     ]
     for item in stays:
-        outcome, rules = judged_with_keys(item, page(), tokens)
+        outcome, rules = judged_with_keys(item, page())
         assert outcome == "findings", item
         assert any(line.startswith("Design system: Fail") for line in rules), item
 
 
 def test_a_centred_claim_is_checked_in_its_own_direction(tmp_path: Path) -> None:
-    tokens = tokens_of(tmp_path)
     disproved = decided(
         "Alignment: Fail — image-1.png: Header line [align] centred Fix: left-align it.",
-        tokens,
     )
     assert disproved.startswith("Alignment: Pass — code checked: ")
     assert "text-align start, not centred in its parent" in disproved
     stands = "Alignment: Fail — image-1.png: Section title [align] centred Fix: left-align it."
-    assert decided(stands, tokens) == stands
+    assert decided(stands) == stands
     old_claim = decided(
         "Alignment: Fail — image-1.png: Header line [align] not centred Fix: centre it.",
-        tokens,
     )
     assert old_claim.startswith("Alignment: Fail — image-1.png: Header line [align]")
     assert " — code: text-align start, not centred in its parent" in old_claim
     plain = decided(
-        "Alignment: Fail — image-1.png: Header line [align] Fix: centre it.", tokens
+        "Alignment: Fail — image-1.png: Header line [align] Fix: centre it."
     )
     assert " — code: text-align start, not centred in its parent" in plain
     held = decided(
         "Alignment: Fail — image-1.png: Section title [align] not centred Fix: centre it.",
-        tokens,
     )
     assert held.startswith("Alignment: Pass — code checked: ")
     phrase = decided(
         "Alignment: Fail — image-1.png: Header line [align] the header line is centred Fix: left-align it.",
-        tokens,
     )
     assert phrase.startswith("Alignment: Pass — code checked: ")
     for note in (
@@ -116,7 +106,6 @@ def test_a_centred_claim_is_checked_in_its_own_direction(tmp_path: Path) -> None
     ):
         sentence = decided(
             f"Alignment: Fail — image-1.png: Header line [align] {note} Fix: centre it.",
-            tokens,
         )
         assert " — code: text-align start, not centred in its parent" in sentence, note
         assert "Pass" not in sentence, note
@@ -132,14 +121,12 @@ GAPS = values(
 
 
 def test_a_touch_claim_is_checked_against_the_gap_of_its_pair(tmp_path: Path) -> None:
-    tokens = tokens_from_text(ZERO_DESIGN.replace("sm: 8px", "sm: 8px\n  odd: 11px"))
     stands = (
         "Spacing: Fail — image-1.png: Week to Month [gap] chips touch Fix: space them."
     )
-    assert decided(stands, tokens, GAPS) == stands
+    assert decided(stands, GAPS) == stands
     apart = decided(
         "Spacing: Fail — image-1.png: Month to Year [gap] chips touch Fix: join them.",
-        tokens,
         GAPS,
     )
     assert apart.startswith("Spacing: Pass — code checked: ")
@@ -147,21 +134,19 @@ def test_a_touch_claim_is_checked_against_the_gap_of_its_pair(tmp_path: Path) ->
     for note in ("the chips touch", "touching"):
         found = decided(
             f"Spacing: Fail — image-1.png: Month to Year [gap] {note} Fix: join them.",
-            tokens,
             GAPS,
         )
         assert found.startswith("Spacing: Pass — code checked: "), note
     for note in ("should touch", "don't touch", "not touching", ""):
         kept = decided(
             f"Spacing: Fail — image-1.png: Year to Spare [gap] {note} Fix: use a token.",
-            tokens_from_text(ZERO_DESIGN),
             GAPS,
         )
-        assert " — code: gap 11 px is not a spacing token" in kept, note
+        assert " — code:" not in kept, note
+        assert "Pass" not in kept, note
     refused = judged_with_keys(
         "image-1.png: the chips of Week to Month touch [judgement] Fix: space them",
         GAPS,
-        tokens,
     )
     assert refused[0].startswith("not done: "), refused
     assert "Start the note with the claim" in refused[0]
@@ -172,7 +157,6 @@ def test_two_elements_with_one_name_get_their_own_keys_and_verdicts(
 ) -> None:
     import look_facts
 
-    tokens = tokens_of(tmp_path)
     measured = values(
         radii=[
             {"at": "Chip", "px": 0, "corners": [0, 0, 0, 0], "clamped": False},
@@ -181,136 +165,73 @@ def test_two_elements_with_one_name_get_their_own_keys_and_verdicts(
         ],
         texts=[text_fact("Save", 10.5, under=True), text_fact("Save", 14)],
     )
-    keys = look_facts.item_keys(measured, tokens)
+    keys = look_facts.item_keys(measured)
     assert {"Chip #1", "Chip #2", "Solo"} <= keys["radius"]
     assert "Chip" not in keys["radius"]
     assert {"Save #1", "Save #2"} <= keys["size"]
-    square = look_facts.verdict("radius", "Chip #1", measured, tokens, "square")
-    round_ = look_facts.verdict("radius", "Chip #2", measured, tokens, "square")
-    assert square is not None
-    assert square[0] is False
+    square = look_facts.verdict("radius", "Chip #1", measured, "square")
+    round_ = look_facts.verdict("radius", "Chip #2", measured, "square")
+    assert square is None
     assert round_ is not None
     assert round_[0] is True
-    small = look_facts.verdict("size", "Save #1", measured, tokens)
-    big = look_facts.verdict("size", "Save #2", measured, tokens)
+    small = look_facts.verdict("size", "Save #1", measured)
+    big = look_facts.verdict("size", "Save #2", measured)
     assert small is not None
     assert big is not None
     assert (small[0], big[0]) == (False, True)
-    assert look_facts.verdict("size", "Save", measured, tokens) is None
-    listed = look_facts.measured_text(measured, tokens)
+    assert look_facts.verdict("size", "Save", measured) is None
+    listed = look_facts.measured_text(measured)
     assert "- Save #1: 10.5 px" in listed
-    assert "- Chip #1: 0 px (square)" in listed
+    assert "Chip #1" in next(
+        line for line in listed.splitlines() if line.startswith("radius keys:")
+    )
 
 
 def test_a_square_claim_is_checked_against_the_corners_of_its_element(
     tmp_path: Path,
 ) -> None:
-    tokens = tokens_of(tmp_path)
     line = (
         "Design system: Fail — image-1.png: Chip A [radius] square; "
         "image-1.png: Chip B [radius] square corners; "
         "image-1.png: Chip C [radius] square Fix: round them."
     )
-    found = decided(line, tokens)
-    assert (
-        "Chip A [radius] square — code: corner radius 0 px, square, and 0 is in no rounded token"
-        in found
-    )
-    assert "Chip B" not in found
-    assert "Chip C" not in found
-    assert "Other" not in found
-    allowed = decided(line, tokens_from_text(ZERO_DESIGN))
-    assert allowed == (
+    found = decided(line)
+    assert found == (
         "Design system: Fail — image-1.png: Chip A [radius] square Fix: round them."
     )
     only_b = decided(
         "Design system: Fail — image-1.png: Chip B [radius] square Fix: round them.",
-        tokens,
     )
     assert only_b.startswith("Design system: Pass — code checked: ")
     assert "corner radii 6, 6, 6, 6 px, not square" in only_b
-    plain = decided(
-        "Design system: Fail — image-1.png: Chip A [radius] Fix: use a token.", tokens
-    )
-    assert plain.startswith("Design system: Pass — code checked: ")
-    assert "square, is not judged against the rounded tokens" in plain
+    stays = "Design system: Fail — image-1.png: Chip A [radius] Fix: use a token."
+    assert decided(stays) == stays
     for note in ("should be square", "is not square", "no longer square"):
         sentence = decided(
             f"Design system: Fail — image-1.png: Odd [radius] {note} Fix: use a token.",
-            tokens,
         )
-        assert " — code: corner radius 7 px is not a rounded token" in sentence, note
+        assert " — code:" not in sentence, note
+        assert "Pass" not in sentence, note
 
 
-def test_a_square_row_never_counts_as_off_token_and_is_listed_last(
+def test_a_square_row_has_a_key_and_no_value_row_is_listed(
     tmp_path: Path,
 ) -> None:
     import look_facts
 
-    tokens = tokens_of(tmp_path)
-    listed = look_facts.measured_text(page(), tokens).splitlines()
+    listed = look_facts.measured_text(page()).splitlines()
     coverage = next(line for line in listed if line.startswith("radius: "))
-    assert coverage == (
-        "radius: checked for all 4 corner radii against 2 rounded tokens: "
-        "1 outside them; 1 square, judged only by a claim that the corners are square"
+    assert coverage.startswith(
+        "radius: code checks only a claim that corners are square, for "
     )
-    rows = [line for line in listed if line.startswith("- ") and "px" in line]
-    radius_rows = rows[rows.index("- Odd: 7 px") :]
-    assert radius_rows[-1] == "- Chip A: 0 px (square)"
-    assert not any(line.startswith("- no name: 0 px") for line in listed)
-    keys = look_facts.item_keys(page(), tokens)["radius"]
+    assert not any(line.startswith("- Chip A") for line in listed)
+    keys = look_facts.item_keys(page())["radius"]
     assert "Chip A" in keys
     assert "no name" not in keys
-    off = look_facts.verdict("radius", "Chip A", page(), tokens)
-    assert off is not None
-    assert off[0] is True
-
-
-@pytest.mark.parametrize(
-    "row",
-    [
-        {"at": "Go", "px": 0, "corners": [0, 0, 0, 0], "clamped": False},
-        {"at": "Go", "px": 0, "clamped": False},
-    ],
-)
-def test_a_square_control_adds_no_token_fault(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, row: dict[str, object]
-) -> None:
-    import look
-
-    (tmp_path / "DESIGN.md").write_text(
-        "---\nrounded:\n  sm: 4px\n  md: 6px\n---\n# Design\n"
-    )
-    measured = values(radii=[row, {"at": "Card", "px": 6, "clamped": False}])
-
-    def recorded(root: Path | None, digest: str) -> dict[str, object]:
-        return measured
-
-    monkeypatch.setattr(look, "recorded_measured", recorded)
-    assert look_records.token_fault(tmp_path, ["a" * 64]) == ""
-
-
-def test_a_code_failed_square_claim_is_still_failed_on_the_next_head(
-    tmp_path: Path,
-) -> None:
-    tokens = tokens_of(tmp_path)
-    first = decided(
-        "Design system: Fail — image-1.png: Chip A [radius] square Fix: round them.",
-        tokens,
-    )
-    assert "Chip A [radius] square — code: corner radius 0 px, square" in first
-    item = first.partition("Fail — ")[2].partition(" Fix:")[0]
-    kept, fails = look_records.earlier_split(
-        f"Design system: Fail — {item} Fix: round them.",
-        {"image-1.png": page()},
-        tokens,
-    )
-    assert fails == [item]
-    assert kept == ""
+    assert look_facts.verdict("radius", "Chip A", page()) is None
 
 
 def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -> None:
-    tokens = tokens_from_text(ZERO_DESIGN)
     measured = values(
         texts=[text_fact("Header line", 14, align="start", centred=False)],
         gaps=[{"at": "Year", "to": "Spare", "px": 11, "axis": "x"}],
@@ -323,8 +244,6 @@ def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -
         ("Spacing", "Year to Spare [gap] don’t touch"),
         ("Design system", "Odd [radius] isn’t square"),
     ):
-        found = decided(
-            f"{rule}: Fail — image-1.png: {item} Fix: change it.", tokens, measured
-        )
+        found = decided(f"{rule}: Fail — image-1.png: {item} Fix: change it.", measured)
         assert "Pass" not in found, item
-        assert " — code:" in found, item
+        assert (" — code:" in found) == (rule == "Alignment"), item

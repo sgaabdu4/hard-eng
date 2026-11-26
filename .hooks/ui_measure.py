@@ -40,9 +40,9 @@ PROOF_KINDS = {
 }
 ITEM_KINDS = {
     "size": f"the rendered text size against the {LIMITS['text_px']} px floor",
-    "colour": "the text colour and its fill against the DESIGN.md colour tokens",
-    "gap": "the gap between two neighbours against the DESIGN.md spacing tokens; a claim that the neighbours touch opens its note after the tag with that claim, such as chips touch",
-    "radius": "the corner radius against the DESIGN.md rounded tokens; a claim that the corners are square opens its note after the tag with that claim, such as square corners",
+    "colour": "not checked in code: tag a colour item [judgement] and name no colour value",
+    "gap": "a claim that two neighbours touch, which opens its note after the tag with that claim, such as chips touch; any other gap item is judgement",
+    "radius": "a claim that the corners are square, which opens its note after the tag with that claim, such as square corners; any other radius item is judgement",
     "tap": "the control size against its tap floor",
     "weight": "a claim that the element is bolder or lighter than named elements, which opens its note after the tag with bolder than or lighter than; a weight that is only unlike a neighbour is judgement",
     "align": "whether the text is centred in its parent: a claim that it is not (the default), or, when the note after the tag opens with the claim centred, a claim that it is; any other alignment claim is judgement",
