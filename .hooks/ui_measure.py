@@ -40,11 +40,11 @@ PROOF_KINDS = {
 ITEM_KINDS = {
     "size": f"the rendered text size against the {LIMITS['text_px']} px floor",
     "colour": "the text colour and its fill against the DESIGN.md colour tokens",
-    "gap": "the gap between two neighbours against the DESIGN.md spacing tokens",
-    "radius": "the corner radius against the DESIGN.md rounded tokens; a claim that the corners are square starts its note after the tag with the word square",
+    "gap": "the gap between two neighbours against the DESIGN.md spacing tokens; a claim that the neighbours touch opens its note after the tag with that claim, such as chips touch",
+    "radius": "the corner radius against the DESIGN.md rounded tokens; a claim that the corners are square opens its note after the tag with that claim, such as square corners",
     "tap": "the control size against its tap floor",
     "weight": "the text weight against the weight of its neighbours in the same row",
-    "align": "whether the text is centred in its parent: a claim that it is not (the default), or, with the word centred as the first word of the note after the tag, a claim that it is; any other alignment claim is judgement",
+    "align": "whether the text is centred in its parent: a claim that it is not (the default), or, when the note after the tag opens with the claim centred, a claim that it is; any other alignment claim is judgement",
     "judgement": "anything else: placement, any other alignment or weight claim, line count, wording",
 }
 MEASURED_KINDS = frozenset(ITEM_KINDS) - {"judgement"}

@@ -656,7 +656,13 @@ def run(root: Path, argv: list[str]) -> int:
     """The launcher's entry for `browser` and for `look`, which shares its fast start."""
     if argv[0] == "look":
         from look import look_main
+        from tool_setup import ensure_python_runtime
 
+        try:
+            ensure_python_runtime()
+        except FileNotFoundError as error:
+            print(f"Hard Eng: {error}", file=sys.stderr)
+            return 1
         return look_main(root, argv[1:])
     return browser_command(root, argv[1:])
 
