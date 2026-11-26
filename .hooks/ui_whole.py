@@ -95,10 +95,10 @@ def judged_names(root: Path, texts: dict[str, str], ui_paths: list[str]) -> list
 
 
 TOKEN_BLOCK = re.compile(
-    r"\s*(?:@media[^{}]*\{\s*)?(?::root|@theme(?:\s+\w+)?)\s*\{(?:\s*--[\w-]+\s*:[^;{}]*;)*\s*\}"
+    r"\s*(?:@media[^{}]*\{\s*)?(?::root|@theme(?:\s+\w+)?)\s*\{"
+    r"(?:\s*(?:--[\w-]+\s*:[^;{}]*|--(?:[\w-]+-)?\*\s*:\s*initial)\s*;)*\s*\}"
     r"(?:\s*\})?"
 )
-CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 CSS_IMPORT = re.compile(r"@import[^;]*;")
 THEME_COLOUR = re.compile(r"--color-([\w-]+)\s*:")
 THEME_BLOCK = re.compile(r"@theme[^{]*\{([^}]*)\}")
@@ -108,7 +108,7 @@ CONFIG_VALUE_END = re.compile(r"[,\n}]")
 def only_custom_properties(name: str, text: str) -> bool:
     if not name.endswith(STYLE_SUFFIXES):
         return False
-    rest = CSS_IMPORT.sub("", CSS_COMMENT.sub("", text))
+    rest = CSS_IMPORT.sub("", code_of(text))
     return bool(rest.strip()) and not TOKEN_BLOCK.sub("", rest).strip()
 
 
