@@ -45,7 +45,7 @@ Decisions made here, each with a reason:
 - [x] The prompt names the kinds and what they cover from the one table → `tests/test_look_facts.py::test_the_prompt_lists_the_kinds_from_the_one_table`
 - [x] Code decides each measured kind, with one known fault and one known pass for each → `tests/test_look_facts.py::test_code_decides_each_measured_kind`
 - [x] An ambiguous, short, unknown or unmatched element stays with the reviewer → `tests/test_look_facts.py::test_an_item_that_code_cannot_match_stays_with_the_reviewer`
-- [x] A colour token with alpha matches the raw colour of the element → `tests/test_look_facts.py::test_a_colour_token_with_alpha_matches_the_raw_colour`
+- [x] A colour value that a token list lacks is never decided in code → `tests/test_look_facts.py::test_a_value_that_a_token_list_lacks_is_never_decided_in_code`
 - [x] The other items of a line stay, and a line whose items all pass in code becomes a Pass → `tests/test_look_facts.py::test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass`
 - [x] An earlier measured item is decided by code and not listed; an earlier true colour Fail stays a Fail when the reviewer says nothing; an earlier false item never returns → `tests/test_look_facts.py::test_an_earlier_measured_item_is_decided_by_code_before_the_prompt`
 - [x] An earlier measured item that code cannot find stays on the recheck list; judgement items stay there → `tests/test_look_facts.py::test_an_earlier_item_that_code_cannot_find_is_listed_again`
