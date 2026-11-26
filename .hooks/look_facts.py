@@ -428,7 +428,14 @@ def _weight_claim(
         if not key:
             break
         named.append(key)
-        rest = re.sub(r"^\s*(?:,|&|\band\b|\bor\b)?\s*", "", rest[len(key) :]).strip()
+        joined = re.match(
+            r"\s*(?:,\s*(?:(?:and|or)\s+)?|&\s*|(?:and|or)\s+)",
+            rest[len(key) :],
+            re.IGNORECASE,
+        )
+        if not joined:
+            break
+        rest = rest[len(key) + joined.end() :]
     for key in named:
         beats = (
             weights[element] > weights[key]

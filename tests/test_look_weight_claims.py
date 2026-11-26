@@ -66,6 +66,8 @@ def test_a_claim_names_only_the_elements_that_open_its_note() -> None:
         "bolder than Helper, matching Twin",
         "bolder than Helper under Twin",
         "bolder than Helper across all cards",
+        "bolder than Helper label",
+        "bolder than Helper twin",
     ):
         assert look_facts.verdict("weight", "Label", PAGE, note) is None, note
     for note in ("bolder than Helper and Twin", "bolder than Helper, Twin"):
