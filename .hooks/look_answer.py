@@ -227,42 +227,52 @@ def with_note(part: str, note: str) -> str:
 
 
 def claimed_line(line: str) -> tuple[str, str]:
-    """A Fail line in which each part holds its own claim, and the text of the first part that has none. A note that is only `same` takes the note of the nearest earlier part with its own claim, whatever its element. An empty note of a judgement item takes the note of the next judgement part with a claim and the same element, the live shape `Decline [judgement]; Decline [judgement] the claim`; any other empty note is the claim of its element text. Any other note, such as `same missing the asterisk`, stays. A `same` part with no earlier claim to take is named, because it points at nothing and cannot be disputed."""
+    """A Fail line in which each part holds its own claim, and the text of the first part that has none. A claim is a note with a letter or digit that is not only `same`. A `same` part takes the claim of the part right before it, whatever its element, and that claim may itself be filled. An empty note of a judgement item takes the claim of the part right after it, only when that part has the same element, and that claim may itself be filled. Any other note, such as `same missing the asterisk`, stays. An empty note that has no match is the claim of its element text. A `same` part that has no claim to take is named, because it points at nothing and cannot be disputed."""
     parts, fix = fail_parts(line)
     items = [part_item(part)[1] for part in parts]
 
     def own(item: Item | None) -> bool:
-        return item is not None and bool(item.note) and not is_same(item.note)
+        return (
+            item is not None
+            and re.search(r"\w", item.note) is not None
+            and not is_same(item.note)
+        )
 
     def folded(text: str) -> str:
         return " ".join(text.split()).lower()
 
-    kept: list[str] = []
-    missing = ""
-    for number, (part, item) in enumerate(zip(parts, items, strict=True)):
-        if item is not None and not own(item):
-            lead = None
+    claims: list[str | None] = [item.note if own(item) else None for item in items]
+    for _ in items:
+        for number, item in enumerate(items):
+            if item is None or claims[number] is not None:
+                continue
             if is_same(item.note):
-                earlier = [other for other in items[:number] if own(other)]
-                lead = earlier[-1] if earlier else None
-                missing = missing or ("" if lead else item.text)
-            elif item.kind == "judgement":
-                later = [
-                    other
-                    for other in items[number + 1 :]
-                    if own(other)
-                    and other is not None
-                    and other.kind == "judgement"
-                    and folded(other.element) == folded(item.element)
-                ]
-                lead = later[0] if later else None
-            if lead is not None:
-                part = with_note(part, lead.note)
-        kept.append(part.strip())
-    if kept == [part.strip() for part in parts]:
+                claims[number] = claims[number - 1] if number else None
+            elif item.kind == "judgement" and number + 1 < len(items):
+                after = items[number + 1]
+                if after is not None and folded(after.element) == folded(item.element):
+                    claims[number] = claims[number + 1]
+    kept = [
+        with_note(part, claim.rstrip(" ."))
+        if item is not None and claim is not None and not own(item)
+        else part
+        for part, item, claim in zip(parts, items, claims, strict=True)
+    ]
+    missing = next(
+        (
+            item.text
+            for item, claim in zip(items, claims, strict=True)
+            if item is not None and claim is None and is_same(item.note)
+        ),
+        "",
+    )
+    if kept == parts:
         return line, missing
     label = split_rule_line(line)[0]
-    return f"{label}: Fail — {'; '.join(kept)} {fix}".rstrip(), missing
+    return (
+        f"{label}: Fail — {'; '.join(p.strip() for p in kept)} {fix}".rstrip(),
+        missing,
+    )
 
 
 def judge(
@@ -308,22 +318,23 @@ def judge(
             [],
             {},
         )
-    rule_lines = [found[name] for name in wanted]
-    if refusal := rule_refusal(rule_lines, names, keys):
-        return refusal, [], {}
-    if refusal := recheck_problem(lines, rule_lines, rechecks or [], names):
-        return refusal, [], {}
     claimed = [
-        claimed_line(line) if split_rule_line(line)[1] == "Fail" else (line, "")
-        for line in rule_lines
+        claimed_line(found[name])
+        if split_rule_line(found[name])[1] == "Fail"
+        else (found[name], "")
+        for name in wanted
     ]
     if empty := next((item for _, item in claimed if item), ""):
         return (
-            f"not done: `{empty}` says only `same` and no earlier item of its line states a claim; write the claim in its note",
+            f"not done: `{empty}` says only `same` and the part right before it states no claim; write the claim in its note",
             [],
             {},
         )
     rule_lines = [line for line, _ in claimed]
+    if refusal := rule_refusal(rule_lines, names, keys):
+        return refusal, [], {}
+    if refusal := recheck_problem(lines, rule_lines, rechecks or [], names):
+        return refusal, [], {}
     failed = any(split_rule_line(line)[1] == "Fail" for line in rule_lines)
     outcome = "findings" if failed or VERDICTS[lines[-1]] == "findings" else "clean"
     return outcome, rule_lines, details

@@ -161,3 +161,87 @@ def test_a_dispute_of_one_part_clears_no_other_image_or_element() -> None:
         assert kept in left
     assert "image-4.png" not in left
     assert record["outcome"] == "findings"
+
+
+def test_a_same_chain_takes_the_claim_through_each_neighbour_with_any_element() -> None:
+    line, missing = filled(
+        f"image-4.png: Cancel flow [judgement] {CLAIM}",
+        "image-5.png: Cancel flow [judgement] same",
+        "image-6.png: Cancel flow [judgement] same",
+        "image-16.png: Cancel 2 sessions and take lea [judgement] same",
+    )
+    assert missing == ""
+    assert notes_of(line) == [CLAIM, CLAIM, CLAIM, CLAIM]
+
+
+def test_a_note_that_is_only_a_closing_period_is_empty() -> None:
+    parts = (
+        "image-1.png: banner text [judgement]",
+        "image-2.png: banner text [judgement].",
+    )
+    line = line_of(*parts)
+    assert look_answer.claimed_line(line) == (line, "")
+    both, missing = look_answer.claimed_line(
+        f"Design system: Fail — image-1.png: Decline [judgement]. "
+        f"image-2.png: Decline [judgement] — {CLAIM}. Fix: use a token."
+    )
+    assert missing == ""
+    assert notes_of(both)[0] == CLAIM
+
+
+def test_a_same_part_after_an_empty_part_that_ends_in_a_period_has_no_claim() -> None:
+    line = (
+        "Design system: Fail — image-1.png: Cancel flow [judgement]. "
+        "image-2.png: Cancel flow [judgement] same. Fix: change it."
+    )
+    assert look_answer.claimed_line(line)[1] == (
+        "image-2.png: Cancel flow [judgement] same."
+    )
+
+
+def test_a_same_part_does_not_skip_an_empty_part_before_it() -> None:
+    skipped = filled(
+        "image-1.png: Header [align] centred",
+        "image-1.png: Subtitle [align]",
+        "image-2.png: Subtitle [align] same",
+    )
+    assert skipped[1] == "image-2.png: Subtitle [align] same"
+    other = filled(
+        "image-1.png: Order card [radius] square corners",
+        "image-1.png: filled Reject buttons [judgement]",
+        "image-2.png: filled Reject buttons [judgement] same",
+    )
+    assert other[1] == "image-2.png: filled Reject buttons [judgement] same"
+
+
+def read(fail: str, keys: dict[str, frozenset[str]]) -> str:
+    outcome, _, _ = look_answer.judge(
+        answer_with(f"{fail} Fix: change it."),
+        ["image-1.png"],
+        {"image-1.png": True},
+        keys={"image-1.png": keys},
+    )
+    return outcome
+
+
+def test_a_copied_number_in_a_judgement_part_is_refused_after_the_fill() -> None:
+    outcome = read(
+        "image-1.png: Chip B [radius] 2 px; image-1.png: Other chip [judgement] same",
+        {"radius": frozenset({"Chip B"})},
+    )
+    assert outcome.startswith("not done: ")
+
+
+def test_a_copied_claim_word_on_a_keyed_element_is_refused_after_the_fill() -> None:
+    keys = {"radius": frozenset({"Chip B"})}
+    same = read(
+        "image-1.png: Chip B [radius] square corners; "
+        "image-1.png: Chip B [judgement] same",
+        keys,
+    )
+    assert same.startswith("not done: ")
+    forward = read(
+        "image-1.png: Chip B [judgement]; image-1.png: Chip B [judgement] — square corners",
+        keys,
+    )
+    assert forward.startswith("not done: ")
