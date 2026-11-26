@@ -78,13 +78,20 @@ def read_cite(root: Path, spec: str, rev: str = "HEAD") -> Cite:
         raise problem(f"cite `{path}`: no such file at HEAD")
     if listed[0] not in PLAIN_FILE:
         raise problem(f"cite `{path}`: not a plain file at HEAD")
+    blob = rev + ":" + path
     shown = subprocess.run(
-        ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, check=True
+        ["git", "show", blob], cwd=root, capture_output=True, check=True
     )
     lines = shown.stdout.decode("utf-8", errors="replace").splitlines(keepends=True)
     if end > len(lines):
         raise problem(f"cite `{spec}`: `{path}` has {len(lines)} lines at HEAD")
     return Cite(path, start, end, "".join(lines[start - 1 : end]))
+
+
+def held(part: str) -> str:
+    """The item of a part, with the sentence that may open the part left out."""
+    shown = part_item(part)[1]
+    return " ".join((shown.text if shown else part).split())
 
 
 def locate(record: dict[str, object], item: str) -> list[Found]:
@@ -94,7 +101,7 @@ def locate(record: dict[str, object], item: str) -> list[Found]:
         label, verdict, text, _ = split_rule_line(line)
         parts, fix = fail_parts(line) if verdict == "Fail" else ([], "")
         for part in parts:
-            if " ".join(part.split()) != item:
+            if held(part) != item:
                 continue
             if text.startswith(owner_prefixes()):
                 raise problem("an owner check decides this line, not a reviewer")
@@ -104,7 +111,7 @@ def locate(record: dict[str, object], item: str) -> list[Found]:
     if found:
         return found
     for line in cast(list[str], record.get("reviewer_fails", [])):
-        if any(" ".join(part.split()) == item for part in fail_parts(line)[0]):
+        if any(held(part) == item for part in fail_parts(line)[0]):
             raise problem("an owner check decides this rule, not a reviewer")
     raise problem("the item is no Fail item of this head's record for these images")
 
@@ -219,7 +226,7 @@ def decided(
     )
     rules = cast(list[str], record["rules"])
     for found in founds:
-        kept = [part.strip() for part in found.parts if " ".join(part.split()) != item]
+        kept = [part.strip() for part in found.parts if held(part) != item]
         rules[found.index] = (
             f"{found.label}: Fail — {'; '.join(kept)} {found.fix}"
             if kept
