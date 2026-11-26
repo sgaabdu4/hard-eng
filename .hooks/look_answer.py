@@ -7,6 +7,7 @@ from typing import NamedTuple
 from look_facts import claim_in
 from plans import split_rule_line, usability_lines, usability_rules
 
+WORD = re.compile(r"\w")
 FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
 ITEM_START = re.compile(r"image-\d+\.png\s*:")
 KIND_TAG = re.compile(r"\[([A-Za-z-]+)\]")
@@ -256,14 +257,16 @@ def claimed_line(line: str) -> tuple[str, str]:
     def own(item: Item | None) -> bool:
         return (
             item is not None
-            and re.search(r"\w", item.note) is not None
+            and WORD.search(item.note) is not None
             and not is_same(item.note)
         )
 
     def folded(text: str) -> str:
         return " ".join(text.split()).lower()
 
-    claims: list[str | None] = [item.note if own(item) else None for item in items]
+    claims: list[str | None] = [
+        item.note if item is not None and own(item) else None for item in items
+    ]
     for _ in items:
         for number, item in enumerate(items):
             if item is None or claims[number] is not None:
