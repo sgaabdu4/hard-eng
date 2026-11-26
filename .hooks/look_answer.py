@@ -91,22 +91,11 @@ class Item(NamedTuple):
     note: str
 
 
-LIST_MARKER = re.compile(r"(?<=[.!?])\s+\d+[.)]\s*$")
-FRAME_LIST = re.compile(r"\s*(?:image-\d+\.png\s*(?:,|&|\band\b)\s*)+")
+LIST_MARKER = re.compile(r"\s+\d+[.)]\s*$")
 
 
-def split_frames(part: str) -> list[str]:
-    """One part for each image of a part that lists images before its item, `image-1.png, image-2.png: Save [size] note`; each keeps the element, tag and note. A part whose words before the item are anything else stays whole."""
-    found = ITEM_START.search(part)
-    if not found or not FRAME_LIST.fullmatch(part[: found.start()]):
-        return [part]
-    frames = [*FRAME.findall(part[: found.start()]), found[0].partition(":")[0].strip()]
-    tail = part[found.end() :]
-    return [f"{frame}:{tail.rstrip()}" for frame in frames]
-
-
-def raw_parts(line: str) -> tuple[list[str], str]:
-    """The parts of a Fail line before its last `Fix:`, with no image list split, and the Fix part. A new part starts at each `;` and at each item after the first of a chunk, so a list with no `;` is still one item for each part. A list marker that ends a part belongs to the next item and is cut."""
+def fail_parts(line: str) -> tuple[list[str], str]:
+    """The parts of a Fail line before its last `Fix:`, and the Fix part. A new part starts at each `;` and at each item after the first of a chunk, so a list with no `;` is still one item for each part. A list marker that ends a part, with the next item right after it, belongs to that item and is cut."""
     text = split_rule_line(line)[2]
     fixes = list(FIX_PART.finditer(text))
     cut = fixes[-1].start() if fixes else len(text)
@@ -114,18 +103,25 @@ def raw_parts(line: str) -> tuple[list[str], str]:
     for chunk in text[:cut].split(";"):
         starts = [found.start() for found in ITEM_START.finditer(chunk)]
         edges = [0, *starts[1:], len(chunk)]
+        pieces = [chunk[a:b] for a, b in pairwise(edges) if chunk[a:b].strip()]
         parts.extend(
-            LIST_MARKER.sub("", chunk[a:b])
-            for a, b in pairwise(edges)
-            if chunk[a:b].strip()
+            [*(LIST_MARKER.sub("", piece) for piece in pieces[:-1]), *pieces[-1:]]
         )
     return parts, text[cut:]
 
 
-def fail_parts(line: str) -> tuple[list[str], str]:
-    """The parts of a Fail line before its last `Fix:`, one part for each image, and the Fix part."""
-    parts, fix = raw_parts(line)
-    return [piece for part in parts for piece in split_frames(part)], fix
+def image_problem(rule_lines: list[str]) -> str | None:
+    """Why a Fail line cannot stand: a part that names an image that is not the start of its item. An item names exactly one image, first; the opening sentence and the words after an item name none."""
+    for line in rule_lines:
+        if split_rule_line(line)[1] != "Fail":
+            continue
+        for part in fail_parts(line)[0]:
+            if len(FRAME.findall(part)) > len(ITEM_START.findall(part)):
+                return (
+                    f"not done: `{part.strip()}` names an image that does not start an item; "
+                    "write one item per image, with its image name first"
+                )
+    return None
 
 
 def part_item(part: str) -> tuple[str, Item | None]:
@@ -252,8 +248,7 @@ def with_note(part: str, note: str) -> str:
 
 def claimed_line(line: str) -> tuple[str, str]:
     """A Fail line in which each part holds its own claim, and the text of the first part that has none. A claim is a note with a letter or digit that is not only `same`. A `same` part takes the claim of the part right before it, whatever its element, and that claim may itself be filled. An empty note of a judgement item takes the claim of the part right after it, only when that part has the same element, and that claim may itself be filled. Any other note, such as `same missing the asterisk`, stays. An empty note that has no match is the claim of its element text. A `same` part that has no claim to take is named, because it points at nothing and cannot be disputed."""
-    raw, fix = raw_parts(line)
-    parts = [piece for part in raw for piece in split_frames(part)]
+    parts, fix = fail_parts(line)
     items = [part_item(part)[1] for part in parts]
 
     def own(item: Item | None) -> bool:
@@ -295,7 +290,7 @@ def claimed_line(line: str) -> tuple[str, str]:
         ),
         "",
     )
-    if kept == raw:
+    if kept == parts:
         return line, missing
     label = split_rule_line(line)[0]
     return (
@@ -347,6 +342,8 @@ def judge(
             [],
             {},
         )
+    if refusal := image_problem([found[name] for name in wanted]):
+        return refusal, [], {}
     claimed = [
         claimed_line(found[name])
         if split_rule_line(found[name])[1] == "Fail"

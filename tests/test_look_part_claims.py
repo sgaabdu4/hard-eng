@@ -1,12 +1,17 @@
 """Each part of a Fail line holds its own claim text once the answer is read: `same` takes the claim of the nearest earlier part, an empty judgement note takes the claim of the next judgement part, and a part with no claim to take is refused."""
 
+from pathlib import Path
 from typing import cast
 
 import look_answer
 import look_dispute
 import look_records
 import pytest
-from test_look_facts import answer_with, values
+from conftest import commit
+from test_look import good_answer, install_agent, look_project, make_images, run_look
+from test_look_facts import DESIGN, answer_with, values
+
+project = pytest.fixture(look_project)
 
 CLAIM = "the fill is not a token colour"
 CHIPS: dict[str, object] = values(
@@ -247,78 +252,6 @@ def test_a_copied_claim_word_on_a_keyed_element_is_refused_after_the_fill() -> N
     assert forward.startswith("not done: ")
 
 
-def parts_of(line: str) -> list[str]:
-    return [part.strip() for part in look_answer.fail_parts(line)[0]]
-
-
-def test_a_part_that_lists_several_images_becomes_one_part_for_each() -> None:
-    line = "Alignment: Fail — image-1.png, image-2.png: Save [size] too small Fix: grow it."
-    assert parts_of(line) == [
-        "image-1.png: Save [size] too small",
-        "image-2.png: Save [size] too small",
-    ]
-    three = "Alignment: Fail — image-1.png, image-2.png and image-3.png: Save [align] centred Fix: x."
-    assert parts_of(three) == [
-        "image-1.png: Save [align] centred",
-        "image-2.png: Save [align] centred",
-        "image-3.png: Save [align] centred",
-    ]
-
-
-def test_a_sentence_that_names_an_image_is_not_split() -> None:
-    line = "Alignment: Fail — see image-1.png, then image-2.png: Save [size] x Fix: y."
-    assert len(parts_of(line)) == 1
-
-
-def test_a_record_holds_no_part_that_lists_several_images() -> None:
-    answer = answer_with(
-        f"image-1.png, image-2.png: Cancel flow [judgement] {CLAIM} Fix: change it."
-    ).replace("VERDICT", "Image image-2.png: a card\nVERDICT")
-    outcome, rules, _ = look_answer.judge(
-        answer,
-        ["image-1.png", "image-2.png"],
-        {"image-1.png": True, "image-2.png": True},
-    )
-    assert outcome == "findings"
-    line = next(rule for rule in rules if rule.startswith("Design system:"))
-    assert "image-1.png, image-2.png" not in line
-    assert parts_of(line) == [
-        f"image-1.png: Cancel flow [judgement] {CLAIM}",
-        f"image-2.png: Cancel flow [judgement] {CLAIM}",
-    ]
-
-
-def test_a_dispute_of_image_2_clears_only_image_2() -> None:
-    line, _ = look_answer.claimed_line(
-        f"Design system: Fail — image-1.png, image-2.png: Cancel flow [judgement] {CLAIM} Fix: change it."
-    )
-    record: dict[str, object] = {"rules": [line], "disputes": [], "outcome": "findings"}
-    item = f"image-2.png: Cancel flow [judgement] {CLAIM}"
-    look_dispute.decided(
-        record, item, look_dispute.locate(record, item), "disproved", "measured"
-    )
-    left = cast(list[str], record["rules"])[0]
-    assert left.startswith("Design system: Fail — ")
-    assert "image-1.png: Cancel flow" in left
-    assert "image-2.png" not in left
-
-
-def test_a_numbered_list_marker_does_not_enter_the_note_of_the_part_before_it() -> None:
-    line = (
-        "Design system: Fail — 1. image-1.png: Chip B [radius] square corners. "
-        "2. image-2.png: Chip B [radius] same. 3. image-3.png: Chip B [radius] same. "
-        "Fix: round them."
-    )
-    assert notes_of(line) == ["square corners.", "same.", "same."]
-    filled_line, missing = look_answer.claimed_line(line)
-    assert missing == ""
-    assert notes_of(filled_line) == [
-        "square corners.",
-        "square corners",
-        "square corners",
-    ]
-
-
 def test_a_note_that_ends_in_a_number_keeps_it() -> None:
     line = "Design system: Fail — image-1.png: Cancel flow [judgement] wrong in step 2. Fix: x."
     assert notes_of(line) == ["wrong in step 2."]
@@ -330,3 +263,90 @@ def test_a_measured_part_after_an_empty_judgement_part_gives_it_no_claim() -> No
         "image-1.png: Cancel [radius] square corners",
     )
     assert filled(*parts) == (line_of(*parts), "")
+
+
+MANY = ["image-1.png", "image-2.png", "image-3.png"]
+ONE_PER_IMAGE = "write one item per image, with its image name first"
+
+
+def read_many(fail: str) -> str:
+    answer = answer_with(f"{fail} Fix: change it.").replace(
+        "VERDICT", "Image image-2.png: a card\nImage image-3.png: a card\nVERDICT"
+    )
+    outcome, _, _ = look_answer.judge(answer, MANY, dict.fromkeys(MANY, True))
+    return outcome
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        "image-1.png, image-2.png: Save [size] too small",
+        "The fill is off. image-1.png, image-2.png: Cancel flow [judgement] off palette",
+        "image-1.png, image-2.png, and image-3.png: Save [size] too small",
+        "1. image-1.png, image-2.png: Cancel flow [judgement] off palette",
+        "see image-1.png, then image-2.png: Save [size] x",
+        "image-1.png: Cancel flow [judgement] the same as on image-2.png",
+        "Compare image-1.png. image-2.png: Save [size] x",
+        "image-1.png: Chip A [radius] square corners. image-2.png, image-3.png: Chip B [radius] square corners",
+    ],
+)
+def test_an_item_that_names_more_than_one_image_is_refused(fail: str) -> None:
+    outcome = read_many(fail)
+    assert outcome.startswith("not done: `")
+    assert ONE_PER_IMAGE in outcome
+
+
+def test_one_item_for_each_image_is_accepted() -> None:
+    outcome = read_many(
+        "image-1.png: Save [size] too small; image-2.png: Save [size] too small; "
+        "image-3.png: Cancel flow [judgement] off palette"
+    )
+    assert ONE_PER_IMAGE not in outcome
+
+
+def test_a_list_marker_with_no_sentence_mark_does_not_enter_the_note_before_it() -> (
+    None
+):
+    line = (
+        "Design system: Fail — 1. image-1.png: Chip B [radius] square corners "
+        "2. image-2.png: Chip B [radius] same 3. image-3.png: Chip B [radius] same "
+        "Fix: round them."
+    )
+    assert notes_of(line) == ["square corners", "same", "same"]
+    filled_line, missing = look_answer.claimed_line(line)
+    assert missing == ""
+    assert notes_of(filled_line) == ["square corners"] * 3
+
+
+def test_an_empty_note_before_a_list_marker_is_empty_and_leaves_same_without_a_claim() -> (
+    None
+):
+    line = (
+        "Design system: Fail — 1. image-1.png: Cancel flow [judgement] "
+        "2. image-2.png: Cancel flow [judgement] same Fix: change it."
+    )
+    assert notes_of(line) == ["", "same"]
+    assert look_answer.claimed_line(line)[1] == (
+        "image-2.png: Cancel flow [judgement] same"
+    )
+    forward = (
+        "Design system: Fail — 1. image-1.png: Decline [judgement] "
+        f"2. image-2.png: Decline [judgement] — {CLAIM} Fix: use a token."
+    )
+    assert notes_of(look_answer.claimed_line(forward)[0]) == [CLAIM, CLAIM]
+
+
+def test_a_refused_run_is_not_kept_and_a_rerun_can_pass(
+    tmp_path: Path, project: Path
+) -> None:
+    import ui_measure
+
+    (project / "DESIGN.md").write_text(DESIGN)
+    commit(project, "design")
+    images = make_images(project, 1)
+    ui_measure.write_record(project, images[0], 1280, [], "/kpi", measured=values())
+    bad = "image-1.png, image-2.png: Cancel flow [judgement] x Fix: change it."
+    install_agent(tmp_path, "claude", 1, answer_with(bad))
+    assert str(run_look(project, "codex", images)["outcome"]).startswith("not done")
+    install_agent(tmp_path, "claude", 1, good_answer(1))
+    assert run_look(project, "codex", images)["outcome"] == "clean"

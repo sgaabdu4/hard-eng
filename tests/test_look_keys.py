@@ -119,6 +119,9 @@ def test_a_measured_item_is_decided_from_its_exact_key(tmp_path: Path) -> None:
         outcome, rules = judged_with_keys(
             f"image-1.png: {key} [{kind}] Fix: change it", measured
         )
+        if "image-" in key:
+            assert outcome.startswith("not done: `"), key
+            continue
         assert outcome == "findings", key
         parts, _ = look_answer.fail_parts(
             next(r for r in rules if "Design system" in r)

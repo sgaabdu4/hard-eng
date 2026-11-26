@@ -627,7 +627,7 @@ def test_a_notice_is_for_the_images_to_review_and_the_newest_matching_record_end
     assert "does not carry" not in capsys.readouterr().out
 
 
-def test_an_item_with_leading_frame_names_is_decided_for_each_image(
+def test_an_item_with_leading_frame_names_stays_with_the_reviewer(
     tmp_path: Path,
 ) -> None:
     import look_records
@@ -637,10 +637,7 @@ def test_an_item_with_leading_frame_names_is_decided_for_each_image(
         "image-2.png": values(texts=[text_fact("Save", 14)]),
     }
     line = "Design system: Fail — image-1.png, image-2.png: Save [size] Fix: make it bigger."
-    assert look_records.decide_line(line, measured) == (
-        "Design system: Fail — image-1.png: Save [size] — code: text is 10.5 px, "
-        "under the 11 px floor Fix: bring each item to its measured limit"
-    )
+    assert look_records.decide_line(line, measured) == line
 
 
 def test_an_earlier_measured_item_of_an_image_that_is_not_in_this_run_is_not_listed(
@@ -777,15 +774,15 @@ def test_an_item_that_names_more_than_one_item_or_frame_stays_with_the_reviewer(
     assert look_records.decide_line(line, measured) == line
 
 
-def test_a_part_with_a_leading_frame_keeps_only_the_frames_that_are_in_this_run() -> (
+def test_a_part_with_a_leading_frame_stays_while_any_of_its_frames_is_in_this_run() -> (
     None
 ):
     import look_records
 
     line = "Design system: Fail — image-1.png, image-2.png: Save [size] Fix: bigger."
     then = {"image-1.png": "home-375.png", "image-2.png": "home-1280.png"}
-    assert look_records._without_held(line, then, {"home-375.png": "image-1.png"}) == (
-        "Design system: Fail — image-1.png: Save [size] Fix: bigger."
+    assert (
+        look_records._without_held(line, then, {"home-375.png": "image-1.png"}) == line
     )
     assert look_records._without_held(line, then, {}) == "Design system: Pass"
 
