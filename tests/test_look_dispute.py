@@ -566,3 +566,12 @@ def test_a_dispute_of_a_part_whose_note_is_only_same_is_refused() -> None:
     record = run_record(CLAIM_ITEM, "image-5.png: Cancel flow [judgement] same")
     with pytest.raises(ValueError, match="dispute the part that states the claim"):
         look_dispute.locate(record, "image-5.png: Cancel flow [judgement] same")
+
+
+def test_a_same_part_that_ends_with_a_period_is_cleared_and_refused_like_same() -> None:
+    record = run_record(CLAIM_ITEM, "image-5.png: Cancel flow [judgement] same.")
+    with pytest.raises(ValueError, match="dispute the part that states the claim"):
+        look_dispute.locate(record, "image-5.png: Cancel flow [judgement] same.")
+    assert disprove(record, CLAIM_ITEM).startswith(
+        "Design system: Pass — evidence checked: "
+    )

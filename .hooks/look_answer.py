@@ -91,6 +91,11 @@ class Item(NamedTuple):
     note: str
 
 
+def is_same(note: str) -> bool:
+    """True when the note of an item is only `same`, whatever its case or spacing, with or without a closing period."""
+    return " ".join(note.split()).lower().rstrip(".").rstrip() == "same"
+
+
 def fail_parts(line: str) -> tuple[list[str], str]:
     """The parts of a Fail line before its last `Fix:`, and the Fix part. A new part starts at each `;` and at each item after the first of a chunk, so a list with no `;` is still one item for each part."""
     text = split_rule_line(line)[2]

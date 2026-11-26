@@ -12,7 +12,7 @@ from typing import NamedTuple, cast
 
 import look
 from challenge import git_text
-from look_answer import fail_parts, part_item
+from look_answer import fail_parts, is_same, part_item
 from look_facts import FACTS, fact_key
 from look_records import owner_prefixes
 from look_reviewer import claude_proof, codex_proof, run_first_reviewer
@@ -97,7 +97,7 @@ def held(part: str) -> str:
 def says_same(part: str) -> bool:
     """True when the note of the part's item is only `same`, whatever its case or spacing."""
     shown = part_item(part)[1]
-    return shown is not None and " ".join(shown.note.split()).lower() == "same"
+    return shown is not None and is_same(shown.note)
 
 
 def left_after(parts: list[str], item: str) -> list[str]:
