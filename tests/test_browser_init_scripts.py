@@ -68,9 +68,24 @@ def test_a_session_that_the_tool_no_longer_lists_loses_its_saved_init_scripts(
     )
     browser.limit_sessions(str(open_one), folder, "s1")
     assert browser.route_scripts(folder, "s1") == [str(own.resolve())]
-    none_open = fake_tool(tmp_path, monkeypatch, 'echo \'{"data":{"sessions":[]}}\'\n')
+    none_open = fake_tool(tmp_path, monkeypatch, "echo '{\"sessions\":[]}'\n")
     browser.limit_sessions(str(none_open), folder, "s1")
     assert browser.route_scripts(folder, "s1") == []
+
+
+def test_the_empty_session_list_of_the_real_tool_clears_saved_init_scripts_and_a_wrapped_one_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    """The real tool prints {"sessions":[]} with no data wrapper for a checkout with no open session."""
+    monkeypatch.delenv("AGENT_BROWSER_INIT_SCRIPTS", raising=False)
+    folder = browser.output_folder(tmp_path)
+    own = tmp_path / "own.js"
+    own.write_text("window.x = 1;\n")
+    for body in ('{"sessions":[]}', '{"success":true,"data":{"sessions":[]}}'):
+        browser.keep_route_scripts(folder, "s1", [str(own)])
+        tool = fake_tool(tmp_path, monkeypatch, f"echo '{body}'\n")
+        browser.limit_sessions(str(tool), folder, "s1")
+        assert browser.route_scripts(folder, "s1") == []
 
 
 def test_a_session_opened_outside_the_command_still_reaches_the_request_delay_refusal(
