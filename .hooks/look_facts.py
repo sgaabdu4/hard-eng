@@ -3,7 +3,6 @@
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping
-from pathlib import Path
 from typing import NamedTuple
 
 from ui_measure import LIMITS
@@ -33,63 +32,12 @@ CLAIM_FORMS = {
 }
 
 
-class Tokens(NamedTuple):
-    colours: dict[str, str]
-    spacing: list[str]
-    rounded: list[str]
-
-
 class Fact(NamedTuple):
     key: str
     ok: bool | None
     margin: float
     line: str
     why: str
-
-
-def design_tokens(root: Path | None) -> Tokens:
-    """The tokens of the DESIGN.md on disk; a missing file gives no tokens."""
-    try:
-        text = (root / "DESIGN.md").read_text() if root else ""
-    except OSError:
-        text = ""
-    return tokens_from_text(text)
-
-
-def tokens_from_text(text: str) -> Tokens:
-    """The colour, spacing and rounded tokens of the DESIGN.md front matter, as written. A missing front matter, a front matter that is not YAML or a missing group gives an empty list, which means no verdict; a python3 without PyYAML refuses, because a front matter that cannot be read must never look like one with no tokens."""
-    from ui_tokens import FRONT_MATTER, colours_in
-
-    none = Tokens({}, [], [])
-    front = FRONT_MATTER.match(text)
-    if not front:
-        return none
-    try:
-        import yaml
-    except ImportError as error:
-        raise ValueError(
-            "look: PyYAML is missing, so the DESIGN.md tokens cannot be read; run `python3 .hooks/hard-eng.py look`, which loads it, or install pyyaml"
-        ) from error
-    try:
-        data = yaml.safe_load(front[1])
-    except yaml.YAMLError:
-        return none
-    if not isinstance(data, dict):
-        return none
-
-    def group(name: str) -> dict[str, object]:
-        found = data.get(name)
-        return found if isinstance(found, dict) else {}
-
-    return Tokens(
-        {
-            colour: name
-            for name, value in group("colors").items()
-            for colour in colours_in(str(value))
-        },
-        [str(value) for value in group("spacing").values()],
-        [str(value) for value in group("rounded").values()],
-    )
 
 
 def _rows(measured: dict[str, object], key: str) -> list[dict[str, object]]:
@@ -146,7 +94,7 @@ def _pair(row: dict[str, object]) -> str:
     return f"{fact_key(row.get('at'))} to {fact_key(row.get('to'))}"
 
 
-def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def size_facts(measured: dict[str, object]) -> list[Fact]:
     floor = LIMITS["text_px"]
     found: list[Fact] = []
     for key, row in _named(_rows(measured, "texts"), _at):
@@ -173,11 +121,11 @@ def size_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return found
 
 
-def colour_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def colour_facts(measured: dict[str, object]) -> list[Fact]:
     return []
 
 
-def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def tap_facts(measured: dict[str, object]) -> list[Fact]:
     found: list[Fact] = []
     for key, row in _named(_controls(measured), _at):
         if not isinstance(row.get("under"), bool) or "floor" not in row:
@@ -205,7 +153,7 @@ def tap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return found
 
 
-def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def weight_facts(measured: dict[str, object]) -> list[Fact]:
     rows = [
         (own, row)
         for own, row in _named(_rows(measured, "texts"), _at)
@@ -251,7 +199,7 @@ def weight_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     return found
 
 
-def align_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def align_facts(measured: dict[str, object]) -> list[Fact]:
     return [
         Fact(
             key,
@@ -269,7 +217,7 @@ def _gap_rows(measured: dict[str, object]) -> list[dict[str, object]]:
     return [row for row in _rows(measured, "gaps") if "to" in row and "px" in row]
 
 
-def gap_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def gap_facts(measured: dict[str, object]) -> list[Fact]:
     return [
         Fact(pair, True, px, "", f"gap {px} px")
         for pair, row in _named(_gap_rows(measured), _pair)
@@ -285,7 +233,7 @@ def corners_of(row: dict[str, object]) -> list[int]:
     return [int(_num(row.get("px")))] * 4
 
 
-def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
+def radius_facts(measured: dict[str, object]) -> list[Fact]:
     return [
         Fact(key, True, px, "", f"corner radius {px} px")
         for key, row in _named(_rows(measured, "radii"), _at)
@@ -294,7 +242,7 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
     ]
 
 
-FACTS: dict[str, Callable[[dict[str, object], Tokens], list[Fact]]] = {
+FACTS: dict[str, Callable[[dict[str, object]], list[Fact]]] = {
     "size": size_facts,
     "colour": colour_facts,
     "tap": tap_facts,
@@ -390,11 +338,11 @@ CLAIM_ONLY = {
 }
 
 
-def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
+def measured_text(measured: dict[str, object]) -> str:
     """The measured facts of one image, by element: for each check what it covered, then the facts nearest to its limit first, up to FACT_BYTES; the rest are counted, with their keys, so every key that code can decide is shown. Each fact line starts with its key."""
     lines: list[str] = []
     for kind, build in FACTS.items():
-        facts = build(measured, tokens)
+        facts = build(measured)
         lines.append(_covered(kind, facts))
         if kind in NOTES:
             lines += _listed(facts, NOTES[kind])
@@ -403,9 +351,9 @@ def measured_text(measured: dict[str, object], tokens: Tokens) -> str:
     return "\n".join(lines)
 
 
-def item_keys(measured: dict[str, object], tokens: Tokens) -> dict[str, frozenset[str]]:
+def item_keys(measured: dict[str, object]) -> dict[str, frozenset[str]]:
     """The keys of one image for each measured kind: the exact texts that an item of that kind may name. A fact that code cannot decide has no key, so an item on it is a judgement item."""
-    return {kind: _keyed(build(measured, tokens)) for kind, build in FACTS.items()}
+    return {kind: _keyed(build(measured)) for kind, build in FACTS.items()}
 
 
 def claim_word(kind: str, text: str) -> str:
@@ -442,9 +390,7 @@ def _held(
     return [row for key, row in _named(_rows(measured, name), namer) if key == element]
 
 
-def _square(
-    element: str, measured: dict[str, object], tokens: Tokens
-) -> tuple[bool, str] | None:
+def _square(element: str, measured: dict[str, object]) -> tuple[bool, str] | None:
     """A square claim is disproved by any corner of the element above 0; when every corner is 0 the claim is true and the item stays with the reviewer."""
     held = [corners_of(row) for row in _held(measured, "radii", _at, element)]
     squares = [not any(corners) for corners in held]
@@ -455,9 +401,7 @@ def _square(
     return None
 
 
-def _centred(
-    element: str, measured: dict[str, object], tokens: Tokens
-) -> tuple[bool, str] | None:
+def _centred(element: str, measured: dict[str, object]) -> tuple[bool, str] | None:
     """A centred claim is disproved by a text that is measured as not centred; a measured centred text leaves the item with the reviewer."""
     held = [
         row
@@ -469,9 +413,7 @@ def _centred(
     return True, f"text-align {held[0].get('align')}, not centred in its parent"
 
 
-def _touch(
-    element: str, measured: dict[str, object], tokens: Tokens
-) -> tuple[bool, str] | None:
+def _touch(element: str, measured: dict[str, object]) -> tuple[bool, str] | None:
     """A touch claim is disproved by a measured gap above 0; a measured gap of 0 leaves the item with the reviewer."""
     held = [
         max(0, int(_num(row.get("px"))))
@@ -490,16 +432,15 @@ def verdict(
     kind: str,
     element: str,
     measured: dict[str, object],
-    tokens: Tokens,
     claim: str = "",
 ) -> tuple[bool, str] | None:
     """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal a key of that kind exactly, and every fact of that key must give the same verdict; any other case leaves the item to the reviewer. There is no loose name match, because a wrong match gives a false verdict. A note that states a claim (`square`, `centred`) is compared with the fact in the direction of the claim: a Pass means the claim is disproved."""
     if state := claimed_state(kind, claim):
-        return STATES[state](element, measured, tokens)
+        return STATES[state](element, measured)
     build = FACTS.get(kind)
     if build is None or kind in CLAIM_ONLY:
         return None
-    hits = [fact for fact in build(measured, tokens) if fact.key == element]
+    hits = [fact for fact in build(measured) if fact.key == element]
     if not hits or any(fact.ok is None for fact in hits):
         return None
     if len({fact.ok for fact in hits}) != 1:

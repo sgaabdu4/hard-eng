@@ -778,9 +778,35 @@ def pre_push() -> int:
 
 
 def deliver(args: "Namespace") -> int:
-    from deliver import deliver as run_command
+    if args.command == "adopt":
+        return adopt()
+    if args.command == "ci-usage":
+        from ci_usage import ci_usage
 
-    return run_command(ROOT, args, adopt)
+        return ci_usage(ROOT, args.repo, args.days, args.runs)
+    if args.command == "hot-paths":
+        from hot_paths import scan_all
+
+        return scan_all(ROOT, paths=args.paths)
+    if args.command == "text-walls":
+        from text_walls import walls_command
+
+        return walls_command(ROOT, args.paths, args.stdin)
+    if args.command == "pr-text":
+        from pr_text import pr_text_command
+
+        return pr_text_command(ROOT, args.pr)
+    if args.command == "gap-issue":
+        from gap_issue import file_gap
+
+        return file_gap(ROOT, args.text)
+    if args.command == "challenge":
+        from challenge import challenge
+
+        return challenge(ROOT, args.base, args.host)
+    from ship_actions import run
+
+    return run(ROOT, args.plan, args.pr, args.stage, args.worktree, args.merge_method)
 
 
 def adopt() -> int:

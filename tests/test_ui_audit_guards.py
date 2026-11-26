@@ -743,7 +743,6 @@ def test_code_decides_each_kind_the_same_way_in_five_real_captures(
     import look_facts
 
     (tmp_path / "DESIGN.md").write_text(KIND_TOKENS)
-    tokens = look_facts.design_tokens(tmp_path)
     (tmp_path / "pages/kinds.html").write_text(
         "<!doctype html><html lang=en><title>Kinds</title>"
         f"<style>body{{margin:0;font:16px sans-serif}}</style><body>{KIND_PAGE}</body>"
@@ -759,7 +758,7 @@ def test_code_decides_each_kind_the_same_way_in_five_real_captures(
         record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
         runs.append(
             {
-                case: look_facts.verdict(case[0], case[1], record["measured"], tokens)
+                case: look_facts.verdict(case[0], case[1], record["measured"])
                 for case in KIND_CASES
             }
         )

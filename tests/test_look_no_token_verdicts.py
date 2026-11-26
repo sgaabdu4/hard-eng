@@ -5,7 +5,6 @@ from pathlib import Path
 import look_facts
 import look_records
 import pytest
-from look_facts import Tokens
 from test_look import look_project
 from test_look_facts import (
     answer_with,
@@ -17,7 +16,6 @@ from test_look_facts import (
 
 project = pytest.fixture(look_project)
 
-TOKENS = Tokens({"1a1a1aff": "ink"}, ["8px"], ["4px"])
 PAGE = values(
     texts=[
         text_fact("Body", 14, colour="ffffffff", fill="", fg="#ffffff", bg="#ffffff")
@@ -32,7 +30,7 @@ PAGE = values(
 
 
 def decided(line: str) -> str:
-    return look_records.decide_line(line, {"image-1.png": PAGE}, TOKENS)
+    return look_records.decide_line(line, {"image-1.png": PAGE})
 
 
 def test_a_colour_a_gap_and_a_radius_outside_the_token_lists_stay_with_the_reviewer() -> (
@@ -59,7 +57,7 @@ def test_a_chips_touch_claim_stands_at_0_px_and_falls_at_4_px() -> None:
 
 
 def test_the_facts_list_no_value_that_invites_a_token_item() -> None:
-    text = look_facts.measured_text(PAGE, TOKENS)
+    text = look_facts.measured_text(PAGE)
     assert "no token" not in text
     assert "12 px" not in text
     assert "7 px" not in text

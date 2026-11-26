@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 from conftest import commit
-from look_facts import Tokens
 from test_look import good_answer, install_agent, look_project, make_images, run_look
 from test_look_proof_kinds import prompt_of
 
@@ -126,7 +125,7 @@ def test_the_prompt_says_what_each_check_covered(tmp_path: Path, project: Path) 
     assert "radius: code checks only a claim that corners are square, for 1 " in prompt
 
 
-def test_a_check_that_code_does_not_decide_says_so_with_or_without_tokens(
+def test_a_check_that_code_does_not_decide_says_so(
     tmp_path: Path, project: Path
 ) -> None:
     import ui_measure
@@ -151,9 +150,8 @@ def test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out(
     many = [text_fact(f"Row {number:03d}", 14 + number % 5) for number in range(300)]
     many.append(text_fact("Tiny", 9))
     measured = values(texts=many)
-    tokens = look_facts.design_tokens(None)
-    first = look_facts.measured_text(measured, tokens)
-    assert first == look_facts.measured_text(measured, tokens)
+    first = look_facts.measured_text(measured)
+    assert first == look_facts.measured_text(measured)
     listed = [line for line in first.splitlines() if line.startswith("- ")]
     assert listed[0].startswith("- Tiny: 9 px")
     assert len(listed) < 301
@@ -274,21 +272,13 @@ NOT_DECIDED = {
 }
 
 
-def tokens_of(tmp_path: Path) -> Tokens:
-    import look_facts
-
-    (tmp_path / "DESIGN.md").write_text(DESIGN)
-    return look_facts.design_tokens(tmp_path)
-
-
 @pytest.mark.parametrize("kind", sorted(FAULT_AND_PASS))
 def test_code_decides_each_measured_kind(kind: str, tmp_path: Path) -> None:
     import look_facts
 
     element, fault, held = FAULT_AND_PASS[kind]
-    tokens = tokens_of(tmp_path)
-    failed = look_facts.verdict(kind, element, fault, tokens)
-    passed = look_facts.verdict(kind, element, held, tokens)
+    failed = look_facts.verdict(kind, element, fault)
+    passed = look_facts.verdict(kind, element, held)
     assert failed is not None
     assert failed[0] is False
     assert passed is not None
@@ -342,7 +332,7 @@ def test_an_item_that_code_cannot_match_stays_with_the_reviewer(
     import look_facts
 
     kind, element, measured = NEAR_MISSES[case]
-    assert look_facts.verdict(kind, element, measured, tokens_of(tmp_path)) is None
+    assert look_facts.verdict(kind, element, measured) is None
 
 
 @pytest.mark.parametrize("kind", sorted(NOT_DECIDED))
@@ -352,9 +342,8 @@ def test_a_value_that_a_token_list_lacks_is_never_decided_in_code(
     import look_facts
 
     element, fault, held = NOT_DECIDED[kind]
-    for tokens in (tokens_of(tmp_path), Tokens({}, [], [])):
-        assert look_facts.verdict(kind, element, fault, tokens) is None
-        assert look_facts.verdict(kind, element, held, tokens) is None
+    assert look_facts.verdict(kind, element, fault) is None
+    assert look_facts.verdict(kind, element, held) is None
 
 
 def test_the_other_items_of_a_line_stay_and_all_passed_items_make_a_pass(
@@ -611,8 +600,7 @@ def test_a_gap_that_overlaps_by_a_pixel_is_no_gap_for_a_touch_claim(
 
     measured = values(gaps=[{"at": "Save", "to": "Cancel", "px": -1, "axis": "y"}])
     claim = "chips touch"
-    tokens = tokens_of(tmp_path)
-    assert look_facts.verdict("gap", "Save to Cancel", measured, tokens, claim) is None
+    assert look_facts.verdict("gap", "Save to Cancel", measured, claim) is None
 
 
 def test_a_notice_is_for_the_images_to_review_and_the_newest_matching_record_ends_it(
@@ -649,13 +637,12 @@ def test_an_item_with_leading_frame_names_stays_with_the_reviewer(
         "image-2.png": values(texts=[text_fact("Save", 14)]),
     }
     line = "Design system: Fail — image-1.png, image-2.png: Save [size] Fix: make it bigger."
-    assert look_records.decide_line(line, measured, tokens_of(tmp_path)) == line
+    assert look_records.decide_line(line, measured) == line
 
 
 def test_an_earlier_measured_item_of_an_image_that_is_not_in_this_run_is_not_listed(
     tmp_path: Path, project: Path
 ) -> None:
-    import look_facts
     import look_records
     import ui_measure
     from test_look import judged_rule_names, next_head
@@ -685,7 +672,6 @@ def test_an_earlier_measured_item_of_an_image_that_is_not_in_this_run_is_not_lis
         [("image-1.png", images[1].name, digest)],
         judged_rule_names(),
         {"image-1.png": held},
-        look_facts.design_tokens(project),
     )
     assert listed == []
     assert fails == []
@@ -785,7 +771,7 @@ def test_an_item_that_names_more_than_one_item_or_frame_stays_with_the_reviewer(
         "image-1.png": ok,
         "image-2.png": ok,
     }
-    assert look_records.decide_line(line, measured, tokens_of(tmp_path)) == line
+    assert look_records.decide_line(line, measured) == line
 
 
 def test_a_part_with_a_leading_frame_stays_while_any_of_its_frames_is_in_this_run() -> (

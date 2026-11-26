@@ -800,7 +800,6 @@ UI_MODULES = (
     "look_answer",
     "look_facts",
     "look_records",
-    "ui_tokens",
 )
 
 
