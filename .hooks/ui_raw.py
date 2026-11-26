@@ -1,6 +1,8 @@
 """HE-UI-SOURCE: raw colours and lengths typed in web, CSS and HTML files."""
 
+import os
 import re
+from collections.abc import Callable
 
 STYLE_SUFFIXES = (".css", ".scss", ".less")
 SCRIPT_SUFFIXES = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts")
@@ -105,19 +107,35 @@ def kebab(name: str) -> str:
     return CAMEL.sub("-", name).lower()
 
 
-def inside_string(line: str, end: int) -> bool:
-    quote = ""
-    skip = False
-    for char in line[:end]:
-        if skip:
-            skip = False
-        elif char == "\\":
-            skip = True
-        elif quote:
-            quote = "" if char == quote else quote
-        elif char in "\"'`":
-            quote = char
-    return bool(quote)
+def literal_checker(
+    name: str, lines: list[tuple[int, str]]
+) -> Callable[[int, int], bool]:
+    """A function that tells whether a column of the n-th line sits inside a string or template literal, read with the shared source scanner (nested templates and quotes in text included); the scan runs at the first question only."""
+    spans: list[tuple[int, int]] = []
+    starts: list[int] = []
+    state = {"ready": False}
+
+    def inside(index: int, column: int) -> bool:
+        if not state["ready"]:
+            from source_scan import scanned_spans
+
+            state["ready"] = True
+            text = "\n".join(line for _, line in lines)
+            at = 0
+            for _, line in lines:
+                starts.append(at)
+                at += len(line) + 1
+            spans.extend(
+                (start, end)
+                for comment, start, end, _ in scanned_spans(
+                    text, os.path.splitext(name)[1]
+                )
+                if not comment
+            )
+        point = starts[index] + column
+        return any(start <= point < end for start, end in spans)
+
+    return inside
 
 
 def colour_names(value: str, code: bool) -> list[str]:
@@ -128,9 +146,11 @@ def colour_names(value: str, code: bool) -> list[str]:
 
 
 def declaration_hits(
-    line: str, in_style_object: bool, script: bool = False, in_template: bool = False
+    line: str,
+    in_style_object: bool,
+    in_literal: Callable[[int], bool] | None = None,
 ) -> list[tuple[str, str]]:
-    """(kind, text) for each colour or length typed as a property value on this line. A script file holds CSS text only inside a string or a multi-line template, as a declaration that ends with `;`, or as a `[prop:value]` class; any other unquoted name is a JS value."""
+    """(kind, text) for each colour or length typed as a property value on this line. A script file holds CSS text only inside a string or template literal, as a declaration that ends with `;`, or as a `[prop:value]` class; any other unquoted name is a JS value."""
     found: list[tuple[str, str]] = []
     for match in DECLARATION.finditer(line):
         prop, value = kebab(match[1]), match[2]
@@ -140,15 +160,18 @@ def declaration_hits(
         if colour:
             after = line[match.end() : match.end() + 1]
             css_text = (
-                in_template
-                or after == ";"
+                after == ";"
                 or (after == "]" and line[: match.start(1)].endswith("["))
-                or inside_string(line, match.start(1))
+                or (
+                    not in_style_object
+                    and in_literal is not None
+                    and in_literal(match.start(1))
+                )
             )
             found += [
                 ("colour", f"{prop}: {word}")
                 for word in colour_names(
-                    value, (in_style_object or script) and not css_text
+                    value, (in_style_object or in_literal is not None) and not css_text
                 )
             ]
         if LENGTH_PROPERTY.fullmatch(prop):
@@ -248,10 +271,8 @@ def raw_value_hits(
     found: list[tuple[int, str, str]] = []
     depth = 0
     used = used_style_objects(lines)
-    template = False
-    for number, line in lines:
-        in_template = template
-        template ^= (line.count("`") - line.count("\\`")) % 2 == 1
+    literal = literal_checker(name, lines) if name.endswith(SCRIPT_SUFFIXES) else None
+    for row, (number, line) in enumerate(lines):
         opened = (
             (STYLE_OPEN.search(line) or (used and used.search(line)))
             if depth <= 0
@@ -265,7 +286,9 @@ def raw_value_hits(
             depth += object_depth(line) if in_style_object else 0
         spaced = BRACKET_GROUP.sub(lambda group: group[0].replace("_", " "), line)
         hits = declaration_hits(
-            spaced, in_style_object, name.endswith(SCRIPT_SUFFIXES), in_template
+            spaced,
+            in_style_object,
+            None if literal is None else lambda column, row=row: literal(row, column),
         )
         hits += [("colour", hit[0]) for hit in COLOUR_FUNCTION.finditer(spaced)]
         if not name.endswith(STYLE_SUFFIXES):
