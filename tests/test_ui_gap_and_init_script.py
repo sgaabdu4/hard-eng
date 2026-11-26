@@ -36,15 +36,11 @@ def assert_no_weight_verdict(
     tmp_path: Path, found: dict[str, object], *keys: str
 ) -> None:
     import look_facts
-    from test_look_facts import tokens_of
 
-    tokens = tokens_of(tmp_path)
     for key in keys:
-        assert look_facts.verdict("weight", key, found, tokens) is None
+        assert look_facts.verdict("weight", key, found) is None
         assert (
-            look_facts.verdict(
-                "weight", key, found, tokens, "differs from its neighbours"
-            )
+            look_facts.verdict("weight", key, found, "differs from its neighbours")
             is None
         )
 

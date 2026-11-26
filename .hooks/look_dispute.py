@@ -119,11 +119,10 @@ def locate(record: dict[str, object], item: str) -> list[Found]:
 def measured_lines(root: Path, head: str, digest: str, key: str) -> str:
     """The decided facts of the measured element, one line for each kind, as the facts list shows them."""
     values = look.recorded_measured(root, digest)
-    tokens = look.design_tokens_at(root, head)
     lines = [
         f"- {kind}: {fact.why}"
         for kind, build in FACTS.items()
-        for fact in build(values or {}, tokens)
+        for fact in build(values or {})
         if fact.key == fact_key(key) and fact.ok is not None
     ]
     if not lines:

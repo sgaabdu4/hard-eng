@@ -8,13 +8,11 @@ import look_dispute
 import look_records
 import pytest
 from conftest import commit
-from look_facts import Tokens
 from test_look import good_answer, install_agent, look_project, make_images, run_look
 from test_look_facts import DESIGN, answer_with, text_fact, values
 
 project = pytest.fixture(look_project)
 
-NO_TOKENS = Tokens({}, [], [])
 CLAIM = "the fill is not a token colour"
 CHIPS: dict[str, object] = values(
     radii=[
@@ -142,7 +140,7 @@ def test_a_code_pass_of_the_claim_part_gives_the_same_part_the_same_verdict() ->
         "image-1.png": CHIPS,
         "image-2.png": CHIPS,
     }
-    assert look_records.decide_line(line, frames, NO_TOKENS).startswith(
+    assert look_records.decide_line(line, frames).startswith(
         "Design system: Pass — code checked: "
     )
 
@@ -357,7 +355,7 @@ def test_a_trailing_number_in_a_note_stays_in_the_part() -> None:
         "image-1.png": page,
         "image-2.png": page,
     }
-    assert look_records.decide_line(line, frames, NO_TOKENS).startswith(
+    assert look_records.decide_line(line, frames).startswith(
         "Spacing: Pass — code checked: "
     )
 

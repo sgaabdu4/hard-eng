@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-from look_facts import SQUARE_LAST, radius_facts, tokens_from_text, verdict
+from look_facts import radius_facts, verdict
 from test_browser import plain_step, session
 from test_ui_audit_guards import measured, open_board
 
@@ -51,10 +51,7 @@ def test_square_chips_are_recorded_and_decided_from_their_own_corners(
     assert all(item["at"] for item in values["radii"])
     assert rows["Plain link"]["corners"] == [0, 0, 0, 0]
     assert rows["Cell"]["corners"] == [0, 0, 0, 0]
-    tokens = tokens_from_text(DESIGN)
-    squares = [
-        fact for fact in radius_facts(values, tokens) if fact.margin == SQUARE_LAST
-    ]
+    squares = [fact for fact in radius_facts(values) if fact.margin == 0]
     assert {fact.key for fact in squares} == {
         "Square one",
         "Square two",
@@ -62,13 +59,9 @@ def test_square_chips_are_recorded_and_decided_from_their_own_corners(
         "Plain link",
         "Cell",
     }
-    assert all(fact.ok is True for fact in squares)
-    failing = verdict("radius", "Square one", values, tokens, "square")
-    assert failing is not None
-    assert failing[0] is False
-    assert "0 is in no rounded token" in failing[1]
+    assert verdict("radius", "Square one", values, "square") is None
     for passing in ("Round one", "Round end"):
-        found = verdict("radius", passing, values, tokens, "square")
+        found = verdict("radius", passing, values, "square")
         assert found is not None
         assert found[0] is True
         assert "not square" in found[1]

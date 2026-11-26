@@ -8,7 +8,7 @@ from typing import cast
 
 from challenge import store
 from look_answer import KIND_TAG, Item, fail_parts, part_item
-from look_facts import Tokens, claimed_state
+from look_facts import claimed_state
 from look_facts import verdict as code_verdict
 from plans import split_rule_line, usability_rules
 
@@ -43,13 +43,12 @@ def image_keys(
     design_digest: str,
     digests: list[str],
     unmeasured: bool,
-    tokens: Tokens | None = None,
 ) -> list[str]:
     """One key for each image: its bytes, its ring boxes and measured values, the rules, the design documents and the plan scope that the reviewer reads."""
     import look
 
     names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
-    ringed, values = look.image_inputs(root, names, digests, tokens)
+    ringed, values = look.image_inputs(root, names, digests)
     shared = look.sha256(
         json.dumps(
             [
@@ -110,7 +109,6 @@ def carried_record(
         look.design_hash(root, design_rev),
         [str(item["sha256"]) for item in entries],
         lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
-        look.design_tokens_at(root, design_rev),
     )
     if keys != [item["inputs"] for item in entries]:
         return None
@@ -233,7 +231,6 @@ def earlier_findings(
     pairs: list[tuple[str, str, str]],
     judged: list[str],
     measured: dict[str, dict[str, object] | None],
-    tokens: Tokens,
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
     """The Fail lines of the newest clean or findings record on this branch for each file name: the (rule, text) items for the reviewer to recheck, and the (rule, item) Fails that code still finds in the record of this run. A measured item that code finds is decided by code now and is not listed; one that code cannot find stays on the list. A later clean record of a file ends its list. Frame names in a line are set to the names of this run. No line claims that a finding is fixed. `pairs` holds (prompt name, file name, digest)."""
     prefixes = owner_prefixes()
@@ -284,7 +281,7 @@ def earlier_findings(
                 and label in judged
                 and not text.startswith(prefixes)
             ):
-                shown, fails = earlier_split(FRAME.sub(now, live), measured, tokens)
+                shown, fails = earlier_split(FRAME.sub(now, live), measured)
                 owned.update({(label, fail): None for fail in fails})
                 if shown:
                     items.setdefault(shown, (label, []))[1].extend(
@@ -317,10 +314,10 @@ def _without_held(line: str, then: dict[str, str], current: dict[str, str]) -> s
 
 
 def earlier_split(
-    line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
+    line: str, measured: dict[str, dict[str, object] | None]
 ) -> tuple[str, list[str]]:
     """The text of an earlier Fail line to recheck (its judgement items, other parts and the measured items that code cannot find; empty when none is left), and the item text of each measured item that code still fails now. A measured item that code passes is dropped."""
-    kept, passed, failed, fix = sort_parts(line, measured, tokens)
+    kept, passed, failed, fix = sort_parts(line, measured)
     if not passed and not failed:
         return line, []
     head = line.partition(": Fail")[0]
@@ -387,37 +384,8 @@ def stale_problem(
     return "; ".join(stale) or None
 
 
-def token_fault(root: Path, digests: list[str]) -> str:
-    """The measured corner radii that no DESIGN.md token holds, or an empty text. A radius that its box clamped, a record without the clamp field or the root size, and a token that is not a plain length give no verdict. Text sizes stay with the reviewer, because fluid type and a changed root size make a rendered size inexact."""
-    import look
-    from look_facts import corners_of, design_tokens, length_scale
-
-    tokens = design_tokens(root).rounded
-    faults: list[str] = []
-    for digest in digests if tokens else []:
-        values = look.recorded_measured(root, digest) or {}
-        base = values.get("root_px")
-        held = (
-            length_scale(tokens, float(base))
-            if isinstance(base, int | float) and not isinstance(base, bool)
-            else None
-        )
-        if held is None:
-            continue
-        for item in cast(list[dict[str, object]], values.get("radii", [])):
-            for px in sorted({corner for corner in corners_of(item) if corner}):
-                text = f"corner radius {px} px is in no rounded token ({', '.join(map(str, sorted(held)))} px)"
-                if (
-                    item.get("clamped") is False
-                    and px not in held
-                    and text not in faults
-                ):
-                    faults.append(text)
-    return "; ".join(faults) + "; use a token or add it to DESIGN.md" if faults else ""
-
-
 def code_fails(root: Path, head: str, digests: list[str]) -> dict[str, str]:
-    """A Fail text for each judged rule that code decides: a measure finding of a rule that owns it, and the token fault of Design system. A rule without a fault is absent, so the reviewer's line for it stands."""
+    """A Fail text for each judged rule that code decides: a measure finding of a rule that owns it. A rule without a fault is absent, so the reviewer's line for it stands."""
     from ui_measure import FINDING_RULES
     from ui_proof import measure_found
 
@@ -435,8 +403,6 @@ def code_fails(root: Path, head: str, digests: list[str]) -> dict[str, str]:
         rule: "; ".join(texts) + "; fix the screen and capture it again"
         for rule, texts in found.items()
     }
-    if fault := token_fault(root, digests):
-        fails["Design system"] = fault
     return fails
 
 
@@ -496,15 +462,11 @@ def with_owner_lines(
 
 
 def decide_item(
-    item: Item, measured: dict[str, dict[str, object] | None], tokens: Tokens
+    item: Item, measured: dict[str, dict[str, object] | None]
 ) -> tuple[bool, str] | None:
     """Code's Pass (True) or Fail (False) for an item of a measured kind whose element it finds in the record of that image; None leaves the item to the reviewer."""
     values = measured.get(item.frame)
-    return (
-        code_verdict(item.kind, item.element, values, tokens, item.note)
-        if values
-        else None
-    )
+    return code_verdict(item.kind, item.element, values, item.note) if values else None
 
 
 def code_item(item: Item, why: str) -> str:
@@ -514,7 +476,7 @@ def code_item(item: Item, why: str) -> str:
 
 
 def sort_parts(
-    line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
+    line: str, measured: dict[str, dict[str, object] | None]
 ) -> tuple[list[str], list[str], list[str], str]:
     """The parts of a Fail line that code does not decide, the text of each item that code passes, the text of each item that code fails, and the Fix part."""
     parts, fix = fail_parts(line)
@@ -524,7 +486,7 @@ def sort_parts(
     for part in parts:
         prose, item = part_item(part)
         decided = (
-            decide_item(item, measured, tokens)
+            decide_item(item, measured)
             if item
             and not any(
                 (
@@ -544,11 +506,9 @@ def sort_parts(
     return kept, passed, failed, fix
 
 
-def decide_line(
-    line: str, measured: dict[str, dict[str, object] | None], tokens: Tokens
-) -> str:
+def decide_line(line: str, measured: dict[str, dict[str, object] | None]) -> str:
     """A reviewer Fail line with each item that code decides replaced by code's verdict: a Pass item leaves the line, a Fail item stays with code's reason, every other item and part stays. A line with no item left to fail becomes a Pass."""
-    kept, passed, failed, fix = sort_parts(line, measured, tokens)
+    kept, passed, failed, fix = sort_parts(line, measured)
     if not passed and not failed:
         return line
     head = line.partition(": Fail")[0]
@@ -561,13 +521,10 @@ def decide_line(
 def decide_lines(
     rule_lines: list[str],
     measured: dict[str, dict[str, object] | None],
-    tokens: Tokens,
 ) -> list[str]:
     """The reviewer's rule lines with the measured items that code decides replaced by code's verdict."""
     return [
-        decide_line(line, measured, tokens)
-        if split_rule_line(line)[1] == "Fail"
-        else line
+        decide_line(line, measured) if split_rule_line(line)[1] == "Fail" else line
         for line in rule_lines
     ]
 
@@ -576,10 +533,9 @@ def with_code_decisions(
     outcome: str,
     rule_lines: list[str],
     measured: dict[str, dict[str, object] | None],
-    tokens: Tokens,
 ) -> tuple[str, list[str]]:
     """The outcome and the rule lines after code decides the measured items: findings while a Fail line remains, else clean."""
-    decided = decide_lines(rule_lines, measured, tokens)
+    decided = decide_lines(rule_lines, measured)
     if decided == rule_lines:
         return outcome, rule_lines
     failed = any(split_rule_line(line)[1] == "Fail" for line in decided)
