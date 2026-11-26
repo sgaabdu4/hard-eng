@@ -108,3 +108,14 @@ def test_a_colour_tag_is_refused_with_the_judgement_tag_named(
     record = run_look(project, "codex", images)
     assert record["outcome"] != "clean"
     assert "or tag the item [judgement]" in capsys.readouterr().out
+
+
+def test_the_prompt_describes_no_check_against_the_token_lists(
+    tmp_path: Path, project: Path
+) -> None:
+    from test_look_proof_kinds import prompt_of
+
+    _, log = look_with(tmp_path, project, values(texts=[text_fact("Body")]))
+    prompt = prompt_of(log)
+    for stale in ("against the DESIGN.md", "against the tokens", "spacing tokens"):
+        assert stale not in prompt, stale

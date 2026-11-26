@@ -59,3 +59,15 @@ def test_the_facts_list_holds_no_weight_difference_to_copy() -> None:
     text = look_facts.measured_text(PAGE)
     assert "differs from" not in text
     assert "weight keys: " in text
+
+
+def test_a_claim_names_only_the_elements_that_open_its_note() -> None:
+    for note in (
+        "bolder than Helper, matching Twin",
+        "bolder than Helper under Twin",
+        "bolder than Helper across all cards",
+    ):
+        assert look_facts.verdict("weight", "Label", PAGE, note) is None, note
+    for note in ("bolder than Helper and Twin", "bolder than Helper, Twin"):
+        held = look_facts.verdict("weight", "Label", PAGE, note)
+        assert held is not None and held[0] is True, note

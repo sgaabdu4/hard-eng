@@ -254,7 +254,7 @@ def _key_line(kind: str, facts: list[Fact]) -> str:
             break
         shown.append(key)
     more = (
-        f" | {len(keys) - len(shown)} more, the largest values, have no key listed"
+        f" | {len(keys) - len(shown)} more have no key listed"
         if len(shown) < len(keys)
         else ""
     )
@@ -407,18 +407,28 @@ WEIGHT_CLAIM = re.compile(
 def _weight_claim(
     element: str, measured: dict[str, object], claim: str
 ) -> tuple[bool, str] | None:
-    """A claim that an element is bolder or lighter than named elements is disproved by the first named element it does not beat; a true claim stays with the reviewer."""
+    """A claim that an element is bolder or lighter than the elements that open its note (a list joined by commas, `and` or `or`; the list ends at the first other word) is disproved by the first of them it does not beat; a true claim stays with the reviewer."""
     found = WEIGHT_CLAIM.match(claim.replace("’", "'"))
     weights = {key: weight for key, (_, weight) in _weights(measured).items()}
     if not found or element not in weights:
         return None
     heavier = found[1].lower() in ("bolder", "heavier")
-    rest, named = found[2], []
-    for key in sorted(weights, key=len, reverse=True):
-        pattern = rf"(?<!\w){re.escape(key)}(?!\w)"
-        if key != element and re.search(pattern, rest, re.IGNORECASE):
-            named.append(key)
-            rest = re.sub(pattern, " ", rest, flags=re.IGNORECASE)
+    rest, named = found[2].strip(), []
+    by_length = sorted(weights, key=len, reverse=True)
+    while rest:
+        key = next(
+            (
+                key
+                for key in by_length
+                if key != element
+                and re.match(rf"{re.escape(key)}(?!\w)", rest, re.IGNORECASE)
+            ),
+            "",
+        )
+        if not key:
+            break
+        named.append(key)
+        rest = re.sub(r"^\s*(?:,|&|\band\b|\bor\b)?\s*", "", rest[len(key) :]).strip()
     for key in named:
         beats = (
             weights[element] > weights[key]
