@@ -32,7 +32,7 @@ Decisions made here, each with a reason:
 
 ## Acceptance + steps
 
-- [x] A DESIGN.md `rounded` or `spacing` token of `0` is a zero length and does not turn off the radius and gap verdicts → `tests/test_look_keys.py::test_a_zero_token_is_a_length_and_keeps_the_other_verdicts`
+- [x] A DESIGN.md `rounded` or `spacing` token of `0` turns off no verdict, because no token list decides one → `tests/test_look_facts.py::test_a_value_that_a_token_list_lacks_is_never_decided_in_code`
 - [x] A `--font-size-*`, `--font-weight-*` or `--font-style-*` property is not a font family → `tests/test_ui_token_sources.py::test_a_font_property_that_is_not_a_family_adds_no_family`
 - [x] A comment, a test file and a generated file define no token colour or length → `tests/test_ui_token_sources.py::test_a_comment_a_test_file_and_a_generated_file_define_no_token`
 - [x] The library index and the token compare skip tests, generated files and tool folders → `tests/test_ui_token_sources.py::test_the_library_index_and_the_token_compare_skip_tests_and_generated_files`
@@ -43,7 +43,7 @@ Decisions made here, each with a reason:
 - [x] Code decides weight, alignment and the other kinds the same way in 5 of 5 real captures → `tests/test_ui_audit_guards.py::test_code_decides_each_kind_the_same_way_in_five_real_captures`
 - [x] The facts list shows one key for each measured element, and code decides a measured item only from an exact key → `tests/test_look_keys.py::test_a_measured_item_is_decided_from_its_exact_key`
 - [x] A measured item with no valid key is refused by form → `tests/test_look_keys.py::test_a_measured_item_with_no_valid_key_is_refused_by_form`
-- [x] The real items of the release proof are decided from keys, and their old shape is refused → `tests/test_look_keys.py::test_the_real_items_of_the_release_proof_are_decided_from_keys`
+- [x] The real items of the release proof stay with the reviewer when only a token list is claimed, and their old shape is refused → `tests/test_look_keys.py::test_the_real_items_of_the_release_proof_stay_with_the_reviewer_when_only_a_token_list_is_claimed`
 - [x] The counter item and the centred items are decided by code → `tests/test_look_keys.py::test_the_counter_and_the_centred_items_are_decided_by_code`
 - [x] A route's init script and the hold script both run on every step of a session → `tests/test_ui_gap_and_init_script.py::test_a_capture_keeps_the_route_init_script_beside_the_hold_script`
 - [x] A step that started the page again for its init scripts is refused, and a missing init script file is refused → `tests/test_browser_init_scripts.py::test_a_step_that_started_the_page_again_for_its_init_scripts_is_refused`
@@ -53,10 +53,10 @@ Decisions made here, each with a reason:
 - [x] A centred line with an inline link is centred, whatever the number of text fragments on the line → `tests/test_ui_gap_and_init_script.py::test_a_centred_line_with_an_inline_link_is_centred`
 - [x] A label repeated in two rows with one style gets no weight verdict → `tests/test_ui_gap_and_init_script.py::test_a_label_repeated_in_two_rows_with_one_style_gets_no_weight_verdict`
 - [x] A key whose facts disagree has no key, and its item is refused by form → `tests/test_look_keys.py::test_a_key_whose_facts_disagree_has_no_key_and_its_item_is_refused`
-- [x] A listed fact that code cannot decide says it has no key, so a reviewer does not copy it into a measured item → `tests/test_look_keys.py::test_a_listed_fact_that_code_cannot_decide_says_it_has_no_key`
+- [x] A listed gap has its key and no colour has one, so a reviewer does not copy a fact that code cannot decide → `tests/test_look_keys.py::test_a_gap_is_listed_by_its_key_only_and_no_colour_has_a_key`
 - [x] Each text kind lists its own keys, and a key whose facts disagree is not listed → `tests/test_look_keys.py::test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed`
 - [x] An icon button named like a link gives no weight verdict to either → `tests/test_ui_gap_and_init_script.py::test_an_icon_button_named_like_a_link_gives_no_weight_verdict`
-- [x] A failing key leads the colour keys, even on a long page → `tests/test_look_keys.py::test_a_failing_key_leads_the_colour_keys_even_on_a_long_page`
+- [x] A text off every token list gets no colour key, even on a long page → `tests/test_look_keys.py::test_a_text_off_every_token_list_gets_no_colour_key_on_a_long_page`
 - [x] A wrapper named like a heading gives no weight verdict; only text elements are paired → `tests/test_ui_gap_and_init_script.py::test_a_wrapper_named_like_a_heading_gives_no_weight_verdict`
 
 Steps:
