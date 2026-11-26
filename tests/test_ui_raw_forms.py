@@ -29,11 +29,19 @@ def raw(name: str, text: str, defined: tuple[str, ...] = ()) -> list[tuple[str, 
             "<i style={{ background: `linear-gradient(to right, white, ${end})` }} />",
             [("colour", "background: white")],
         ),
+        ("a.ts", "text(ctx, WORD, x, y, { size: 30, color: WHITE, family });", []),
         (
-            "a.tsx",
-            "function f(style: CSSProperties = {}) {\n  return { width: 300 };\n}",
-            [],
+            "a.ts",
+            "text(ctx, WORD, x, y, { size: 30, color: 'white', family });",
+            [("colour", "color: white")],
         ),
+        (
+            "a.ts",
+            "const Box = styled.div`\n  color: white;\n`;",
+            [("colour", "color: white")],
+        ),
+        ("a.tsx", 'const css = "color: white";', [("colour", "color: white")]),
+        ("a.html", '<p style="color: white">Hi</p>', [("colour", "color: white")]),
         (
             "a.tsx",
             'function css(style: CSSProperties = {}) { return ".a { color: white; }"; }',
@@ -54,10 +62,10 @@ def raw(name: str, text: str, defined: tuple[str, ...] = ()) -> list[tuple[str, 
         ("a.css", ".x { color: WHITE; }", [("colour", "color: white")]),
     ],
 )
-def test_a_colour_name_in_a_style_object_counts_only_as_a_quoted_string(
+def test_a_colour_name_in_script_code_counts_only_as_a_quoted_string(
     name: str, text: str, found: list[tuple[str, str]]
 ) -> None:
-    """HE-UI-SOURCE: a JS constant named like a colour is no typed colour; the quoted word is, and a stylesheet reads a name in any case."""
+    """HE-UI-SOURCE: a JS constant named like a colour is no typed colour; a quoted word, CSS text in a string and a declaration that ends with a semicolon are, and a stylesheet reads a name in any case."""
     assert raw(name, text) == found
 
 

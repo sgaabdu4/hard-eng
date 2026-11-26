@@ -3,6 +3,7 @@
 import re
 
 STYLE_SUFFIXES = (".css", ".scss", ".less")
+SCRIPT_SUFFIXES = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts")
 HEX = r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![\w-])"
 HEX_VALUE = re.compile(rf"(?<!url\()(?<!url\(\")(?<!url\(')(?<![\w&/]){HEX}")
 COLOUR_FUNCTION = re.compile(
@@ -65,8 +66,7 @@ NOT_A_COLOUR = re.compile(
 )
 DIGIT = re.compile(r"\d")
 STYLE_OPEN = re.compile(
-    r"style=\{\{|\b\w*[Ss]tyles?\s*[=:]\s*\{|\b(?:const|let|var)\s+\w*[Ss]tyles?\s*:\s*[^=\n{;)]+=\s*\{"
-    r"|\b(?:sx|css)\s*[=:]\s*\{+|StyleSheet\.create\(\s*\{"
+    r"style=\{\{|\b\w*[Ss]tyles?\s*[=:]\s*\{|\b(?:sx|css)\s*[=:]\s*\{+|StyleSheet\.create\(\s*\{"
 )
 APPLY = re.compile(r"@apply\b")
 UNIT_NUMBER = r"-?\d*\.?\d+(?:px|rem|em|pt)"
@@ -105,15 +105,32 @@ def kebab(name: str) -> str:
     return CAMEL.sub("-", name).lower()
 
 
-def colour_names(value: str, in_style_object: bool) -> list[str]:
-    """The colour names of a value, in any case; in a style object only a quoted string holds one (an open one runs to the end, where a `${` cut the value), so a constant such as WHITE is no colour."""
-    if in_style_object:
+def inside_string(line: str, end: int) -> bool:
+    quote = ""
+    skip = False
+    for char in line[:end]:
+        if skip:
+            skip = False
+        elif char == "\\":
+            skip = True
+        elif quote:
+            quote = "" if char == quote else quote
+        elif char in "\"'`":
+            quote = char
+    return bool(quote)
+
+
+def colour_names(value: str, code: bool) -> list[str]:
+    """The colour names of a value, in any case. In script code a name counts only as a quoted string (an open one runs to the end, where a `${` cut the value), so a constant such as WHITE is no colour."""
+    if code:
         value = " ".join(text for _, text in QUOTED_TEXT.findall(value))
     return COLOUR_NAME.findall(NOT_A_WORD.sub(" ", value).lower())
 
 
-def declaration_hits(line: str, in_style_object: bool) -> list[tuple[str, str]]:
-    """(kind, text) for each colour or length typed as a property value on this line."""
+def declaration_hits(
+    line: str, in_style_object: bool, script: bool = False
+) -> list[tuple[str, str]]:
+    """(kind, text) for each colour or length typed as a property value on this line. A script file holds CSS text only inside a string or as a declaration that ends with `;` or `]`; any other unquoted name is a JS value."""
     found: list[tuple[str, str]] = []
     for match in DECLARATION.finditer(line):
         prop, value = kebab(match[1]), match[2]
@@ -121,11 +138,14 @@ def declaration_hits(line: str, in_style_object: bool) -> list[tuple[str, str]]:
         if colour:
             found += [("colour", hit[0]) for hit in HEX_VALUE.finditer(value)]
         if colour:
+            css_text = line[match.end() : match.end() + 1] in (
+                ";",
+                "]",
+            ) or inside_string(line, match.start(1))
             found += [
                 ("colour", f"{prop}: {word}")
                 for word in colour_names(
-                    value,
-                    in_style_object and not line[: match.start(1)].endswith("["),
+                    value, (in_style_object or script) and not css_text
                 )
             ]
         if LENGTH_PROPERTY.fullmatch(prop):
@@ -238,7 +258,7 @@ def raw_value_hits(
             in_style_object = depth > 0
             depth += object_depth(line) if in_style_object else 0
         spaced = BRACKET_GROUP.sub(lambda group: group[0].replace("_", " "), line)
-        hits = declaration_hits(spaced, in_style_object)
+        hits = declaration_hits(spaced, in_style_object, name.endswith(SCRIPT_SUFFIXES))
         hits += [("colour", hit[0]) for hit in COLOUR_FUNCTION.finditer(spaced)]
         if not name.endswith(STYLE_SUFFIXES):
             hits += string_hits(line)
