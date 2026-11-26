@@ -1,6 +1,6 @@
 # One owner of "is this value a token", and no colour from a constant name
 
-Status: Ready
+Status: Complete
 
 ## Outcome + scope
 
@@ -45,11 +45,11 @@ N/A — hook validation logic and tests only; no visible UI.
 
 ## Verification
 
-Result: Pending
-Evidence: Pending.
+Result: Passed
+Evidence: Focused tests pass: all look, UI-source, audit and plan tests (553 cases before the colour-name fix) and the HE-UI-SOURCE, plan and look tests again after it (356 cases). The new look tests fail on `origin/develop` (4 of 7) and the new colour-name rows fail there (8 of 15 at the final form, each on a real assertion). Static gates pass with the exact commands of `hard-eng.gates.json`: format, lint, complexity, annotations, types, dead-code and security (semgrep). `hot-paths` on the touched sources: 0 findings. The five look modules and the item kind text equal `main`. The independent review ran three times: the first two found a plan reference break and three colour-name regressions (an open template string, a `[color:white]` class beside a style attribute, a typed style object), each fixed with a test; the third at `b22a647b` is clean.
 E2E: N/A — hook tests run real temporary Git repositories and real file text; no user journey changes.
 Real service: N/A — local Git and Python only; no outside service is called.
-Retro: Pending.
+Retro: Escaped bug: the join kept develop's look modules, so a second owner of the token rule came back and a false colour Fail could not be disputed; the gate is the look tests that hold a token list and the colour-name rows → `tests/test_look_no_token_verdicts.py::test_a_gap_and_a_radius_outside_the_token_lists_stay_with_the_reviewer`. Review correction: the first colour-name change dropped three real forms; the rows now pin them → `tests/test_ui_raw_forms.py::test_a_colour_name_in_a_style_object_counts_only_as_a_quoted_string`. Ran too late: none. Single source: HE-UI-SOURCE for every token verdict.
 
 Delivery target: Merge
 Delivery: Pending — `hard-eng` and `canary` pass on the PR to develop.
