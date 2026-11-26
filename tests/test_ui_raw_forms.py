@@ -10,6 +10,31 @@ def raw(name: str, text: str, defined: tuple[str, ...] = ()) -> list[tuple[str, 
     return [(kind, hit) for _, kind, hit in raw_value_hits(name, lines, set(defined))]
 
 
+@pytest.mark.parametrize(
+    ("name", "text", "found"),
+    [
+        ("a.tsx", "const style = { color: WHITE };", []),
+        ("a.tsx", "const style = { color: theme.white };", []),
+        ("a.tsx", "const style = { borderColor: BLACK, fill: WHITE };", []),
+        ("a.tsx", "<i style={{ color: WHITE }} />", []),
+        ("a.tsx", "const style = { color: 'white' };", [("colour", "color: white")]),
+        ("a.tsx", 'const style = { color: "White" };', [("colour", "color: white")]),
+        (
+            "a.tsx",
+            "<i style={{ border: `1px solid ${WHITE}` }} />",
+            [],
+        ),
+        ("a.css", ".x { color: White; }", [("colour", "color: white")]),
+        ("a.css", ".x { color: WHITE; }", [("colour", "color: white")]),
+    ],
+)
+def test_a_colour_name_in_a_style_object_counts_only_as_a_quoted_string(
+    name: str, text: str, found: list[tuple[str, str]]
+) -> None:
+    """HE-UI-SOURCE: a JS constant named like a colour is no typed colour; the quoted word is, and a stylesheet reads a name in any case."""
+    assert raw(name, text) == found
+
+
 def test_code_after_a_closed_comment_on_the_same_line_is_judged() -> None:
     """HE-UI-SOURCE: a closed comment at the start of a line hides nothing after it; an open comment line and a whole comment line stay skipped."""
     tsx = '{/* x */}<button style={{ color: "#0a0b0c" }}>Go</button>\n'
