@@ -2,12 +2,12 @@
 
 import re
 from collections.abc import Mapping
-from itertools import pairwise
 from typing import NamedTuple
 
 from look_facts import claim_in
 from plans import split_rule_line, usability_lines, usability_rules
 
+WORD = re.compile(r"\w")
 FIX_PART = re.compile(r"(?i)\bfix:\s*\S")
 ITEM_START = re.compile(r"image-\d+\.png\s*:")
 KIND_TAG = re.compile(r"\[([A-Za-z-]+)\]")
@@ -92,16 +92,39 @@ class Item(NamedTuple):
 
 
 def fail_parts(line: str) -> tuple[list[str], str]:
-    """The parts of a Fail line before its last `Fix:`, and the Fix part. A new part starts at each `;` and at each item after the first of a chunk, so a list with no `;` is still one item for each part."""
+    """The parts of a Fail line before its last `Fix:`, and the Fix part. A part is a `;` piece; the opening sentence may come before the first item, and nothing inside a piece is cut."""
     text = split_rule_line(line)[2]
     fixes = list(FIX_PART.finditer(text))
     cut = fixes[-1].start() if fixes else len(text)
-    parts: list[str] = []
-    for chunk in text[:cut].split(";"):
-        starts = [found.start() for found in ITEM_START.finditer(chunk)]
-        edges = [0, *starts[1:], len(chunk)]
-        parts.extend(chunk[a:b] for a, b in pairwise(edges) if chunk[a:b].strip())
-    return parts, text[cut:]
+    return [part for part in text[:cut].split(";") if part.strip()], text[cut:]
+
+
+def image_problem(rule_lines: list[str], keys: "Keys | None" = None) -> str | None:
+    """Why a Fail line cannot stand: a `;` piece that holds more than one item, or that names an image that does not start its item. An item names exactly one image, first; the opening sentence and the words after an item name none. An image name inside the item's own element key does not count when that key is a measured key of the item's image."""
+    for line in rule_lines:
+        if split_rule_line(line)[1] != "Fail":
+            continue
+        for part in fail_parts(line)[0]:
+            starts = len(ITEM_START.findall(part))
+            if starts > 1:
+                return (
+                    f"not done: `{part.strip()}` holds more than one item; "
+                    "join items with `;`"
+                )
+            item = part_item(part)[1]
+            inside = (
+                len(FRAME.findall(item.element))
+                if item
+                and keys
+                and item.element in keys.get(item.frame, {}).get(item.kind, ())
+                else 0
+            )
+            if len(FRAME.findall(part)) - inside > starts:
+                return (
+                    f"not done: `{part.strip()}` names an image that does not start an item; "
+                    "write one item per image, with its image name first"
+                )
+    return None
 
 
 def part_item(part: str) -> tuple[str, Item | None]:
@@ -214,6 +237,73 @@ def judged_lines(unmeasured: bool = False) -> list[str]:
     ]
 
 
+def is_same(note: str) -> bool:
+    """True when the note of an item is only `same`, whatever its case or spacing, with or without a closing period."""
+    return " ".join(note.split()).lower().rstrip(".").rstrip() == "same"
+
+
+def with_note(part: str, note: str) -> str:
+    """The part with the note after its kind tag replaced; its image, tag and element stay."""
+    found = ITEM_START.search(part)
+    tag = KIND_TAG.search(part, found.end()) if found else None
+    return f"{part[: tag.end()]} {note}" if tag else part
+
+
+def claimed_line(line: str) -> tuple[str, str]:
+    """A Fail line in which each part holds its own claim, and the text of the first part that has none. A claim is a note with a letter or digit that is not only `same`. A `same` part takes the claim of the part right before it, whatever its element, and that claim may itself be filled. An empty note of a judgement item takes the claim of the part right after it, only when that part has the same element, and that claim may itself be filled. Any other note, such as `same missing the asterisk`, stays. An empty note that has no match is the claim of its element text. A `same` part that has no claim to take is named, because it points at nothing and cannot be disputed."""
+    parts, fix = fail_parts(line)
+    items = [part_item(part)[1] for part in parts]
+
+    def own(item: Item | None) -> bool:
+        return (
+            item is not None
+            and WORD.search(item.note) is not None
+            and not is_same(item.note)
+        )
+
+    def folded(text: str) -> str:
+        return " ".join(text.split()).lower()
+
+    claims: list[str | None] = [
+        item.note if item is not None and own(item) else None for item in items
+    ]
+    for _ in items:
+        for number, item in enumerate(items):
+            if item is None or claims[number] is not None:
+                continue
+            if is_same(item.note):
+                claims[number] = claims[number - 1] if number else None
+            elif item.kind == "judgement" and number + 1 < len(items):
+                after = items[number + 1]
+                if (
+                    after is not None
+                    and after.kind == "judgement"
+                    and folded(after.element) == folded(item.element)
+                ):
+                    claims[number] = claims[number + 1]
+    kept = [
+        with_note(part, claim.rstrip(" ."))
+        if item is not None and claim is not None and not own(item)
+        else part
+        for part, item, claim in zip(parts, items, claims, strict=True)
+    ]
+    missing = next(
+        (
+            item.text
+            for item, claim in zip(items, claims, strict=True)
+            if item is not None and claim is None and is_same(item.note)
+        ),
+        "",
+    )
+    if kept == parts:
+        return line, missing
+    label = split_rule_line(line)[0]
+    return (
+        f"{label}: Fail — {'; '.join(p.strip() for p in kept)} {fix}".rstrip(),
+        missing,
+    )
+
+
 def judge(
     answer: str,
     names: list[str],
@@ -257,7 +347,21 @@ def judge(
             [],
             {},
         )
-    rule_lines = [found[name] for name in wanted]
+    if refusal := image_problem([found[name] for name in wanted], keys):
+        return refusal, [], {}
+    claimed = [
+        claimed_line(found[name])
+        if split_rule_line(found[name])[1] == "Fail"
+        else (found[name], "")
+        for name in wanted
+    ]
+    if empty := next((item for _, item in claimed if item), ""):
+        return (
+            f"not done: `{empty}` says only `same` and the part right before it states no claim; write the claim in its note",
+            [],
+            {},
+        )
+    rule_lines = [line for line, _ in claimed]
     if refusal := rule_refusal(rule_lines, names, keys):
         return refusal, [], {}
     if refusal := recheck_problem(lines, rule_lines, rechecks or [], names):

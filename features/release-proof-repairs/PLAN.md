@@ -37,7 +37,7 @@ Decisions made here, each with a reason:
 - [x] A comment, a test file and a generated file define no token colour or length → `tests/test_ui_token_sources.py::test_a_comment_a_test_file_and_a_generated_file_define_no_token`
 - [x] The library index and the token compare skip tests, generated files and tool folders → `tests/test_ui_token_sources.py::test_the_library_index_and_the_token_compare_skip_tests_and_generated_files`
 - [x] The gap between inline neighbours follows their order on the line → `tests/test_ui_gap_and_init_script.py::test_the_gap_between_inline_neighbours_follows_their_order_on_the_line`
-- [x] Code decides font weight against its neighbours → `tests/test_look_keys.py::test_code_decides_font_weight_against_its_neighbours`
+- [x] Code decides a weight only from a claim that one element is bolder or lighter than another named element, and a weight that differs from a neighbour decides nothing → `tests/test_look_weight_claims.py::test_a_bolder_claim_passes_or_fails_on_the_two_measured_weights`, `tests/test_look_weight_claims.py::test_a_weight_that_differs_from_the_neighbours_decides_nothing`
 - [x] Code decides text alignment from text-align and the box position → `tests/test_look_keys.py::test_code_decides_text_alignment`
 - [x] A control at its floor says so in the facts list, and code decides its tap item → `tests/test_look_keys.py::test_the_tap_fact_of_a_link_at_its_floor_says_so_and_code_decides_it`
 - [x] Code decides weight, alignment and the other kinds the same way in 5 of 5 real captures → `tests/test_ui_audit_guards.py::test_code_decides_each_kind_the_same_way_in_five_real_captures`

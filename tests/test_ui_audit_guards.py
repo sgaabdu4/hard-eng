@@ -944,8 +944,8 @@ KIND_CASES = {
     ("tap", "Big one"): True,
     ("align", "Centred note"): True,
     ("align", "Left note"): False,
-    ("weight", "Even one"): True,
-    ("weight", "Bold two"): False,
+    ("weight", "Even one"): None,
+    ("weight", "Bold two"): None,
 }
 
 
