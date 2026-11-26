@@ -133,7 +133,7 @@ def test_web_raw_values_red_then_fixed(tmp_path: Path) -> None:
     assert found == Counter(
         {
             ("src/screens/Profile.tsx", "bg-[#1a2b3c]"): 1,
-            ("src/screens/Profile.tsx", "rgb("): 1,
+            ("src/screens/Profile.tsx", "rgb(10, 20, 30)"): 1,
             ("src/screens/Profile.tsx", "p-[13px]"): 1,
             ("src/screens/Profile.tsx", "w-[240px]"): 1,
             ("src/screens/Profile.tsx", "h-[3rem]"): 1,

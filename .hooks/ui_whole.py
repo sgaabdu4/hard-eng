@@ -190,8 +190,13 @@ def token_values(
     return values
 
 
+ARBITRARY_VALUE = re.compile(r"-\[([^\]]*)\]$")
+
+
 def is_token_literal(hit: str, tokens: set[tuple[str, str | float]]) -> bool:
     typed = hit.rsplit(": ", 1)[-1]
+    if bracket := ARBITRARY_VALUE.search(typed):
+        typed = bracket[1].replace("_", " ")
     length = length_px(typed)
     return any(("c", colour) in tokens for colour in colours_in(typed)) or (
         length is not None and ("l", length) in tokens

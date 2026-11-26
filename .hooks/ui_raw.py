@@ -5,7 +5,9 @@ import re
 STYLE_SUFFIXES = (".css", ".scss", ".less")
 HEX = r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![\w-])"
 HEX_VALUE = re.compile(rf"(?<!url\()(?<!url\(\")(?<!url\(')(?<![\w&/]){HEX}")
-COLOUR_FUNCTION = re.compile(r"\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\((?!\s*var\()")
+COLOUR_FUNCTION = re.compile(
+    r"\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\((?!\s*var\()[^()]*(?:\([^()]*\)[^()]*)*\)?"
+)
 COLOUR_NAME = re.compile(
     r"(?<![\w-])(?:"
     "aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|"
@@ -160,13 +162,15 @@ def object_depth(line: str, open_at: int = 0) -> int:
 
 
 def outermost(hits: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """Each hit once, and none that is only a part of a bigger hit of the same kind, such as #abcdef in bg-[#abcdef]."""
+    """Each hit once, and none that is only a part of a bigger hit of the same kind, such as #abcdef in bg-[#abcdef]; an underscore in a bigger hit reads as a space."""
     unique = list(dict.fromkeys(hits))
     return [
         hit
         for hit in unique
         if not any(
-            hit != other and hit[0] == other[0] and hit[1] in other[1]
+            hit != other
+            and hit[0] == other[0]
+            and (hit[1] in other[1] or hit[1] in other[1].replace("_", " "))
             for other in unique
         )
     ]
