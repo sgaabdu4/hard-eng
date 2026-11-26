@@ -128,9 +128,9 @@ def colour_names(value: str, code: bool) -> list[str]:
 
 
 def declaration_hits(
-    line: str, in_style_object: bool, script: bool = False
+    line: str, in_style_object: bool, script: bool = False, in_template: bool = False
 ) -> list[tuple[str, str]]:
-    """(kind, text) for each colour or length typed as a property value on this line. A script file holds CSS text only inside a string or as a declaration that ends with `;` or `]`; any other unquoted name is a JS value."""
+    """(kind, text) for each colour or length typed as a property value on this line. A script file holds CSS text only inside a string or a multi-line template, as a declaration that ends with `;`, or as a `[prop:value]` class; any other unquoted name is a JS value."""
     found: list[tuple[str, str]] = []
     for match in DECLARATION.finditer(line):
         prop, value = kebab(match[1]), match[2]
@@ -138,10 +138,13 @@ def declaration_hits(
         if colour:
             found += [("colour", hit[0]) for hit in HEX_VALUE.finditer(value)]
         if colour:
-            css_text = line[match.end() : match.end() + 1] in (
-                ";",
-                "]",
-            ) or inside_string(line, match.start(1))
+            after = line[match.end() : match.end() + 1]
+            css_text = (
+                in_template
+                or after == ";"
+                or (after == "]" and line[: match.start(1)].endswith("["))
+                or inside_string(line, match.start(1))
+            )
             found += [
                 ("colour", f"{prop}: {word}")
                 for word in colour_names(
@@ -245,7 +248,10 @@ def raw_value_hits(
     found: list[tuple[int, str, str]] = []
     depth = 0
     used = used_style_objects(lines)
+    template = False
     for number, line in lines:
+        in_template = template
+        template ^= (line.count("`") - line.count("\\`")) % 2 == 1
         opened = (
             (STYLE_OPEN.search(line) or (used and used.search(line)))
             if depth <= 0
@@ -258,7 +264,9 @@ def raw_value_hits(
             in_style_object = depth > 0
             depth += object_depth(line) if in_style_object else 0
         spaced = BRACKET_GROUP.sub(lambda group: group[0].replace("_", " "), line)
-        hits = declaration_hits(spaced, in_style_object, name.endswith(SCRIPT_SUFFIXES))
+        hits = declaration_hits(
+            spaced, in_style_object, name.endswith(SCRIPT_SUFFIXES), in_template
+        )
         hits += [("colour", hit[0]) for hit in COLOUR_FUNCTION.finditer(spaced)]
         if not name.endswith(STYLE_SUFFIXES):
             hits += string_hits(line)
