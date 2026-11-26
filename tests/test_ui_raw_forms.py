@@ -41,6 +41,18 @@ def raw(name: str, text: str, defined: tuple[str, ...] = ()) -> list[tuple[str, 
             [("colour", "color: white")],
         ),
         ("a.tsx", 'const css = "color: white";', [("colour", "color: white")]),
+        (
+            "a.ts",
+            "const Box = styled.div`\n  background: linear-gradient(to right, white, ${end});\n`;",
+            [("colour", "background: white")],
+        ),
+        (
+            "a.ts",
+            "const Box = styled.div`\n  box-shadow: 0 1px 2px black,\n    0 4px 8px var(--s);\n`;",
+            [("colour", "box-shadow: black")],
+        ),
+        ("a.tsx", "const style = { color: theme.gray[500] };", []),
+        ("a.tsx", "const style = { color: COLORS[WHITE] };", []),
         ("a.html", '<p style="color: white">Hi</p>', [("colour", "color: white")]),
         (
             "a.tsx",
