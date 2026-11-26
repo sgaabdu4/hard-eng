@@ -1,4 +1,4 @@
-"""Code decides weight, alignment, the zero token and every measured look item from an exact key; an item with no key is refused by form."""
+"""Code decides alignment, the zero token and every measured look item from an exact key; an item with no key is refused by form."""
 
 from pathlib import Path
 
@@ -25,46 +25,6 @@ def test_a_zero_token_is_a_length_and_keeps_the_other_verdicts() -> None:
     assert off_radius[0] is False
     assert off_gap is not None
     assert off_gap[0] is False
-
-
-def counter(
-    weights: tuple[int, int, int], axis: str = "x", twice: bool = False
-) -> dict[str, object]:
-    names = ("Lesson", "Number", "Total")
-    texts = [
-        text_fact(name, 12, weight=weight)
-        for name, weight in zip(names, weights, strict=True)
-    ]
-    return values(
-        texts=[*texts, text_fact("Number", 12, weight=600)] if twice else texts,
-        gaps=[
-            {"at": "Lesson", "to": "Number", "px": 8, "axis": axis},
-            {"at": "Number", "to": "Total", "px": 8, "axis": axis},
-        ],
-    )
-
-
-def test_code_decides_font_weight_against_its_neighbours(tmp_path: Path) -> None:
-    import look_facts
-
-    tokens = tokens_of(tmp_path)
-    same = look_facts.verdict("weight", "Number", counter((600, 600, 600)), tokens)
-    assert same is not None
-    assert same[0] is True
-    assert "equals its neighbours (Lesson, Total)" in same[1]
-    differs = look_facts.verdict("weight", "Number", counter((600, 700, 600)), tokens)
-    assert differs is not None
-    assert differs[0] is False
-    assert "differs from its neighbours (Lesson, Total)" in differs[1]
-    stacked = counter((600, 700, 600), axis="y")
-    assert look_facts.verdict("weight", "Number", stacked, tokens) is None
-    twice = counter((600, 700, 600), twice=True)
-    assert look_facts.verdict("weight", "Number", twice, tokens) is None
-    assert look_facts.verdict("weight", "Lesson", twice, tokens) is None
-    alone = values(texts=[text_fact("Number", 12, weight=700)])
-    assert look_facts.verdict("weight", "Number", alone, tokens) is None
-    old = values(texts=[{"at": "Number", "px": 12}], gaps=counter((1, 1, 1))["gaps"])
-    assert look_facts.verdict("weight", "Number", old, tokens) is None
 
 
 def test_code_decides_text_alignment(tmp_path: Path) -> None:
@@ -412,9 +372,7 @@ def test_the_old_shape_of_the_release_proof_items_is_refused_by_form(
         assert outcome.startswith("not done: `image-1.png: "), old
 
 
-def test_weight_ignores_unnamed_and_repeated_keys_and_a_solo_item_has_no_key(
-    tmp_path: Path,
-) -> None:
+def test_weight_keys_skip_unnamed_and_repeated_elements(tmp_path: Path) -> None:
     import look_facts
 
     tokens = tokens_of(tmp_path)
@@ -425,24 +383,14 @@ def test_weight_ignores_unnamed_and_repeated_keys_and_a_solo_item_has_no_key(
             text_fact("Overdue", 12, weight=400),
             text_fact("5", 12, weight=600),
             text_fact("", 12, weight=400),
-            text_fact("Dashboard", 12, weight=600),
             text_fact("Hero title", 12, weight=700),
         ],
-        gaps=[
-            {"at": "Round", "to": "5", "px": 8, "axis": "x"},
-            {"at": "5", "to": "Overdue", "px": 8, "axis": "x"},
-            {"at": "", "to": "Dashboard", "px": 8, "axis": "x"},
-        ],
     )
-    assert look_facts.verdict("weight", "5", measured, tokens) is None
-    assert look_facts.verdict("weight", "Dashboard", measured, tokens) is None
-    assert "Hero title" not in look_facts.item_keys(measured, tokens)["weight"]
-    outcome, _ = judged_with_keys(
-        "image-1.png: Hero title [weight] looks like 10 px Fix: bolder",
-        measured,
-        tokens,
+    keys = look_facts.item_keys(measured, tokens)["weight"]
+    assert keys == {"Round", "Overdue", "Hero title"}
+    assert (
+        look_facts.verdict("weight", "5", measured, tokens, "bolder than Round") is None
     )
-    assert outcome.startswith("not done: `image-1.png: Hero title [weight]`")
 
 
 def test_a_link_in_a_sentence_is_not_said_to_meet_the_floor(tmp_path: Path) -> None:
@@ -522,7 +470,7 @@ def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
     listed = look_facts.measured_text(measured, tokens).splitlines()
     weight = [line for line in listed if line.startswith("weight keys:")]
     align = [line for line in listed if line.startswith("align keys:")]
-    assert weight == ["weight keys: Bold two | Even one"]
+    assert weight == ["weight keys: Bold two | Even one | Heading"]
     assert len(align) == 1
     assert "Heading" in align[0]
     assert "Settings #1" in align[0]

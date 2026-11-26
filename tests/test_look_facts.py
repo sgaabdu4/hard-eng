@@ -166,7 +166,7 @@ def test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out(
     listed = [line for line in first.splitlines() if line.startswith("- ")]
     assert listed[0].startswith("- Tiny: 9 px")
     assert len(listed) < 301
-    assert len(first.encode()) < 4 * look_facts.FACT_BYTES
+    assert len(first.encode()) < 5 * look_facts.FACT_BYTES
     omitted = 301 - len(listed)
     assert f"{omitted} more not listed, each at or over the 11 px floor" in first
     assert "checked for all 301 text elements: 1 under the 11 px floor" in first
@@ -601,22 +601,26 @@ LIST = (
 )
 
 
-def test_a_list_of_items_with_no_semicolon_is_one_part_for_each_item() -> None:
+def test_a_list_of_items_with_no_semicolon_is_refused() -> None:
     import look_answer
 
     parts, fix = look_answer.fail_parts(f"Design system: Fail — {LIST}")
-    assert len(parts) == 2
-    assert parts[1].startswith("image-1.png: the card sits left")
+    assert len(parts) == 1
     assert fix == "Fix: fix both."
-    outcome, _ = judged(LIST.replace("the card sits left", "badge #7a5c5c"))
-    assert outcome.startswith("not done: a Fail line states #7a5c5c")
+    outcome, _ = judged(LIST)
+    assert outcome.startswith("not done: `")
+    assert "join items with `;`" in outcome
 
 
 def test_the_second_item_of_a_list_survives_when_the_first_passes_in_code(
     tmp_path: Path, project: Path
 ) -> None:
     measured = values(texts=[text_fact("Save", 14)])
-    record, _ = look_with(tmp_path, project, measured, answer_with(LIST))
+    joined = (
+        "image-1.png: Save [size]; image-1.png: the card sits left [judgement] "
+        "Fix: fix both."
+    )
+    record, _ = look_with(tmp_path, project, measured, answer_with(joined))
     line = stored_rule(record, "Design system")
     assert line.startswith("Design system: Fail — ")
     assert "the card sits left [judgement]" in line

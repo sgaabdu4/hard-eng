@@ -44,7 +44,7 @@ ITEM_KINDS = {
     "gap": "the gap between two neighbours against the DESIGN.md spacing tokens; a claim that the neighbours touch opens its note after the tag with that claim, such as chips touch",
     "radius": "the corner radius against the DESIGN.md rounded tokens; a claim that the corners are square opens its note after the tag with that claim, such as square corners",
     "tap": "the control size against its tap floor",
-    "weight": "the text weight against the weight of its neighbours in the same row",
+    "weight": "a claim that the element is bolder or lighter than named elements, which opens its note after the tag with bolder than or lighter than; a weight that is only unlike a neighbour is judgement",
     "align": "whether the text is centred in its parent: a claim that it is not (the default), or, when the note after the tag opens with the claim centred, a claim that it is; any other alignment claim is judgement",
     "judgement": "anything else: placement, any other alignment or weight claim, line count, wording",
 }
@@ -542,7 +542,27 @@ for (const el of texts) {
 }
 const gaps = [];
 const seenGaps = new Set();
-const textSet = new Set(texts);for (const parent of document.body.querySelectorAll("*")) {
+const marginOf = (el, side) => {
+  const value = el.computedStyleMap().get("margin-" + side);
+  return value instanceof CSSUnitValue && value.unit === "px" ? value.value : NaN;
+};
+const gapOf = (value) => parseFloat(value) || 0;
+const spaced = (parent, a, b, axis, px) => {
+  const ps = getComputedStyle(parent), as = getComputedStyle(a), bs = getComputedStyle(b);
+  if (as.display.startsWith("table") || bs.display.startsWith("table")) return false;
+  const lined = /flex|grid/.test(ps.display);
+  if (lined && (parseFloat(as.flexGrow) > 0 || parseFloat(bs.flexGrow) > 0)) return false;
+  if (axis === "x") {
+    const own = marginOf(a, "right") + marginOf(b, "left") + (lined ? gapOf(ps.columnGap) : 0);
+    const word = !lined && as.display.startsWith("inline") && bs.display.startsWith("inline") ? gapOf(as.fontSize) * 0.5 : 0;
+    return px >= own - 1 && px <= own + word + 1;
+  }
+  const down = marginOf(a, "bottom"), up = marginOf(b, "top");
+  const margins = lined || down < 0 || up < 0 ? down + up : Math.max(down, up);
+  return Math.abs(px - (margins + (lined ? gapOf(ps.rowGap) : 0))) <= 1;
+};
+const textSet = new Set(texts);
+for (const parent of document.body.querySelectorAll("*")) {
   const kids = [...parent.children].filter((c) => visible(c) && !["absolute", "fixed"].includes(getComputedStyle(c).position));
   if (kids.length < 2) continue;
   const rows = [];
@@ -557,6 +577,7 @@ const textSet = new Set(texts);for (const parent of document.body.querySelectorA
     const axis = below >= -1 ? "y" : beside >= -1 ? "x" : "";
     if (!axis) continue;
     const gap = { at: factName(boxes[i - 1].c), to: factName(boxes[i].c), px: Math.round(axis === "y" ? below : beside), axis };
+    if (!spaced(parent, boxes[i - 1].c, boxes[i].c, axis, gap.px)) continue;
     if (!textSet.has(boxes[i - 1].c) || !textSet.has(boxes[i].c)) gap.text = false;
     const key = JSON.stringify(gap);
     if (!seenGaps.has(key)) { seenGaps.add(key); gaps.push(gap); }
