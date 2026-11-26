@@ -505,8 +505,11 @@ def limit_sessions(tool: str, folder: Path, session: str) -> None:
         timeout=STEP_TIMEOUT,
     )
     try:
-        open_names = [str(name) for name in json.loads(done.stdout)["data"]["sessions"]]
-    except (ValueError, KeyError, TypeError):
+        payload = json.loads(done.stdout)
+        open_names = [
+            str(name) for name in (payload.get("data") or payload)["sessions"]
+        ]
+    except (ValueError, KeyError, TypeError, AttributeError):
         return
     if session not in open_names and SESSION_NAME.fullmatch(session):
         route_file(folder, session).unlink(missing_ok=True)
