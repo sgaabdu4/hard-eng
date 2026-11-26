@@ -2,7 +2,6 @@
 
 import re
 from collections.abc import Mapping
-from itertools import pairwise
 from typing import NamedTuple
 
 from look_facts import claim_in
@@ -91,32 +90,35 @@ class Item(NamedTuple):
     note: str
 
 
-LIST_MARKER = re.compile(r"\s+\d+[.)]\s*$")
-
-
 def fail_parts(line: str) -> tuple[list[str], str]:
-    """The parts of a Fail line before its last `Fix:`, and the Fix part. A new part starts at each `;` and at each item after the first of a chunk, so a list with no `;` is still one item for each part. A list marker that ends a part, with the next item right after it, belongs to that item and is cut."""
+    """The parts of a Fail line before its last `Fix:`, and the Fix part. A part is a `;` piece; the opening sentence may come before the first item, and nothing inside a piece is cut."""
     text = split_rule_line(line)[2]
     fixes = list(FIX_PART.finditer(text))
     cut = fixes[-1].start() if fixes else len(text)
-    parts: list[str] = []
-    for chunk in text[:cut].split(";"):
-        starts = [found.start() for found in ITEM_START.finditer(chunk)]
-        edges = [0, *starts[1:], len(chunk)]
-        pieces = [chunk[a:b] for a, b in pairwise(edges) if chunk[a:b].strip()]
-        parts.extend(
-            [*(LIST_MARKER.sub("", piece) for piece in pieces[:-1]), *pieces[-1:]]
-        )
-    return parts, text[cut:]
+    return [part for part in text[:cut].split(";") if part.strip()], text[cut:]
 
 
-def image_problem(rule_lines: list[str]) -> str | None:
-    """Why a Fail line cannot stand: a part that names an image that is not the start of its item. An item names exactly one image, first; the opening sentence and the words after an item name none."""
+def image_problem(rule_lines: list[str], keys: "Keys | None" = None) -> str | None:
+    """Why a Fail line cannot stand: a `;` piece that holds more than one item, or that names an image that does not start its item. An item names exactly one image, first; the opening sentence and the words after an item name none. An image name inside the item's own element key does not count when that key is a measured key of the item's image."""
     for line in rule_lines:
         if split_rule_line(line)[1] != "Fail":
             continue
         for part in fail_parts(line)[0]:
-            if len(FRAME.findall(part)) > len(ITEM_START.findall(part)):
+            starts = len(ITEM_START.findall(part))
+            if starts > 1:
+                return (
+                    f"not done: `{part.strip()}` holds more than one item; "
+                    "join items with `;`"
+                )
+            item = part_item(part)[1]
+            inside = (
+                len(FRAME.findall(item.element))
+                if item
+                and keys
+                and item.element in keys.get(item.frame, {}).get(item.kind, ())
+                else 0
+            )
+            if len(FRAME.findall(part)) - inside > starts:
                 return (
                     f"not done: `{part.strip()}` names an image that does not start an item; "
                     "write one item per image, with its image name first"
@@ -342,7 +344,7 @@ def judge(
             [],
             {},
         )
-    if refusal := image_problem([found[name] for name in wanted]):
+    if refusal := image_problem([found[name] for name in wanted], keys):
         return refusal, [], {}
     claimed = [
         claimed_line(found[name])

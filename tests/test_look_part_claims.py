@@ -9,7 +9,7 @@ import look_records
 import pytest
 from conftest import commit
 from test_look import good_answer, install_agent, look_project, make_images, run_look
-from test_look_facts import DESIGN, answer_with, values
+from test_look_facts import DESIGN, answer_with, text_fact, values
 
 project = pytest.fixture(look_project)
 
@@ -187,7 +187,7 @@ def test_a_note_that_is_only_a_closing_period_is_empty() -> None:
     line = line_of(*parts)
     assert look_answer.claimed_line(line) == (line, "")
     both, missing = look_answer.claimed_line(
-        f"Design system: Fail — image-1.png: Decline [judgement]. "
+        f"Design system: Fail — image-1.png: Decline [judgement].; "
         f"image-2.png: Decline [judgement] — {CLAIM}. Fix: use a token."
     )
     assert missing == ""
@@ -196,7 +196,7 @@ def test_a_note_that_is_only_a_closing_period_is_empty() -> None:
 
 def test_a_same_part_after_an_empty_part_that_ends_in_a_period_has_no_claim() -> None:
     line = (
-        "Design system: Fail — image-1.png: Cancel flow [judgement]. "
+        "Design system: Fail — image-1.png: Cancel flow [judgement].; "
         "image-2.png: Cancel flow [judgement] same. Fix: change it."
     )
     assert look_answer.claimed_line(line)[1] == (
@@ -252,11 +252,6 @@ def test_a_copied_claim_word_on_a_keyed_element_is_refused_after_the_fill() -> N
     assert forward.startswith("not done: ")
 
 
-def test_a_note_that_ends_in_a_number_keeps_it() -> None:
-    line = "Design system: Fail — image-1.png: Cancel flow [judgement] wrong in step 2. Fix: x."
-    assert notes_of(line) == ["wrong in step 2."]
-
-
 def test_a_measured_part_after_an_empty_judgement_part_gives_it_no_claim() -> None:
     parts = (
         "image-1.png: Cancel [judgement]",
@@ -293,7 +288,7 @@ def read_many(fail: str) -> str:
 def test_an_item_that_names_more_than_one_image_is_refused(fail: str) -> None:
     outcome = read_many(fail)
     assert outcome.startswith("not done: `")
-    assert ONE_PER_IMAGE in outcome
+    assert ONE_PER_IMAGE in outcome or "join items with `;`" in outcome
 
 
 def test_one_item_for_each_image_is_accepted() -> None:
@@ -302,38 +297,6 @@ def test_one_item_for_each_image_is_accepted() -> None:
         "image-3.png: Cancel flow [judgement] off palette"
     )
     assert ONE_PER_IMAGE not in outcome
-
-
-def test_a_list_marker_with_no_sentence_mark_does_not_enter_the_note_before_it() -> (
-    None
-):
-    line = (
-        "Design system: Fail — 1. image-1.png: Chip B [radius] square corners "
-        "2. image-2.png: Chip B [radius] same 3. image-3.png: Chip B [radius] same "
-        "Fix: round them."
-    )
-    assert notes_of(line) == ["square corners", "same", "same"]
-    filled_line, missing = look_answer.claimed_line(line)
-    assert missing == ""
-    assert notes_of(filled_line) == ["square corners"] * 3
-
-
-def test_an_empty_note_before_a_list_marker_is_empty_and_leaves_same_without_a_claim() -> (
-    None
-):
-    line = (
-        "Design system: Fail — 1. image-1.png: Cancel flow [judgement] "
-        "2. image-2.png: Cancel flow [judgement] same Fix: change it."
-    )
-    assert notes_of(line) == ["", "same"]
-    assert look_answer.claimed_line(line)[1] == (
-        "image-2.png: Cancel flow [judgement] same"
-    )
-    forward = (
-        "Design system: Fail — 1. image-1.png: Decline [judgement] "
-        f"2. image-2.png: Decline [judgement] — {CLAIM} Fix: use a token."
-    )
-    assert notes_of(look_answer.claimed_line(forward)[0]) == [CLAIM, CLAIM]
 
 
 def test_a_refused_run_is_not_kept_and_a_rerun_can_pass(
@@ -350,3 +313,77 @@ def test_a_refused_run_is_not_kept_and_a_rerun_can_pass(
     assert str(run_look(project, "codex", images)["outcome"]).startswith("not done")
     install_agent(tmp_path, "claude", 1, good_answer(1))
     assert run_look(project, "codex", images)["outcome"] == "clean"
+
+
+def read_one(fail: str, keys: dict[str, frozenset[str]] | None = None) -> str:
+    outcome, _, _ = look_answer.judge(
+        answer_with(f"{fail} Fix: change it."),
+        ["image-1.png"],
+        {"image-1.png": True},
+        keys={"image-1.png": keys} if keys is not None else None,
+    )
+    return outcome
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [
+        "image-1.png: Cancel flow [judgement] off palette. image-1.png: Other [judgement] x",
+        "1. image-1.png: Cancel flow [judgement] off palette 2. image-1.png: Other [judgement] x",
+        "image-1.png: Chip B [radius] square corners image-1.png: Chip B [radius] same",
+    ],
+)
+def test_a_piece_that_holds_more_than_one_item_is_refused(fail: str) -> None:
+    outcome = read_one(fail)
+    assert outcome.startswith("not done: `")
+    assert "join items with `;`" in outcome
+
+
+def test_a_trailing_number_in_a_note_stays_in_the_part() -> None:
+    line = (
+        "Spacing: Fail — image-1.png: Round [weight] bolder than 5; "
+        "image-2.png: Round [weight] bolder than 5 Fix: match the weights."
+    )
+    assert notes_of(line) == ["bolder than 5", "bolder than 5"]
+    page = values(
+        texts=[
+            text_fact("Round", 12, weight=600),
+            text_fact("5", 12, weight=600),
+        ]
+    )
+    frames: dict[str, dict[str, object] | None] = {
+        "image-1.png": page,
+        "image-2.png": page,
+    }
+    assert look_records.decide_line(line, frames).startswith(
+        "Spacing: Pass — code checked: "
+    )
+
+
+def test_a_dispute_matches_the_stored_text_of_an_item_that_ends_in_a_number() -> None:
+    line = (
+        "Design system: Fail — image-1.png: Cancel flow [judgement] wrong in step 2.; "
+        "image-2.png: Other flow [judgement] off palette Fix: fix both."
+    )
+    assert notes_of(line) == ["wrong in step 2.", "off palette"]
+    record: dict[str, object] = {"rules": [line], "disputes": [], "outcome": "findings"}
+    item = "image-1.png: Cancel flow [judgement] wrong in step 2."
+    look_dispute.decided(
+        record, item, look_dispute.locate(record, item), "disproved", "measured"
+    )
+    assert cast(list[str], record["rules"])[0] == (
+        "Design system: Fail — image-2.png: Other flow [judgement] off palette Fix: fix both."
+    )
+
+
+def test_an_image_name_in_the_measured_key_of_its_own_item_is_not_refused() -> None:
+    keys = {"size": frozenset({"image-2.png Next"})}
+    assert read_one("image-1.png: image-2.png Next [size]", keys) == "findings"
+
+
+def test_the_same_image_name_in_the_note_or_in_an_unmeasured_key_is_refused() -> None:
+    keys = {"size": frozenset({"image-2.png Next"})}
+    in_note = read_one("image-1.png: image-2.png Next [size] as in image-2.png", keys)
+    assert ONE_PER_IMAGE in in_note
+    unkeyed = read_one("image-1.png: image-3.png Next [size]", keys)
+    assert ONE_PER_IMAGE in unkeyed
