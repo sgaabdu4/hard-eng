@@ -31,6 +31,8 @@ COLOUR_NAME = re.compile(
     r")(?![\w-])"
 )
 NOT_A_WORD = re.compile(r"(?:url|var)\([^)]*\)", re.IGNORECASE)
+QUOTED_TEXT = re.compile(r"([\"'`])((?:(?!\1).)*)\1")
+TEMPLATE_HOLE = re.compile(r"\$\{[^}]*\}")
 COLOUR_PROPERTY = re.compile(
     r"--[\w-]+|(?:background|border|outline|column-rule)(?:-[a-z]+)*|color|fill|stroke"
     r"|[a-z]+-color|box-shadow|text-shadow|text-decoration|filter"
@@ -103,6 +105,15 @@ def kebab(name: str) -> str:
     return CAMEL.sub("-", name).lower()
 
 
+def colour_names(value: str, in_style_object: bool) -> list[str]:
+    """The colour names of a value, in any case; in a style object only a quoted string holds one, so a constant such as WHITE is no colour."""
+    if in_style_object:
+        value = " ".join(
+            TEMPLATE_HOLE.sub(" ", text) for _, text in QUOTED_TEXT.findall(value)
+        )
+    return COLOUR_NAME.findall(NOT_A_WORD.sub(" ", value).lower())
+
+
 def declaration_hits(line: str, in_style_object: bool) -> list[tuple[str, str]]:
     """(kind, text) for each colour or length typed as a property value on this line."""
     found: list[tuple[str, str]] = []
@@ -114,7 +125,7 @@ def declaration_hits(line: str, in_style_object: bool) -> list[tuple[str, str]]:
         if colour:
             found += [
                 ("colour", f"{prop}: {word}")
-                for word in COLOUR_NAME.findall(NOT_A_WORD.sub(" ", value).lower())
+                for word in colour_names(value, in_style_object)
             ]
         if LENGTH_PROPERTY.fullmatch(prop):
             found += [("size", f"{prop}: {hit[0]}") for hit in LENGTH.finditer(value)]
