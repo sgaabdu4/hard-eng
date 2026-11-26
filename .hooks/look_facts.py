@@ -372,7 +372,7 @@ def radius_facts(measured: dict[str, object], tokens: Tokens) -> list[Fact]:
                 found.append(
                     Fact(
                         key,
-                        True,
+                        None if scale is None else True,
                         SQUARE_LAST,
                         f"{key}: 0 px (square)",
                         "corner radius 0 px, square, is not judged against the rounded tokens",
