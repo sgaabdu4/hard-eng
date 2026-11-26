@@ -9,6 +9,9 @@ PAGE = values(
         text_fact("Label", 14, weight=600),
         text_fact("Helper", 12, weight=400),
         text_fact("Twin", 12, weight=600),
+        text_fact("Next", 12, weight=600),
+        text_fact("Copy", 12, weight=600),
+        text_fact("Details", 12, weight=600),
     ]
 )
 FRAMES: dict[str, dict[str, object] | None] = {"image-1.png": PAGE}
@@ -67,6 +70,9 @@ def test_a_claim_names_only_the_elements_that_open_its_note() -> None:
         "bolder than Helper under Twin",
         "bolder than Helper across all cards",
         "bolder than Helper label",
+        "bolder than Helper next to it",
+        "bolder than Helper copy",
+        "bolder than Helper details",
         "bolder than Helper twin",
     ):
         assert look_facts.verdict("weight", "Label", PAGE, note) is None, note
