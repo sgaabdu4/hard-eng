@@ -6,7 +6,10 @@ from pathlib import PurePosixPath
 SCRIPT_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte")
 PDF_MODULE = r"(?:@react-pdf/renderer|jspdf|pdfmake|pdf-lib)(?:/[^'\"]*)?"
 EMAIL_MODULE = r"(?:@react-email/[^'\"]+|mjml)(?:/[^'\"]*)?"
-COMMENT = re.compile(r"(?:^|(?<=\s))//[^\n]*|/\*.*?\*/", re.DOTALL | re.MULTILINE)
+STRING = r"(?P<string>\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)"
+COMMENT = re.compile(
+    STRING + r"|(?:^|(?<=\s))//[^\n]*|/\*.*?\*/", re.DOTALL | re.MULTILINE
+)
 EMAIL_FOLDERS = frozenset(("email", "emails", "mail", "mails"))
 STANDALONE = re.compile(r"<!doctype html", re.IGNORECASE)
 DART_PDF = re.compile(r"(?m)^\s*import\s+['\"]package:(?:pdf|printing)/")
@@ -54,8 +57,8 @@ def used_import(code: str, patterns: list[re.Pattern[str]]) -> bool:
 
 
 def code_of(text: str) -> str:
-    """The text without comments; a line comment is matched before a block comment, so a // line that holds /* hides nothing."""
-    return COMMENT.sub("", text)
+    """The text without comments; a string is read whole, so a /* inside it opens nothing, and a line comment is matched before a block comment, so a // line that holds /* hides nothing."""
+    return COMMENT.sub(lambda hit: hit["string"] or "", text)
 
 
 def exemption(name: str, text: str) -> str | None:

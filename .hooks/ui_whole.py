@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from flutter_screens import flutter_packages
 from generated_marks import generated_sources
 from plans import _is_test as is_test_path
-from ui_exempt import code_of, exemption
+from ui_exempt import STRING, code_of, exemption
 from ui_library import (
     BASE_STEP,
     base_element_hits,
@@ -204,15 +204,15 @@ def shown_colour(line: str, hit: re.Match[str]) -> str:
 
 
 BLOCK_COMMENT = re.compile(
-    r"(?:^|(?<=\s))//[^\n]*|/\*.*?\*/|<!--.*?-->", re.DOTALL | re.MULTILINE
+    STRING + r"|(?:^|(?<=\s))//[^\n]*|/\*.*?\*/|<!--.*?-->",
+    re.DOTALL | re.MULTILINE,
 )
 LINE_COMMENT_START = re.compile(r"\s*//")
 
 
 def blank_comment(hit: re.Match[str]) -> str:
-    """A block comment becomes its line breaks, unless a quote is open before it on its line; a line comment is kept as it is, so a /* inside it opens nothing."""
-    before = hit.string[: hit.start()].rsplit("\n", 1)[-1]
-    if hit[0].startswith("//") or any(before.count(quote) % 2 for quote in "'\"`"):
+    """A block comment becomes its line breaks; a string is kept whole, so a /* inside it opens nothing, and a line comment is kept as it is, so a /* inside it opens nothing."""
+    if hit["string"] or hit[0].startswith("//"):
         return hit[0]
     return "\n" * hit[0].count("\n")
 
