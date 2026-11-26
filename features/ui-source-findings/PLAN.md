@@ -20,7 +20,7 @@ Single source: `code_of` for comment cutting in the token readers; `plan_text_un
 
 Blockers: None.
 Handoff: Approval
-Authority: Autonomous: the coordinator's brief of 2026-11-26 asks for these fixes and a PR into `develop`; no merge or ship here.
+Authority: Autonomous: the maintainer's release request to merge to develop and main; the coordinator's brief of 2026-11-26 asks for these fixes, and the coordinator merges the PR into `develop` through `ship`.
 
 ## Acceptance + steps
 
