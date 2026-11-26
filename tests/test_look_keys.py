@@ -22,28 +22,6 @@ def counter(
     )
 
 
-def test_code_decides_font_weight_against_its_neighbours(tmp_path: Path) -> None:
-    import look_facts
-
-    same = look_facts.verdict("weight", "Number", counter((600, 600, 600)))
-    assert same is not None
-    assert same[0] is True
-    assert "equals its neighbours (Lesson, Total)" in same[1]
-    differs = look_facts.verdict("weight", "Number", counter((600, 700, 600)))
-    assert differs is not None
-    assert differs[0] is False
-    assert "differs from its neighbours (Lesson, Total)" in differs[1]
-    stacked = counter((600, 700, 600), axis="y")
-    assert look_facts.verdict("weight", "Number", stacked) is None
-    twice = counter((600, 700, 600), twice=True)
-    assert look_facts.verdict("weight", "Number", twice) is None
-    assert look_facts.verdict("weight", "Lesson", twice) is None
-    alone = values(texts=[text_fact("Number", 12, weight=700)])
-    assert look_facts.verdict("weight", "Number", alone) is None
-    old = values(texts=[{"at": "Number", "px": 12}], gaps=counter((1, 1, 1))["gaps"])
-    assert look_facts.verdict("weight", "Number", old) is None
-
-
 def test_code_decides_text_alignment(tmp_path: Path) -> None:
     import look_facts
 
@@ -366,9 +344,7 @@ def test_the_old_shape_of_the_release_proof_items_is_refused_by_form(
         assert outcome.startswith("not done: `image-1.png: "), old
 
 
-def test_weight_ignores_unnamed_and_repeated_keys_and_a_solo_item_has_no_key(
-    tmp_path: Path,
-) -> None:
+def test_weight_keys_skip_unnamed_and_repeated_elements(tmp_path: Path) -> None:
     import look_facts
 
     measured = values(
@@ -378,23 +354,12 @@ def test_weight_ignores_unnamed_and_repeated_keys_and_a_solo_item_has_no_key(
             text_fact("Overdue", 12, weight=400),
             text_fact("5", 12, weight=600),
             text_fact("", 12, weight=400),
-            text_fact("Dashboard", 12, weight=600),
             text_fact("Hero title", 12, weight=700),
         ],
-        gaps=[
-            {"at": "Round", "to": "5", "px": 8, "axis": "x"},
-            {"at": "5", "to": "Overdue", "px": 8, "axis": "x"},
-            {"at": "", "to": "Dashboard", "px": 8, "axis": "x"},
-        ],
     )
-    assert look_facts.verdict("weight", "5", measured) is None
-    assert look_facts.verdict("weight", "Dashboard", measured) is None
-    assert "Hero title" not in look_facts.item_keys(measured)["weight"]
-    outcome, _ = judged_with_keys(
-        "image-1.png: Hero title [weight] looks like 10 px Fix: bolder",
-        measured,
-    )
-    assert outcome.startswith("not done: `image-1.png: Hero title [weight]`")
+    keys = look_facts.item_keys(measured)["weight"]
+    assert keys == {"Round", "Overdue", "Hero title"}
+    assert look_facts.verdict("weight", "5", measured, "bolder than Round") is None
 
 
 def test_a_link_in_a_sentence_is_not_said_to_meet_the_floor(tmp_path: Path) -> None:
@@ -468,7 +433,7 @@ def test_each_text_kind_lists_its_own_keys_and_a_disagreeing_key_is_not_listed(
     listed = look_facts.measured_text(measured).splitlines()
     weight = [line for line in listed if line.startswith("weight keys:")]
     align = [line for line in listed if line.startswith("align keys:")]
-    assert weight == ["weight keys: Bold two | Even one"]
+    assert weight == ["weight keys: Bold two | Even one | Heading"]
     assert len(align) == 1
     assert "Heading" in align[0]
     assert "Settings #1" in align[0]

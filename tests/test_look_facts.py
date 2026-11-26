@@ -155,7 +155,7 @@ def test_a_long_fact_list_is_cut_by_the_stated_rule_and_counts_what_it_left_out(
     listed = [line for line in first.splitlines() if line.startswith("- ")]
     assert listed[0].startswith("- Tiny: 9 px")
     assert len(listed) < 301
-    assert len(first.encode()) < 4 * look_facts.FACT_BYTES
+    assert len(first.encode()) < 5 * look_facts.FACT_BYTES
     omitted = 301 - len(listed)
     assert f"{omitted} more not listed, each at or over the 11 px floor" in first
     assert "checked for all 301 text elements: 1 under the 11 px floor" in first

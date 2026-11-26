@@ -47,3 +47,34 @@ def test_free_space_between_neighbours_is_no_gap_fact(
     assert not [pair for pair in pairs if pair[0] == "Take leave"]
     assert not [pair for pair in pairs if pair[0] == "Earned leave"]
     assert not [pair for pair in pairs if pair[0] == "Grown label"]
+
+
+HEADER = (
+    "<main style='width:500px'>"
+    "<div style='display:flex;justify-content:space-between;align-items:center;font-size:14px'>"
+    "<h2 style='margin:0;font-size:18px'>Sheet title</h2>"
+    "<button aria-label='Close' style='width:44px;height:44px'>X</button></div></main>"
+)
+TABLE = (
+    "<main style='width:640px'>"
+    "<table style='width:600px;border-collapse:collapse;font-size:14px'><tr>"
+    "<td style='padding:8px 16px'><span style='display:inline-block;background:#ddd'>Row badge</span></td>"
+    "<td style='padding:8px 16px;text-align:right'>"
+    "<button style='height:44px'>Row button</button></td></tr></table></main>"
+)
+
+
+def test_the_two_ends_of_a_justified_header_row_make_no_gap_fact(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    pairs = pairs_of(captured(tmp_path, site, browser, "header", HEADER))
+    assert not [pair for pair in pairs if "Sheet title" in pair]
+    assert not [pair for pair in pairs if "Close" in pair]
+
+
+def test_two_cells_of_one_table_row_make_no_gap_fact(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    pairs = pairs_of(captured(tmp_path, site, browser, "table", TABLE))
+    assert not [pair for pair in pairs if "Row badge" in pair]
+    assert not [pair for pair in pairs if "Row button" in pair]

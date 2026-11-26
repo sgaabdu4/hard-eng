@@ -38,7 +38,10 @@ def assert_no_weight_verdict(
 
     for key in keys:
         assert look_facts.verdict("weight", key, found) is None
-        assert key not in look_facts.item_keys(found)["weight"]
+        assert (
+            look_facts.verdict("weight", key, found, "differs from its neighbours")
+            is None
+        )
 
 
 COUNTER_PAGE = (

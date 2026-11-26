@@ -153,50 +153,27 @@ def tap_facts(measured: dict[str, object]) -> list[Fact]:
     return found
 
 
-def weight_facts(measured: dict[str, object]) -> list[Fact]:
+def _weights(measured: dict[str, object]) -> dict[str, tuple[str, float]]:
     rows = [
         (own, row)
         for own, row in _named(_rows(measured, "texts"), _at)
         if "weight" in row and _at(row) != NO_NAME
     ]
-    weights: dict[str, set[float]] = {}
     seen: Counter[str] = Counter()
     for _, row in rows:
-        key = fact_key(row.get("at"))
-        seen[key] += max(1, int(_num(row.get("n"))))
-        weights.setdefault(key, set()).add(_num(row.get("weight")))
-    near: dict[str, set[str]] = {}
-    for gap in _rows(measured, "gaps"):
-        first, second = fact_key(gap.get("at")), fact_key(gap.get("to"))
-        text_pair = gap.get("text") is not False
-        if (
-            text_pair
-            and gap.get("axis") == "x"
-            and first in weights
-            and second in weights
-        ):
-            near.setdefault(first, set()).add(second)
-            near.setdefault(second, set()).add(first)
-    found: list[Fact] = []
-    for own, row in rows:
-        name, weight = fact_key(row.get("at")), _num(row.get("weight"))
-        others = sorted(near.get(name, set()) - {name})
-        shared = any(seen[key] > 1 for key in (name, *others))
-        ok = (
-            None
-            if not others or shared
-            else all(weights[o] == {weight} for o in others)
-        )
-        found.append(
-            Fact(
-                own,
-                ok,
-                0 if ok is False else 1,
-                "",
-                f"weight {_shown(weight)} {'equals' if ok else 'differs from'} its neighbours ({', '.join(others)})",
-            )
-        )
-    return found
+        seen[fact_key(row.get("at"))] += max(1, int(_num(row.get("n"))))
+    return {
+        fact_key(row.get("at")): (own, _num(row.get("weight")))
+        for own, row in rows
+        if seen[fact_key(row.get("at"))] == 1
+    }
+
+
+def weight_facts(measured: dict[str, object]) -> list[Fact]:
+    return [
+        Fact(own, True, 1, "", f"weight {_shown(weight)}")
+        for own, weight in _weights(measured).values()
+    ]
 
 
 def align_facts(measured: dict[str, object]) -> list[Fact]:
@@ -314,16 +291,11 @@ def _covered(kind: str, facts: list[Fact]) -> str:
             f"tap size: checked for all {count} controls: {outside} under their floor "
             f"({LIMITS['control_px']} px; {LIMITS['link_px']} px for a link at {LIMITS['desktop_px']} px and wider)"
         )
-    if kind in ("weight", "align"):
+    if kind == "align":
         counted = sum(fact.ok is not None for fact in facts)
-        what = (
-            "text elements that have a neighbour: {} differ from a neighbour"
-            if kind == "weight"
-            else "text elements: {} not centred in their parent"
-        )
         if not counted:
-            return f"{kind}: no {kind} facts in this record, so code does not decide {kind}"
-        return f"{kind}: checked for {'all ' if kind == 'align' else ''}{counted} {what.format(outside)}"
+            return "align: no align facts in this record, so code does not decide align"
+        return f"align: checked for all {counted} text elements: {outside} not centred in their parent"
     return CLAIM_ONLY[kind].format(count=count)
 
 
@@ -334,6 +306,7 @@ NOTES = {
 CLAIM_ONLY = {
     "colour": "colour: code does not decide colours, so a colour item is judgement",
     "gap": "gap: code checks only a claim that two neighbours touch, for {count} neighbour pairs; a gap value is not checked against DESIGN.md, so any other gap item is judgement",
+    "weight": "weight: code checks only a claim that one element is bolder or lighter than another named element, for {count} text elements; a different weight alone is no fault, so any other weight item is judgement",
     "radius": "radius: code checks only a claim that corners are square, for {count} elements; a corner radius is not checked against DESIGN.md, so any other radius item is judgement",
 }
 
@@ -426,6 +399,39 @@ def _touch(element: str, measured: dict[str, object]) -> tuple[bool, str] | None
 
 
 STATES = {"square": _square, "centred": _centred, "touch": _touch}
+WEIGHT_CLAIM = re.compile(
+    rf"(?i)\s*{LEAD}(bolder|heavier|lighter|thinner)\s+than\b(.*)"
+)
+
+
+def _weight_claim(
+    element: str, measured: dict[str, object], claim: str
+) -> tuple[bool, str] | None:
+    """A claim that an element is bolder or lighter than named elements is disproved by the first named element it does not beat; a true claim stays with the reviewer."""
+    found = WEIGHT_CLAIM.match(claim.replace("’", "'"))
+    weights = {key: weight for key, (_, weight) in _weights(measured).items()}
+    if not found or element not in weights:
+        return None
+    heavier = found[1].lower() in ("bolder", "heavier")
+    rest, named = found[2], []
+    for key in sorted(weights, key=len, reverse=True):
+        pattern = rf"(?<!\w){re.escape(key)}(?!\w)"
+        if key != element and re.search(pattern, rest, re.IGNORECASE):
+            named.append(key)
+            rest = re.sub(pattern, " ", rest, flags=re.IGNORECASE)
+    for key in named:
+        beats = (
+            weights[element] > weights[key]
+            if heavier
+            else weights[element] < weights[key]
+        )
+        if not beats:
+            word = "bolder" if heavier else "lighter"
+            return (
+                True,
+                f"weight {_shown(weights[element])}, not {word} than {key} ({_shown(weights[key])})",
+            )
+    return None
 
 
 def verdict(
@@ -435,6 +441,8 @@ def verdict(
     claim: str = "",
 ) -> tuple[bool, str] | None:
     """Pass (True) or Fail (False) of an item with a measured kind, with the reason; None when code cannot decide it. The element must equal a key of that kind exactly, and every fact of that key must give the same verdict; any other case leaves the item to the reviewer. There is no loose name match, because a wrong match gives a false verdict. A note that states a claim (`square`, `centred`) is compared with the fact in the direction of the claim: a Pass means the claim is disproved."""
+    if kind == "weight":
+        return _weight_claim(element, measured, claim)
     if state := claimed_state(kind, claim):
         return STATES[state](element, measured)
     build = FACTS.get(kind)
