@@ -180,6 +180,26 @@ def test_a_disproved_item_leaves_the_record_and_the_head_turns_clean(
     assert look.block_problem(look.block_text(after), 1) is None
 
 
+def test_the_first_item_of_a_line_that_opens_with_a_sentence_can_be_disputed(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = "image-1.png: the Email field is empty [judgement]"
+    second = "image-1.png: the Nickname field is empty [judgement]"
+    images = found(
+        tmp_path,
+        project,
+        monkeypatch,
+        [f"The form could save a blank value. {first}", second],
+        {"src/save.ts": FORM},
+    )
+    install_agent(tmp_path, "claude", 1, "DISPUTE: disproved\nRelies on: cite 1 line 2")
+    assert dispute(project, images, first, ["src/save.ts:2-2"]) == 1
+    after = stored(project, images)
+    assert first not in design_line(after)
+    assert second in design_line(after)
+    assert after["outcome"] == "findings"
+
+
 def test_a_disproved_item_does_not_return_on_a_new_head(
     tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
