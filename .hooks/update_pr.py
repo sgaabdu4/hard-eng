@@ -4,7 +4,6 @@ import fcntl
 import json
 import shlex
 import subprocess
-import tempfile
 from pathlib import Path
 
 from gate_config import SOURCE_FILE, JsonValue
@@ -15,6 +14,7 @@ from update_runner import (
     UPDATE_BRANCH,
     UPDATE_COMMAND,
     branch_current,
+    candidate_worktree,
     fetch_base,
     installed_revision,
     landed,
@@ -213,29 +213,8 @@ def load_refusal(tree: Path) -> str | None:
 
 
 def tip_refusal(root: Path) -> str | None:
-    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
-        tip = Path(temporary) / "candidate"
-        subprocess.run(
-            [
-                "git",
-                "worktree",
-                "add",
-                "--quiet",
-                "--detach",
-                str(tip),
-                f"refs/heads/{UPDATE_BRANCH}",
-            ],
-            cwd=root,
-            check=True,
-        )
-        try:
-            return load_refusal(tip)
-        finally:
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", str(tip)],
-                cwd=root,
-                check=False,
-            )
+    with candidate_worktree(root, f"refs/heads/{UPDATE_BRANCH}") as tip:
+        return load_refusal(tip)
 
 
 def fix_steps(root: Path) -> str:
@@ -409,6 +388,47 @@ def wait_for_running_update(root: Path) -> None:
         fcntl.flock(handle, fcntl.LOCK_SH)
 
 
+def push_lines(root: Path, expected: str) -> tuple[bool, bool]:
+    """Push the update branch, showing each line as it comes; say whether it passed and whether the pre-push check named a signal stop."""
+    from ship_actions import STOP_MARK
+
+    push = subprocess.Popen(
+        ["git", "push", expected, "origin", UPDATE_BRANCH],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    stopped = False
+    for line in push.stdout or ():
+        print(line, end="", flush=True)
+        stopped = stopped or STOP_MARK in line
+    return push.wait() == 0, stopped
+
+
+def failed_push(stopped: bool) -> int:
+    """Say what a failed push of the update branch means; a stop by a signal is no fault."""
+    if stopped:
+        print(
+            f"The push of {UPDATE_BRANCH} was stopped by a signal. The stop is not a "
+            "fault in the project. Fix any other failure printed above, then run "
+            f"`{UPDATE_COMMAND}` again."
+        )
+        return 1
+    print(
+        f"The push of {UPDATE_BRANCH} failed; the lines above give the reason. "
+        "If the output says the check was stopped before it finished, the stop is "
+        "not a fault, and neither is a gate that the stop ended: fix any other "
+        f"failure printed above, then run `{UPDATE_COMMAND}` again. If a failing "
+        "check is printed above with no stop line, the new release found a fault "
+        f"in this project: fix it on the branch {UPDATE_BRANCH} in its own "
+        f"worktree, as its own commit, then run `{UPDATE_COMMAND}` again. If no "
+        "failing check is printed, the project is not at fault: run "
+        f"`{UPDATE_COMMAND}` again."
+    )
+    return 1
+
+
 def publish(root: Path, merge: bool = True) -> int:
     wait_for_running_update(root)
     base = update_base(root)
@@ -456,22 +476,9 @@ def publish(root: Path, merge: bool = True) -> int:
     if lease is None:
         return 1
     expected = f"--force-with-lease=refs/heads/{UPDATE_BRANCH}:{lease}"
-    pushed = subprocess.run(
-        ["git", "push", expected, "origin", UPDATE_BRANCH], cwd=root, check=False
-    )
-    if pushed.returncode:
-        print(
-            f"The push of {UPDATE_BRANCH} failed; the lines above give the reason. "
-            "If the output says the check was stopped before it finished, the stop is "
-            "not a fault, and neither is a gate that the stop ended: fix any other "
-            f"failure printed above, then run `{UPDATE_COMMAND}` again. If a failing "
-            "check is printed above with no stop line, the new release found a fault "
-            f"in this project: fix it on the branch {UPDATE_BRANCH} in its own "
-            f"worktree, as its own commit, then run `{UPDATE_COMMAND}` again. If no "
-            "failing check is printed, the project is not at fault: run "
-            f"`{UPDATE_COMMAND}` again."
-        )
-        return 1
+    pushed_ok, stopped = push_lines(root, expected)
+    if not pushed_ok:
+        return failed_push(stopped)
     title = REPAIR_TITLE if repair else f"Update Hard Eng to {revision[:12]}"
     pull = open_pull(root)
     if pull is None:

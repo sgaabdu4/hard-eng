@@ -855,3 +855,35 @@ def test_hidden_deferral_respects_timers_promises_argument_order() -> None:
     top_cjs = 'const { setTimeout } = require("node:timers/promises");\n'
     assert hidden_deferral("await setTimeout(200, 0);", ".js", top_cjs) is None
     assert hidden_deferral('await setTimeout(10, "value");', ".js", top_cjs) is not None
+
+
+def test_a_timed_out_semgrep_rule_fails_the_scan_loudly(tmp_path: Path) -> None:
+    """HE-HOT-PATH: a scan whose Semgrep run reports a timed-out rule fails; it never passes as clean."""
+    report = '{"results": [], "errors": [{"type": "Timeout", "rule_id": "r", "path": "src/app.ts"}]}'
+
+    def fake(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, report, "")
+
+    with (
+        patch("hot_paths.subprocess.run", fake),
+        pytest.raises(ValueError, match="Semgrep reports scan errors"),
+    ):
+        findings(tmp_path, ["src"], 900)
+
+
+def test_the_scan_sets_no_per_rule_clock_that_a_loaded_machine_can_trip(
+    tmp_path: Path,
+) -> None:
+    """A per-rule wall clock fails a slow machine; the whole-scan limit still ends a runaway scan."""
+    seen: list[list[str]] = []
+
+    def fake(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        seen.append(command)
+        return subprocess.CompletedProcess(
+            command, 0, '{"results": [], "errors": []}', ""
+        )
+
+    with patch("hot_paths.subprocess.run", fake):
+        findings(tmp_path, ["src"], 900)
+    command = seen[0]
+    assert command[command.index("--timeout") + 1] == "0"

@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -124,6 +125,61 @@ def test_cleanup_does_not_count_compiled_hook_modules(
     assert not task.exists()
 
 
+def keep_proof_in_the_task(root: Path, task: Path) -> Path:
+    with (root / ".git/info/exclude").open("a") as exclude:
+        exclude.write(".hard-eng/\n")
+    proof = task / ".hard-eng/browser"
+    proof.mkdir(parents=True)
+    (proof / "after-1280.png").write_bytes(b"capture")
+    (proof / "after-1280.json").write_text("{}")
+    return proof
+
+
+def test_cleanup_removes_the_proof_folder_instead_of_asking_for_its_deletion(
+    shipped: tuple[Path, Path, Shipment],
+) -> None:
+    root, task, shipment = shipped
+    keep_proof_in_the_task(root, task)
+    (task / "notes.private").write_text("valuable work")
+    with pytest.raises(ValueError, match=r"ignored work: notes\.private\.") as refusal:
+        ship_actions.cleanup(root, shipment)
+    assert ".hard-eng" not in str(refusal.value)
+    (task / "notes.private").unlink()
+    ship_actions.cleanup(root, shipment)
+    assert not task.exists()
+
+
+def test_cleanup_keeps_private_files_that_other_skills_put_in_the_proof_folder(
+    shipped: tuple[Path, Path, Shipment],
+) -> None:
+    root, task, shipment = shipped
+    keep_proof_in_the_task(root, task)
+    report = task / ".hard-eng/client-report/2026-11-25/report.html"
+    report.parent.mkdir(parents=True)
+    report.write_text("a private report")
+    with pytest.raises(ValueError, match=r"ignored work: \.hard-eng/\."):
+        ship_actions.cleanup(root, shipment)
+    assert report.is_file()
+    shutil.rmtree(task / ".hard-eng/client-report")
+    ship_actions.cleanup(root, shipment)
+    assert not task.exists()
+
+
+def test_cleanup_keeps_the_proof_when_delivered_does_not_pass(
+    shipped: tuple[Path, Path, Shipment], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, task, shipment = shipped
+    proof = keep_proof_in_the_task(root, task)
+
+    def pending(*_: object) -> Shipment:
+        raise shipping.ShippingError("base-branch CI has not finished")
+
+    monkeypatch.setattr(ship_actions, "verify", pending)
+    with pytest.raises(shipping.ShippingError, match="has not finished"):
+        ship_actions.run(root, None, shipment.pr_url, "cleanup", str(task), None)
+    assert (proof / "after-1280.png").is_file()
+
+
 def test_cleanup_with_no_worktree_names_the_option(
     shipped: tuple[Path, Path, Shipment],
 ) -> None:
@@ -181,3 +237,34 @@ def test_a_leftover_file_in_a_merged_small_task_gets_the_clean_checkout_line(
     (fixture.root / "scratch.txt").write_text("left behind\n")
     with pytest.raises(shipping.ShippingError, match="clean task checkout"):
         shipping.verify(fixture.root, None, _PR_URL, stage)
+
+
+def test_cleanup_reads_a_policy_that_a_newer_release_gave_more_keys(
+    delivered_worktree: tuple[Path, Shipment],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, shipment = delivered_worktree
+    held = tmp_path / "newer-policy"
+    held.mkdir()
+    policy: dict[str, object] = {
+        "base": "main",
+        "checks": ["build"],
+        "ui_paths": [],
+        "ci_seconds": 180,
+        "pre_push_seconds": 180,
+        "delivery": [],
+        "added_by_a_newer_release": True,
+    }
+    (held / "hard-eng.gates.json").write_text(json.dumps({"shipping": policy}))
+
+    def verify(*_arguments: object) -> Shipment:
+        shipping.load_policy(held)
+        return shipment
+
+    monkeypatch.setattr(ship_actions, "verify", verify)
+    with pytest.raises(shipping.ShippingError, match="unknown or missing keys"):
+        ship_actions.run(root, None, shipment.pr_url, "delivered", None, None)
+    assert shipment.root.exists()
+    ship_actions.run(root, None, shipment.pr_url, "cleanup", str(shipment.root), None)
+    assert not shipment.root.exists()

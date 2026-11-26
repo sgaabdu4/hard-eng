@@ -11,6 +11,7 @@ import pytest
 from test_browser import Site, plain_step, session
 from test_ui_quality import pair
 from ui_capture import WIDTHS, capture
+from ui_measure import LIMITS
 
 AUDIT_FAULTS = {
     "competing-same-colour": (
@@ -49,6 +50,32 @@ AUDIT_FAULTS = {
         "clipped-control",
         1,
     ),
+    "wrapped-button": (
+        "<button style='width:96px;min-height:44px;font-size:16px'>Save landlord record</button>",
+        "wrapped-label",
+        1,
+    ),
+    "wrapped-block-label-button": (
+        "<button style='width:96px;min-height:44px;font-size:16px'><div>Save landlord record</div></button>",
+        "wrapped-label",
+        1,
+    ),
+    "wrapped-flex-button": (
+        (
+            "<button style='display:inline-flex;gap:8px;width:120px;min-height:44px;font-size:16px'>"
+            "<svg width='16' height='16' aria-hidden='true'></svg><span>Save landlord record</span></button>"
+        ),
+        "wrapped-label",
+        1,
+    ),
+    "wrapped-link-button": (
+        (
+            "<a href='/rent' style='display:block;width:96px;min-height:44px;font-size:16px;"
+            "background:#124;color:#fff'>Review rent schedule</a>"
+        ),
+        "wrapped-label",
+        1,
+    ),
     "clipped-chrome": (
         (
             "<aside style='position:fixed;top:0;left:0;width:200px;height:960px;overflow:visible'>"
@@ -83,6 +110,40 @@ def test_each_runtime_audit_guard_finds_one_fault(
     found = capture(browser, tmp_path, site, "audit")
     for width in WIDTHS:
         assert found[width] == Counter({rule: count}), (width, found[width])
+
+
+def test_a_one_line_button_and_a_wrapped_text_link_pass_the_label_rule(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/audit.html").write_text(
+        "<!doctype html><html lang=en><title>Audit</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style><body>"
+        "<button style='min-height:44px;min-width:44px;font-size:16px'>Save</button>"
+        "<p style='width:120px'>Read the <a href='/rent'>full rent schedule for the unit</a> now.</p>"
+        "</body>"
+    )
+    found = capture(browser, tmp_path, site, "audit")
+    for width in WIDTHS:
+        assert found[width]["wrapped-label"] == 0, (width, found[width])
+
+
+def test_a_bordered_card_link_and_a_button_with_stacked_blocks_pass_the_label_rule(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    (tmp_path / "pages/audit.html").write_text(
+        "<!doctype html><html lang=en><title>Audit</title>"
+        "<style>body{margin:0;font:16px sans-serif}</style><body>"
+        "<a href='/unit' style='display:block;width:200px;border:1px solid #333;padding:8px;color:#111'>"
+        "<span style='display:block'>Unit 4B</span>"
+        "<span style='display:block'>Two rooms, second floor</span></a>"
+        "<button style='display:block;width:200px;min-height:44px;font-size:16px'>"
+        "<span style='display:block'>Premium</span>"
+        "<span style='display:block'>12 per month</span></button>"
+        "</body>"
+    )
+    found = capture(browser, tmp_path, site, "audit")
+    for width in WIDTHS:
+        assert found[width]["wrapped-label"] == 0, (width, found[width])
 
 
 def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
@@ -128,11 +189,18 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
         )
 
 
-QUIET_SECONDS = 0.8
+SETTLED = (
+    "(async () => { for (;;) { const log = window.__heRequests || []; "
+    "const last = Math.max(0, ...log.map((e) => e.end)); "
+    "if ((window.pressed || 0) >= PRESSES && log.every((e) => e.end > 0) "
+    "&& performance.now() - last >= QUIET) return true; "
+    "await new Promise((go) => setTimeout(go, 25)); } })()"
+)
 LOAD_WAVE = "Promise.all([0,1].map((i) => fetch('/step.json?l=' + i)));"
 PRESS = (
     "(async () => { await fetch('/session', { method: 'POST' }); "
-    "await fetch('/step.json?p=' + Date.now()); })()"
+    "await fetch('/step.json?p=' + Date.now()); "
+    "window.pressed = (window.pressed || 0) + 1; })()"
 )
 CHAIN = (
     "(async () => { for (let i = 0; i < 4; i++) "
@@ -204,6 +272,36 @@ def finished(tmp_path: Path, name: str) -> None:
     raise AssertionError("the page chain did not finish")
 
 
+def settled(tmp_path: Path, name: str, presses: int = 0) -> None:
+    """Wait on the page itself until `presses` presses have finished and no fetch has run for longer than the quiet limit."""
+    script = SETTLED.replace("PRESSES", str(presses)).replace(
+        "QUIET", str(LIMITS["action_quiet_ms"] + 100)
+    )
+    plain_step(tmp_path, name, "eval", script)
+
+
+def press_clicks(tmp_path: Path, name: str, buttons: str) -> None:
+    """Click each button once, each after the page has finished the last press and is quiet."""
+    settled(tmp_path, name)
+    for count, button in enumerate(buttons, 1):
+        plain_step(tmp_path, name, "click", f"#{button}")
+        settled(tmp_path, name, count)
+
+
+def past_the_reaction_window(tmp_path: Path, browser: ModuleType, name: str) -> None:
+    """Wait on the page clock until the last logged action is older than the reaction limit, so the fetches of a later step cannot count as its reaction."""
+    last = browser.actions_file(browser.output_folder(tmp_path), name).read_text()
+    stamp = int(last.strip().splitlines()[-1].split(" ", 1)[0])
+    until = stamp + LIMITS["action_reaction_ms"] + 100
+    plain_step(
+        tmp_path,
+        name,
+        "eval",
+        f"(async () => {{ while (performance.timeOrigin + performance.now() < {until}) "
+        "await new Promise((go) => setTimeout(go, 25)); return true; })()",
+    )
+
+
 def measured(
     tmp_path: Path, browser: ModuleType, name: str
 ) -> list[tuple[object, object]]:
@@ -213,6 +311,106 @@ def measured(
     assert code == 0
     record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
     return [(item["rule"], item.get("at")) for item in record["findings"]]
+
+
+STAGGERED = (
+    "(async () => { await Promise.all([0, 1, 2, 3, 4].map((i) => "
+    "new Promise((go) => setTimeout(go, i * 20)).then(() => fetch('/step.json?s=' + i)).then((reply) => reply.text()))); "
+    "window.done = true; })()"
+)
+XHR_CHAIN = (
+    "(async () => { const get = (url) => new Promise((done) => { "
+    "const request = new XMLHttpRequest(); request.open('GET', url); "
+    "request.onload = () => done(request.responseText); request.send(); }); "
+    "for (let i = 0; i < 4; i++) await get('/step.json?x=' + i + Date.now()); "
+    "window.done = true; })()"
+)
+
+
+def prefetching(headers: str) -> str:
+    return (
+        "(async () => { const get = (url, headers) => fetch(url, { headers }).then((reply) => reply.text()); "
+        "for (let i = 0; i < 3; i++) await get('/step.json?w=' + i + Date.now()); "
+        f"for (let i = 0; i < 2; i++) await get('/step.json?x=' + i + Date.now(), {headers}); "
+        "window.done = true; })()"
+    )
+
+
+def test_fetches_that_start_a_few_milliseconds_apart_count_as_one_wave(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "staggered", STAGGERED)
+    name = session()
+    open_board(tmp_path, site, name, "staggered")
+    try:
+        finished(tmp_path, name)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_four_xhr_chain_still_fails_with_the_request_delay(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "xhr", XHR_CHAIN)
+    name = session()
+    open_board(tmp_path, site, name, "xhr")
+    try:
+        finished(tmp_path, name)
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+@pytest.mark.parametrize(
+    ("headers", "findings"),
+    [
+        ("{ 'Next-Router-Prefetch': '1' }", []),
+        ("{ Purpose: 'prefetch' }", []),
+        ("{ 'Sec-Purpose': 'prefetch;anonymous' }", []),
+        ("{ Purpose: 'preview' }", [("fetch-waterfall", "load")]),
+        ("{}", [("fetch-waterfall", "load")]),
+    ],
+)
+def test_prefetch_requests_add_no_wave(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    headers: str,
+    findings: list[tuple[object, object]],
+) -> None:
+    board(tmp_path, "prefetch", prefetching(headers))
+    name = session()
+    open_board(tmp_path, site, name, "prefetch")
+    try:
+        finished(tmp_path, name)
+        assert measured(tmp_path, browser, name) == findings
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_session_without_the_request_delay_is_refused(
+    tmp_path: Path,
+    site: str,
+    browser: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    board(tmp_path, "plain", "")
+    name = session()
+    monkeypatch.setattr(browser, "hold_script_file", lambda: None)
+    tool, folder = browser.ensure_tool(), browser.output_folder(tmp_path)
+    try:
+        browser.require(
+            browser.run_tool(tool, folder, name, "open", f"{site}/plain.html")
+        )
+        code = browser.browser_command(
+            tmp_path, ["measure", "--session", name, "--name", "state"]
+        )
+        assert code == 1
+        assert "request delay" in capsys.readouterr().err
+    finally:
+        browser.run_tool(tool, folder, name, "close")
 
 
 VALUES_PAGE = (
@@ -319,10 +517,24 @@ def test_each_press_is_measured_apart_from_the_load(
     name = session()
     open_board(tmp_path, site, name, "presses")
     try:
-        for button in "abc":
-            time.sleep(QUIET_SECONDS)
-            plain_step(tmp_path, name, "click", f"#{button}")
-        time.sleep(QUIET_SECONDS)
+        press_clicks(tmp_path, name, "abc")
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+LATE_PRESS = f"setTimeout(() => {{ {PRESS} }}, 300)"
+
+
+def test_each_press_is_measured_apart_from_the_load_when_the_page_answers_late(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    buttons = "".join(press_button(name, LATE_PRESS) for name in "abc")
+    board(tmp_path, "late", LOAD_WAVE, buttons)
+    name = session()
+    open_board(tmp_path, site, name, "late")
+    try:
+        press_clicks(tmp_path, name, "abc")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
@@ -352,9 +564,9 @@ def test_a_press_that_starts_a_four_wave_chain_fails_at_that_press(
     name = session()
     open_board(tmp_path, site, name, "chain")
     try:
-        time.sleep(QUIET_SECONDS)
+        settled(tmp_path, name)
         plain_step(tmp_path, name, "click", "body")
-        time.sleep(2)
+        past_the_reaction_window(tmp_path, browser, name)
         plain_step(tmp_path, name, "click", "#go")
         finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 2")]
@@ -370,7 +582,7 @@ def test_a_step_in_a_quiet_gap_that_starts_no_fetch_does_not_split_a_load_waterf
     name = session()
     open_board(tmp_path, site, name, "gap")
     try:
-        time.sleep(QUIET_SECONDS)
+        settled(tmp_path, name)
         plain_step(tmp_path, name, verb, "body")
         finished(tmp_path, name)
         assert measured(tmp_path, browser, name) == [("fetch-waterfall", "load")]

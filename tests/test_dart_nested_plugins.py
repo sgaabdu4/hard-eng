@@ -118,7 +118,7 @@ def test_dart_setup_migrates_nested_plugin_overrides(
     ):
         assert (
             yaml.safe_load(checked.read_text())["plugins"]["flutter_skill_lints"]
-            == "^0.15.0"
+            == "^0.16.0"
         )
     runner.validate_typing(package, "dart", ["lib"])
 

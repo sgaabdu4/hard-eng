@@ -37,3 +37,6 @@ def validate_attribution(root: Path, base: str | None = None) -> None:
         if any(CLAUDE_EMAIL.fullmatch(email) for email in emails):
             raise ValueError(f"Commit {revision} has a Claude author or committer")
         reject_attribution(root, "commit", text, f"Commit {revision}")
+
+
+CLAUDE_EMAIL = re.compile(r"noreply@anthropic\.com", re.IGNORECASE)

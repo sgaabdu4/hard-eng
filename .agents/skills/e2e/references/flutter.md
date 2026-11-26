@@ -42,7 +42,7 @@ if (useMarionette) {
 
 ## Connect + drive
 
-- `flutter run` on the booted simulator/emulator, take the VM service URI from its output and pass the `ws://.../ws` form to `connect`. `connect` precedes every other tool.
+- `flutter run` on the booted simulator/emulator, take the VM service URI from its output, change its scheme to `ws`, end its path with `/ws`, and pass it to `connect`. `connect` precedes every other tool.
 - Drive with `get_interactive_elements` → `tap` (prefer `key`, then `identifier`, then `text`/`type`/`coordinates`), `enter_text`, `press_key`, `swipe`, `scroll_to`; read with `take_screenshots` and `get_logs` (needs a configured collector); `hot_reload`/`hot_restart` after code changes.
 - On iOS/Android the platform keyboard owns field editing → change a field's value with `enter_text`, not `press_key`.
 

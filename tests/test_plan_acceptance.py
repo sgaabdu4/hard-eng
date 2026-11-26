@@ -130,6 +130,31 @@ def test_complete_plan_resolves_a_requirement_id_to_its_tests(
             validate_plans(root, base="0" * 40, stage="Complete")
 
 
+@pytest.mark.parametrize(
+    ("line", "accepted"),
+    [
+        ("- [x] Exit → `tests/test_app.py::test_exit` (HE-YAGNI).", True),
+        ("- [x] HE-YAGNI: exit → `tests/test_app.py::test_exit`.", True),
+        (f"- [x] Exit → `tests/test_app.py::test_exit` ({EXIT_ID}).", False),
+        ("- [x] Exit → HE-YAGNI.", False),
+    ],
+    ids=["rule-beside-test", "rule-first", "project-id-beside-test", "rule-alone"],
+)
+def test_a_rule_id_beside_the_named_test_is_a_citation_not_a_claim_of_coverage(
+    runner: ModuleType, line: str, accepted: bool
+) -> None:
+    root = runner.ROOT
+    (root / "tests").mkdir()
+    (root / "tests/test_app.py").write_text("def test_exit() -> None: ...\n")
+    plan = root / "PLAN.md"
+    plan.write_text(plan.read_text().replace(UNPROVED, line))
+    if accepted:
+        assert validate_plans(root, base="0" * 40, stage="Complete") == "Complete"
+    else:
+        with pytest.raises(ValueError, match="untested requirements"):
+            validate_plans(root, base="0" * 40, stage="Complete")
+
+
 @pytest.mark.parametrize("by_id", [False, True], ids=["path", "id"])
 @pytest.mark.parametrize("skipped", [False, True])
 def test_check_fails_when_an_acceptance_test_was_skipped(
@@ -841,11 +866,12 @@ def test_a_comment_mark_inside_a_nested_string_hides_no_later_test(
     assert missing_tests(tmp_path, [(path, name)]) == []
 
 
+@pytest.mark.parametrize("extra", ["", "\n- [x] An old line with no named proof."])
 @pytest.mark.parametrize(
     ("removed", "refused"), [("test_named", True), ("test_unnamed", False)]
 )
 def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_with_no_plan_edit(
-    repository: Path, completed_plan: str, removed: str, refused: bool
+    repository: Path, completed_plan: str, removed: str, refused: bool, extra: str
 ) -> None:
     (repository / "tests").mkdir()
     source = repository / "tests/test_one.py"
@@ -853,7 +879,7 @@ def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_wit
     source.write_text(both)
     old = repository / "features/old/PLAN.md"
     old.parent.mkdir(parents=True)
-    named = "- [x] Observe it → `tests/test_one.py::test_named`."
+    named = "- [x] Observe it → `tests/test_one.py::test_named`." + extra
     old.write_text(completed_plan.replace(UNPROVED, named))
     base = commit(repository, "plans and tests")
     source.write_text(both.replace(f"def {removed}():\n    pass\n", ""))
@@ -871,6 +897,50 @@ def test_removing_a_test_that_a_plan_names_is_refused_even_in_a_small_change_wit
 
 
 NAMED_ROW = "- [x] Observe it → `tests/test_one.py::test_named`."
+
+
+def old_plan_of_form(plan: str, form: str) -> str:
+    text = plan.replace(UNPROVED, NAMED_ROW)
+    if form == "no ux_reference section":
+        return re.sub(r"(?ms)^## ux_reference\n.*?(?=^## )", "", text)
+    if form == "a bare N/A":
+        return text.replace("Verify fixture", "Notes: N/A\nVerify fixture", 1)
+    if form == "a ./ path":
+        return text.replace("`tests/test_one", "`./tests/test_one")
+    return text
+
+
+@pytest.mark.parametrize("how", ["edit", "delete the file"])
+@pytest.mark.parametrize(
+    "form", ["plain", "no ux_reference section", "a bare N/A", "a ./ path"]
+)
+def test_removing_a_named_test_is_refused_whatever_the_form_of_the_old_plan(
+    repository: Path, completed_plan: str, form: str, how: str
+) -> None:
+    (repository / "tests").mkdir()
+    source = repository / "tests/test_one.py"
+    source.write_text(
+        "def test_named():\n    pass\n\n\ndef test_unnamed():\n    pass\n"
+    )
+    old = repository / "features/old/PLAN.md"
+    old.parent.mkdir(parents=True)
+    text = old_plan_of_form(completed_plan, form)
+    old.write_text(text)
+    base = commit(repository, "plans and tests")
+    mine = repository / "features/mine/PLAN.md"
+    mine.parent.mkdir()
+    mine.write_text(completed_plan)
+    if how == "edit":
+        source.write_text("def test_unnamed():\n    pass\n")
+    else:
+        source.unlink()
+    line = next(n for n, row in enumerate(text.splitlines(), 1) if "test_named" in row)
+
+    with pytest.raises(
+        ValueError,
+        match=rf"features/old/PLAN.md: acceptance names tests that do not exist: \S*tests/test_one.py::test_named \(line {line}\)",
+    ):
+        validate_plans(repository, base, "Complete")
 
 
 def test_the_lenient_reader_gives_the_rows_of_the_strict_reader(

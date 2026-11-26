@@ -23,47 +23,6 @@ from conftest import SOURCE, add_origin, commit, init
 from shipping import PendingCheck, Shipment, ShippingError, ShippingPolicy, git
 
 
-@pytest.fixture
-def delivered_worktree(
-    tmp_path: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Path, Shipment]:
-    monkeypatch.setattr(ship_actions, "shipping_note", Mock(return_value=None))
-    root, bare, task = (tmp_path / name for name in ("checkout", "origin.git", "task"))
-    git(tmp_path, "init", "-q", "-b", "main", str(root))
-    git(tmp_path, "init", "--bare", "-q", str(bare))
-    git(root, "config", "user.name", "Ship Fixture")
-    git(root, "config", "user.email", "ship-fixture@example.test")
-    (root / "PLAN.md").write_text(completed_plan + "\nDelivery target: Merge\n")
-    (root / ".gitignore").write_text("*.private\n")
-    git(root, "add", "PLAN.md", ".gitignore")
-    git(root, "commit", "-qm", "baseline")
-    git(root, "remote", "add", "origin", str(bare))
-    git(root, "push", "-q", "origin", "main")
-    git(root, "worktree", "add", "-qb", "feature/ship", str(task))
-    (task / "change.txt").write_text("authorized behavior\n")
-    git(task, "add", "change.txt")
-    git(task, "commit", "-qm", "task behavior")
-    head = git(task, "rev-parse", "HEAD").strip()
-    git(task, "push", "-q", "origin", "feature/ship")
-    git(root, "merge", "--squash", "feature/ship")
-    git(root, "commit", "-qm", "land task through squash")
-    merged = git(root, "rev-parse", "HEAD").strip()
-    git(root, "push", "-q", "origin", "main")
-    return root, Shipment(
-        root=task,
-        plan=task / "PLAN.md",
-        pr_url="https://github.com/fixture/project/pull/1",
-        repository="fixture/project",
-        remote="origin",
-        remote_url=str(bare),
-        branch="feature/ship",
-        head_sha=head,
-        base="main",
-        merged_sha=merged,
-        delivery_target="Merge",
-    )
-
-
 def test_cleanup_removes_only_squash_merged_task(
     delivered_worktree: tuple[Path, Shipment],
 ) -> None:
@@ -139,53 +98,6 @@ def test_cleanup_preserves_active_git_operation(
     assert (
         ship_actions.remote_branch(root, "origin", shipment.branch) == shipment.head_sha
     )
-
-
-def _with_submodule(shipment: Shipment, tmp_path: Path) -> Shipment:
-    module = tmp_path / "module"
-    git(tmp_path, "init", "-q", str(module))
-    git(module, "config", "user.name", "Ship Fixture")
-    git(module, "config", "user.email", "ship-fixture@example.test")
-    (module / "work.txt").write_text("baseline")
-    git(module, "add", "work.txt")
-    git(module, "commit", "-qm", "module baseline")
-    allow = ("-c", "protocol.file.allow=always")
-    git(shipment.root, *allow, "submodule", "add", "-q", str(module), "component")
-    git(shipment.root, "commit", "-qm", "include module")
-    head = git(shipment.root, "rev-parse", "HEAD").strip()
-    return replace(shipment, head_sha=head)
-
-
-def test_cleanup_preserves_submodules_even_when_git_ignores_them(
-    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
-) -> None:
-    root, shipment = delivered_worktree
-    original_head = shipment.head_sha
-    shipment = _with_submodule(shipment, tmp_path)
-    with pytest.raises(ValueError, match="initialized submodules"):
-        ship_actions.cleanup(root, shipment)
-    git(shipment.root, "config", "diff.ignoreSubmodules", "all")
-    nested = shipment.root / "component/work.txt"
-    nested.write_text("valuable nested work")
-    assert not git(shipment.root, "status", "--porcelain").strip()
-    with pytest.raises(ValueError, match="modified, untracked or ignored"):
-        ship_actions.cleanup(root, shipment)
-    assert nested.read_text() == "valuable nested work"
-    assert ship_actions.remote_branch(root, "origin", shipment.branch) == original_head
-
-
-def test_cleanup_removes_task_with_uninitialized_submodule(
-    delivered_worktree: tuple[Path, Shipment], tmp_path: Path
-) -> None:
-    root, shipment = delivered_worktree
-    shipment = _with_submodule(shipment, tmp_path)
-    git(shipment.root, "submodule", "deinit", "-q", "-f", "component")
-    git(shipment.root, "push", "-q", "origin", shipment.branch)
-    assert git(shipment.root, "submodule", "status").startswith("-")
-    ship_actions.cleanup(root, shipment)
-    assert not shipment.root.exists()
-    assert git(root, "branch", "--list", shipment.branch).strip() == ""
-    assert ship_actions.remote_branch(root, shipment.remote, shipment.branch) is None
 
 
 def test_cleanup_rejects_remote_branch_reuse(

@@ -44,7 +44,11 @@ CONDITION = re.compile(
 FINISHED = re.compile(
     r"\b(?:(?:is|are) (?:now |already )?(?:live|done)|went live)\b", re.IGNORECASE
 )
-WAITS = re.compile(rf"next release|not built yet|{WORKING}", re.IGNORECASE)
+OPEN_PR = (
+    r"\b(?:in|waits? for|waiting for) (?:an? |the )?(?:open )?(?:PR|pull request)\b"
+)
+WAITS = re.compile(rf"next release|not built yet|{WORKING}|{OPEN_PR}", re.IGNORECASE)
+WAITS_IN_DOING = re.compile(OPEN_PR, re.IGNORECASE)
 LIVE = re.compile(r"\b(?:(?:is|are) (?:now |already )?live|went live)\b", re.IGNORECASE)
 NUMBER = re.compile(r"^\s*#(\d+)")
 ACK_WORD = r"(?:ok(?:ay)?|thanks?(?: you)?|works?|done)"
@@ -301,9 +305,10 @@ def labels(ctx: Context, view: View) -> list[Item]:
 
 def waits_on_us(ctx: Context, view: View) -> list[Item]:
     ours = view.last_ours
-    if not ours or view.role != "testing":
+    pattern = {"testing": WAITS, "doing": WAITS_IN_DOING}.get(view.role)
+    if not ours or pattern is None:
         return []
-    if says(WAITS, ours.text) and not says(LIVE, ours.text):
+    if says(pattern, ours.text) and not says(LIVE, ours.text):
         return [from_event(view, ours)]
     return []
 
@@ -341,12 +346,43 @@ def queues(items: list[Item]) -> list[Item]:
     return result
 
 
+def client_duplicates(ctx: Context) -> dict[str, str]:
+    """Card id → client number for each open card that is not the oldest of its client and is not marked checked."""
+    pattern = ctx.config.client
+    if pattern is None:
+        return {}
+    snapshot = ctx.snapshot
+    finished = {name for role, name in ctx.config.lists.items() if role == "done"}
+    by_client: dict[str, list[Obj]] = {}
+    for card in snapshot.cards:
+        found = pattern.search(text(card.get("name")))
+        if found and snapshot.lists.get(text(card.get("idList"))) not in finished:
+            by_client.setdefault(found.group(1), []).append(card)
+    mark = ctx.config.checked_label
+    checked = {i for i, name in snapshot.labels.items() if mark and name == mark}
+    duplicates: dict[str, str] = {}
+    for client, same in by_client.items():
+        older = min(
+            same, key=lambda card: (len(text(card.get("id"))), text(card.get("id")))
+        )
+        for card in same:
+            labels = card.get("idLabels")
+            marked = isinstance(labels, list) and any(
+                text(i) in checked for i in labels
+            )
+            if card is not older and not marked:
+                duplicates[text(card.get("id"))] = client
+    return duplicates
+
+
 def unnumbered(ctx: Context, view: View) -> list[Item]:
     at = text(view.card.get("dateLastActivity"))
     if not NUMBER.match(view.name):
         return [item(view, at, "", "")]
     if text(view.card.get("id")) in duplicate_ids(ctx.snapshot.cards):
         return [item(view, at, "", f"another card also has #{view.ref}")]
+    if client := client_duplicates(ctx).get(text(view.card.get("id"))):
+        return [item(view, at, "", f"another open card also names client {client}")]
     return []
 
 

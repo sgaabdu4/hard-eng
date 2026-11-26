@@ -8,6 +8,15 @@ from pathlib import Path, PurePosixPath
 from generated_marks import generated_sources
 from plans import _is_test as is_test_path
 from project_files import GIT_LISTING
+from ui_css_imports import (
+    BUILD_FOLDERS,
+    CSS_COMMENT,
+    authored_imports,
+    css_entrypoint_orders,
+    outside_imports,
+    outside_text,
+    package_dir,
+)
 
 UNOWNED = (".hooks/", ".agents/", ".claude/")
 THEME_WORDS = frozenset(
@@ -44,7 +53,6 @@ TOKEN_STEP = (
 MARKUP_TOKEN_SUFFIXES = (".tsx", ".jsx", ".html", ".vue", ".svelte", ".astro")
 SCRIPT_TOKEN_SUFFIXES = (".ts", ".js")
 STYLE_TOKEN_SUFFIXES = (".css", ".scss", ".less")
-BUILD_FOLDERS = frozenset(("dist", "build", ".next", "out", "coverage", "node_modules"))
 SAFE_PLUGINS = frozenset(
     (
         "@tailwindcss/typography",
@@ -236,8 +244,6 @@ BUILTIN_STROKE = frozenset(
         "opacity",
     )
 )
-CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-CSS_IMPORT = re.compile(r"""@import\s+(?:url\(\s*)?["']([^"']+)["']""")
 THEME_BLOCK = re.compile(r"@theme\b[^{]*\{")
 PLUGIN_CALL = re.compile(r"""@plugin\s+["']([^"']+)["']""")
 CONFIG_CALL = re.compile(r"@config\b")
@@ -316,14 +322,6 @@ def _theme_bodies(css: str) -> list[str]:
     return [body for body, _ in _theme_blocks(css)]
 
 
-def _package_dir(root: Path, name: str) -> Path:
-    for parent in PurePosixPath(name).parents:
-        candidate = root / parent
-        if (candidate / "package.json").is_file():
-            return candidate
-    return root
-
-
 def _all_css_entries(root: Path) -> list[str]:
     done = subprocess.run(
         [
@@ -356,7 +354,7 @@ def _css_files(
             entry.startswith(UNOWNED)
             or is_test_path(PurePosixPath(entry))
             or BUILD_FOLDERS.intersection(parts)
-            or _package_dir(root, entry) != package
+            or package_dir(root, entry) != package
         ):
             continue
         path = root / entry
@@ -374,61 +372,6 @@ def _has_external_theme(package: Path, css_texts: list[str]) -> bool:
         if any(plugin not in SAFE_PLUGINS for plugin in PLUGIN_CALL.findall(text)):
             return True
     return False
-
-
-def _css_import_targets(
-    path: Path, text: str, by_resolved: dict[Path, Path]
-) -> list[Path]:
-    found: list[Path] = []
-    for target in CSS_IMPORT.findall(text):
-        if target.startswith(("http://", "https://", "//")):
-            continue
-        for suffix in ("", ".css"):
-            candidate = (path.parent / (target + suffix)).resolve()
-            if candidate in by_resolved:
-                found.append(by_resolved[candidate])
-                break
-    return found
-
-
-def _css_entrypoint_orders(
-    files: list[Path], texts: dict[Path, str]
-) -> list[list[Path]]:
-    """Expand each CSS entrypoint independently in exact @import order so separate builds do not reset one another."""
-    by_resolved = {path.resolve(): path for path in files}
-    edges = {
-        path: _css_import_targets(path, texts[path], by_resolved) for path in files
-    }
-    imported = {target.resolve() for targets in edges.values() for target in targets}
-    reached: set[Path] = set()
-    groups: list[list[Path]] = []
-    limit = max(64, len(files) * 8)
-
-    def collect(root_path: Path) -> list[Path]:
-        ordered: list[Path] = []
-        visiting: set[Path] = set()
-
-        def visit(path: Path) -> None:
-            resolved = path.resolve()
-            if resolved in visiting or len(ordered) >= limit:
-                return
-            visiting.add(resolved)
-            for target in edges[path]:
-                visit(target)
-            visiting.remove(resolved)
-            reached.add(resolved)
-            ordered.append(path)
-
-        visit(root_path)
-        return ordered
-
-    for path in files:
-        if path.resolve() not in imported:
-            groups.append(collect(path))
-    for path in files:
-        if path.resolve() not in reached:
-            groups.append(collect(path))
-    return groups
 
 
 def _collect_theme_vars(
@@ -511,15 +454,11 @@ def _theme_for_group(texts: list[str]) -> tuple[ThemeTokens, bool]:
     )
 
 
-def _load_theme(
-    root: Path, package: Path, entries: list[str] | None = None
-) -> ThemeTokens | None:
-    files = _css_files(root, package, entries)
+def _load_theme(package: Path, texts: dict[Path, str]) -> ThemeTokens | None:
+    files = list(texts)
     if not files:
         return None
-    raw = {
-        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
-    }
+    raw = {path: CSS_COMMENT.sub("", text) for path, text in texts.items()}
     all_texts = list(raw.values())
     if not any(THEME_BLOCK.search(text) for text in all_texts) or _has_external_theme(
         package, all_texts
@@ -527,7 +466,7 @@ def _load_theme(
         return None
     evaluated = [
         _theme_for_group([raw[path] for path in group])
-        for group in _css_entrypoint_orders(files, raw)
+        for group in css_entrypoint_orders(files, raw)
     ]
     all_tokens = [tokens for tokens, _ in evaluated]
     themed = [tokens for tokens, has_theme in evaluated if has_theme]
@@ -946,41 +885,109 @@ def line_findings(
     return found
 
 
+UNDEFINED_TOKEN = "undefined Tailwind theme token"
+
+
+def _app_state(
+    root: Path, package: Path, css_entries: list[str]
+) -> tuple[ThemeTokens | None, list[tuple[str, int, str]]]:
+    texts = {
+        path: path.read_text(errors="replace")
+        for path in _css_files(root, package, css_entries)
+    }
+    return _load_theme(package, texts), outside_imports(root, package, texts)
+
+
+def _adds_import(name: str, lines: list[tuple[int, str]]) -> bool:
+    return name.endswith(STYLE_TOKEN_SUFFIXES) and any(
+        "@import" in text for _, text in lines
+    )
+
+
+def _outside_findings(
+    root: Path,
+    outside: dict[Path, list[tuple[str, int, str]]],
+    live: dict[Path, list[tuple[str, int, str]]],
+    caused: dict[Path, set[str]],
+    candidates: dict[str, list[tuple[int, str]]],
+    skipped: set[str],
+) -> list[str]:
+    """The import finding of each app whose undefined-token findings it caused, or whose import line was added."""
+    found: list[str] = []
+    for package, imports in outside.items():
+        every = bool(caused.get(package, set()) - skipped)
+        reported = [
+            item
+            for item in imports
+            if every
+            or any(number == item[1] for number, _ in candidates.get(item[0], []))
+        ]
+        if package in live:
+            reported = [item for item in reported if item in live[package]]
+        else:
+            reported = authored_imports(root, reported)
+        found.extend(outside_text(*item) for item in reported)
+    return found
+
+
 def ui_findings(root: Path, candidates: dict[str, list[tuple[int, str]]]) -> list[str]:
     """Findings for the marked lines of each UI file; only a file with a finding is looked up as generated."""
     from ui_audit_rules import JSX_SUFFIXES, audit_findings, duplicate_sibling_keys
 
     css_entries: list[str] | None = None
     themes: dict[Path, ThemeTokens | None] = {}
+    outside: dict[Path, list[tuple[str, int, str]]] = {}
+    live: dict[Path, list[tuple[str, int, str]]] = {}
+    caused: dict[Path, set[str]] = {}
     found: dict[str, list[str]] = {}
     for name, lines in candidates.items():
         theme: ThemeTokens | None = None
         file_text: str | None = None
+        package: Path | None = None
         if (
             not name.startswith(UNOWNED)
             and not is_test_path(PurePosixPath(name))
-            and not is_theme_path(name)
             and name.endswith(
                 (*MARKUP_TOKEN_SUFFIXES, *SCRIPT_TOKEN_SUFFIXES, *STYLE_TOKEN_SUFFIXES)
             )
+            and (not is_theme_path(name) or _adds_import(name, lines))
         ):
+            package = package_dir(root, name)
             if css_entries is None:
                 css_entries = _all_css_entries(root)
-            package = _package_dir(root, name)
             if package not in themes:
-                themes[package] = _load_theme(root, package, css_entries)
+                themes[package], outside[package] = _app_state(
+                    root, package, css_entries
+                )
             theme = themes[package]
-            if (theme is not None or name.endswith(JSX_SUFFIXES)) and (
-                root / name
-            ).is_file():
+            if (
+                not is_theme_path(name)
+                and (theme is not None or name.endswith(JSX_SUFFIXES))
+                and (root / name).is_file()
+            ):
                 file_text = (root / name).read_text(errors="replace")
         items = line_findings(name, lines, theme, file_text)
+        if (
+            package in outside
+            and outside[package]
+            and any(UNDEFINED_TOKEN in item for item in items)
+        ):
+            if package not in live:
+                live[package] = authored_imports(root, outside[package])
+            if live[package]:
+                items = [item for item in items if UNDEFINED_TOKEN not in item]
+                caused.setdefault(package, set()).add(name)
         if file_text is not None and name.endswith(JSX_SUFFIXES):
             items.extend(
                 duplicate_sibling_keys(name, file_text, {num for num, _ in lines})
             )
         found[name] = items
-    named = sorted(name for name, items in found.items() if items)
-    skipped = generated_sources(root, named) if named else set()
-    hits = [item for name in named if name not in skipped for item in found[name]]
-    return [*hits, *audit_findings(root, candidates, css_entries)]
+    looked = {name for name, items in found.items() if items}.union(*caused.values())
+    skipped = generated_sources(root, sorted(looked)) if looked else set()
+    hits = [
+        item for name in sorted(found) if name not in skipped for item in found[name]
+    ]
+    imports = _outside_findings(root, outside, live, caused, candidates, skipped)
+    return list(
+        dict.fromkeys([*imports, *hits, *audit_findings(root, candidates, css_entries)])
+    )

@@ -3,6 +3,7 @@
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -109,36 +110,88 @@ def process_links(process: Path) -> set[str] | None:
     return found
 
 
-def proc_paths(proc: Path = Path("/proc")) -> set[str] | None:
-    found: set[str] = set()
+def mine(process: Path) -> bool:
+    try:
+        return process.stat().st_uid == os.getuid()
+    except OSError:
+        return False
+
+
+def proc_files(
+    proc: Path = Path("/proc"), own: bool = False
+) -> list[tuple[int, str]] | None:
+    found: list[tuple[int, str]] = []
     for process in proc.iterdir():
         if process.name.isdigit() and int(process.name) != os.getpid():
+            if own and not mine(process):
+                continue
             links = process_links(process)
             if links is None:
                 return None
-            found |= links
+            found += [(int(process.name), name) for name in sorted(links)]
     return found
+
+
+def proc_paths(proc: Path = Path("/proc")) -> set[str] | None:
+    files = proc_files(proc)
+    return None if files is None else {name for _, name in files}
+
+
+def open_files(own: bool = False) -> list[tuple[int, str]] | None:
+    """Each process (not this one) with a path as its folder or open file, as (process, path), or only those of our account with `own`; None when the host cannot say."""
+    if os.name != "posix":
+        return None
+    if Path("/proc/self/cwd").exists():
+        return proc_files(own=own)
+    if shutil.which("lsof") is None:
+        return None
+    account = ["-u", str(os.getuid())] if own else []
+    done = tidy_run(Path("/"), 60, "lsof", "-n", "-P", "-w", *account, "-F", "pn")
+    if done.returncode not in {0, 1}:
+        raise TidyStop(f"`lsof` exited {done.returncode}")
+    found: list[tuple[int, str]] = []
+    process = os.getpid()
+    for line in done.stdout.splitlines():
+        if line.startswith("p"):
+            process = int(line[1:])
+        elif line.startswith("n/") and process != os.getpid():
+            found.append((process, line[1:]))
+    return found or None
 
 
 def open_paths() -> set[str] | None:
     """Every path a process has as its folder or open file; None when the host cannot say."""
-    if os.name != "posix":
-        return None
-    if Path("/proc/self/cwd").exists():
-        return proc_paths()
-    if shutil.which("lsof") is None:
-        return None
-    done = tidy_run(Path("/"), 60, "lsof", "-n", "-P", "-w", "-F", "pn")
-    if done.returncode not in {0, 1}:
-        raise TidyStop(f"`lsof` exited {done.returncode}")
-    names: set[str] = set()
-    mine = False
-    for line in done.stdout.splitlines():
-        if line.startswith("p"):
-            mine = line[1:] == str(os.getpid())
-        elif line.startswith("n/") and not mine:
-            names.add(line[1:])
-    return names or None
+    files = open_files()
+    return None if files is None else {name for _, name in files}
+
+
+def stop_inside(path: Path, seconds: float = 3) -> None:
+    """Stop every process of our account that has the folder as its working folder or holds a file in it, so nothing writes there while it is removed. A host that cannot list them stops none; each pass also signals a child that a stopped process forked meanwhile."""
+    left: set[int] = set()
+    where = {fold(path), fold(path.resolve())}
+
+    def holders() -> set[int]:
+        try:
+            files = open_files(own=True) or []
+        except TidyStop:
+            return set()
+        return {process for process, name in files if under(where, name)} - left
+
+    for signum in (signal.SIGTERM, signal.SIGKILL):
+        deadline = time.monotonic() + seconds
+        while found := holders():
+            for process in found:
+                try:
+                    os.kill(process, signum)
+                except PermissionError:
+                    left.add(process)
+                except ProcessLookupError:
+                    continue
+            time.sleep(0.1)
+            if time.monotonic() >= deadline:
+                break
+        else:
+            return
 
 
 def fold(path: str | Path) -> str:
@@ -150,13 +203,16 @@ def same_place(first: Path, second: Path) -> bool:
     return fold(first) == fold(second)
 
 
+def under(prefixes: set[str], name: str) -> bool:
+    folded = fold(name)
+    return any(
+        folded == prefix or folded.startswith(prefix + os.sep) for prefix in prefixes
+    )
+
+
 def inside(path: Path, names: set[str]) -> bool:
     prefixes = {fold(path), fold(path.resolve())}
-    return any(
-        folded == prefix or folded.startswith(prefix + os.sep)
-        for folded in map(fold, names)
-        for prefix in prefixes
-    )
+    return any(under(prefixes, name) for name in names)
 
 
 def foreign_folder(worktree: Path, target: Path) -> bool:

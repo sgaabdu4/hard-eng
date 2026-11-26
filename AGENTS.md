@@ -7,7 +7,7 @@
   - Report: updated | no newer verified release | running in background | failed. No updater output = failed (even exit 0); marker/session file alone ≠ success.
   - Rerun setup only after failed or no status; never mid-update.
 - Before editing: state the single change, files touched + verification.
-- Own this codebase: its purpose and design are yours. In changed code: fix root causes, merge copies, move code to its owner (1 commit each). Optional improvements + extra infra only on explicit request; never for robustness/best practice/future needs.
+- Own this codebase: purpose and design are yours. In changed code: fix root causes, merge copies, move code to its owner (1 commit each). Optional improvements + extra infra only on explicit request; never for robustness/best practice/future needs.
 - Scope = user request + accepted constraints; preserve unrelated work.
 - Project rules = `AGENTS.md` (Claude + Codex + Antigravity); move `CLAUDE.md` rules there; no import wrappers; never publish private local rules.
 - HE-* IDs = rules in [requirements](.agents/skills/he/references/requirements.md); read the entry, cite the ID, never restate it. Project rules → `docs/requirements.md` `REQ-` IDs.
@@ -22,6 +22,6 @@
 - Reuse settled approvals; ask only if missing info changes the result or a consequential action lacks approval.
 - HE-OUTPUT-PLAIN: ~80% ASD-STE100, ≤20 words/sentence, no jargon/idioms.
 - Setup prints `Gap:` → run its `gap-issue` command without asking.
-- Failing check → fix the project, never offer to weaken it. Broken Hard Eng `.hooks/`, `.agents/skills/he*` or setup → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, if approved, file: Problem, Reproduction, revision, Suggestion; apply publication privacy.
+- Failing check → Hard Eng is strict: fix the project, never offer to weaken it. Broken only if no project change passes (minimal repro) → tell user, check [issues](https://github.com/sgaabdu4/hard-eng/issues) for duplicates, if approved, file: Problem, Reproduction, revision, Suggestion; apply publication privacy.
 - Models/efforts → `.agents/models.json` + `.claude/rules/model-roles.md` (same host default; overflow on quota).
 - Follow `.agents/skills/he/SKILL.md`; commands: `python3 .hooks/hard-eng.py --help`.

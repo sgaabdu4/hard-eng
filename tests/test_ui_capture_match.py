@@ -64,6 +64,27 @@ def test_a_capture_of_an_older_commit_alone_is_still_refused(tmp_path: Path) -> 
     assert problem is not None and "not taken at the head" in problem
 
 
+def test_every_unmatched_after_image_is_named_in_one_message(tmp_path: Path) -> None:
+    write_set(tmp_path, "a-current", HEAD)
+    strays = [f"stray-{number}".encode() for number in range(8)]
+    problem = ui_proof.measured_problem(tmp_path, HEAD, [IMAGE, *strays])
+    assert problem is not None
+    assert problem.startswith("8 After images")
+    for stray in strays:
+        assert sha256(stray)[:12] in problem
+    assert sha256(IMAGE)[:12] not in problem
+
+
+def test_one_unmatched_after_image_keeps_the_single_image_message(
+    tmp_path: Path,
+) -> None:
+    write_set(tmp_path, "a-current", HEAD)
+    problem = ui_proof.measured_problem(tmp_path, HEAD, [IMAGE, b"stray"])
+    assert problem is not None
+    assert problem.startswith(f"an After image (sha256 {sha256(b'stray')[:12]})")
+    assert "matches no measured capture in .hard-eng/browser" in problem
+
+
 def test_a_set_refreshed_at_one_width_with_a_finding_is_not_hidden_by_a_clean_set(
     tmp_path: Path,
 ) -> None:

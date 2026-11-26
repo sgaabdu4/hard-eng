@@ -60,11 +60,13 @@ def github_response(endpoint: str, headers: dict[str, str]) -> bytes:
     import urllib.error
     import urllib.request
 
+    import https_open
+
     auth = {"Authorization": f"Bearer {token}"} if (token := github_token()) else {}
     url = f"https://api.github.com/{endpoint}"
     request = urllib.request.Request(url, headers={**headers, **auth})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with https_open.open_https(request, timeout=30) as response:
             return response.read()
     except http.client.HTTPException as error:
         raise OSError(f"GitHub response for {endpoint} was cut short") from error
@@ -942,9 +944,13 @@ def release_installed(
     return True
 
 
-def check_scaffold_update(root: Path, base: str, *, sources: bool = True) -> bool:
+def check_scaffold_update(
+    root: Path, base: str, *, sources: bool = True, rules_proven: bool = True
+) -> bool:
     found = update_in_diff(root, base)
     if found is None or not all(maybe_installed(name) for name in found[2]):
+        return False
+    if not rules_proven and found[2] & RULE_FILES:
         return False
     revision, previous, names = found
     if not verified_revision(revision):

@@ -7,6 +7,10 @@ import math
 import os
 import re
 import subprocess
+import time
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,13 +22,6 @@ from gate_config import JsonValue
 from project_files import parse_project_text, read_project_file
 
 REPOSITORY_NAME_PART = re.compile(r"[A-Za-z0-9_.-]+")
-DELIVERY_TARGET_LINE = re.compile(
-    r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*(PR|Merge|Deploy)\s*$"
-)
-ONE_TARGET = (
-    "Verification needs one Delivery target: PR, Merge or Deploy, alone on its line"
-)
-
 Delivery = TypedDict("Delivery", {"name": str, "command": list[str]})
 
 ShippingPolicy = TypedDict(
@@ -33,6 +30,7 @@ ShippingPolicy = TypedDict(
         "base": str,
         "checks": list[str],
         "ui_paths": list[str],
+        "ui_library": list[str],
         "ci_seconds": float,
         "pre_push_seconds": float,
         "pre_push_mutation_seconds": float,
@@ -68,6 +66,8 @@ class PendingCheck(ShippingError):
     """A required check has not concluded yet; it has not failed."""
 
 
+CHECK_POLL_SECONDS = 15
+
 _CONFIG_KEYS = {
     "base",
     "checks",
@@ -79,6 +79,7 @@ _CONFIG_KEYS = {
 _OPTIONAL_KEYS = {
     "pre_push_mutation_seconds",
     "pre_push_checks",
+    "ui_library",
 }  # older policies lack them
 _DELIVERY_KEYS = {"name", "command"}
 _BRANCH_PARTS = re.compile(r"^[A-Za-z0-9._/-]+$")
@@ -134,7 +135,11 @@ def _run(
             env=env,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except subprocess.TimeoutExpired as error:
+        raise ShippingError(
+            f"{executable} timed out after {timeout:g} seconds"
+        ) from error
+    except OSError as error:
         raise ShippingError(f"{executable} query unavailable") from error
     if result.returncode != 0:
         reason = result.stderr.strip().rpartition("\n")[2]
@@ -292,7 +297,22 @@ def _delivery_entries(value: JsonValue) -> list[Delivery]:
     return commands
 
 
+_NEWER_KEYS_OK: ContextVar[bool] = ContextVar("newer_policy_keys_ok", default=False)
+
+
+@contextmanager
+def reading_newer_policy_keys() -> Generator[None]:
+    """Skip policy keys this release does not know, for a step that proves only a merge, such as cleanup run from a checkout older than the task."""
+    token = _NEWER_KEYS_OK.set(True)
+    try:
+        yield
+    finally:
+        _NEWER_KEYS_OK.reset(token)
+
+
 def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
+    if _NEWER_KEYS_OK.get():
+        raw = {key: raw[key] for key in raw if key in _CONFIG_KEYS | _OPTIONAL_KEYS}
     if not _CONFIG_KEYS <= set(raw) <= _CONFIG_KEYS | _OPTIONAL_KEYS:
         raise ShippingError("shipping policy has unknown or missing keys")
     base = raw["base"]
@@ -303,6 +323,7 @@ def _policy(raw: dict[str, JsonValue]) -> ShippingPolicy:
         "base": base,
         "checks": _check_names(raw["checks"]),
         "ui_paths": _strings(raw["ui_paths"], "shipping ui_paths"),
+        "ui_library": _strings(raw.get("ui_library", []), "shipping ui_library"),
         "ci_seconds": _number(raw["ci_seconds"], "shipping ci_seconds"),
         "pre_push_seconds": _number(
             raw["pre_push_seconds"], "shipping pre_push_seconds"
@@ -592,9 +613,11 @@ def _checks(
             by_name[name].append(item)
     base = branch or policy["base"]
     suites = _push_suites(root, repository, revision, base) if push_only else set()
+    waiting: PendingCheck | None = None
     for name, candidates in by_name.items():
         if not candidates:
-            raise PendingCheck(f"required check missing: {name}")
+            waiting = waiting or PendingCheck(f"required check missing: {name}")
+            continue
         run = newest_run(_from_push(candidates, suites))
         if run.get("truncated") is True or (
             isinstance(run.get("output"), dict)
@@ -603,18 +626,55 @@ def _checks(
             raise ShippingError(f"required check truncated: {name}")
         _check_revision(run, revision)
         if run.get("status") != "completed":
-            raise _pending(root, repository, run, policy["ci_seconds"], explain)
-        if run.get("conclusion") == "skipped":
-            raise ShippingError(
-                f"required check was skipped; gate its steps, not the job: {name}"
+            waiting = waiting or _pending(
+                root, repository, run, policy["ci_seconds"], explain
             )
-        if run.get("conclusion") != "success":
-            raise ShippingError(f"required check is not successful: {name}")
-        started = _timestamp(run.get("started_at"), f"check {name}")
-        completed = _timestamp(run.get("completed_at"), f"check {name}")
-        duration = completed - started
-        if duration < 0 or duration > policy["ci_seconds"]:
-            raise ShippingError(f"required check is outside the CI budget: {name}")
+            continue
+        _finished_check(run, name, policy["ci_seconds"])
+    if waiting:
+        raise waiting
+
+
+def _finished_check(run: dict[str, JsonValue], name: str, budget: float) -> None:
+    if run.get("conclusion") == "skipped":
+        raise ShippingError(
+            f"required check was skipped; gate its steps, not the job: {name}"
+        )
+    if run.get("conclusion") != "success":
+        raise ShippingError(f"required check is not successful: {name}")
+    started = _timestamp(run.get("started_at"), f"check {name}")
+    completed = _timestamp(run.get("completed_at"), f"check {name}")
+    duration = completed - started
+    if duration < 0 or duration > budget:
+        raise ShippingError(f"required check is outside the CI budget: {name}")
+
+
+def _stage_checks(
+    root: Path,
+    repository: str,
+    revision: str,
+    policy: ShippingPolicy,
+    stage: str,
+    branch: str,
+) -> None:
+    """Ready judges the PR head at once; delivered waits while a base check is not done."""
+    if stage != "delivered":
+        return _checks(root, repository, revision, policy, True)
+    limit = policy["ci_seconds"]
+    deadline = time.monotonic() + limit
+    while True:
+        try:
+            return _checks(
+                root, repository, revision, policy, True, push_only=True, branch=branch
+            )
+        except PendingCheck as pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise PendingCheck(
+                    f"{pending}; the time limit of {limit:g} seconds "
+                    "(shipping ci_seconds) ended first"
+                ) from pending
+        time.sleep(min(CHECK_POLL_SECONDS, remaining))
 
 
 def passed_branch_point(root: Path) -> str | None:
@@ -688,69 +748,6 @@ def _clean(root: Path) -> None:
             + ", ".join(names[:5])
             + more
         )
-
-
-def _plan_target(root: Path, plan: Path) -> tuple[Path, str]:
-    resolved_root = root.resolve()
-    resolved_plan = plan.resolve()
-    if not resolved_plan.is_relative_to(resolved_root):
-        raise ShippingError("shipping plan must be inside the repository")
-    if not resolved_plan.is_file():
-        raise ShippingError(
-            "shipping plan not found in this checkout; check out the PR's head branch"
-        )
-    try:
-        from plans import plan_sections, validate_plan
-
-        if validate_plan(resolved_plan) != "Complete":
-            raise ShippingError("shipping requires a Complete plan")
-        from plan_controls import plan_root, tracked_problem
-
-        if problem := tracked_problem(
-            resolved_plan.read_text(), plan_root(resolved_plan)
-        ):
-            raise ShippingError(problem)
-        sections = plan_sections(resolved_plan.read_text())
-    except ShippingError:
-        raise
-    except (OSError, UnicodeError, ValueError) as error:
-        raise ShippingError(
-            "shipping plan failed native Complete validation"
-        ) from error
-    targets = DELIVERY_TARGET_LINE.findall(sections["Verification"])
-    if len(targets) != 1:
-        raise ShippingError(ONE_TARGET)
-    return resolved_plan, targets[0]
-
-
-def target_problem(target: str, delivery: list[Delivery]) -> str | None:
-    if target.lower() == "deploy" and not delivery:
-        return "Deploy target requires configured delivery checks"
-    if target.lower() == "merge" and delivery:
-        return "configured delivery checks need Delivery target: Deploy"
-    return None
-
-
-def plan_target_problem(root: Path, verification: str) -> str | None:
-    """Why the delivery target in a plan's Verification does not fit the shipping policy."""
-    targets = DELIVERY_TARGET_LINE.findall(verification)
-    if len(targets) != 1:
-        return ONE_TARGET
-    policy = load_policy(root)
-    return None if policy is None else target_problem(targets[0], policy["delivery"])
-
-
-def _delivery_scope(
-    root: Path, plan: Path | None, delivery: list[Delivery]
-) -> tuple[Path | None, str]:
-    if plan is not None:
-        return _plan_target(root, plan)
-    from change_size import size_verdict
-
-    small, reason = size_verdict(root)
-    if not small:
-        raise ShippingError(f"a big change needs a plan: {reason}")
-    return None, "Deploy" if delivery else "Merge"
 
 
 def _remote_sha(root: Path, base: str, remote_url: str) -> str:
@@ -901,27 +898,9 @@ def _delivery(root: Path, policy: ShippingPolicy, revision: str, pr_url: str) ->
             )
 
 
-def _plan_scope(
-    root: Path,
-    plan: Path | None,
-    policy: ShippingPolicy,
-    identity: tuple[str, str, int],
-) -> tuple[Path | None, str]:
-    """The plan and delivery target; a release, hotfix or join needs no plan even when the branch is big."""
-    from ship_record import route
-
-    try:
-        return _delivery_scope(root, plan, policy["delivery"])
-    except ShippingError:
-        found = route(root, _pull(root, *identity), policy["base"])
-        if plan is not None or found not in ("release", "join"):
-            raise
-        return None, "Deploy" if policy["delivery"] else "Merge"
-
-
 def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     from ship_record import base_matches, ship_method
-    from ui_proof import changed_files
+    from ship_scope import delivered_files, plan_scope, target_problem
 
     if stage not in {"ready", "delivered"}:
         raise ShippingError("shipping stage must be ready or delivered")
@@ -934,7 +913,7 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
     if repository != f"{owner}/{name}".lower():
         raise ShippingError("PR URL repository does not match origin")
     _clean(resolved_root)
-    resolved_plan, target = _plan_scope(
+    resolved_plan, target = plan_scope(
         resolved_root, plan, policy, (owner, name, number)
     )
     if problem := target_problem(target, policy["delivery"]):
@@ -960,18 +939,12 @@ def verify(root: Path, plan: Path | None, pr_url: str, stage: str) -> Shipment:
         else:
             revision = _delivered(resolved_root, pull, pull.base_ref, origin_url)
             merged_sha = revision
-        if policy["ui_paths"]:
-            files = changed_files(resolved_root, owner, name, number)
-            _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
-        _checks(
-            resolved_root,
-            repository,
-            revision,
-            policy,
-            True,
-            push_only=stage == "delivered",
-            branch=pull.base_ref,
+        files = delivered_files(
+            resolved_root, pull, identity, policy, resolved_plan, stage
         )
+        if policy["ui_paths"]:
+            _ui_evidence(resolved_root, pull, files, policy, resolved_plan)
+        _stage_checks(resolved_root, repository, revision, policy, stage, pull.base_ref)
         if stage == "delivered" and target == "Deploy":
             _delivery(resolved_root, policy, revision, url)
         current = _pull(resolved_root, owner, name, number)

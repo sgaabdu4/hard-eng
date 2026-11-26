@@ -36,7 +36,7 @@ SURFACE_VALUE = re.compile(r"(Existing|New|Mock) — \S.+")
 TEST_REFERENCE = re.compile(r"`([^`\s]+?)::(?:[^`\n]*::)?([^`\n]+)`")
 DECISION_SECTION = re.compile(r"(?ms)^## Decision\n(.*?)(?=^## |\Z)")
 NONE_VALUE = re.compile(r"(?i:none)(?:[.;:](?:\s.*)?|\s+[—–-]\s.*)?")
-DELIVERY_TARGET_FIELD = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:")
+DELIVERY_TARGET_FIELD = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target\b")
 CHECKBOX_LABEL = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[([^]\n]*)\](?:\s|$)")
 CHECKBOX_REST = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+\[[^]\n]*\](.*)$")
 PLACEHOLDER_STATUS = re.compile(
@@ -650,25 +650,34 @@ def line_references(line: str) -> list[tuple[str, str]]:
     ]
 
 
+def acceptance_references(sections: dict[str, str]) -> list[tuple[str, str]]:
+    """The `path::test` names of every acceptance line, whatever the form of the other lines."""
+    return [
+        reference
+        for line in CHECKBOX_REST.findall(sections["Acceptance + steps"])
+        for reference in line_references(line)
+    ]
+
+
 def acceptance_tests(
     sections: dict[str, str],
 ) -> tuple[list[tuple[str, str]], set[str]]:
     """Each acceptance checkbox names its `path::test` or requirement ID, or N/A — reason."""
     from requirement_registry import REQUIREMENT_ID
 
-    references: list[tuple[str, str]] = []
     requirements: set[str] = set()
     for line in CHECKBOX_REST.findall(sections["Acceptance + steps"]):
-        found = line_references(line)
+        found = TEST_REFERENCE.findall(line)
         named = set(REQUIREMENT_ID.findall(line))
+        if found:
+            named = {name for name in named if not name.startswith("HE-")}
         if not found and not named and not NOT_APPLICABLE_PROOF.search(line):
             raise ValueError(
                 "Acceptance + steps line needs a `path::test name` reference, "
                 f"a requirement ID or N/A — reason:{line[:80]}"
             )
-        references.extend(found)
         requirements |= named
-    return references, requirements
+    return acceptance_references(sections), requirements
 
 
 def untested_requirements(root: Path, requirements: set[str]) -> list[str]:
@@ -687,7 +696,7 @@ def untested_requirements(root: Path, requirements: set[str]) -> list[str]:
 def _validate_shipping(root: Path, path: Path, status: str) -> None:
     content = path.read_text()
     if status in {"Ready", "Complete"} and DELIVERY_TARGET_FIELD.search(content):
-        from shipping import plan_target_problem
+        from ship_scope import plan_target_problem
 
         verification = plan_sections(content)["Verification"]
         if problem := plan_target_problem(root, verification):
@@ -773,6 +782,16 @@ def _point(root: Path) -> str | None:
     return None
 
 
+def plan_stages(
+    root: Path, applicable: list[Path], changed: set[str], asks_size: bool
+) -> dict[Path, str]:
+    """The stage of each plan; a plan that the change does not hold is named as another task's when it fails."""
+    try:
+        return {path: plan_stage(root, path, changed) for path in applicable}
+    except ValueError as error:
+        raise ValueError(f"{error}{OTHER_PLAN * asks_size}") from error
+
+
 def validate_plans(
     root: Path, base: str | None = None, stage: str | None = None
 ) -> str:
@@ -780,7 +799,7 @@ def validate_plans(
         judged_plans,
         judged_point,
         plan_not_needed,
-        update_only,
+        update_needs_no_plan,
     )
     from plan_parent import may_ride_along
     from plan_tests import unchanged_plan_test_problem
@@ -794,13 +813,7 @@ def validate_plans(
     if stage is None:
         stage = "Draft" if planning_only(root, changed) else "Complete"
     # Unrelated open plans must not block a verified Hard Eng update branch.
-    if (
-        base is not None
-        and not explicit_stage
-        and changed
-        and update_only(root, base, changed)
-    ):
-        print("Plan: only files the verified Hard Eng update wrote; no plan needed.")
+    if update_needs_no_plan(root, base, changed, explicit_stage):
         return stage
     changed, paths, applicable = judged_plans(root, base, changed)
     unchanged_plan_test_problem(
@@ -821,7 +834,7 @@ def validate_plans(
         raise ValueError(
             "repository changes need an applicable PLAN.md; use the HE Plan template"
         )
-    statuses = {path: plan_stage(root, path, changed) for path in applicable}
+    statuses = plan_stages(root, applicable, changed, asks_size)
     reached = any(
         STAGES.index(status) >= STAGES.index(stage) for status in statuses.values()
     )

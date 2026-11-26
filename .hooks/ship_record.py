@@ -65,9 +65,25 @@ def _carries_own_work(root: Path, pull: Pull, tip: str, base_tip: str) -> bool:
     return done.returncode != 0 or bool(done.stdout.strip())
 
 
-def is_join(root: Path, pull: Pull, default: str) -> bool:
-    """The head holds the default branch's tip, which the base lacks, and adds no work of its own; local refs, so fetch first."""
-    tip, base_tip = _remote_tip(root, default), _remote_tip(root, pull.base_ref)
+def base_before_merge(root: Path, head_sha: str, merge_sha: str | None) -> str | None:
+    """The base tip that a merged pull request joined: the first parent of its merge commit, when the head is the second parent."""
+    if not merge_sha:
+        return None
+    done = subprocess.run(
+        ["git", "rev-list", "--parents", "-n", "1", merge_sha],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    parents = done.stdout.split()[1:]
+    return parents[0] if len(parents) == 2 and parents[1] == head_sha else None
+
+
+def is_join(root: Path, pull: Pull, default: str, before: str | None = None) -> bool:
+    """The head holds the default branch's tip, which the base lacks, and adds no work of its own; `before` is the base tip before a merge; local refs, so fetch first."""
+    tip = _remote_tip(root, default)
+    base_tip = before or _remote_tip(root, pull.base_ref)
     return (
         tip is not None
         and base_tip is not None
@@ -77,8 +93,8 @@ def is_join(root: Path, pull: Pull, default: str) -> bool:
     )
 
 
-def route(root: Path, pull: Pull, base: str) -> str | None:
-    """release, hotfix or join when the pull request moves work between the base and the default branch; else None."""
+def route(root: Path, pull: Pull, base: str, before: str | None = None) -> str | None:
+    """release, hotfix or join when the pull request moves work between the base and the default branch; else None. After a merge, `before` is the base tip that it joined."""
     default = pull.default_branch
     if is_release(pull, base) and default in (None, pull.base_ref):
         return "release"
@@ -86,7 +102,7 @@ def route(root: Path, pull: Pull, base: str) -> str | None:
         return None
     if pull.base_ref == default and pull.head_ref.startswith("hotfix/"):
         return "hotfix"
-    if pull.base_ref == base and is_join(root, pull, default):
+    if pull.base_ref == base and is_join(root, pull, default, before):
         return "join"
     return None
 

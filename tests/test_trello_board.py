@@ -167,6 +167,13 @@ def test_promises_ignore_conditional_live(
     assert (refs(project.report()["promises"]) == {"1"}) == listed
 
 
+def is_listed_as_waiting(project: Project, role: str, text: str) -> bool:
+    project.fake.cards = [make_card(1, "#1 Card", role)]
+    project.fake.actions = [comment("ours-1", 1, "m-owner", text, 2)]
+    project.mods.state.log_posted(project.state, "ours-1")
+    return refs(project.report()["waitsOnUs"]) == {"1"}
+
+
 @pytest.mark.parametrize(
     "text,listed",
     [
@@ -190,10 +197,7 @@ def test_promises_ignore_conditional_live(
 def test_waits_on_us_ignores_conditional_live(
     project: Project, text: str, listed: bool
 ) -> None:
-    project.fake.cards = [make_card(1, "#1 Card", "l-testing")]
-    project.fake.actions = [comment("ours-1", 1, "m-owner", text, 2)]
-    project.mods.state.log_posted(project.state, "ours-1")
-    assert (refs(project.report()["waitsOnUs"]) == {"1"}) == listed
+    assert is_listed_as_waiting(project, "l-testing", text) == listed
 
 
 def test_owner_comment_stays_listed_until_we_reply(

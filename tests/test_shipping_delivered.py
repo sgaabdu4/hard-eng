@@ -28,8 +28,10 @@ def _delivered_fake(
     push_suites: tuple[int, ...] = (_PUSH_SUITE,),
     elsewhere: tuple[int, ...] = (),
     release: bool = False,
+    ui_paths: list[str] | None = None,
+    files: list[dict[str, object]] | None = None,
 ) -> Fixture:
-    fixture = _fixture(tmp_path, target="Merge")
+    fixture = _fixture(tmp_path, target="Merge", ui_paths=ui_paths)
     pull = _pull(
         fixture,
         state="closed",
@@ -57,7 +59,9 @@ def _delivered_fake(
                 "repo": {"full_name": "acme/widget"},
             },
         )
-    fake = FakeGitHub(pull, [{**check, "head_sha": fixture.head} for check in checks])
+    fake = FakeGitHub(
+        pull, [{**check, "head_sha": fixture.head} for check in checks], files
+    )
     runs = [
         {"id": suite, "check_suite_id": suite, "head_branch": branch}
         for branch, suites in (("main", push_suites), ("release", elsewhere))
@@ -143,3 +147,52 @@ def test_delivered_judges_a_release_on_the_branch_it_merged_into(
         tmp_path, monkeypatch, [_run_of(_PUSH_SUITE, 1, "success")], release=True
     )
     assert _verify(fixture).merged_sha
+
+
+_SCREEN: dict[str, object] = {"filename": "src/App.ts", "patch": "@@ -1 +1 @@\n-a\n+b"}
+_PLAN_FILE: dict[str, object] = {
+    "filename": "features/shipping/PLAN.md",
+    "patch": "@@ -0,0 +1 @@\n+x",
+}
+
+
+def test_delivered_without_a_plan_says_the_plan_is_missing_when_the_pr_changed_a_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _delivered_fake(
+        tmp_path,
+        monkeypatch,
+        [_run_of(_PUSH_SUITE, 1, "success")],
+        ui_paths=["src/**"],
+        files=[_SCREEN, _PLAN_FILE],
+    )
+    with pytest.raises(shipping.ShippingError) as refused:
+        shipping.verify(fixture.root, None, _PR_URL, "delivered")
+    assert "--plan is missing" in str(refused.value)
+    assert "features/shipping/PLAN.md" in str(refused.value)
+    assert "UI appearance" not in str(refused.value)
+
+
+def test_delivered_without_a_plan_still_passes_for_a_pr_that_changed_no_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _delivered_fake(
+        tmp_path,
+        monkeypatch,
+        [_run_of(_PUSH_SUITE, 1, "success")],
+        files=[{"filename": "src/util.ts", "patch": "@@ -1 +1 @@\n-a\n+b"}],
+    )
+    assert shipping.verify(fixture.root, None, _PR_URL, "delivered").merged_sha
+
+
+def test_delivered_without_a_plan_passes_for_a_release_that_carries_plans(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _delivered_fake(
+        tmp_path,
+        monkeypatch,
+        [_run_of(_PUSH_SUITE, 1, "success")],
+        release=True,
+        files=[_PLAN_FILE],
+    )
+    assert shipping.verify(fixture.root, None, _PR_URL, "delivered").merged_sha

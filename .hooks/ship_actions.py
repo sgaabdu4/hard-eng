@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager, nullcontext, suppress
 from pathlib import Path, PurePosixPath
 from xml.parsers.expat import ExpatError
 
@@ -40,6 +40,7 @@ from shipping import (
     load_policy,
     merge_settings,
     pushed_policy,
+    reading_newer_policy_keys,
     verify,
 )
 from submodules import update_submodules
@@ -137,9 +138,12 @@ def stop_number(code: int) -> int | None:
     )
 
 
+STOP_MARK = "the pre-push check was stopped by"
+
+
 def stopped_line(number: int) -> str:
     return (
-        f"Hard Eng: the pre-push check was stopped by {signal.Signals(number).name} "
+        f"Hard Eng: {STOP_MARK} {signal.Signals(number).name} "
         "before it finished. The stop is not a fault in the project, and neither is "
         "a gate that the stop ended. Fix any other failure printed above, then run "
         "the push again."
@@ -335,6 +339,7 @@ def link_local_files(root: Path, checkout: Path) -> None:
 
 
 COMPILED_HOOKS = "!! .hooks/__pycache__/"
+PROOF_FOLDER = "!! .hard-eng/"
 
 
 def placed_by_hard_eng(root: Path, checkout: Path) -> set[str]:
@@ -677,6 +682,23 @@ def kept_groups(kept: list[str]) -> list[str]:
     return list(dict.fromkeys("".join(name.partition("/")[:2]) for name in kept))
 
 
+def other_proof_files(target: Path) -> list[str]:
+    """What `.hard-eng/` holds besides the proof, session and update files that Hard Eng writes; Git lists the ignored folder as one entry."""
+    from update_runner import FAILURE_FILE, LOG_FILE, RESULT_FILE
+
+    own = {
+        "browser",
+        "sessions",
+        "failures.json",
+        *(Path(name).name for name in (FAILURE_FILE, LOG_FILE, RESULT_FILE)),
+    }
+    return [
+        f".hard-eng/{path.name}"
+        for path in sorted((target / ".hard-eng").iterdir())
+        if path.name not in own
+    ]
+
+
 def unchanged_checkout(shipment: Shipment) -> None:
     target = shipment.root.resolve()
     index_lock = Path(git(target, "rev-parse", "--git-path", "index.lock").strip())
@@ -696,8 +718,11 @@ def unchanged_checkout(shipment: Shipment) -> None:
     kept = [
         line[3:]
         for line in status.splitlines()
-        if line not in own | {COMPILED_HOOKS} and not line.startswith(folders)
+        if line not in own | {COMPILED_HOOKS, PROOF_FOLDER}
+        and not line.startswith(folders)
     ]
+    if PROOF_FOLDER in status.splitlines():
+        kept += other_proof_files(target)
     for folder in folders:
         kept += changed_copies(main, target, folder[3:])
     if kept:
@@ -711,6 +736,33 @@ def unchanged_checkout(shipment: Shipment) -> None:
         )
     if git(target, "rev-parse", "HEAD").strip() != shipment.head_sha:
         raise ValueError("Cleanup preserves commits added after the verified PR")
+
+
+SUBMODULE_STATUS = re.compile(r"^(.)[0-9a-f]+ (.+?)(?: \(.*\))?$")
+
+
+def submodule_work(target: Path) -> list[str]:
+    """Each initialized submodule that holds work no remote has: a moved commit, a local branch commit, a stash, or untracked or ignored files. A shallow clone has no remote ref for the recorded commit, so that commit is not tested against the remotes."""
+    kept = []
+    for line in git(target, "submodule", "status", "--recursive").splitlines():
+        found = SUBMODULE_STATUS.match(line)
+        if found is None or found[1] == "-":
+            continue
+        inner = target / found[2]
+        if (
+            found[1] != " "
+            or git(inner, "rev-list", "--branches", "--not", "--remotes").strip()
+            or git(inner, "stash", "list").strip()
+            or git(
+                inner,
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--ignored=matching",
+            ).strip()
+        ):
+            kept.append(found[2])
+    return kept
 
 
 def cleanup_guard(coordinator: Path, shipment: Shipment) -> None:
@@ -733,12 +785,12 @@ def cleanup_guard(coordinator: Path, shipment: Shipment) -> None:
     if sum(record.get("branch") == branch for record in records) != 1:
         raise ValueError("Another worktree uses the task branch")
     unchanged_checkout(shipment)
-    if any(
-        not line.startswith("-")
-        for line in git(target, "submodule", "status", "--recursive").splitlines()
-    ):
+    if kept := submodule_work(target):
         raise ValueError(
-            "Cleanup preserves initialized submodules; use the repository's procedure"
+            "Cleanup preserves submodule work that no remote holds: "
+            + ", ".join(kept)
+            + ". In each, check out the recorded commit, push local commits, and "
+            "delete or move files and stashes that nobody needs. Then run cleanup again."
         )
     if shipment.branch == shipment.base or not shipment.merged_sha:
         raise ValueError("Cleanup requires a merged task branch, never the base")
@@ -885,7 +937,8 @@ def run(
     proof_stage = "ready" if stage in {"ready", "merge"} else "delivered"
     if stage in {"ready", "merge"}:
         require_current(target)
-    shipment = verify(target, plan_path, pr_url, proof_stage)
+    with reading_newer_policy_keys() if stage == "cleanup" else nullcontext():
+        shipment = verify(target, plan_path, pr_url, proof_stage)
     if stage in {"ready", "merge"} and (
         note := shipping_note(shipment.root, shipment.head_sha)
     ):

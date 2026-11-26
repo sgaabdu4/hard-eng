@@ -6,11 +6,13 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 import local_ui_proof
 import look
 import pytest
 import ui_measure
+import ui_proof
 from comments import validate_rules
 from conftest import SOURCE, commit, git
 from plans import usability_rules
@@ -22,6 +24,8 @@ from test_ui_quality import (
     REAL_UX,
     UNCHANGED_UX,
     WIDTHS,
+    look_record,
+    sha_of,
     write_look,
     write_pair,
 )
@@ -33,26 +37,50 @@ def clear_ci(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CI", raising=False)
 
 
+def _seed_ui_source(root: Path, design: str) -> None:
+    gates = json.loads((root / "hard-eng.gates.json").read_text())
+    gates["shipping"]["ui_library"] = ["src/ui/**"]
+    (root / "hard-eng.gates.json").write_text(json.dumps(gates))
+    (root / "src/ui").mkdir(parents=True, exist_ok=True)
+    (root / "src/ui/Button.tsx").write_text(
+        "export const Button = () => <button>Go</button>;\n"
+    )
+    (root / "src/theme").mkdir(parents=True, exist_ok=True)
+    (root / "src/theme/tokens.css").write_text(":root {\n  --color-ink: #111111;\n}\n")
+    (root / "UI-LIBRARY.md").write_text(
+        "# UI library\n\n## `src/ui/**`\n\n- `Button` — shared button\n"
+    )
+    front = '---\ncolors:\n  ink: "#111111"\n---\n'
+    body = design if design.startswith("---\n") else f"{front}{design}"
+    (root / "DESIGN.md").write_text(f"{body.rstrip()}\n\nParts: UI-LIBRARY.md\n")
+
+
 def web_change_repo(
     tmp_path: Path,
     *,
     ux: str = REAL_UX,
     design: str = "",
     commit_work: bool = True,
+    sentence: str = "one screen edit",
 ) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     fixture = _fixture(tmp_path, ui_paths=["src/**", "app/**"])
     root = fixture.root
     if design:
-        (root / "DESIGN.md").write_text(design)
+        _seed_ui_source(root, design)
     (root / ".git/info/exclude").write_text(".hard-eng/\n")
-    (root / "src").mkdir()
+    (root / "src").mkdir(exist_ok=True)
     (root / "src/App.tsx").write_text("export const App = () => <p>Old</p>;\n")
     commit(root, "base")
     git(root, "branch", "-f", "main", "HEAD")
     git(root, "update-ref", "refs/remotes/origin/main", git(root, "rev-parse", "main"))
     (root / "src/App.tsx").write_text("export const App = () => <p>New</p>;\n")
-    plan_text = (root / "PLAN.md").read_text().replace(NO_UX, ux) + "\n"
+    plan_text = (
+        (root / "PLAN.md")
+        .read_text()
+        .replace(NO_UX, ux)
+        .replace("no product release", sentence)
+    )
     (root / "PLAN.md").write_text(plan_text)
     if commit_work:
         commit(root, "ui work")
@@ -118,6 +146,114 @@ def test_local_complete_check_refuses_missing_browser_and_look_then_passes(
     write_look(root, head, after, design_doc=look.design_hash(root))
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
     validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
+
+
+def looked_at_clean_capture(
+    tmp_path: Path, *, design: str, ux: str = REAL_UX
+) -> tuple[Path, str, bytes]:
+    root = web_change_repo(tmp_path, ux=ux, design=design)
+    head = git(root, "rev-parse", "HEAD").strip()
+    after = write_clean_browser(root, route="/account")
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    return root, head, after
+
+
+def stray_look(root: Path, head: str, after: bytes, strays: list[bytes]) -> None:
+    images = cast(list[dict[str, object]], look_record(head, after)["images"])
+    images += [
+        {"name": f"stray-{n}.png", "sha256": sha_of(data), "read": True, "read_at": "t"}
+        for n, data in enumerate(strays)
+    ]
+    write_look(root, head, after, design_doc=look.design_hash(root), images=images)
+
+
+def test_local_complete_check_names_every_opened_image_that_matches_no_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root, head, after = looked_at_clean_capture(tmp_path, design=DESIGN)
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+    strays = [f"scratch-{number}".encode() for number in range(3)]
+    stray_look(root, head, after, strays)
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and problem.startswith("3 After images")
+    assert problem == ui_proof.measured_problem(
+        root, head, [after, *strays], ["/account"]
+    )
+
+
+def test_local_complete_check_passes_again_after_look_runs_on_the_clean_captures_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root, head, after = looked_at_clean_capture(tmp_path, design=DESIGN)
+    stray_look(root, head, after, [b"scratch-0", b"scratch-1"])
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and problem.startswith("2 After images")
+
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
+def test_local_complete_check_ignores_a_refused_look_that_an_older_clean_look_outlasts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design=DESIGN)
+    head = git(root, "rev-parse", "HEAD").strip()
+    wrong = write_clean_browser(root, name="wrong", route="/other")
+    write_look(root, head, wrong, design_doc=look.design_hash(root))
+    after = write_clean_browser(root, name="after", route="/account")
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+    write_look(root, head, wrong, design_doc=look.design_hash(root))
+    problem = local_ui_proof.local_ui_proof_problem(root, "origin/main")
+    assert problem is not None and "wrong-390.png" in problem
+
+
+def test_local_complete_check_counts_the_dirty_capture_when_an_older_set_has_the_same_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design=DESIGN, commit_work=False)
+    head = git(root, "rev-parse", "HEAD").strip()
+    after = write_clean_browser(root, route="/account")
+    older = root / ".hard-eng/browser/old-390.png"
+    older.write_bytes(after)
+    older.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "image": older.name,
+                "sha256": sha_of(after),
+                "width": 390,
+                "findings": [],
+                "route": "/account",
+                "commit": "0" * 40,
+                "dirty": False,
+            }
+        )
+    )
+    write_look(root, head, after, design_doc=look.design_hash(root))
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
+def test_the_quick_check_never_runs_the_local_ui_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path, design="# Design\n\n## Overview\nNavy primary.\n")
+    ran: list[bool] = []
+
+    def record_run(*_arguments: object) -> None:
+        ran.append(True)
+
+    monkeypatch.setattr(local_ui_proof, "validate_local_ui_proof", record_run)
+    validate_rules(root, "origin/main", screens=True, full=False, stage="Complete")
+    assert ran == []
+    validate_rules(root, "origin/main", screens=True, full=True, stage="Complete")
+    assert ran == [True]
 
 
 def test_local_complete_check_refuses_na_ux_reference_on_visible_change(
@@ -416,13 +552,39 @@ def test_local_complete_check_handles_multi_plan_siblings_and_multiple_routes(
     _assert_unchanged_routes_and_owners(root, base_plan)
 
 
+def test_local_complete_check_ignores_a_refused_look_that_a_later_clean_look_of_another_route_outlasts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clear_ci(monkeypatch)
+    root = web_change_repo(tmp_path)
+    base_plan = (root / "PLAN.md").read_text()
+    (root / "PLAN.md").unlink()
+    (root / "features/ui-a").mkdir(parents=True)
+    (root / "features/ui-b").mkdir(parents=True)
+    (root / "features/ui-a/PLAN.md").write_text(base_plan)
+    (root / "features/ui-b/PLAN.md").write_text(
+        base_plan.replace("/account", "/settings")
+    )
+    commit(root, "two routes")
+    head = git(root, "rev-parse", "HEAD").strip()
+
+    first = write_clean_browser(root, name="account", route="/account")
+    write_look(root, head, first)
+    wrong = write_clean_browser(root, name="wrong", route="/other")
+    write_look(root, head, wrong)
+    second = write_clean_browser(root, name="settings", route="/settings")
+    write_look(root, head, second)
+    assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
+
+
 def test_local_complete_check_detects_quoted_binary_ui_asset_diff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clear_ci(monkeypatch)
     fixture = _fixture(tmp_path, ui_paths=["src/**"])
     root = fixture.root
-    (root / "src").mkdir()
+    _seed_ui_source(root, "# Design\n")
+    (root / "src").mkdir(exist_ok=True)
     asset = root / 'src/logo"1.png'
     asset.write_bytes(b"\x89PNG\r\n\x1a\nold")
     commit(root, "base")
@@ -540,10 +702,9 @@ def test_local_complete_check_accepts_a_capture_of_any_listed_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, surface: str
 ) -> None:
     clear_ci(monkeypatch)
-    root = web_change_repo(tmp_path, ux=surface_ux(surface), design=DESIGN)
-    head = git(root, "rev-parse", "HEAD").strip()
-    after = write_clean_browser(root, route="/account")
-    write_look(root, head, after, design_doc=look.design_hash(root))
+    root, _, _ = looked_at_clean_capture(
+        tmp_path, ux=surface_ux(surface), design=DESIGN
+    )
     assert local_ui_proof.local_ui_proof_problem(root, "origin/main") is None
 
 

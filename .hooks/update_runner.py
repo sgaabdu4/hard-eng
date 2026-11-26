@@ -683,9 +683,65 @@ def free_step(root: Path, worktree: Path) -> str:
     )
 
 
-def build_update(root: Path, base: str, repair: bool) -> str:
+@contextmanager
+def candidate_worktree(
+    root: Path, revision: str, claim: bool = False
+) -> Generator[Path]:
+    """A detached worktree of the revision in its own temporary folder; `claim` locks it with this process as its owner. A git hook may leave a child that still writes there, so whatever runs inside is stopped before the worktree is removed."""
     import tempfile
 
+    from tidy_guards import stop_inside
+
+    owner = f"hard-eng-update {os.getpid()}"
+    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
+        candidate = Path(temporary) / "candidate"
+        try:
+            subprocess.run(
+                [
+                    "git",
+                    "worktree",
+                    "add",
+                    "--quiet",
+                    "--detach",
+                    str(candidate),
+                    revision,
+                ],
+                cwd=root,
+                check=True,
+                timeout=120,
+            )
+            if claim:
+                subprocess.run(
+                    [
+                        "git",
+                        "worktree",
+                        "lock",
+                        "--reason",
+                        owner,
+                        str(candidate),
+                    ],
+                    cwd=root,
+                    check=True,
+                )
+            yield candidate
+        finally:
+            if candidate.exists():
+                stop_inside(candidate)
+                if claim:
+                    subprocess.run(
+                        ["git", "worktree", "unlock", str(candidate)],
+                        cwd=root,
+                        check=False,
+                    )
+                subprocess.run(
+                    ["git", "worktree", "remove", "--force", str(candidate)],
+                    cwd=root,
+                    check=False,
+                    timeout=120,
+                )
+
+
+def build_update(root: Path, base: str, repair: bool) -> str:
     from hook_chain import use_own_hooks
     from update import update
     from update_pr import branch_worktree, unfinished_update
@@ -707,38 +763,14 @@ def build_update(root: Path, base: str, repair: bool) -> str:
             f"update cannot move it; {free_step(root, worktree)}, then rerun "
             "`python3 .hooks/hard-eng.py update`"
         )
-    with tempfile.TemporaryDirectory(prefix="hard-eng-update-") as temporary:
-        candidate = Path(temporary) / "candidate"
-        subprocess.run(
-            ["git", "worktree", "add", "--quiet", "--detach", str(candidate), tip],
-            cwd=root,
-            check=True,
-            timeout=120,
-        )
-        owner = f"hard-eng-update {os.getpid()}"
-        subprocess.run(
-            ["git", "worktree", "lock", "--reason", owner, str(candidate)],
-            cwd=root,
-            check=True,
-        )
-        try:
-            use_own_hooks(root, candidate)
-            for name in LOCAL_INPUTS:
-                if (candidate / name).is_symlink():
-                    (candidate / name).unlink()
-            outcome = update(candidate, repair, remember=None if repair else root)
-            revision = installed_revision(candidate)
-            landed = built_commit(candidate, tip)
-        finally:
-            subprocess.run(
-                ["git", "worktree", "unlock", str(candidate)], cwd=root, check=False
-            )
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", str(candidate)],
-                cwd=root,
-                check=False,
-                timeout=120,
-            )
+    with candidate_worktree(root, tip, claim=True) as candidate:
+        use_own_hooks(root, candidate)
+        for name in LOCAL_INPUTS:
+            if (candidate / name).is_symlink():
+                (candidate / name).unlink()
+        outcome = update(candidate, repair, remember=None if repair else root)
+        revision = installed_revision(candidate)
+        landed = built_commit(candidate, tip)
     if landed is None or not isinstance(revision, str):
         return outcome
     refuse_untracked_overlap(root, tip, landed, revision, repair)

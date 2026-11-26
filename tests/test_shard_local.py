@@ -140,6 +140,7 @@ def test_only_a_merge_inside_the_workflow_skips_the_python_runtime_setup(
         without_dependents=False,
         related_tests=False,
         quick=False,
+        static=False,
     )
     monkeypatch.setattr(runner, "language_filter", no_filter)
     assert runner.check_command(arguments) == 0

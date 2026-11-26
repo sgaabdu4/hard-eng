@@ -38,6 +38,18 @@ QUICK_ROLES = frozenset(
         "secrets-files",
     }
 )
+STATIC_ROLES = frozenset(
+    {
+        "complexity",
+        "dead-code",
+        "duplicates",
+        "dead-code-duplicates",
+        "dependencies",
+        "types-lint",
+        "react",
+        "security",
+    }
+)
 DART_ANALYSIS = (
     ["dart", "analyze", "--fatal-infos"],
     ["dart", "analyze", "--fatal-infos", "."],

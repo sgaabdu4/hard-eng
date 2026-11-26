@@ -710,6 +710,27 @@ def test_flutter_screen_needs_guideline_test(
     ready(fixture.root, fixture)
 
 
+def test_an_unchanged_flutter_screen_still_needs_the_guideline_test(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture, fake = ship_setup(
+        tmp_path,
+        monkeypatch,
+        ux=UNCHANGED_UX,
+        files=[CARD_CHANGE],
+        committed={
+            "app/pubspec.yaml": "name: shop\ndependencies:\n  flutter:\n    sdk: flutter\n",
+            "app/lib/ui/card.dart": "Widget card() => Text('New');\n",
+        },
+        packages=FLUTTER_PACKAGE,
+    )
+    base = _native(fixture.root, "rev-parse", "origin/main")
+    fake.pulls[0]["body"] = f"{UNCHANGED_NOTE}\n{_UNDO}"
+    write_pair(fixture.root, base, fixture.head)
+    with pytest.raises(shipping.ShippingError, match="meetsGuideline"):
+        ready(fixture.root, fixture)
+
+
 def test_swift_after_image_needs_look_but_no_measurement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -797,9 +818,12 @@ UI_MODULES = (
     "merge_guard",
     "ship_record",
     "plan_controls",
-    "look_answer",
-    "look_facts",
-    "look_records",
+    "ui_whole",
+    "ui_library",
+    "ui_css_imports",
+    "ui_raw",
+    "ui_exempt",
+    "ui_tokens",
 )
 
 
@@ -868,39 +892,6 @@ def test_every_usability_rule_has_a_proof_kind_that_matches_the_plan_table() -> 
     assert {name: set(kinds) for name, kinds in PROOF_KINDS.items()} == (
         plan_proof_kinds()
     )
-
-
-def test_ux_text_names_the_gap_items() -> None:
-    reference = (
-        FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
-    ).read_text()
-    for words in (
-        "think and remember as little as possible",
-        "Alignment:",
-        "Spacing:",
-        "Design system:",
-        "plain, calm and positive",
-        "phone 390, tablet 768 and desktop 1280 px",
-        "A Pass line you type is a claim, not proof",
-    ):
-        assert words in reference, words
-
-
-def test_ux_text_states_the_measured_limits() -> None:
-    from ui_measure import LIMITS
-
-    reference = (
-        FIXTURES.parents[2] / ".agents/skills/he-plan/references/ux.md"
-    ).read_text()
-    floor = LIMITS["text_px"]
-    assert (
-        f"Text at least {floor} pt on iOS, {floor} sp on Android and {floor} px on the web"
-        in reference
-    )
-    assert f"at most {LIMITS['accent_colours']} accent colours" in reference
-    assert f"{LIMITS['control_px']} × {LIMITS['control_px']} px on the web" in reference
-    assert f"{LIMITS['link_px']} × {LIMITS['link_px']} px (WCAG" in reference
-    assert f"over {LIMITS['secondary_words']} words" in reference
 
 
 def test_red_to_fixed_journey_end_to_end(

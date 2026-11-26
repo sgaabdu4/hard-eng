@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from gate_config import Gate, Group, validate_gate
 from resolved_settings import judge_before_run, validate_resolved
-from test_fallow_resolved import need_fallow, tests_group
+from test_fallow_resolved import group_with_a_tests_gate, need_fallow
 from test_strict_refusals import project
 
 PYPROJECT = '[project]\nname = "x"\nversion = "0"\nrequires-python = "{}"\n'
@@ -32,7 +32,7 @@ def test_the_template_group_with_a_coverage_gate_and_a_tests_gate_runs(
             "src/main.ts": "export {};\n",
         },
     )
-    group = tests_group()[0]
+    group = group_with_a_tests_gate()[0]
     fallow = group["checks"][0]
     judge_before_run(root, group, fallow, [group], 900)
     validate_resolved(root, [group], 900)

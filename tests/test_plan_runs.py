@@ -52,6 +52,10 @@ def with_line(plan: str, line: str) -> str:
             "Complete",
         ),
         (
+            "Real service: N/A — user, chat of 2026-11-14 at 14:05 and 16:30: the bank has no sandbox, so the fake stays the only proof.\n",
+            "Complete",
+        ),
+        (
             "Real service: Passed — payments API: pending payment was created on the test account.\n",
             "Complete",
         ),
@@ -68,6 +72,7 @@ def with_line(plan: str, line: str) -> str:
         "doubled-is-not-a-test-double",
         "planned-run-can-name-the-fake",
         "the-user-skips-the-run",
+        "the-place-of-the-decision-holds-clock-times",
         "evidence-can-start-with-the-word-pending",
         "evidence-can-say-that-the-fake-matches",
     ],
@@ -117,6 +122,11 @@ def test_a_plan_passes_with_its_real_service_run_stated(
             "is not the real service",
         ),
         (
+            "Real service: N/A — user, chat at 14:05 the tests use a fake of the backend.\n",
+            "Complete",
+            "is not the real service",
+        ),
+        (
             "Real service: N/A — a test double covers the backend.\n",
             "Complete",
             "is not the real service",
@@ -143,6 +153,7 @@ def test_a_plan_passes_with_its_real_service_run_stated(
         "fake-as-the-reason",
         "mock-as-the-reason",
         "a-skip-with-no-place-of-the-decision",
+        "a-skip-with-a-clock-time-and-no-colon-after-the-place",
         "test-double-as-the-reason",
         "a-run-after-the-deploy-is-too-late",
         "passed-with-no-service-named",

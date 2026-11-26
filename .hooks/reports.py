@@ -24,7 +24,7 @@ from dart_test_report import dart_events, failure_summary
 from fallow_report import finding_lines as fallow_findings
 from fallow_report import reads_coverage, sdk_binaries, validate_fallow, write_istanbul
 from gate_config import Gate, Group, JsonObject
-from gate_schedule import QUICK_ROLES
+from gate_schedule import QUICK_ROLES, STATIC_ROLES
 from project_setup import package_script_invocation
 from react_report import finding_lines as react_findings
 from react_report import incomplete_reason
@@ -75,11 +75,16 @@ def emit_dart_test_failure(
 
 
 def quick_groups(
-    groups: list[Group], quick: bool = True, installed: frozenset[str] = frozenset()
+    groups: list[Group],
+    quick: bool = True,
+    installed: frozenset[str] = frozenset(),
+    static: bool = False,
 ) -> list[Group]:
     if not quick:
         return groups
     from process_group import INSTALL_ROLES, install_key
+
+    roles = STATIC_ROLES if static else QUICK_ROLES
 
     return [
         {
@@ -87,7 +92,7 @@ def quick_groups(
             "checks": [
                 gate
                 for gate in group["checks"]
-                if gate.get("role") in QUICK_ROLES
+                if gate.get("role") in roles
                 or (
                     gate.get("role") in INSTALL_ROLES
                     and install_key(group) not in installed

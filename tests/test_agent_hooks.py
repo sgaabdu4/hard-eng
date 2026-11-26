@@ -7,7 +7,6 @@ import json
 import subprocess
 import sys
 import threading
-import urllib.request
 from pathlib import Path
 from types import ModuleType
 from typing import override
@@ -16,6 +15,7 @@ from unittest.mock import Mock
 import agent_hooks
 import commit_attribution
 import gate_config
+import https_open
 import process_group
 import pytest
 import update
@@ -226,7 +226,7 @@ def test_release_lookup_supports_account_free_setup_and_existing_auth(
     )
     monkeypatch.setattr(subprocess, "run", auth)
     request = Mock(return_value=io.StringIO('{"check_runs": []}'))
-    monkeypatch.setattr(urllib.request, "urlopen", request)
+    monkeypatch.setattr(https_open, "open_https", request)
     assert update.github_json("repos/example/fixture/check-runs") == {"check_runs": []}
     sent = request.call_args.args[0]
     assert sent.full_url == "https://api.github.com/repos/example/fixture/check-runs"
@@ -234,7 +234,7 @@ def test_release_lookup_supports_account_free_setup_and_existing_auth(
         None if credentials == "none" else "Bearer fixture-token"
     )
     assert auth.call_count == (0 if credentials == "environment" else 1)
-    monkeypatch.setattr(urllib.request, "urlopen", Mock(side_effect=OSError("offline")))
+    monkeypatch.setattr(https_open, "open_https", Mock(side_effect=OSError("offline")))
     with pytest.raises(OSError, match="offline"):
         update.github_json("repos/example/fixture/check-runs")
 
@@ -243,7 +243,7 @@ def test_release_lookup_supports_account_free_setup_and_existing_auth(
         def read(self, size: int | None = -1, /) -> bytes:
             raise http.client.IncompleteRead(b"{", 10)
 
-    monkeypatch.setattr(urllib.request, "urlopen", Mock(return_value=CutShort()))
+    monkeypatch.setattr(https_open, "open_https", Mock(return_value=CutShort()))
     with pytest.raises(OSError, match="cut short"):
         update.github_json("repos/example/fixture/check-runs")
 
@@ -269,7 +269,7 @@ def refuse_network(monkeypatch: pytest.MonkeyPatch) -> None:
 
     for name in ("github_json", "latest_verified", "upstream_moved"):
         monkeypatch.setattr(update, name, reached)
-    monkeypatch.setattr(urllib.request, "urlopen", reached)
+    monkeypatch.setattr(https_open, "open_https", reached)
 
 
 @pytest.mark.parametrize("path", ["passed", "unchanged", "planning", "repeat"])

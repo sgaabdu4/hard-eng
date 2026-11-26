@@ -6,14 +6,18 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import change_size
+import gate_config
+import plans
 import pytest
+import shipping
 import tool_setup
 import update
-from conftest import SOURCE, commit, git, load_module
+from conftest import SOURCE, commit, default_policy, git, load_module
 from coverage_sources import require_listed_sources
 from gate_config import parse_config, repository_files
 from test_update_pr_refusal import loading_project
 from test_updates import fixed_revision
+from ui_whole import add_ui_library
 
 SKILL_LOCK = ".agents/skills/marketing-video/bun.lock"
 WORKFLOW = ".github/workflows/hard-eng.yml"
@@ -257,6 +261,127 @@ def test_an_update_adds_the_biome_entry_and_stays_an_update(
     assert change_size.update_only(target, base, changed)
 
 
+def test_an_update_branch_with_no_plan_of_its_own_names_no_unrelated_draft_plan(
+    release: tuple[Path, Path, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    source, target, _ = release
+    other = target / "features/other-work/PLAN.md"
+    other.parent.mkdir(parents=True)
+    other.write_text("# Other work\nStatus: Draft\n")
+    base = commit(target, "an unrelated Draft plan")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    changed = set(git(target, "diff", "--name-only", base).splitlines())
+    assert change_size.update_only(target, base, changed)
+    capfd.readouterr()
+    assert plans.validate_plans(target, base, "Complete") == "Complete"
+    assert "other-work" not in capfd.readouterr().out
+
+
+def test_an_update_branch_with_a_repair_commit_names_the_plan_it_read_and_why(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    other = target / "features/other-work/PLAN.md"
+    other.parent.mkdir(parents=True)
+    other.write_text("# Other work\nStatus: Draft\n")
+    base = commit(target, "an unrelated Draft plan")
+    git(target, "switch", "-qc", "hard-eng/update")
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    (target / "repair.py").write_text(
+        "".join(f"def repaired_{n}() -> int:\n    return {n}\n" for n in range(15))
+    )
+    commit(target, "repair the project for the new release")
+    with pytest.raises(ValueError) as refusal:
+        plans.validate_plans(target, base, "Complete")
+    message = str(refusal.value)
+    assert message.startswith("features/other-work/PLAN.md: ")
+    assert message.endswith(
+        "If that plan is for another task, add a plan for this change."
+    )
+
+
+def web_project(target: Path, **extra: object) -> str:
+    """A project with screens in `src` and a shared folder `src/ui`, whose shipping policy has no `ui_library`."""
+    gates = target / "hard-eng.gates.json"
+    config = json.loads(gates.read_text())
+    config["shipping"] = {
+        key: value for key, value in default_policy().items() if key != "ui_library"
+    } | {"ui_paths": ["src/**"], **extra}
+    gates.write_text(json.dumps(config))
+    (target / "src/ui").mkdir(parents=True)
+    (target / "src/ui/Button.tsx").write_text(
+        "export const Button = () => <button>Go</button>;\n"
+    )
+    (target / "src/App.tsx").write_text("export const App = () => <p>Hi</p>;\n")
+    return commit(target, "a web project with no ui_library")
+
+
+def test_an_update_leaves_the_ui_library_key_to_the_project(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A release that does not read the key refuses a pushed policy that holds it, and a replay of the update must plan no change."""
+    source, target, _ = release
+    base = web_project(target)
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    saved = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
+    assert "ui_library" not in saved
+    assert git(target, "rev-list", "--count", f"{base}..HEAD") == "1"
+    changed = set(git(target, "show", "--name-only", "--format=", "HEAD").splitlines())
+    assert "hard-eng.gates.json" not in changed
+    assert change_size.update_only(target, base, changed)
+    assert update.check_scaffold_update(target, base)
+    policy = shipping.load_policy(target)
+    assert policy is not None and policy["ui_library"] == []
+    assert gate_config.load_groups(target)
+
+
+def test_a_first_install_writes_the_ui_library_default(
+    release: tuple[Path, Path, str],
+) -> None:
+    _, target, _ = release
+    web_project(target)
+    config = json.loads((target / "hard-eng.gates.json").read_text())
+    add_ui_library(target, config)
+    assert config["shipping"]["ui_library"] == ["src/ui/*"]
+
+
+def test_an_update_leaves_an_existing_ui_library_key_alone(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    base = web_project(target, ui_library=["src/shared/*"])
+    release_now(source, monkeypatch, "release one")
+    update.update(target)
+    saved = json.loads((target / "hard-eng.gates.json").read_text())["shipping"]
+    assert saved["ui_library"] == ["src/shared/*"]
+    assert "hard-eng.gates.json" not in git(target, "diff", "--name-only", base)
+
+
+def test_setup_writes_no_library_for_a_components_folder(
+    release: tuple[Path, Path, str],
+) -> None:
+    """A folder named `components` holds screens too; a guessed library there hides every base element inside it."""
+    _, target, _ = release
+    web_project(target)
+    (target / "src/ui/Button.tsx").rename(target / "src/Button.tsx")
+    (target / "src/components").mkdir()
+    (target / "src/components/Card.tsx").write_text(
+        "export const Card = () => <button>Go</button>;\n"
+    )
+    commit(target, "a components folder")
+    config = json.loads((target / "hard-eng.gates.json").read_text())
+    add_ui_library(target, config)
+    assert "ui_library" not in config["shipping"]
+
+
 @pytest.mark.parametrize(
     "deployment", [["python3", "-c", "print('DEPLOY')"], ["trivy", "config", "."]]
 )
@@ -311,3 +436,42 @@ def test_an_update_that_adds_codex_rules_stays_a_verified_scaffold_update(
     commit(target, "symlinked codex rules")
     with pytest.raises(ValueError, match=r"\.codex/rules/hard-eng\.rules is a symlink"):
         update.check_scaffold_update(target, base)
+
+
+def test_update_that_changes_the_project_rules_file_does_not_prove_the_project_checks(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Escaped bug: a root AGENTS.md change in a verified update skipped every project check that reads that file."""
+    source, target, _ = release
+    base = git(target, "rev-parse", "HEAD")
+    with (source / "AGENTS.md").open("a") as rules:
+        rules.write("- A new shared rule.\n")
+    release_now(source, monkeypatch, "release with a rule")
+    update.update(target)
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    assert "AGENTS.md" in git(target, "diff", "--name-only", base).splitlines()
+    assert update.check_scaffold_update(target, base)
+    assert not update.check_scaffold_update(target, base, rules_proven=False)
+
+
+def test_the_runner_takes_an_update_as_proof_unless_it_changes_the_rules_file(
+    release: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, _ = release
+    runner = load_module("runner_proof", SOURCE / ".hooks/gate_runner.py")
+    runner.__dict__["ROOT"] = target
+    monkeypatch.setattr(update, "verified_revision", Mock(return_value=True))
+    base = git(target, "rev-parse", "HEAD")
+    with (source / RUN).open("a") as extra:
+        extra.write("- Release note.\n")
+    release_now(source, monkeypatch, "release without a rule")
+    update.update(target)
+    assert "AGENTS.md" not in git(target, "diff", "--name-only", base).splitlines()
+    assert runner.proven_elsewhere(base)
+    later = git(target, "rev-parse", "HEAD")
+    with (source / "AGENTS.md").open("a") as rules:
+        rules.write("- Another shared rule.\n")
+    release_now(source, monkeypatch, "release with a rule")
+    update.update(target)
+    assert "AGENTS.md" in git(target, "diff", "--name-only", later).splitlines()
+    assert not runner.proven_elsewhere(later)

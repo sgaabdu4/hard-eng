@@ -1,0 +1,28 @@
+:root {
+  --brand: #123456;
+}
+
+#feed {
+  display: block;
+}
+
+.nav:hover #add,
+#fad {
+  display: none;
+}
+
+.card {
+  color: #1a2b3c;
+  background: white;
+  padding: 13px;
+  width: 240px;
+  height: 3rem;
+  border-radius: 7px;
+  font-size: 15px;
+}
+
+@media (min-width: 768px) {
+  .card {
+    margin: 0;
+  }
+}

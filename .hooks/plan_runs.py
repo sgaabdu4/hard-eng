@@ -9,7 +9,7 @@ RUN_LINE = re.compile(r"(Required|Passed|Delivery|N/A) — (\S.*)")
 NO_EVIDENCE = re.compile(r"(?i)^(pending|none|blocked|n/a)\b")
 DEPLOY_TARGET = re.compile(r"(?im)^\s*(?:[-*+]\s+)?Delivery target:\s*Deploy\s*$")
 SERVICE_FIRST = re.compile(r"[^:]*\S: \S")
-USER_SKIP = re.compile(r"(?i)user, [^:]*\S: \S")
+USER_SKIP = re.compile(r"(?i)user, (?:[^:]|:(?=\S))*?\S: \S")
 ONLY_PLACEHOLDER = re.compile(r"(?i)(?:pending|none|blocked|n/a)\W*")
 NOT_REAL = re.compile(
     r"(?i)\b(?:fakes?|faked|mocks?|mocked|stubs?|stubbed|test doubles?|in-memory)\b"

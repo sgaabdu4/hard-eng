@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
+import https_open
 from gate_config import LANGUAGES, GateConfig, Group, JsonObject
 
 JOB_BOUNDARY = re.compile(r"(?m)^(?=  [A-Za-z0-9_-]+:\n)")
@@ -61,13 +62,16 @@ def add_shard_option(parser: ArgumentParser) -> ArgumentParser:
     return parser
 
 
-def add_walls_command(add_parser: Callable[..., ArgumentParser]) -> None:
+def add_text_commands(add_parser: Callable[..., ArgumentParser]) -> None:
     walls = add_parser(
         "text-walls",
         help="List screen text blocks over the caps, or judge server strings with --stdin",
     )
     walls.add_argument("paths", nargs="*")
     walls.add_argument("--stdin", action="store_true")
+    add_parser(
+        "ui-library", help="Write UI-LIBRARY.md from the ui_library folders"
+    ).add_argument("--write", action="store_true", required=True)
 
 
 def add_scope_options(checks: ArgumentParser) -> None:
@@ -85,6 +89,11 @@ def add_scope_options(checks: ArgumentParser) -> None:
         "--quick",
         action="store_true",
         help="Run only format, lint, types and the file secret scan; the Stop hook uses it",
+    )
+    checks.add_argument(
+        "--static",
+        action="store_true",
+        help="Run only the read-only analyzer checks (complexity, dead code, duplicates, dependencies, React, security) of the changed packages, with no tests",
     )
     checks.add_argument(
         "--commit-secrets",
@@ -145,7 +154,7 @@ def bun_releases() -> list[JsonObject]:
     if token := os.environ.get("GH_TOKEN"):
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(BUN_RELEASES, headers=headers)
-    with urllib.request.urlopen(request, timeout=10) as response:
+    with https_open.open_https(request, timeout=10) as response:
         releases = json.load(response)
     return [item for item in releases if isinstance(item, dict)]
 
@@ -194,6 +203,7 @@ def impact_outputs(
 ) -> int:
     """Tell CI the runner, the tools and whether Swift is affected, before tools exist."""
     from ci_setup import impact_tools, push_base, require_ci_base
+    from dependency_graph import DOCS_ROLES
     from gate_config import affected_groups, parse_config
 
     require_ci_base(base, root)
@@ -214,7 +224,11 @@ def impact_outputs(
     with redirect_stdout(sys.stderr):
         selected = affected_groups(root, groups, base)
         needed = language_groups(selected, languages)
-    docs_only = bool(config["packages"]) and len(selected) == 1
+    docs_only = (
+        bool(config["packages"])
+        and len(selected) == 1
+        and all(gate.get("role") in DOCS_ROLES for gate in selected[0]["checks"])
+    )
     print(f"docs_only={str(docs_only).lower()}")
     tools = impact_tools(root, needed)
     print("tools=" + " ".join(tools))

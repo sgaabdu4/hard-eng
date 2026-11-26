@@ -3,14 +3,7 @@
 import re
 from pathlib import Path, PurePosixPath
 
-from plans import (
-    CHECKBOX_REST,
-    _is_test,
-    acceptance_tests,
-    line_references,
-    plan_sections,
-    plan_status,
-)
+from plans import CHECKBOX_REST, _is_test, line_references, plan_status
 from source_scan import code_without_comments
 
 ACCEPTANCE_HEADING = re.compile(r"(?m)^## Acceptance \+ steps\s*$")
@@ -135,15 +128,18 @@ def unchanged_plan_test_problem(
             continue
         if plan_status(content) != "Complete":
             continue
-        try:
-            sections = plan_sections(content)
-            found, _ = acceptance_tests(sections)
-        except ValueError:
-            continue
-        named = [reference for reference in found if reference[0] in changed]
-        if missing := missing_tests(root, named):
+        named = [
+            (number, reference)
+            for number, references in acceptance_rows(content)
+            for reference in references
+            if repo_paths(root, reference[0]) & changed
+        ]
+        if missing := missing_tests(root, [reference for _, reference in named]):
+            lines = {
+                f"{path}::{name}": number for number, (path, name) in reversed(named)
+            }
             raise ValueError(
                 f"{path.relative_to(root)}: acceptance names tests that do not exist: "
-                + ", ".join(missing)
+                + ", ".join(f"{found} (line {lines[found]})" for found in missing)
                 + ". Update that plan to the replacement test"
             )

@@ -28,6 +28,7 @@ from ui_proof import (
     is_native,
     look_base_problem,
     matches,
+    measured_digest_problem,
     merge_base,
     plans_reference_problem,
     reference_problem,
@@ -250,24 +251,14 @@ def _opened_sets_problem(
     min_mtime_ns: int,
     opened: set[str],
 ) -> str | None:
-    items = browser_record_files(evidence)
-    by_image = {str(rec["image"]): (path, rec) for path, rec in items}
-    for stem in dict.fromkeys(
-        _stem(rec)
-        for _, rec in items
-        if rec.get("commit") == head and rec["sha256"] in opened
-    ):
-        problem, _ = capture_set_problem(
-            by_image,
-            stem,
-            head,
-            routes,
-            allow_dirty=dirty_tree,
-            min_mtime_ns=min_mtime_ns,
-        )
-        if problem:
-            return problem
-    return None
+    return measured_digest_problem(
+        evidence,
+        head,
+        sorted(opened),
+        routes,
+        allow_dirty=dirty_tree,
+        min_mtime_ns=min_mtime_ns,
+    )
 
 
 def _single_local_look_problem(
@@ -302,6 +293,27 @@ def _single_local_look_problem(
     return None, opened
 
 
+def _newest_look_problem(
+    clean: list[tuple[int, set[str]]],
+    stray: list[tuple[int, set[str]]],
+    route_hashes: list[set[str]],
+    opened_problem: Callable[[set[str]], str | None],
+) -> str | None:
+    """Each route is judged by the newest clean look record that covers it, so a later `look` on the clean captures replaces an earlier one that held strays. A refused record of this head counts only when it is newer than those."""
+    chosen: list[tuple[int, set[str]]] = []
+    for hashes in route_hashes:
+        covering = [item for item in clean if item[1] & hashes]
+        if not covering:
+            return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
+        chosen.append(max(covering, key=lambda item: item[0]))
+    cutoff = max(item[0] for item in chosen)
+    chosen += [item for item in stray if item[0] > cutoff]
+    for _, opened in chosen:
+        if problem := opened_problem(opened):
+            return problem
+    return None
+
+
 def _local_look_problem(
     root: Path,
     evidence: Path,
@@ -320,8 +332,8 @@ def _local_look_problem(
         return f"Look review: no record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>`"
     expected_design = look.design_hash(root)
     wanted = [name for name, _ in usability_rules()]
-    covered: set[str] = set()
-    looked: set[str] = set()
+    clean: list[tuple[int, set[str]]] = []
+    stray: list[tuple[int, set[str]]] = []
     first_problem: str | None = None
     for path, record in files:
         problem, opened = _single_local_look_problem(
@@ -334,17 +346,16 @@ def _local_look_problem(
             native,
             min_mtime_ns,
         )
-        looked |= opened
-        if problem is None:
-            if native:
-                return None
-            covered |= opened
-        elif first_problem is None:
-            first_problem = problem
-    if not native and route_hashes and all(covered & hashes for hashes in route_hashes):
-        return opened_problem(looked)
-    if not native and covered:
-        return "Look review: clean look records do not cover every changed route's capture; run `look` on each route's After images"
+        if problem is not None:
+            first_problem = first_problem or problem
+            if path.stem.rpartition("-")[0] == head and opened:
+                stray.append((path.stat().st_mtime_ns, opened))
+            continue
+        if native:
+            return None
+        clean.append((path.stat().st_mtime_ns, opened))
+    if clean:
+        return _newest_look_problem(clean, stray, route_hashes, opened_problem)
     return (
         first_problem
         or f"Look review: no clean record for {head[:12]}; run `python3 .hooks/hard-eng.py look <After images>`"
@@ -352,15 +363,15 @@ def _local_look_problem(
 
 
 def _active_plan_texts(root: Path, base: str | None, changed: set[str]) -> list[str]:
-    from change_size import judged_plans
+    from change_size import judged_plans, unedited_plans
     from plan_parent import named_parents
     from plans import plan_status
 
     _, _, applicable = judged_plans(root, base, changed)
+    names = {str(path.relative_to(root)) for path in applicable if path.is_file()}
     texts = {
-        str(path.relative_to(root)): path.read_text()
-        for path in applicable
-        if path.is_file()
+        name: (root / name).read_text()
+        for name in sorted(names - unedited_plans(root, base, names))
     }
     parents = named_parents(texts)
     return [

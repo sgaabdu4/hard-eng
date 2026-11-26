@@ -809,6 +809,10 @@ def plan_install(
 
     add_swift_groups(root, config)
     add_package_groups(root, config)
+    if previous is None:
+        from ui_whole import add_ui_library
+
+        add_ui_library(root, config)
     from project_setup import (
         adapt_boundaries,
         add_freshness,

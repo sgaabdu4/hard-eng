@@ -489,6 +489,22 @@ def packages_for(
     return selected
 
 
+def shared_for(root: Path, shared: Group, names: set[str]) -> Group:
+    """No package reads the change: documentation keeps the secret scan alone; any other file runs every shared check."""
+    from plans import is_documentation, is_plan_capture, plan_folders
+
+    folders = plan_folders(root)
+    if all(
+        is_documentation(Path(name))
+        or is_plan_capture(name, folders)
+        or is_workflow(name)
+        for name in names
+    ):
+        return shared_only(shared, names)
+    print("No package reads this change; running the shared checks.")
+    return shared
+
+
 def affected_groups(
     root: Path,
     groups: list[Group],
@@ -513,7 +529,7 @@ def affected_groups(
         print("Checking every package: " + selected)
         return groups
     if not selected:
-        return [shared_only(groups[-1], names)]
+        return [shared_for(root, groups[-1], names)]
     if not dependents:
         print("Pre-push leaves dependents of changed packages to CI.")
         selected = cycle_members(packages, by_path, selected)

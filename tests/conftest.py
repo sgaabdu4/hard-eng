@@ -17,11 +17,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, override
+from unittest import mock
 
 import pytest
 
 if TYPE_CHECKING:
-    from shipping import ShippingPolicy
+    from shipping import Shipment, ShippingPolicy
 
 SOURCE = Path(__file__).resolve().parents[1]
 WORKFLOW_TEMPLATE = SOURCE / ".github/hard-eng.yml"
@@ -358,6 +359,7 @@ def default_policy() -> "ShippingPolicy":
         "base": "main",
         "checks": ["hard-eng"],
         "ui_paths": [],
+        "ui_library": [],
         "ci_seconds": 180.0,
         "pre_push_seconds": 180.0,
         "pre_push_mutation_seconds": 120.0,
@@ -636,3 +638,49 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for held in first:
         ordered += [*held, *itertools.islice(filler, batch - len(held))]
     items[:] = [*ordered, *filler]
+
+
+@pytest.fixture
+def delivered_worktree(
+    tmp_path: Path, completed_plan: str, monkeypatch: pytest.MonkeyPatch
+) -> "tuple[Path, Shipment]":
+    import ship_actions
+    import shipping
+
+    git = shipping.git
+
+    monkeypatch.setattr(ship_actions, "shipping_note", mock.Mock(return_value=None))
+    root, bare, task = (tmp_path / name for name in ("checkout", "origin.git", "task"))
+    git(tmp_path, "init", "-q", "-b", "main", str(root))
+    git(tmp_path, "init", "--bare", "-q", str(bare))
+    git(root, "config", "user.name", "Ship Fixture")
+    git(root, "config", "user.email", "ship-fixture@example.test")
+    (root / "PLAN.md").write_text(completed_plan + "\nDelivery target: Merge\n")
+    (root / ".gitignore").write_text("*.private\n")
+    git(root, "add", "PLAN.md", ".gitignore")
+    git(root, "commit", "-qm", "baseline")
+    git(root, "remote", "add", "origin", str(bare))
+    git(root, "push", "-q", "origin", "main")
+    git(root, "worktree", "add", "-qb", "feature/ship", str(task))
+    (task / "change.txt").write_text("authorized behavior\n")
+    git(task, "add", "change.txt")
+    git(task, "commit", "-qm", "task behavior")
+    head = git(task, "rev-parse", "HEAD").strip()
+    git(task, "push", "-q", "origin", "feature/ship")
+    git(root, "merge", "--squash", "feature/ship")
+    git(root, "commit", "-qm", "land task through squash")
+    merged = git(root, "rev-parse", "HEAD").strip()
+    git(root, "push", "-q", "origin", "main")
+    return root, shipping.Shipment(
+        root=task,
+        plan=task / "PLAN.md",
+        pr_url="https://github.com/fixture/project/pull/1",
+        repository="fixture/project",
+        remote="origin",
+        remote_url=str(bare),
+        branch="feature/ship",
+        head_sha=head,
+        base="main",
+        merged_sha=merged,
+        delivery_target="Merge",
+    )

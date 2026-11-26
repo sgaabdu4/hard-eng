@@ -16,6 +16,7 @@ LIMITS = {
     "frame_ratio": 1.1,
     "cls": 0.1,
     "fetch_waves": 3,
+    "request_hold_ms": 150,
     "action_quiet_ms": 500,
     "action_reaction_ms": 1000,
 }
@@ -79,6 +80,54 @@ DECORATED_JS = (
     "|| (parseFloat(s.borderTopWidth) >= 1 && s.borderTopStyle !== 'none' && apart(s.borderTopColor, e)); }; "
     "for (let n = el; n; n = n.parentElement) { if (boxed(n)) return true; if (n === root) return false; } return false; })"
 )
+PREFETCH_SIGNS = {
+    "next-router-prefetch": "",
+    "purpose": "prefetch",
+    "sec-purpose": "prefetch",
+}
+HOLD_SCRIPT = """(() => {
+if (window.__heHold) return;
+const HOLD = HOLD_MS;
+const SIGNS = SIGNS_JSON;
+const log = [];
+Object.defineProperty(window, "__heHold", { value: HOLD });
+Object.defineProperty(window, "__heRequests", { value: log });
+const prefetching = (headers) => [...headers].some(([name, value]) => name in SIGNS && value.toLowerCase().includes(SIGNS[name]));
+const realFetch = window.fetch;
+window.fetch = (input, init) => {
+  const headers = new Headers(input instanceof Request ? input.headers : undefined);
+  new Headers(init && init.headers).forEach((value, name) => headers.set(name, value));
+  const entry = { start: performance.now(), end: 0, prefetch: prefetching(headers) };
+  log.push(entry);
+  return new Promise((resolve, reject) => setTimeout(() => {
+    realFetch(input, init).then(
+      (reply) => { entry.end = performance.now(); resolve(reply); },
+      (error) => { entry.end = performance.now(); reject(error); },
+    );
+  }, HOLD));
+};
+const states = new WeakMap();
+const proto = XMLHttpRequest.prototype;
+const realOpen = proto.open, realSend = proto.send, realSet = proto.setRequestHeader;
+proto.open = function (method, url, async = true, ...rest) {
+  const state = { sync: async === false, headers: new Headers(), entry: null };
+  states.set(this, state);
+  this.addEventListener("readystatechange", () => { if (this.readyState === 4 && state.entry) state.entry.end = performance.now(); });
+  return realOpen.call(this, method, url, async, ...rest);
+};
+proto.setRequestHeader = function (name, value) {
+  realSet.call(this, name, value);
+  const state = states.get(this);
+  if (state) state.headers.set(name, value);
+};
+proto.send = function (body) {
+  const state = states.get(this);
+  if (!state || state.sync) return realSend.call(this, body);
+  state.entry = { start: performance.now(), end: 0, prefetch: prefetching(state.headers) };
+  log.push(state.entry);
+  setTimeout(() => { try { realSend.call(this, body); } catch { state.entry.end = performance.now(); } }, HOLD);
+};
+})()"""
 AXE_TAGS = "wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa"
 AXE_NAMES = {
     "color-contrast": "contrast",
@@ -93,6 +142,7 @@ AXE_NAMES = {
 MEASURE_SCRIPT = """(async () => {
 const LIMITS = LIMITS_JSON;
 const found = [];
+if (!window.__heHold) return JSON.stringify({ found: [{ rule: "request-delay-missing" }], measured: {} });
 const shown = (el) => {
   const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
@@ -306,8 +356,27 @@ for (const h of h2s) {
   }
 }
 const measureCtx = document.createElement("canvas").getContext("2d");
+const stackedBlocks = (el) => {
+  const rows = [...el.querySelectorAll("*")].filter((c) => ownText(c) && visible(c) && !getComputedStyle(c).display.startsWith("inline")).map((c) => c.getBoundingClientRect());
+  return rows.some((a, i) => rows.slice(i + 1).some((b) => a.bottom <= b.top + 1 || b.bottom <= a.top + 1));
+};
+const labelLines = (el) => {
+  const boxes = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!n.nodeValue.trim() || !visible(n.parentElement)) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    for (const b of range.getClientRects()) if (b.width > 1 && b.height > 1) boxes.push({ mid: (b.top + b.bottom) / 2, h: b.height });
+  }
+  boxes.sort((a, b) => a.mid - b.mid);
+  return boxes.filter((b, i) => i === 0 || b.mid - boxes[i - 1].mid > Math.min(b.h, boxes[i - 1].h) / 2).length;
+};
 for (const el of controls) {
   const s = getComputedStyle(el);
+  if ((el.tagName === "BUTTON" || el.getAttribute("role") === "button" || (el.tagName === "A" && chip(el))) && !stackedBlocks(el) && labelLines(el) > 1) {
+    found.push({ rule: "wrapped-label", at: name(el), lines: labelLines(el) });
+  }
   if (el.tagName === "SELECT") {
     const opt = el.options[el.selectedIndex];
     const label = (opt ? opt.text : "").trim();
@@ -355,8 +424,9 @@ for (const el of document.body.querySelectorAll("*")) {
     }
   }
 }
-const fetches = performance.getEntriesByType("resource")
-  .filter((e) => (e.initiatorType === "fetch" || e.initiatorType === "xmlhttprequest") && e.responseEnd > 0)
+const fetches = window.__heRequests
+  .filter((e) => !e.prefetch && e.end > 0)
+  .map((e) => ({ startTime: e.start, responseEnd: e.end }))
   .sort((a, b) => a.startTime - b.startTime);
 const wavesOf = (list) => {
   let waves = 0, waveEnd = -1;
@@ -547,6 +617,12 @@ def measure_script(actions: Sequence[tuple[int, str]] = ()) -> str:
     script = script.replace("COLOUR_JSFN", COLOUR_JS)
     script = script.replace("DECORATED_JSFN", DECORATED_JS)
     return script.replace("DECORATION_JSON", json.dumps(DECORATION))
+
+
+def hold_script() -> str:
+    """The script that every page of a session runs first: each fetch and XHR waits the same time before it is sent, and its own start and end are logged."""
+    script = HOLD_SCRIPT.replace("HOLD_MS", str(LIMITS["request_hold_ms"]))
+    return script.replace("SIGNS_JSON", json.dumps(PREFETCH_SIGNS))
 
 
 def decoration_script(selectors: list[str]) -> str:

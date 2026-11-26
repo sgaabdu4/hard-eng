@@ -540,7 +540,14 @@ def design_weight_findings(
     root: Path, package: Path, css_entries: list[str], changed: set[str]
 ) -> list[str]:
     """Verify DESIGN.md YAML fontWeight declarations match @theme --text-*--font-weight and loaded @font-face weights."""
-    from ui_rules import CSS_COMMENT, _css_entrypoint_orders, _css_files
+    from ui_css_imports import (
+        CSS_COMMENT,
+        authored_imports,
+        css_entrypoint_orders,
+        outside_imports,
+        outside_text,
+    )
+    from ui_rules import _css_files
 
     design_path = (
         package / "DESIGN.md"
@@ -556,11 +563,10 @@ def design_weight_findings(
     css_rels = {path.relative_to(root).as_posix() for path in files}
     if design_rel not in changed and not (css_rels & changed):
         return []
-    text_by_path = {
-        path: CSS_COMMENT.sub("", path.read_text(errors="replace")) for path in files
-    }
+    texts = {path: path.read_text(errors="replace") for path in files}
+    text_by_path = {path: CSS_COMMENT.sub("", text) for path, text in texts.items()}
     live_groups = _live_css_groups(
-        root, _css_entrypoint_orders(files, text_by_path), changed
+        root, css_entrypoint_orders(files, text_by_path), changed
     )
     live_paths = list(dict.fromkeys(path for group in live_groups for path in group))
     pkg_faces = _font_face_ranges([text_by_path[path] for path in live_paths])
@@ -576,6 +582,10 @@ def design_weight_findings(
         ):
             if hit not in seen:
                 seen.append(hit)
+    if seen and (
+        outside := authored_imports(root, outside_imports(root, package, texts))
+    ):
+        return [outside_text(*item) for item in outside]
     return seen
 
 
@@ -584,7 +594,8 @@ def audit_findings(
     candidates: dict[str, list[tuple[int, str]]],
     css_entries: list[str] | None,
 ) -> list[str]:
-    from ui_rules import STYLE_TOKEN_SUFFIXES, UNOWNED, _all_css_entries, _package_dir
+    from ui_css_imports import package_dir
+    from ui_rules import STYLE_TOKEN_SUFFIXES, UNOWNED, _all_css_entries
 
     relevant = [
         name
@@ -607,10 +618,10 @@ def audit_findings(
         css_entries = _all_css_entries(root)
     packages: set[Path] = set()
     for name in live:
-        pkg = _package_dir(root, name)
+        pkg = package_dir(root, name)
         packages.add(pkg)
         if name == "DESIGN.md":
-            packages.update(_package_dir(root, entry) for entry in css_entries)
+            packages.update(package_dir(root, entry) for entry in css_entries)
     return [
         hit
         for package in sorted(packages)

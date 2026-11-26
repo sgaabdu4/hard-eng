@@ -27,17 +27,6 @@ LOGIN = (
     "<input name=username type=text><input name=password type=password>"
     "<button type=submit>Sign in</button></form>"
 )
-INVOICE = (
-    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 200]/Contents 4 0 R"
-    b"/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
-    b"4 0 obj<</Length 66>>stream\n"
-    b"BT /F1 14 Tf 20 100 Td (Mail bob@example.com or +44 7700 900123) Tj ET\n"
-    b"endstream endobj\n"
-    b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
-    b"trailer<</Root 1 0 R/Size 6>>\n%%EOF\n"
-)
 PLAIN_STEP = (
     "import sys; from pathlib import Path; from browser import browser_command; "
     "raise SystemExit(browser_command(Path(sys.argv[1]), sys.argv[2:]))"
@@ -55,12 +44,7 @@ class Site(SimpleHTTPRequestHandler):
 
     @override
     def do_GET(self) -> None:
-        if self.path == "/invoice":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/pdf")
-            self.end_headers()
-            self.wfile.write(INVOICE)
-        elif self.path == "/login":
+        if self.path == "/login":
             self.reply(200, LOGIN)
         elif self.path == "/home":
             signed = "sid=session-7741" in self.headers.get("Cookie", "")
@@ -250,6 +234,24 @@ def fake_tool(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> Pat
     tool.chmod(0o755)
     monkeypatch.setattr(shutil, "which", functools.partial(found_at, tool))
     return tool
+
+
+def test_every_step_of_a_session_gets_the_same_request_delay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import browser
+    import ui_measure
+
+    monkeypatch.delenv("AGENT_BROWSER_INIT_SCRIPTS", raising=False)
+    folder = browser.output_folder(tmp_path)
+    scripts = browser.checkout_space(folder)["AGENT_BROWSER_INIT_SCRIPTS"].split(",")
+    assert len(scripts) == 1
+    hold = Path(scripts[0]).read_text()
+    assert f"const HOLD = {ui_measure.LIMITS['request_hold_ms']};" in hold
+    assert browser.checkout_space(folder)["AGENT_BROWSER_INIT_SCRIPTS"] == scripts[0]
+    monkeypatch.setenv("AGENT_BROWSER_INIT_SCRIPTS", "/elsewhere/own.js")
+    kept = browser.checkout_space(folder)["AGENT_BROWSER_INIT_SCRIPTS"].split(",")
+    assert kept == ["/elsewhere/own.js", scripts[0]]
 
 
 def test_installs_like_other_tools(
@@ -446,6 +448,85 @@ def test_refuses_shared_sessions(
     assert code == 1
     assert "matched no visible element" in capsys.readouterr().err
     assert name not in open_sessions(browser, tmp_path)
+
+
+def fake_open_sessions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    open_by_root: dict[Path, list[str]],
+) -> list[Mapping[str, str]]:
+    """A tool whose `session list --json` shows the sessions of the namespace that the step's environment names; each launched step is recorded and stopped."""
+    store = tmp_path / "open"
+    store.mkdir()
+    for root, names in open_by_root.items():
+        space = browser.checkout_space(browser.output_folder(root))
+        (store / space["AGENT_BROWSER_NAMESPACE"]).write_text(
+            json.dumps({"success": True, "data": {"sessions": names}})
+        )
+    tool = tmp_path / "agent-browser"
+    tool.write_text('#!/bin/sh\ncat "$FAKE_OPEN/$AGENT_BROWSER_NAMESPACE"\n')
+    tool.chmod(0o755)
+    monkeypatch.setenv("FAKE_OPEN", str(store))
+    monkeypatch.setattr(browser, "ensure_tool", lambda: str(tool))
+    monkeypatch.chdir(tmp_path)
+    launched: list[Mapping[str, str]] = []
+
+    def execve(path: str, argv: list[str], env: Mapping[str, str]) -> None:
+        del path, argv
+        launched.append(env)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(os, "execve", execve)
+    return launched
+
+
+def test_the_idle_limit_is_fixed_and_the_environment_cannot_raise_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    folder = browser.output_folder(tmp_path)
+    fixed = browser.checkout_space(folder)["AGENT_BROWSER_IDLE_TIMEOUT_MS"]
+    assert 0 < int(fixed) <= 600_000
+    for given in ("3600000", "0"):
+        monkeypatch.setenv("AGENT_BROWSER_IDLE_TIMEOUT_MS", given)
+        assert browser.checkout_space(folder)["AGENT_BROWSER_IDLE_TIMEOUT_MS"] == fixed
+
+
+def test_a_new_session_past_the_cap_is_refused_with_the_open_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    names = ["a", "b", "c", "d"]
+    launched = fake_open_sessions(tmp_path, monkeypatch, browser, {tmp_path: names})
+    for step in (
+        ["--session", "e", "open", "about:blank"],
+        ["measure", "--session", "e", "--name", "x"],
+        ["capture", "http://127.0.0.1/", "--session", "e"],
+    ):
+        assert browser.browser_command(tmp_path, step) == 1
+        err = capsys.readouterr().err
+        for name in names:
+            assert f"browser --session {name} close" in err
+    assert launched == []
+
+
+def test_a_step_on_an_open_session_passes_and_another_checkouts_sessions_do_not_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, browser: ModuleType
+) -> None:
+    full, other = tmp_path / "full", tmp_path / "other"
+    launched = fake_open_sessions(
+        tmp_path, monkeypatch, browser, {full: ["a", "b", "c", "d"], other: ["x"]}
+    )
+    for root, name in ((full, "a"), (other, "new")):
+        with pytest.raises(SystemExit):
+            browser.browser_command(root, ["--session", name, "open", "about:blank"])
+    assert [env["AGENT_BROWSER_IDLE_TIMEOUT_MS"] for env in launched] == [
+        browser.checkout_space(browser.output_folder(full))[
+            "AGENT_BROWSER_IDLE_TIMEOUT_MS"
+        ]
+    ] * 2
 
 
 def test_capture_draws_boxes_at_each_width(
@@ -756,61 +837,6 @@ def test_capture_fails_with_no_image_when_a_frame_slips_past(
     assert not list((tmp_path / ".hard-eng/browser").glob("*.png"))
 
 
-def test_capture_keeps_no_image_of_a_pdf_it_cannot_mask(
-    tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
-) -> None:
-    code = browser.browser_command(
-        tmp_path, ["capture", f"{site}/invoice", "--session", session()]
-    )
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "application/pdf" in error
-    assert "no image was kept" in error
-    folder = tmp_path / ".hard-eng/browser"
-    assert not list(folder.glob("*.png")) + list(folder.glob("*.json"))
-
-
-def test_measure_keeps_no_image_of_a_pdf_in_an_open_session(
-    tmp_path: Path, site: str, browser: ModuleType, capsys: pytest.CaptureFixture[str]
-) -> None:
-    name = session()
-    plain_step(tmp_path, name, "open", f"{site}/invoice")
-    try:
-        code = browser.browser_command(
-            tmp_path, ["measure", "--session", name, "--name", "invoice"]
-        )
-    finally:
-        plain_step(tmp_path, name, "close")
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "application/pdf" in error
-    assert "no image was kept" in error
-    folder = tmp_path / ".hard-eng/browser"
-    assert not list(folder.glob("invoice-*"))
-
-
-def test_capture_replaces_a_pdf_in_a_same_origin_frame(
-    tmp_path: Path, site: str, browser: ModuleType
-) -> None:
-    page(tmp_path, "preview.html", "<iframe id=doc src='/invoice'></iframe>")
-    name = session()
-    try:
-        plain_step(tmp_path, name, "open", f"{site}/preview.html")
-        plain_step(tmp_path, name, "wait", "--load", "networkidle")
-        plain_step(tmp_path, name, "eval", browser.PAGE_SCRIPT.replace("RINGS", "[]"))
-        shown = plain_step(
-            tmp_path,
-            name,
-            "eval",
-            "document.querySelector('#doc').tagName + document.body.textContent",
-        )
-        unread = plain_step(tmp_path, name, "eval", browser.FRAME_CHECK)
-    finally:
-        plain_step(tmp_path, name, "close")
-    assert json.loads(shown) == "DIV[frame hidden]"
-    assert json.loads(unread) == 0
-
-
 @pytest.mark.parametrize("start_fails", [False, True])
 def test_capture_keeps_no_image_when_the_frame_check_fails(
     tmp_path: Path,
@@ -821,14 +847,17 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
 ) -> None:
     checks: list[tuple[str, ...]] = []
 
+    def no_limit(tool: str, folder: Path, session: str) -> None:
+        del tool, folder, session
+
     def tool(
         name: str, folder: Path, session: str, *arguments: str, text: str | None = None
     ) -> subprocess.CompletedProcess[str]:
         del name, session
         if arguments[:1] == ("screenshot",):
             (folder / arguments[-1]).write_bytes(b"image")
-        if arguments == ("eval", "document.contentType"):
-            return subprocess.CompletedProcess(arguments, 0, '"text/html"', "")
+        if arguments == ("eval", browser.DOCUMENT_STATE):
+            return subprocess.CompletedProcess(arguments, 0, '["text/html", true]', "")
         if arguments[:2] == ("eval", browser.FRAME_CHECK):
             checks.append(arguments)
             if len(checks) == 2 and start_fails:
@@ -846,6 +875,7 @@ def test_capture_keeps_no_image_when_the_frame_check_fails(
         return subprocess.CompletedProcess(arguments, 0, reply, "")
 
     monkeypatch.setattr(browser, "ensure_tool", lambda: "agent-browser")
+    monkeypatch.setattr(browser, "limit_sessions", no_limit)
     monkeypatch.setattr(browser, "run_tool", tool)
     code = browser.browser_command(
         tmp_path, ["capture", "http://x", "--session", session()]
@@ -925,6 +955,10 @@ def test_skills_point_to_the_command() -> None:
         assert not re.search(r"\b(390|1280)\b", text), name
     assert "WIDTHS = (390, 768, 1280)" in command
     assert "3px solid red" in command
+    import browser
+
+    assert f"close after {int(browser.IDLE_MS) // 60000} minutes" in e2e
+    assert f"at most {browser.MAX_SESSIONS}" in e2e
 
 
 @pytest.mark.parametrize(

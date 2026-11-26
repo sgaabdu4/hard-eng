@@ -1,0 +1,33 @@
+#feed {
+  display: block;
+}
+
+.nav:hover #add,
+#fad {
+  display: none;
+}
+
+.card {
+  color: var(--brand);
+  background: var(--surface);
+  padding: var(--space-3);
+  width: var(--card-width);
+  height: 100vh;
+  border-radius: var(--radius);
+  font-size: var(--text-size);
+  border: 0;
+  margin: 0;
+  top: 50%;
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--space-3);
+  }
+}
+
+@container (min-width: 400px) {
+  .card {
+    width: auto;
+  }
+}

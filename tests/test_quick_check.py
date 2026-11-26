@@ -64,6 +64,71 @@ def test_quick_check_runs_only_the_fast_roles_and_plain_check_runs_all(
     assert ran == set(expected)
 
 
+STATIC_ROLES = ("complexity", "dead-code", "duplicates", "dependencies")
+TWISTY = "def f(a):\n" + "".join(
+    f"    if a == {n}:\n        return {n}\n" for n in range(5)
+)
+OVER_LIMIT = (
+    "import ast, sys; tree = ast.parse(open('src.py').read()); "
+    "sys.exit(sum(isinstance(node, ast.If) for node in ast.walk(tree)) > 3)"
+)
+
+
+def test_a_static_check_runs_the_analyzer_roles_and_no_tests(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    roles = QUICK_ROLES + STATIC_ROLES + ("tests", "custom")
+    configure(
+        tmp_path,
+        [
+            gate(role, f"open({role!r}, 'w').close()", role=role, parallel=True)
+            for role in roles
+        ],
+    )
+    assert runner.check(quick=True, static=True) == 0
+    assert {path.name for path in tmp_path.iterdir()} & set(roles) == set(STATIC_ROLES)
+
+
+def test_a_function_over_the_complexity_limit_fails_the_static_check_and_passes_the_quick_one(
+    runner: ModuleType, tmp_path: Path
+) -> None:
+    (tmp_path / "src.py").write_text(TWISTY)
+    configure(
+        tmp_path,
+        [
+            gate("format", "pass", role="format", parallel=True),
+            gate("complexity", OVER_LIMIT, role="complexity", parallel=True),
+            gate(
+                "tests", "open('tests-ran', 'w').close()", role="tests", parallel=True
+            ),
+        ],
+    )
+    assert runner.check(quick=True) == 0
+    assert runner.check(quick=True, static=True) == 1
+    assert not (tmp_path / "tests-ran").exists()
+    (tmp_path / "src.py").write_text("def f(a):\n    return a\n")
+    assert runner.check(quick=True, static=True) == 0
+
+
+def test_a_quick_check_refuses_a_bad_plan_line_as_the_full_check_does(
+    runner: ModuleType, tmp_path: Path, completed_plan: str
+) -> None:
+    configure(tmp_path, [gate("format", "pass", role="format", parallel=True)])
+    assert runner.check(quick=True) == 0
+    bad = "- [x] Observe the configured command exit."
+    (tmp_path / "PLAN.md").write_text(
+        completed_plan.replace(
+            "- [x] Observe the configured command exit → N/A — fixture plan has no product test.",
+            bad,
+        )
+    )
+    assert bad in (tmp_path / "PLAN.md").read_text()
+    with pytest.raises(ValueError, match="Acceptance \\+ steps line needs"):
+        runner.check(quick=True)
+    with pytest.raises(ValueError, match="Acceptance \\+ steps line needs"):
+        runner.check()
+
+
 def test_the_first_quick_check_in_a_checkout_runs_the_install_one_time(
     runner: ModuleType, tmp_path: Path
 ) -> None:

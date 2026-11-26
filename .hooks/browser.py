@@ -18,6 +18,12 @@ from typing import cast
 from gate_config import GateConfig, parse_config
 
 TOOL = "agent-browser"
+INIT_SCRIPTS = "AGENT_BROWSER_INIT_SCRIPTS"
+ROUTE_FLAG = "--init-script"
+RELAUNCH = re.compile(r"init-scripts: (?!default )\S.*relaunched browser")
+IDLE_LIMIT = "AGENT_BROWSER_IDLE_TIMEOUT_MS"
+IDLE_MS = "300000"
+MAX_SESSIONS = 4
 ROLE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 USAGE = (
     "browser --session S <agent-browser step>: run one step from .hard-eng/browser. "
@@ -148,6 +154,7 @@ const hideAll = (root) => {
   }
 };
 watch(document.body);
+window.hardEngMasked = true;
 const pageHeight = document.documentElement.scrollHeight;
 const fixed = [...document.body.querySelectorAll("*")].flatMap((element) => {
   const style = getComputedStyle(element);
@@ -211,6 +218,9 @@ const unread = (root) => [...root.querySelectorAll("*")].reduce((count, element)
 }, 0);
 return unread(document);
 })()""".replace("READABLE", json.dumps(sorted(READABLE_KINDS)))
+
+
+DOCUMENT_STATE = "[document.contentType, window.hardEngMasked === true]"
 
 
 def browser_roles(config: GateConfig) -> dict[str, dict[str, str]]:
@@ -383,25 +393,154 @@ def session_actions(folder: Path, session: str) -> list[tuple[int, str]]:
     return found
 
 
-def checkout_space(folder: Path) -> dict[str, str]:
-    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart."""
+def hold_script_file() -> str | None:
+    """The file of the script that makes every request of a page wait the same time; it sits in the shared tool folder, named by its text, so no checkout changes."""
+    from tool_setup import shared_tool_folder
+    from ui_measure import hold_script
+
+    text = hold_script()
+    path = (
+        shared_tool_folder()
+        / f"request-hold-{hashlib.sha256(text.encode()).hexdigest()[:12]}.js"
+    )
+    if not path.is_file():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_suffix(f".{uuid.uuid4().hex[:8]}.tmp")
+        partial.write_text(text)
+        partial.replace(path)
+    return str(path)
+
+
+def route_file(folder: Path, session: str) -> Path:
+    return folder / f"init-scripts-{session}.txt"
+
+
+def route_scripts(folder: Path, session: str) -> list[str]:
+    """The init scripts that the steps of this session named with `--init-script`; the browser tool keeps one set for a session and starts the page again when a later step names another set, so each step gets all of them."""
+    if not SESSION_NAME.fullmatch(session):
+        return []
+    try:
+        return route_file(folder, session).read_text().splitlines()
+    except OSError:
+        return []
+
+
+def split_route_scripts(steps: list[str]) -> tuple[list[str], list[str]]:
+    """The steps without their `--init-script` flags, and the script files that those flags named."""
+    kept: list[str] = []
+    files: list[str] = []
+    steps_iter = iter(steps)
+    for step in steps_iter:
+        if step == ROUTE_FLAG:
+            files.append(next(steps_iter, ""))
+        elif step.startswith(f"{ROUTE_FLAG}="):
+            files.append(step.removeprefix(f"{ROUTE_FLAG}="))
+        else:
+            kept.append(step)
+    return kept, files
+
+
+def keep_route_scripts(folder: Path, session: str, files: list[str]) -> None:
+    """Save the init scripts of a session's route, as full paths, so every later step of the session runs them with the request delay."""
+    missing = [name for name in files if not name or not Path(name).is_file()]
+    if missing:
+        raise ValueError(
+            f"the init script {missing[0] or '(no file named)'} cannot run: it is not a file. "
+            "Name an existing file after --init-script"
+        )
+    if not SESSION_NAME.fullmatch(session):
+        raise ValueError("--init-script needs a valid --session name")
+    saved = dict.fromkeys(
+        [
+            *route_scripts(folder, session),
+            *(str(Path(name).resolve()) for name in files),
+        ]
+    )
+    route_file(folder, session).write_text("\n".join(saved) + "\n")
+
+
+def checkout_space(folder: Path, session: str = "") -> dict[str, str]:
+    """Sessions live in the home folder; a namespace per checkout keeps worktrees apart, an idle session shuts itself down after a fixed time, and each page starts with the same request delay, beside the init scripts that the user's environment and the session's route name."""
     digest = hashlib.sha256(str(folder.resolve()).encode()).hexdigest()[:10]
-    return {**os.environ, "AGENT_BROWSER_NAMESPACE": "he-" + digest}
+    env = {
+        **os.environ,
+        "AGENT_BROWSER_NAMESPACE": "he-" + digest,
+        IDLE_LIMIT: IDLE_MS,
+    }
+    scripts = [
+        env.get(INIT_SCRIPTS),
+        *route_scripts(folder, session),
+        hold_script_file(),
+    ]
+    env[INIT_SCRIPTS] = ",".join(dict.fromkeys(script for script in scripts if script))
+    return env
+
+
+def step_session(steps: list[str]) -> str:
+    for index, step in enumerate(steps):
+        if step == "--session":
+            return steps[index + 1] if index + 1 < len(steps) else ""
+        if step.startswith("--session="):
+            return step.removeprefix("--session=")
+    return ""
+
+
+def step_verb(steps: list[str]) -> str:
+    """The first word of a step after its `--session NAME` flag."""
+    rest = list(steps)
+    while rest and (rest[0].startswith("--session=") or rest[0] == "--session"):
+        rest = rest[2:] if rest[0] == "--session" else rest[1:]
+    return rest[0] if rest else ""
+
+
+def limit_sessions(tool: str, folder: Path, session: str) -> None:
+    """Refuse a session name that is not open yet when this checkout already holds the most it may, so a job that never closes cannot pile up browsers."""
+    done = subprocess.run(
+        [tool, "session", "list", "--json"],
+        cwd=folder,
+        env=checkout_space(folder, session),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=STEP_TIMEOUT,
+    )
+    try:
+        payload = json.loads(done.stdout)
+        open_names = [
+            str(name) for name in (payload.get("data") or payload)["sessions"]
+        ]
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return
+    if session not in open_names and SESSION_NAME.fullmatch(session):
+        route_file(folder, session).unlink(missing_ok=True)
+    if session in open_names or len(open_names) < MAX_SESSIONS:
+        return
+    closers = "; ".join(
+        f"python3 .hooks/hard-eng.py browser --session {name} close"
+        for name in open_names
+    )
+    raise ValueError(
+        f"this checkout holds {len(open_names)} open browser sessions ({', '.join(open_names)}), "
+        f"the most it may hold, and {session} is a new one. Close one first: {closers}"
+    )
 
 
 def run_tool(
     tool: str, folder: Path, session: str, *arguments: str, text: str | None = None
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    done = subprocess.run(
         [tool, "--session", session, *arguments],
         cwd=folder,
-        env=checkout_space(folder),
+        env=checkout_space(folder, session),
         input=text,
         capture_output=True,
         text=True,
         check=False,
         timeout=STEP_TIMEOUT,
     )
+    if arguments[:1] == ("close",) and SESSION_NAME.fullmatch(session):
+        route_file(folder, session).unlink(missing_ok=True)
+    return done
 
 
 def require(result: subprocess.CompletedProcess[str], secret: str = "") -> str:
@@ -409,6 +548,12 @@ def require(result: subprocess.CompletedProcess[str], secret: str = "") -> str:
         message = (result.stderr or result.stdout).strip()
         raise ValueError(
             f"{TOOL} failed: {message.replace(secret, '***') if secret else message}"
+        )
+    if RELAUNCH.search(result.stderr):
+        raise ValueError(
+            f"{TOOL} started the page again because the init scripts of this step differ from the steps before it, "
+            "so the page state is gone and no image was kept. Close the session and open the page again "
+            f"with `browser --session NAME open --init-script <file> <url>`: {result.stderr.strip()}"
         )
     return result.stdout
 
@@ -421,14 +566,21 @@ def unread_frames(tool: str, folder: Path, session: str, width: int) -> None:
         )
 
 
-def require_readable_document(tool: str, folder: Path, session: str) -> None:
-    """Refuse a document that the page script cannot read and mask; the browser reports its kind."""
-    kind = json.loads(
-        require(run_tool(tool, folder, session, "eval", "document.contentType"))
+def require_readable_document(
+    tool: str, folder: Path, session: str, masked: bool = False
+) -> None:
+    """Refuse a document that the page script cannot read and mask; the browser reports its kind. With `masked`, also refuse a document that is not the one the page script hid personal data in."""
+    kind, hidden = json.loads(
+        require(run_tool(tool, folder, session, "eval", DOCUMENT_STATE))
     )
     if kind not in READABLE_KINDS:
         raise ValueError(
             f"the document is {kind}, which capture cannot read to hide emails and phones, "
+            "so no image was kept"
+        )
+    if masked and not hidden:
+        raise ValueError(
+            "the page changed to another document after its emails and phones were hidden, "
             "so no image was kept"
         )
 
@@ -451,6 +603,11 @@ def measure_page(
     )
     page = json.loads(json.loads(reply))
     measured = cast(dict[str, object], page["measured"])
+    if any(item["rule"] == "request-delay-missing" for item in page["found"]):
+        raise ValueError(
+            "the open page has no fixed request delay, because its session was opened outside this command; "
+            f"close session {session} and open the page again with `browser --session {session} open <url>`"
+        )
     audit = require(
         run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
     )
@@ -488,10 +645,12 @@ def shoot_page(
         )
     ring_boxes = cast(list[dict[str, int]], page_result["boxes"])
     unread_frames(tool, folder, session, width)
+    require_readable_document(tool, folder, session, masked=True)
     image = folder / f"{name}-{width}.png"
     try:
         require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
         unread_frames(tool, folder, session, width)
+        require_readable_document(tool, folder, session, masked=True)
         route = json.loads(
             require(run_tool(tool, folder, session, "eval", "location.pathname"))
         )
@@ -549,6 +708,7 @@ def capture(root: Path, argv: list[str]) -> int:
     if args.state:
         args.state = str(Path(args.state).resolve())
     tool, folder = ensure_tool(), output_folder(root)
+    limit_sessions(tool, folder, args.session)
     images: list[Path] = []
     try:
         for width in WIDTHS:
@@ -570,6 +730,7 @@ def measure(root: Path, argv: list[str]) -> int:
     parser.add_argument("--name", required=True)
     args = parser.parse_args(argv)
     tool, folder = ensure_tool(), output_folder(root)
+    limit_sessions(tool, folder, args.session)
     width = int(
         json.loads(require(run_tool(tool, folder, args.session, "eval", "innerWidth")))
     )
@@ -605,6 +766,7 @@ def signin(root: Path, argv: list[str]) -> int:
     username = environment_value(role["username_env"], env_file)
     password = environment_value(role["password_env"], env_file)
     tool, folder = ensure_tool(), output_folder(root)
+    limit_sessions(tool, folder, args.session)
     state = folder / "state" / f"{args.role}.json"
     login = f"{args.role}-{uuid.uuid4().hex[:12]}"
     state.parent.mkdir(exist_ok=True)
@@ -645,11 +807,18 @@ def dispatch(root: Path, argv: list[str]) -> int:
     if reason := refusal(argv):
         print(reason, file=sys.stderr)
         return 2
-    tool = ensure_tool()
     folder = output_folder(root)
-    record_action(folder, argv)
+    session = step_session(argv)
+    steps, scripts = split_route_scripts(argv)
+    tool = ensure_tool()
+    limit_sessions(tool, folder, session)
+    if scripts:
+        keep_route_scripts(folder, session, scripts)
+    record_action(folder, steps)
+    if step_verb(steps) == "close" and SESSION_NAME.fullmatch(session):
+        route_file(folder, session).unlink(missing_ok=True)
     os.chdir(folder)
-    os.execve(tool, [tool, *argv], checkout_space(folder))
+    os.execve(tool, [tool, *steps], checkout_space(folder, session))
 
 
 def run(root: Path, argv: list[str]) -> int:
