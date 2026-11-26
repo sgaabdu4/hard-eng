@@ -4,7 +4,7 @@ Status: Ready
 
 ## Outcome + scope
 
-`look` stops judging a colour, a gap or a radius against the DESIGN.md token lists. HE-UI-SOURCE reads the source code, so it stays the one owner of the token rule. Code in `look` decides only whether a stated claim is true: square or rounded, touch, centred, bolder or lighter than, tap size and text size. A value that no token list holds goes to the reviewer, who can dispute it. The facts list names no value to copy. `look` no longer loads PyYAML. A JS constant named like a colour, such as `WHITE`, is no typed colour in a style object; a quoted `'white'` is, and a stylesheet still reads a name in any case. A typed style object (`const headerStyle: CSSProperties = {`) counts as a style object. Five old Complete plans that named the deleted look tests now name the tests that replace them. Non-goals: teaching `look` to read the stylesheet theme or an alpha, and any new rule.
+`look` stops judging a colour, a gap or a radius against the DESIGN.md token lists. HE-UI-SOURCE reads the source code, so it stays the one owner of the token rule. Code in `look` decides only whether a stated claim is true: square or rounded, touch, centred, bolder or lighter than, tap size and text size. A value that no token list holds goes to the reviewer, who can dispute it. The facts list names no value to copy. `look` no longer loads PyYAML. A JS constant named like a colour, such as `WHITE`, is no typed colour in a style object; a quoted `'white'` is, and a stylesheet still reads a name in any case. A typed style declaration (`const headerStyle: CSSProperties = {`) counts as a style object; a function parameter named `style` does not. Five old Complete plans that named the deleted look tests now name the tests that replace them. Non-goals: teaching `look` to read the stylesheet theme or an alpha, and any new rule.
 
 ## Sources + coverage
 
@@ -37,7 +37,7 @@ Execution: One builder in a linked worktree off `origin/develop`: red tests firs
 
 ## Risks + recovery
 
-A project with a reviewer Fail on a value that a token list lacks now keeps it as a reviewer item; the whole-project scan of HE-UI-SOURCE still refuses a typed value outside the theme. A JS object that is not named like a style (a helper that returns an object, a chart config) still reads an unquoted constant as a colour; that is a stated limit of the style-object reader, as before. A name in a real quoted string, a template string with a `${` after it, a `[color:white]` class and a stylesheet is still found. Recovery: revert the two commits.
+A project with a reviewer Fail on a value that a token list lacks now keeps it as a reviewer item; the whole-project scan of HE-UI-SOURCE still refuses a typed value outside the theme. A JS object that is not named like a style (a helper that returns an object, a chart config) still reads an unquoted constant as a colour; that is a stated limit of the style-object reader, as before. A name after a `${` in a template string is not found, because the declaration reader stops at `{`; that limit is older than this change. A name in a real quoted string, in a template string before a `${`, in a `[color:white]` class and in a stylesheet is still found. Recovery: revert the two commits.
 
 ## ux_reference
 

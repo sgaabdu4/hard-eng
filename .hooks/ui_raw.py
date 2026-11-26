@@ -65,7 +65,8 @@ NOT_A_COLOUR = re.compile(
 )
 DIGIT = re.compile(r"\d")
 STYLE_OPEN = re.compile(
-    r"style=\{\{|\b\w*[Ss]tyles?(?::\s*[^=\n{]+)?\s*[=:]\s*\{|\b(?:sx|css)\s*[=:]\s*\{+|StyleSheet\.create\(\s*\{"
+    r"style=\{\{|\b\w*[Ss]tyles?\s*[=:]\s*\{|\b(?:const|let|var)\s+\w*[Ss]tyles?\s*:\s*[^=\n{;)]+=\s*\{"
+    r"|\b(?:sx|css)\s*[=:]\s*\{+|StyleSheet\.create\(\s*\{"
 )
 APPLY = re.compile(r"@apply\b")
 UNIT_NUMBER = r"-?\d*\.?\d+(?:px|rem|em|pt)"
