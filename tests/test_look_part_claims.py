@@ -245,3 +245,88 @@ def test_a_copied_claim_word_on_a_keyed_element_is_refused_after_the_fill() -> N
         keys,
     )
     assert forward.startswith("not done: ")
+
+
+def parts_of(line: str) -> list[str]:
+    return [part.strip() for part in look_answer.fail_parts(line)[0]]
+
+
+def test_a_part_that_lists_several_images_becomes_one_part_for_each() -> None:
+    line = "Alignment: Fail — image-1.png, image-2.png: Save [size] too small Fix: grow it."
+    assert parts_of(line) == [
+        "image-1.png: Save [size] too small",
+        "image-2.png: Save [size] too small",
+    ]
+    three = "Alignment: Fail — image-1.png, image-2.png and image-3.png: Save [align] centred Fix: x."
+    assert parts_of(three) == [
+        "image-1.png: Save [align] centred",
+        "image-2.png: Save [align] centred",
+        "image-3.png: Save [align] centred",
+    ]
+
+
+def test_a_sentence_that_names_an_image_is_not_split() -> None:
+    line = "Alignment: Fail — see image-1.png, then image-2.png: Save [size] x Fix: y."
+    assert len(parts_of(line)) == 1
+
+
+def test_a_record_holds_no_part_that_lists_several_images() -> None:
+    answer = answer_with(
+        f"image-1.png, image-2.png: Cancel flow [judgement] {CLAIM} Fix: change it."
+    ).replace("VERDICT", "Image image-2.png: a card\nVERDICT")
+    outcome, rules, _ = look_answer.judge(
+        answer,
+        ["image-1.png", "image-2.png"],
+        {"image-1.png": True, "image-2.png": True},
+    )
+    assert outcome == "findings"
+    line = next(rule for rule in rules if rule.startswith("Design system:"))
+    assert "image-1.png, image-2.png" not in line
+    assert parts_of(line) == [
+        f"image-1.png: Cancel flow [judgement] {CLAIM}",
+        f"image-2.png: Cancel flow [judgement] {CLAIM}",
+    ]
+
+
+def test_a_dispute_of_image_2_clears_only_image_2() -> None:
+    line, _ = look_answer.claimed_line(
+        f"Design system: Fail — image-1.png, image-2.png: Cancel flow [judgement] {CLAIM} Fix: change it."
+    )
+    record: dict[str, object] = {"rules": [line], "disputes": [], "outcome": "findings"}
+    item = f"image-2.png: Cancel flow [judgement] {CLAIM}"
+    look_dispute.decided(
+        record, item, look_dispute.locate(record, item), "disproved", "measured"
+    )
+    left = cast(list[str], record["rules"])[0]
+    assert left.startswith("Design system: Fail — ")
+    assert "image-1.png: Cancel flow" in left
+    assert "image-2.png" not in left
+
+
+def test_a_numbered_list_marker_does_not_enter_the_note_of_the_part_before_it() -> None:
+    line = (
+        "Design system: Fail — 1. image-1.png: Chip B [radius] square corners. "
+        "2. image-2.png: Chip B [radius] same. 3. image-3.png: Chip B [radius] same. "
+        "Fix: round them."
+    )
+    assert notes_of(line) == ["square corners.", "same.", "same."]
+    filled_line, missing = look_answer.claimed_line(line)
+    assert missing == ""
+    assert notes_of(filled_line) == [
+        "square corners.",
+        "square corners",
+        "square corners",
+    ]
+
+
+def test_a_note_that_ends_in_a_number_keeps_it() -> None:
+    line = "Design system: Fail — image-1.png: Cancel flow [judgement] wrong in step 2. Fix: x."
+    assert notes_of(line) == ["wrong in step 2."]
+
+
+def test_a_measured_part_after_an_empty_judgement_part_gives_it_no_claim() -> None:
+    parts = (
+        "image-1.png: Cancel [judgement]",
+        "image-1.png: Cancel [radius] square corners",
+    )
+    assert filled(*parts) == (line_of(*parts), "")
