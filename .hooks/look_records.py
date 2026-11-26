@@ -205,7 +205,10 @@ def combined(
         if entry.get("verdict") == "disproved"
     ]
     if fresh is not None and covered and held:
-        record["disputes"] = [*cast(list[object], record.get("disputes", [])), *held]
+        record["disputes"] = [
+            *cast(list[object], record.get("disputes", [])),
+            *({**entry, "carried_from": base.get("head")} for entry in held),
+        ]
     kept = {
         str(item["sha256"]): {**item, "carried_from": base.get("head")}
         for item in cast(list[dict[str, object]], base.get("images", []))
