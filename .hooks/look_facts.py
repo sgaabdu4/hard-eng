@@ -399,6 +399,9 @@ def _touch(element: str, measured: dict[str, object]) -> tuple[bool, str] | None
 
 
 STATES = {"square": _square, "centred": _centred, "touch": _touch}
+NAME_JOIN = re.compile(
+    r"\s*(?:,\s*(?:(?:and|or)\s+)?|&\s*|(?:and|or)\s+)", re.IGNORECASE
+)
 WEIGHT_CLAIM = re.compile(
     rf"(?i)\s*{LEAD}(bolder|heavier|lighter|thinner)\s+than\b(.*)"
 )
@@ -413,7 +416,8 @@ def _weight_claim(
     if not found or element not in weights:
         return None
     heavier = found[1].lower() in ("bolder", "heavier")
-    rest, named = found[2].strip(), []
+    rest = found[2].strip()
+    named: list[str] = []
     by_length = sorted(weights, key=len, reverse=True)
     while rest:
         key = next(
@@ -428,11 +432,7 @@ def _weight_claim(
         if not key:
             break
         named.append(key)
-        joined = re.match(
-            r"\s*(?:,\s*(?:(?:and|or)\s+)?|&\s*|(?:and|or)\s+)",
-            rest[len(key) :],
-            re.IGNORECASE,
-        )
+        joined = NAME_JOIN.match(rest[len(key) :])
         if not joined:
             break
         rest = rest[len(key) + joined.end() :]
