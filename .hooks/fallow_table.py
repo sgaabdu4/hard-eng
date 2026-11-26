@@ -48,7 +48,7 @@ FALLOW_KEYS = {
     "health.coverage": "proved",
     "health.coverageRoot": "free",
     "health.ignore": "patterns",
-    "health.shallowDirectories.ignore": "patterns",
+    "health.shallowDirectories.ignore": "equal",
     "health.shallowDirectories.minInterface": "equal",
     "health.suggestInlineSuppression": "equal",
     "health.inlineThresholdOverrides": "free",
