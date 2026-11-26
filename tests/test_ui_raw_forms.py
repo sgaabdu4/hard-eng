@@ -31,8 +31,13 @@ def raw(name: str, text: str, defined: tuple[str, ...] = ()) -> list[tuple[str, 
         ),
         (
             "a.tsx",
-            "<i style={{ border: `1px solid ${WHITE} red` }} />",
+            "function f(style: CSSProperties = {}) {\n  return { width: 300 };\n}",
             [],
+        ),
+        (
+            "a.tsx",
+            'function css(style: CSSProperties = {}) { return ".a { color: white; }"; }',
+            [("colour", "color: white")],
         ),
         (
             "a.tsx",
