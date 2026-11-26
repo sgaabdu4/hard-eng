@@ -7,6 +7,8 @@ from typing import cast
 
 import look
 import look_answer
+import look_dispute
+import look_records
 import pytest
 import ui_measure
 import ui_proof
@@ -463,3 +465,25 @@ def test_the_pr_proof_accepts_a_record_that_a_dispute_cleaned(
     block = look.block_text(stored(project, images))
     head = git(project, "rev-parse", "HEAD")
     assert ui_proof.look_problem(project, head, block, [images[0].read_bytes()]) is None
+
+
+def test_a_record_that_carries_one_image_keeps_the_disputes_it_rests_on(
+    tmp_path: Path, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    images, _ = cleaned(tmp_path, project, monkeypatch)
+    base = stored(project, images)
+    digest = str(cast(list[dict[str, object]], base["images"])[0]["sha256"])
+    other = tmp_path / "other.png"
+    other.write_bytes(b"other")
+    fresh: dict[str, object] = {
+        "outcome": "clean",
+        "reviewer": "claude",
+        "images": [{"name": "image-1.png", "file": "other.png", "sha256": "b" * 64}],
+    }
+    record = look_records.combined(
+        [images[0], other], [digest, "b" * 64], base, {digest}, fresh
+    )
+    assert record["disputes"] == base["disputes"]
+    (project / "src/form.ts").write_text(FORM.replace(">= 0", "> 0"))
+    head = commit(project, "the rule changed")
+    assert not look_dispute.cites_hold(project, head, record)
