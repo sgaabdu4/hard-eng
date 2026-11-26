@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from challenge import store
-from look_answer import KIND_TAG, Item, fail_parts, is_same, part_item
+from look_answer import KIND_TAG, Item, fail_parts, part_item
 from look_facts import claimed_state
 from look_facts import verdict as code_verdict
 from plans import split_rule_line, usability_rules
@@ -483,13 +483,8 @@ def sort_parts(
     kept: list[str] = []
     failed: list[str] = []
     passed: list[str] = []
-    lead = ""
     for part in parts:
         prose, item = part_item(part)
-        if item and not is_same(item.note):
-            lead = item.note
-        elif item and lead:
-            item = item._replace(note=lead)
         decided = (
             decide_item(item, measured)
             if item

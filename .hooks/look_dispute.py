@@ -12,7 +12,7 @@ from typing import NamedTuple, cast
 
 import look
 from challenge import git_text
-from look_answer import fail_parts, is_same, part_item
+from look_answer import fail_parts, part_item
 from look_facts import FACTS, fact_key
 from look_records import owner_prefixes
 from look_reviewer import claude_proof, codex_proof, run_first_reviewer
@@ -94,31 +94,8 @@ def held(part: str) -> str:
     return " ".join((shown.text if shown else part).split())
 
 
-def says_same(part: str) -> bool:
-    """True when the note of the part's item is only `same`, whatever its case or spacing."""
-    shown = part_item(part)[1]
-    return shown is not None and is_same(shown.note)
-
-
-def left_after(parts: list[str], item: str) -> list[str]:
-    """The parts that remain after the item is disproved: the item and each part after it whose note is only `same`, up to the next part with its own text, leave."""
-    kept: list[str] = []
-    clearing = False
-    for part in parts:
-        if held(part) == item:
-            clearing = True
-        elif not (clearing and says_same(part)):
-            kept.append(part.strip())
-            clearing = False
-    return kept
-
-
 def locate(record: dict[str, object], item: str) -> list[Found]:
     """Each Fail line of this head's record that holds the item (the same item can stand under two rules); a line from an owner check, a part that code decided and a part under `reviewer_fails` are refused."""
-    if says_same(item):
-        raise problem(
-            "the note of this item is only `same`; dispute the part that states the claim"
-        )
     found: list[Found] = []
     for index, line in enumerate(cast(list[str], record.get("rules", []))):
         label, verdict, text, _ = split_rule_line(line)
@@ -248,7 +225,7 @@ def decided(
     )
     rules = cast(list[str], record["rules"])
     for found in founds:
-        kept = left_after(found.parts, item)
+        kept = [part.strip() for part in found.parts if held(part) != item]
         rules[found.index] = (
             f"{found.label}: Fail — {'; '.join(kept)} {found.fix}"
             if kept

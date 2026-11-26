@@ -247,29 +247,3 @@ def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -
         found = decided(f"{rule}: Fail — image-1.png: {item} Fix: change it.", measured)
         assert "Pass" not in found, item
         assert (" — code:" in found) == (rule == "Alignment"), item
-
-
-def test_a_same_part_takes_the_claim_of_the_part_that_leads_its_run() -> None:
-    line = (
-        "Design system: Fail — image-1.png: Chip B [radius] square corners; "
-        "image-2.png: Chip B [radius] same Fix: round them."
-    )
-    frames: dict[str, dict[str, object] | None] = {
-        "image-1.png": page(),
-        "image-2.png": page(),
-    }
-    assert look_records.decide_line(line, frames).startswith(
-        "Design system: Pass — code checked: "
-    )
-    square = {"at": "Chip B", "px": 0, "corners": [0, 0, 0, 0], "clamped": False}
-    frames["image-2.png"] = values(radii=[square])
-    kept = look_records.decide_line(line, frames)
-    assert kept.startswith("Design system: Fail — ")
-    assert "image-2.png: Chip B [radius] same" in kept
-    assert "image-1.png" not in kept
-
-
-def test_a_same_part_with_no_claim_before_it_stays_with_the_reviewer() -> None:
-    line = "Design system: Fail — image-2.png: Chip B [radius] same Fix: round them."
-    frames: dict[str, dict[str, object] | None] = {"image-2.png": page()}
-    assert look_records.decide_line(line, frames) == line
