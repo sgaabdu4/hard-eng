@@ -513,3 +513,56 @@ def test_a_record_that_carries_one_image_keeps_the_disputes_it_rests_on(
     (project / "src/form.ts").write_text(FORM.replace(">= 0", "> 0"))
     head = commit(project, "the rule changed")
     assert not look_dispute.cites_hold(project, head, record)
+
+
+CLAIM_ITEM = "image-4.png: Cancel flow [judgement] the fill is not a token colour"
+
+
+def run_record(*parts: str) -> dict[str, object]:
+    line = "Design system: Fail — " + "; ".join(parts) + " Fix: use a token."
+    return {"rules": [line], "disputes": [], "outcome": "findings"}
+
+
+def disprove(record: dict[str, object], item: str) -> str:
+    founds = look_dispute.locate(record, item)
+    look_dispute.decided(record, item, founds, "disproved", "measured")
+    rules = cast(list[str], record["rules"])
+    return rules[0]
+
+
+def test_a_disproved_item_clears_the_same_parts_that_continue_its_run() -> None:
+    record = run_record(
+        CLAIM_ITEM,
+        "image-5.png: Cancel flow [judgement] same",
+        "image-6.png: Cancel flow [judgement]  Same ",
+        "image-16.png: Other flow [judgement] SAME",
+        "image-7.png: Own part [judgement] its own claim",
+        "image-8.png: Own part [judgement] same",
+    )
+    line = disprove(record, CLAIM_ITEM)
+    assert line == (
+        "Design system: Fail — image-7.png: Own part [judgement] its own claim; "
+        "image-8.png: Own part [judgement] same Fix: use a token."
+    )
+    assert record["outcome"] == "findings"
+
+
+def test_a_line_that_holds_only_the_claim_and_its_same_parts_becomes_a_pass() -> None:
+    record = run_record(CLAIM_ITEM, "image-5.png: Cancel flow [judgement] same")
+    assert disprove(record, CLAIM_ITEM).startswith(
+        "Design system: Pass — evidence checked: "
+    )
+    assert record["outcome"] == "clean"
+
+
+def test_a_same_part_before_the_claim_stays() -> None:
+    record = run_record("image-3.png: Cancel flow [judgement] same", CLAIM_ITEM)
+    assert disprove(record, CLAIM_ITEM).startswith(
+        "Design system: Fail — image-3.png: Cancel flow [judgement] same"
+    )
+
+
+def test_a_dispute_of_a_part_whose_note_is_only_same_is_refused() -> None:
+    record = run_record(CLAIM_ITEM, "image-5.png: Cancel flow [judgement] same")
+    with pytest.raises(ValueError, match="dispute the part that states the claim"):
+        look_dispute.locate(record, "image-5.png: Cancel flow [judgement] same")
