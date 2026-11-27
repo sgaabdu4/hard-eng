@@ -13,6 +13,7 @@ from test_ui_audit_guards import (
     measured,
     open_board,
     press_button,
+    press_clicks,
 )
 from ui_measure import LIMITS
 
@@ -111,9 +112,67 @@ def test_a_polling_page_still_measures_each_press_apart_from_the_load(
     open_board(tmp_path, site, name, "background")
     try:
         for count, button in enumerate("abc", 1):
-            time.sleep((LIMITS["action_quiet_ms"] + 300) / 1000)
+            time.sleep((LIMITS["action_quiet_ms"] + 800) / 1000)
             plain_step(tmp_path, name, "click", f"#{button}")
             pressed(tmp_path, name, count)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+TAB_LOAD = (
+    "(async () => { for (const u of ['t1a', 't1b']) "
+    "await fetch('/step.json?' + u).then((r) => r.text()); })();"
+)
+
+
+def tab_button(name: str, tab: str) -> str:
+    script = (
+        f"(async () => {{ for (const u of ['{tab}a', '{tab}b']) "
+        "await fetch('/step.json?' + u).then((r) => r.text()); "
+        "window.pressed = (window.pressed || 0) + 1; })()"
+    )
+    return press_button(name, script)
+
+
+def test_a_tab_opened_again_after_another_tab_is_measured_as_its_own_step(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    buttons = tab_button("a", "t2") + tab_button("b", "t1")
+    board(tmp_path, "tabs", TAB_LOAD, buttons)
+    name = session()
+    open_board(tmp_path, site, name, "tabs")
+    try:
+        press_clicks(tmp_path, name, "ab")
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+LONG_PRESS = (
+    "(async () => { await new Promise((go) => setTimeout(go, 600)); "
+    "for (let i = 0; i < 3; i++) "
+    "await fetch('/step.json?long=' + i + Date.now()).then((r) => r.text()); "
+    "await new Promise((go) => setTimeout(go, 400)); "
+    "window.pressed = (window.pressed || 0) + 1; })()"
+)
+
+
+def test_a_poll_that_carries_on_into_a_press_adds_no_wave_to_it(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(
+        tmp_path,
+        "carry",
+        LOAD_WAVE + BACKGROUND_POLL,
+        press_button("a", LONG_PRESS),
+    )
+    name = session()
+    open_board(tmp_path, site, name, "carry")
+    try:
+        time.sleep((LIMITS["action_quiet_ms"] + 800) / 1000)
+        plain_step(tmp_path, name, "click", "#a")
+        pressed(tmp_path, name, 1)
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")

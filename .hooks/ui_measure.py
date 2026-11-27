@@ -143,14 +143,19 @@ proto.send = function (body) {
   setTimeout(() => { try { realSend.call(this, body); } catch { state.entry.end = performance.now(); } }, HOLD);
 };
 })()"""
-SHOWN_JS = """const drawn = (el) => {
+SHOWN_JS = """const alive = (el) => {
+  const s = getComputedStyle(el);
+  return s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && !el.closest("[inert]") && (!el.checkVisibility || el.checkVisibility());
+};
+const drawn = (el) => {
   const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
   const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
   const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
-  return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1 && !el.closest("[inert]") && (!el.checkVisibility || el.checkVisibility());
+  return !clipped && !away && b.width > 1 && b.height > 1 && alive(el);
 };
-const modals = [...document.querySelectorAll("dialog,[aria-modal=true]")].filter((el) => drawn(el) && (el.matches("[aria-modal=true]") || el.matches(":modal")));
+const isOpen = (el) => alive(el) && (drawn(el) || [...el.querySelectorAll("*")].some(drawn));
+const modals = [...document.querySelectorAll("dialog,[aria-modal=true]")].filter((el) => (el.matches("[aria-modal=true]") || el.matches(":modal")) && isOpen(el));
 const modal = modals.length ? modals[modals.length - 1] : null;
 const shown = (el) => drawn(el) && (!modal || modal.contains(el));
 """
@@ -345,7 +350,7 @@ for (const heading of document.querySelectorAll(HEADINGS)) {
   else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
   const every = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
   if (every.some((l) => l.px < LIMITS.text_px)) continue;
-  const lines = every.filter((l) => getComputedStyle(l.el).display !== "inline" || !every.some((o) => o !== l && o.el.contains(l.el)));
+  const lines = every.filter((l) => !getComputedStyle(l.el).display.startsWith("inline") || !every.some((o) => o !== l && o.el.contains(l.el)));
   if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
   for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
 }
@@ -461,19 +466,23 @@ const wavesOf = (list) => {
   }
   return waves;
 };
-const everSeen = new Set();
-const fresh = fetches.filter((e) => !everSeen.has(e.key) && everSeen.add(e.key));
-const quiet = (t) => !fresh.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
-const reacts = (t) => fresh.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
 const taken = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin, verb }))
   .filter((c) => c.t > 0)
   .sort((a, b) => a.t - b.t);
+const runs = new Map();
+for (const e of fetches) runs.set(e.key, [...(runs.get(e.key) || []), e]);
+const polling = (key) => runs.get(key).some((e, i, all) => i > 0 && !taken.some((c) => c.t > all[i - 1].startTime && c.t <= e.startTime));
+const fresh = fetches.filter((e) => runs.get(e.key).indexOf(e) === 0 || !polling(e.key));
+const quiet = (t) => !fresh.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
+const reacts = (t) => fresh.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
 const cuts = taken.filter((c) => quiet(c.t) && reacts(c.t));
 const parts = [{ at: "load", entries: [] }, ...cuts.map((c) => ({ at: `${c.verb} ${taken.filter((o) => o.verb === c.verb && o.t <= c.t).length}`, entries: [] }))];
 for (const entry of fetches) parts[cuts.filter((c) => c.t <= entry.startTime).length].entries.push(entry);
+const carried = new Set();
 for (const part of parts) {
   const seen = new Set();
-  const waves = wavesOf(part.entries.filter((e) => !seen.has(e.key) && seen.add(e.key)));
+  const waves = wavesOf(part.entries.filter((e) => !seen.has(e.key) && !carried.has(e.key) && seen.add(e.key)));
+  for (const key of seen) if (polling(key)) carried.add(key);
   if (waves > LIMITS.fetch_waves) found.push({ rule: "fetch-waterfall", at: part.at, waves });
 }
 const shifts = [];
@@ -653,9 +662,17 @@ def hold_script() -> str:
 def decoration_script(selectors: list[str]) -> str:
     decorated = DECORATED_JS.replace("DECORATION_JSON", json.dumps(DECORATION))
     return (
-        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; {COLOUR_JS}{SHOWN_JS}const decorated = {decorated}; "
+        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; {COLOUR_JS}const decorated = {decorated}; "
         f"return JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
-        "const el = document.querySelector(s); return Boolean(el && (decorated(el) || !shown(el))); "
+        "const el = document.querySelector(s); return Boolean(el && decorated(el)); "
+        "} catch { return false; } })); })()"
+    )
+
+
+def unshown_script(selectors: list[str]) -> str:
+    return (
+        f"(() => {{ {SHOWN_JS}return JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
+        "const el = document.querySelector(s); return Boolean(el && !shown(el)); "
         "} catch { return false; } })); })()"
     )
 
