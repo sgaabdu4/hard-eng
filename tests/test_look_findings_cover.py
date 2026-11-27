@@ -267,3 +267,57 @@ def test_a_findings_verdict_with_no_fail_line_covers_nothing(
     extra = images[0].with_name("after-9.png")
     extra.write_bytes(PNG + b"another image")
     assert covering(project, [*images, extra]) is None
+
+
+def full_reread(
+    tmp_path: Path, project: Path, images: list[Path], answer_text: str
+) -> str:
+    """A second head where a full run (`--all`) re-reads the three images; returns that head, with a third head on top."""
+    install_agent(tmp_path, "claude", 3, answer_text)
+    run_look(project, "claude", images, extra=["--all"])
+    newer = head(project)
+    next_head(project)
+    return newer
+
+
+def a_newer_record_that_fails_two(
+    tmp_path: Path, project: Path
+) -> tuple[list[Path], str]:
+    """The older findings record fails one image; a full re-read at a newer head fails two others."""
+    images, _ = findings_over_three(tmp_path, project)
+    still = "Recheck R1: still shown. image-2.png: the card is cramped"
+    fails = "image-1.png: the card is cramped; image-2.png: the label is cut off"
+    return images, full_reread(
+        tmp_path, project, images, answer(3, fails, recheck=still)
+    )
+
+
+def test_an_older_record_never_covers_an_image_that_a_newer_record_failed(
+    tmp_path: Path, project: Path
+) -> None:
+    images, newer = a_newer_record_that_fails_two(tmp_path, project)
+    found = covering(project, images)
+    assert found is not None and found[0]["head"] == newer
+    assert found[1] == {sha(images[2])}
+
+
+def test_an_older_record_never_covers_an_image_that_a_newer_record_did_not_read(
+    tmp_path: Path, project: Path
+) -> None:
+    images, newer = a_newer_record_that_fails_two(tmp_path, project)
+    path = record_file(project, newer, images)
+    record = json.loads(path.read_text())
+    record["images"][2]["read"] = False
+    path.write_text(json.dumps(record))
+    assert covering(project, images) is None
+
+
+def test_a_newer_clean_record_covers_an_image_that_an_older_record_failed(
+    tmp_path: Path, project: Path
+) -> None:
+    images, _ = findings_over_three(tmp_path, project)
+    gone = "Recheck R1: gone. image-2.png: the card has room now"
+    newer = full_reread(tmp_path, project, images, answer(3, recheck=gone))
+    found = covering(project, images)
+    assert found is not None and found[0]["head"] == newer
+    assert found[1] == {sha(image) for image in images}
