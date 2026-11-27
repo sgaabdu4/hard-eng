@@ -23,6 +23,7 @@ from test_look import (
 
 project = pytest.fixture(look_project)
 
+STILL = "Recheck R1: still shown. image-2.png: the card is cramped"
 SOURCE = "export const label = 'one';\nexport const note = 'two';\n"
 
 
@@ -285,7 +286,7 @@ def a_newer_record_that_fails_two(
 ) -> tuple[list[Path], str]:
     """The older findings record fails one image; a full re-read at a newer head fails two others."""
     images, _ = findings_over_three(tmp_path, project)
-    still = "Recheck R1: still shown. image-2.png: the card is cramped"
+    still = STILL
     fails = "image-1.png: the card is cramped; image-2.png: the label is cut off"
     return images, full_reread(
         tmp_path, project, images, answer(3, fails, recheck=still)
@@ -321,3 +322,12 @@ def test_a_newer_clean_record_covers_an_image_that_an_older_record_failed(
     found = covering(project, images)
     assert found is not None and found[0]["head"] == newer
     assert found[1] == {sha(image) for image in images}
+
+
+def test_a_failed_image_of_this_head_is_not_covered_from_an_older_head(
+    tmp_path: Path, project: Path
+) -> None:
+    images, _ = findings_over_three(tmp_path, project)
+    install_agent(tmp_path, "claude", 1, answer(1, "image-1.png: the card is cramped"))
+    assert run_look(project, "claude", [images[0]])["outcome"] == "findings"
+    assert covered_images(covering(project, [images[0], images[2]])) == {sha(images[2])}
