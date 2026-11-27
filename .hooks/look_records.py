@@ -1,4 +1,4 @@
-"""The look records that back a head: its own, the clean verdicts that carry from earlier heads one image at a time, and the owner-check line of each rule that the reviewer does not decide."""
+"""The look records that back a head: its own, the clean verdicts and the no-Fail images of findings records that carry from earlier heads one image at a time, and the owner-check line of each rule that the reviewer does not decide."""
 
 import json
 import re
@@ -102,10 +102,14 @@ def carried_record(
     except ValueError:
         return None
     entries = look.listed_images(record)
+    try:
+        design = look.design_text(root, design_rev)
+    except look.DesignTooLarge:
+        return None
     keys = image_keys(
         evidence or root,
         scope,
-        look.design_text(root, design_rev),
+        design,
         look.design_hash(root, design_rev),
         [str(item["sha256"]) for item in entries],
         lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
@@ -160,31 +164,80 @@ def records_for(root: Path, head: str) -> list[dict[str, object]]:
     return [record for _, record in record_files(root, head, design_rev=head)]
 
 
+def failing_images(record: dict[str, object]) -> set[str] | None:
+    """The digests of the images that own a Fail item of the record: the image that each item names first, found through the entries of this record's own review. An owner-check line is left out, since code writes it again at each head. A piece with no image name (an opening sentence, or words after an item) belongs to the item before it. None when a Fail line names no image of that review at all, or an image that is not in it, or an entry has no name, or the record holds no Fail line at all (a findings verdict with only Pass lines), so no image can be told apart."""
+    entries = cast(list[dict[str, object]], record.get("images", []))
+    if not all(item.get("name") and item.get("sha256") for item in entries):
+        return None
+    own = {
+        str(item["name"]): str(item["sha256"])
+        for item in entries
+        if "carried_from" not in item
+    }
+    prefixes = owner_prefixes()
+    lines = [
+        *(
+            line
+            for line in cast(list[str], record.get("rules", []))
+            if not split_rule_line(line)[2].startswith(prefixes)
+        ),
+        *cast(list[str], record.get("reviewer_fails", [])),
+    ]
+    failing: set[str] = set()
+    if not any(
+        split_rule_line(line)[1] == "Fail"
+        for line in (*cast(list[str], record.get("rules", [])), *lines)
+    ):
+        return None
+    for line in lines:
+        if split_rule_line(line)[1] != "Fail":
+            continue
+        named = [
+            found[0] for part in fail_parts(line)[0] if (found := FRAME.search(part))
+        ]
+        if not named or any(name not in own for name in named):
+            return None
+        failing.update(own[name] for name in named)
+    return failing
+
+
 def covering_record(
     root: Path, head: str, wanted: dict[str, str]
 ) -> tuple[dict[str, object], set[str]] | None:
-    """The clean record of an earlier head that holds the most images with the wanted key (image digest to key), newest first, and the digests it covers."""
+    """The clean or findings record of an earlier head that covers the most images with the wanted key (image digest to key), and the digests it covers. For each digest, only the newest record that holds it with that key decides, in the order of `_newest_paths`: an older record never covers an image that a newer record failed or did not read, and a record of this head holds its images without covering them. A findings record covers only the images that no Fail item names first, and never the whole set."""
     import look_dispute
 
-    best: tuple[tuple[int, int], dict[str, object], set[str]] | None = None
-    for path in _record_paths(root):
+    decided: set[str] = set()
+    found: list[tuple[int, dict[str, object], set[str]]] = []
+    for path in _newest_paths(root):
         record = _read_record(path)
-        if (
-            record is None
-            or record.get("outcome") != "clean"
-            or record.get("head") == head
-            or not look_dispute.cites_hold(root, head, record)
-        ):
+        outcome = record.get("outcome") if record else None
+        if record is None or outcome not in ("clean", "findings"):
             continue
+        entries = [
+            item
+            for item in cast(list[dict[str, object]], record.get("images", []))
+            if str(item.get("sha256")) not in decided
+            and _same(item.get("inputs"), wanted.get(str(item.get("sha256"))))
+        ]
+        if not entries:
+            continue
+        if record.get("head") == head:
+            decided.update(str(item["sha256"]) for item in entries)
+            continue
+        failing = set() if outcome == "clean" else failing_images(record)
+        usable = failing is not None and look_dispute.cites_hold(root, head, record)
         covered = {
             str(item["sha256"])
-            for item in cast(list[dict[str, object]], record.get("images", []))
-            if item.get("read") is True
-            and _same(item.get("inputs"), wanted.get(str(item.get("sha256"))))
+            for item in entries
+            if usable
+            and item.get("read") is True
+            and str(item["sha256"]) not in (failing or ())
         }
-        rank = (len(covered), path.stat().st_mtime_ns)
-        if covered and (best is None or rank > best[0]):
-            best = (rank, record, covered)
+        decided.update(str(item["sha256"]) for item in entries)
+        if covered and not (outcome == "findings" and covered >= set(wanted)):
+            found.append((path.stat().st_mtime_ns, record, covered))
+    best = max(found, key=lambda row: (len(row[2]), row[0]), default=None)
     return (best[1], best[2]) if best else None
 
 
@@ -297,7 +350,7 @@ def earlier_findings(
 
 
 def _without_held(line: str, then: dict[str, str], current: dict[str, str]) -> str:
-    """The Fail line without the items of an image that this run does not hold, since that image has its own clean record; a line with no part left is a Pass line, so no Fail parts reach the list."""
+    """The Fail line without the items of an image that this run does not hold, since that image has its own record with no Fail on it; a line with no part left is a Pass line, so no Fail parts reach the list."""
     parts, fix = fail_parts(line)
     if split_rule_line(line)[1] != "Fail":
         return line

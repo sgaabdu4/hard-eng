@@ -15,9 +15,8 @@ TIMEOUT_SECONDS = 1800
 LOOK_REVIEWERS = ("claude", "codex")
 
 
-def command(
-    reviewer: str, prompt: str, folder: Path, root: Path | None = None
-) -> list[str]:
+def command(reviewer: str, folder: Path, root: Path | None = None) -> list[str]:
+    """The reviewer command; the prompt goes on stdin, since one argument holds at most 131,072 bytes on Linux."""
     flags = cli_flags(reviewer, "reasoning", root, trusted_ref=trusted_base_ref(root))
     if reviewer == "codex":
         return [
@@ -32,12 +31,11 @@ def command(
             "--skip-git-repo-check",
             "--cd",
             str(folder),
-            prompt,
+            "-",
         ]
     return [
         "claude",
         "--print",
-        prompt,
         *flags,
         "--safe-mode",
         "--tools",
@@ -150,10 +148,10 @@ def run_reviewer(
 ) -> tuple[subprocess.CompletedProcess[str] | None, str, bool]:
     try:
         result = run_in_group(
-            command(reviewer, prompt, folder, root),
+            command(reviewer, folder, root),
             cwd=folder,
             env=without_host_markers(),
-            stdin=subprocess.DEVNULL,
+            input=prompt,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=TIMEOUT_SECONDS,

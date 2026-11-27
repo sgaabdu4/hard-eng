@@ -32,33 +32,57 @@ def test_a_file_outside_ui_paths_names_both_fixes(tmp_path: Path) -> None:
     assert ".gitignore" in line
 
 
-def test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bounded(
-    tmp_path: Path,
-) -> None:
-    """HE-UI-SOURCE: no refusal stops a library of 2,000 parts; the look excerpt keeps DESIGN.md and ends at its byte limit."""
-    import look
+def _library_project(root: Path, parts: int, use: str, design: str) -> str:
     from ui_library import index_findings
 
-    root = tmp_path / "big"
     root.mkdir()
     texts = {
         f"src/ui/Part{number}.tsx": f"export const Part{number} = () => null;\n"
-        for number in range(2000)
+        for number in range(parts)
     }
     library = ["src/ui/*"]
     uses = {
-        entry: dict.fromkeys(parts, "a part")
-        for entry, parts in expected_index(texts, library).items()
+        entry: dict.fromkeys(names, use)
+        for entry, names in expected_index(texts, library).items()
     }
     index = index_text(texts, library, uses)
     assert index_findings({**texts, "UI-LIBRARY.md": index}, library) == []
-    design = "---\ncolors:\n  ink: '#111111'\n---\n\n# Big\n"
     (root / "DESIGN.md").write_text(design)
     (root / "UI-LIBRARY.md").write_text(index)
-    excerpt = look.design_text(root)
-    assert len(excerpt.encode()) <= look.DESIGN_BYTE_LIMIT
-    assert design.strip() in excerpt
-    assert excerpt.endswith("[truncated]")
+    return index
+
+
+def test_a_written_library_and_a_full_design_md_reach_look_whole(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: the index that Hard Eng requires never forces a cut or a refusal of a full DESIGN.md: 200 parts with full use lines beside a 22,700-byte DESIGN.md reach the reviewer whole."""
+    import look
+
+    design = "---\ncolors:\n  ink: '#111111'\n---\n\n# Design\n" + (
+        "- A rule line that the reviewer must see in full.\n" * 450
+    )
+    design += "- The last rule.\n"
+    use = "Use for the main action of a form or dialog; one per group, the rest plain."
+    index = _library_project(tmp_path / "real", 200, use, design)
+    assert len(design.encode()) + len(index.encode()) > 38_000
+    text = look.design_text(tmp_path / "real")
+    assert "- The last rule." in text
+    assert "`Part99`" in text and text.rstrip().endswith(use)
+
+
+def test_a_library_of_2000_parts_with_short_use_lines_reaches_look_whole(
+    tmp_path: Path,
+) -> None:
+    """HE-UI-SOURCE: a refusal of the design text always has a fix in the project; short use lines bring even 2,000 parts inside the limit."""
+    import look
+
+    _library_project(
+        tmp_path / "big",
+        2000,
+        "a part",
+        "---\ncolors:\n  ink: '#111111'\n---\n\n# Big\n",
+    )
+    assert "`Part1999` — a part" in look.design_text(tmp_path / "big")
 
 
 def test_the_ui_refusal_header_says_the_rule_is_intended_and_fixed_in_the_project(

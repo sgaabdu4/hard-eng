@@ -47,10 +47,11 @@ def run_in_group(
     cwd: os.PathLike[str] | str | None = None,
     env: dict[str, str] | None = None,
     stdin: int | IO[str] | None = None,
+    input: str | None = None,
     stdout: int | IO[str] | None = None,
     stderr: int | IO[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Like subprocess.run, but a timeout or interrupt kills the whole group first."""
+    """Like subprocess.run, but a timeout or interrupt kills the whole group first. `input` is written to the command on a pipe, in place of `stdin`."""
     process: subprocess.Popen[str] | None = None
     try:
         with STARTING:
@@ -65,7 +66,7 @@ def run_in_group(
                     command,
                     cwd=cwd,
                     env=env,
-                    stdin=stdin,
+                    stdin=subprocess.PIPE if input is not None else stdin,
                     stdout=stdout,
                     stderr=stderr,
                     text=True,
@@ -76,7 +77,7 @@ def run_in_group(
                 MAIN_STARTING.clear()
                 if DEFERRED_STOP.is_set():
                     raise SystemExit(128 + STOP_SIGNAL[0])
-        out, err = process.communicate(timeout=timeout)
+        out, err = process.communicate(input, timeout=timeout)
     except BaseException:
         if process is not None:
             with suppress(ProcessLookupError):

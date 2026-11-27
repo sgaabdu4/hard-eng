@@ -15,6 +15,7 @@ from test_look import (
     listed,
     look_project,
     make_images,
+    prompt_text,
     run_look,
 )
 
@@ -246,7 +247,7 @@ def test_the_prompt_lists_an_earlier_fail_without_calling_it_fixed(
     commit(project, "change the image")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    prompt = prompt_text(log)
     assert "Alignment: Fail — image-1.png: merge badge and meta into one line" in prompt
     assert "earlier look findings" in prompt.lower()
     assert "fixed" not in prompt.lower()
@@ -276,7 +277,7 @@ def test_each_earlier_fail_is_listed_for_a_recheck_and_never_called_fixed(
     commit(project, f"change: {edit}")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    prompt = prompt_text(log)
     assert "R1: Alignment: Fail — image-1.png: merge badge and meta" in prompt
     assert "(frames: image-1.png)" in prompt
     assert "fixed" not in prompt.lower()
@@ -346,10 +347,7 @@ def test_a_later_clean_verdict_ends_the_recheck_list(
     commit(project, "design again")
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    assert (
-        "earlier look findings"
-        not in " ".join(json.loads(log.read_text())["argv"]).lower()
-    )
+    assert "earlier look findings" not in prompt_text(log).lower()
 
 
 def test_a_run_that_holds_back_images_tells_the_reviewer_and_all_forces_a_full_review(
@@ -358,7 +356,7 @@ def test_a_run_that_holds_back_images_tells_the_reviewer_and_all_forces_a_full_r
     images, _ = two_images_with_a_clean_look_of_the_first(tmp_path, project)
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    prompt = " ".join(json.loads(log.read_text())["argv"])
+    prompt = prompt_text(log)
     assert "holds back 1 unchanged image" in prompt
     assert "not shown" in prompt
 
