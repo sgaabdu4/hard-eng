@@ -92,7 +92,7 @@ EARLIER_SECTION = (
 )
 HELD_NOTE = (
     "\n\nThis run holds back {count} unchanged image(s) of the set; each was reviewed "
-    "clean at the same inputs and is not shown. Do not fail a rule because a width or "
+    "at the same inputs with no Fail on it and is not shown. Do not fail a rule because a width or "
     "a state is missing from this folder; judge only what you see."
 )
 MEASURED_SECTION = (
