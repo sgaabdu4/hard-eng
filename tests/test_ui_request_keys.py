@@ -1,20 +1,31 @@
 """A repeat of an earlier finished request adds no fetch wave; any other request chain still counts."""
 
+import time
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from test_browser import plain_step, session
-from test_ui_audit_guards import board, finished, measured, open_board
+from test_ui_audit_guards import (
+    LOAD_WAVE,
+    board,
+    finished,
+    measured,
+    open_board,
+    press_button,
+)
+from ui_measure import LIMITS
 
 LOOP = (
-    "(async () => { const go = (n) => CALL; PREFACE"
+    "(async () => { const go = (n) => CALL; "
     "for (let i = 0; i < COUNT; i++) { await go(i); await new Promise((r) => setTimeout(r, GAP)); } "
     "window.done = true; })();"
 )
-LOAD = (
-    "await fetch('/step.json?a').then((r) => r.text()); "
-    "await fetch('/step.json?b').then((r) => r.text()); "
+POLLING = (
+    "(async () => { const go = () => CALL; "
+    "const polls = [0, 1, 2, 3, 4].map((i) => new Promise((r) => setTimeout(r, i * 300)).then(go)); "
+    "for (const w of 'abc') await fetch('/step.json?' + w).then((r) => r.text()); "
+    "await Promise.all(polls); window.done = true; })();"
 )
 FORM = (
     "(() => { const f = new FormData(); f.append('a', '1'); "
@@ -65,12 +76,7 @@ def run(
 def test_a_poll_that_repeats_after_the_load_adds_no_wave(
     tmp_path: Path, site: str, browser: ModuleType, call: str
 ) -> None:
-    script = (
-        LOOP.replace("CALL", call)
-        .replace("PREFACE", LOAD)
-        .replace("COUNT", "5")
-        .replace("GAP", "300")
-    )
+    script = POLLING.replace("CALL", call)
     assert run(tmp_path, site, browser, script) == []
 
 
@@ -78,10 +84,36 @@ def test_a_poll_that_repeats_after_the_load_adds_no_wave(
 def test_a_chain_to_one_address_with_a_new_body_each_time_still_fails(
     tmp_path: Path, site: str, browser: ModuleType, call: str
 ) -> None:
-    script = (
-        LOOP.replace("CALL", call)
-        .replace("PREFACE", "")
-        .replace("COUNT", "4")
-        .replace("GAP", "0")
-    )
+    script = LOOP.replace("CALL", call).replace("COUNT", "4").replace("GAP", "0")
     assert run(tmp_path, site, browser, script) == [("fetch-waterfall", "load")]
+
+
+BACKGROUND_POLL = (
+    "setInterval(() => fetch('/step.json?poll').then((r) => r.text()), 300);"
+)
+
+
+def pressed(tmp_path: Path, name: str, count: int) -> None:
+    """Wait on the page itself until `count` presses have finished; a polling page is never quiet, so the fetch log cannot settle."""
+    script = (
+        "(async () => { while ((window.pressed || 0) < COUNT) "
+        "await new Promise((go) => setTimeout(go, 25)); return true; })()"
+    ).replace("COUNT", str(count))
+    plain_step(tmp_path, name, "eval", script)
+
+
+def test_a_polling_page_still_measures_each_press_apart_from_the_load(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    buttons = "".join(press_button(name) for name in "abc")
+    board(tmp_path, "background", LOAD_WAVE + BACKGROUND_POLL, buttons)
+    name = session()
+    open_board(tmp_path, site, name, "background")
+    try:
+        for count, button in enumerate("abc", 1):
+            time.sleep((LIMITS["action_quiet_ms"] + 300) / 1000)
+            plain_step(tmp_path, name, "click", f"#{button}")
+            pressed(tmp_path, name, count)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
