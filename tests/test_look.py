@@ -920,22 +920,20 @@ def test_look_refuses_design_system_na_when_design_doc_exists(
     assert problem is not None and "Design system cannot be N/A" in problem
 
 
-def test_look_truncates_large_design_docs_in_utf8_bytes_and_preserves_ui_library(
+def test_look_counts_the_design_limit_in_utf8_bytes_and_hashes_every_byte(
     project: Path,
 ) -> None:
     import look
 
-    (project / "DESIGN.md").write_text(
-        "# Design\n" + ("é" * look.DESIGN_BYTE_LIMIT) + "\nTAIL_A\n"
-    )
+    (project / "DESIGN.md").write_text("# Design\nTAIL_A\n")
     (project / "UI-LIBRARY.md").write_text("# UI Library\n\nUse Button atom.\n")
     first_hash = look.design_hash(project)
-    text = look.design_text(project)
-    assert len(text.encode()) <= look.DESIGN_BYTE_LIMIT
-    assert "Use Button atom." in text
-    assert "...[truncated]" in text
+    assert "Use Button atom." in look.design_text(project)
+    (project / "DESIGN.md").write_text("# Design\nTAIL_B\n")
+    assert look.design_hash(project) != first_hash
 
     (project / "DESIGN.md").write_text(
-        "# Design\n" + ("é" * look.DESIGN_BYTE_LIMIT) + "\nTAIL_B\n"
+        "# Design\n" + "é" * (look.DESIGN_BYTE_LIMIT // 2)
     )
-    assert look.design_hash(project) != first_hash
+    with pytest.raises(look.DesignTooLarge):
+        look.design_text(project)

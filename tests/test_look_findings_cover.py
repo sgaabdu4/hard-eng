@@ -11,7 +11,15 @@ import pytest
 import ui_measure
 from conftest import commit, git
 from plans import usability_rules
-from test_look import PNG, install_agent, look_project, make_images, next_head, run_look
+from test_look import (
+    PNG,
+    install_agent,
+    listed,
+    look_project,
+    make_images,
+    next_head,
+    run_look,
+)
 
 project = pytest.fixture(look_project)
 
@@ -85,6 +93,24 @@ def edit_record(path: Path, change: dict[str, object]) -> None:
     path.write_text(json.dumps(record))
 
 
+def set_rule(project: Path, old: str, images: list[Path], rule: str, line: str) -> None:
+    path = record_file(project, old, images)
+    record = json.loads(path.read_text())
+    record["rules"] = [
+        line if text.startswith(f"{rule}:") else text for text in record["rules"]
+    ]
+    path.write_text(json.dumps(record))
+
+
+def look_again_clean(
+    tmp_path: Path, project: Path, images: list[Path]
+) -> tuple[dict[str, object], Path]:
+    """The next run, where the reviewer sees the one failed image and says that its earlier Fail is gone."""
+    gone = "Recheck R1: gone. image-1.png: the card has room now"
+    log = install_agent(tmp_path, "claude", 1, answer(1, recheck=gone))
+    return run_look(project, "claude", images), log
+
+
 def covered_images(found: tuple[dict[str, object], set[str]] | None) -> set[str]:
     return found[1] if found else set()
 
@@ -93,12 +119,10 @@ def test_a_findings_record_covers_each_image_that_holds_no_fail(
     tmp_path: Path, project: Path
 ) -> None:
     images, old = findings_over_three(tmp_path, project)
-    gone = "Recheck R1: gone. image-1.png: the card has room now"
-    log = install_agent(tmp_path, "claude", 1, answer(1, recheck=gone))
-    record = run_look(project, "claude", images)
+    record, log = look_again_clean(tmp_path, project, images)
     assert sent_files(log) == ["image-1.png"]
     assert record["outcome"] == "clean"
-    entries = record["images"]
+    entries = listed(record, "images")
     assert [item.get("carried_from") for item in entries] == [old, None, old]
     assert all(item["read"] is True for item in entries)
 
@@ -122,12 +146,7 @@ def test_a_fail_item_owns_only_the_image_it_names_first(
 ) -> None:
     images, old = findings_over_three(tmp_path, project)
     line = f"Alignment: Fail — {first}: the card clashes with {second} Fix: change it."
-    path = record_file(project, old, images)
-    record = json.loads(path.read_text())
-    record["rules"] = [
-        line if text.startswith("Alignment:") else text for text in record["rules"]
-    ]
-    path.write_text(json.dumps(record))
+    set_rule(project, old, images, "Alignment", line)
     wanted = {sha(image) for number, image in enumerate(images) if number != failing}
     assert covered_images(covering(project, images)) == wanted
 
@@ -176,24 +195,25 @@ def test_a_fail_that_names_no_run_image_covers_nothing(
     tmp_path: Path, project: Path, form: str
 ) -> None:
     images, old = findings_over_three(tmp_path, project)
-    path = record_file(project, old, images)
-    record = json.loads(path.read_text())
     if form == "no entry name":
+        path = record_file(project, old, images)
+        record = json.loads(path.read_text())
         for item in record["images"]:
             item.pop("name")
+        path.write_text(json.dumps(record))
     else:
         text = (
             "the card is cramped"
             if form == "no image named"
             else "image-9.png: the card is cramped"
         )
-        record["rules"] = [
-            f"Alignment: Fail — {text} Fix: change it."
-            if line.startswith("Alignment:")
-            else line
-            for line in record["rules"]
-        ]
-    path.write_text(json.dumps(record))
+        set_rule(
+            project,
+            old,
+            images,
+            "Alignment",
+            f"Alignment: Fail — {text} Fix: change it.",
+        )
     assert covering(project, images) is None
 
 
@@ -211,12 +231,10 @@ def test_the_second_head_after_a_findings_head_reads_only_the_image_that_failed(
     middle = run_look(project, "claude", images)
     assert middle["outcome"] == "findings"
     next_head(project)
-    gone = "Recheck R1: gone. image-1.png: the card has room now"
-    log = install_agent(tmp_path, "claude", 1, answer(1, recheck=gone))
-    record = run_look(project, "claude", images)
+    record, log = look_again_clean(tmp_path, project, images)
     assert sent_files(log) == ["image-1.png"]
     assert record["outcome"] == "clean"
-    assert [item.get("carried_from") is None for item in record["images"]] == [
+    assert [item.get("carried_from") is None for item in listed(record, "images")] == [
         False,
         True,
         False,
@@ -227,13 +245,15 @@ def test_an_owner_check_fail_does_not_hold_an_image_back(
     tmp_path: Path, project: Path
 ) -> None:
     images, old = findings_over_three(tmp_path, project)
-    path = record_file(project, old, images)
-    record = json.loads(path.read_text())
-    record["rules"] = [
-        "Accessibility: Fail — measured: after-0.png has findings (tap); fix the screen and capture it again"
-        if line.startswith("Accessibility:")
-        else line
-        for line in record["rules"]
-    ]
-    path.write_text(json.dumps(record))
+    line = "Accessibility: Fail — measured: after-0.png has findings (tap); fix the screen and capture it again"
+    set_rule(project, old, images, "Accessibility", line)
+    assert covered_images(covering(project, images)) == {sha(images[0]), sha(images[2])}
+
+
+def test_a_piece_with_no_image_name_belongs_to_the_item_before_it(
+    tmp_path: Path, project: Path
+) -> None:
+    images, old = findings_over_three(tmp_path, project)
+    line = "Alignment: Fail — the cards are uneven; image-2.png: the card is cramped; it also overlaps the title Fix: change it."
+    set_rule(project, old, images, "Alignment", line)
     assert covered_images(covering(project, images)) == {sha(images[0]), sha(images[2])}

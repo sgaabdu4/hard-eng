@@ -3,6 +3,7 @@
 import shutil
 from pathlib import Path
 
+import pytest
 from test_ui_single_source import build, library_message, refusal
 from ui_library import expected_index, index_text
 
@@ -32,10 +33,10 @@ def test_a_file_outside_ui_paths_names_both_fixes(tmp_path: Path) -> None:
     assert ".gitignore" in line
 
 
-def test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bounded(
+def test_a_large_library_passes_the_index_check_and_look_refuses_the_design_text_over_its_limit(
     tmp_path: Path,
 ) -> None:
-    """HE-UI-SOURCE: no refusal stops a library of 2,000 parts; the look excerpt keeps DESIGN.md and ends at its byte limit."""
+    """HE-UI-SOURCE: no refusal stops a library of 2,000 parts; look then refuses the design text over its byte limit and names UI-LIBRARY.md, never cutting it."""
     import look
     from ui_library import index_findings
 
@@ -55,10 +56,8 @@ def test_a_large_library_passes_the_index_check_and_the_look_excerpt_stays_bound
     design = "---\ncolors:\n  ink: '#111111'\n---\n\n# Big\n"
     (root / "DESIGN.md").write_text(design)
     (root / "UI-LIBRARY.md").write_text(index)
-    excerpt = look.design_text(root)
-    assert len(excerpt.encode()) <= look.DESIGN_BYTE_LIMIT
-    assert design.strip() in excerpt
-    assert excerpt.endswith("[truncated]")
+    with pytest.raises(look.DesignTooLarge, match="UI-LIBRARY.md"):
+        look.design_text(root)
 
 
 def test_the_ui_refusal_header_says_the_rule_is_intended_and_fixed_in_the_project(

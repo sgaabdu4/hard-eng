@@ -1,4 +1,4 @@
-"""The look records that back a head: its own, the clean verdicts that carry from earlier heads one image at a time, and the owner-check line of each rule that the reviewer does not decide."""
+"""The look records that back a head: its own, the clean verdicts and the no-Fail images of findings records that carry from earlier heads one image at a time, and the owner-check line of each rule that the reviewer does not decide."""
 
 import json
 import re
@@ -102,10 +102,14 @@ def carried_record(
     except ValueError:
         return None
     entries = look.listed_images(record)
+    try:
+        design = look.design_text(root, design_rev)
+    except look.DesignTooLarge:
+        return None
     keys = image_keys(
         evidence or root,
         scope,
-        look.design_text(root, design_rev),
+        design,
         look.design_hash(root, design_rev),
         [str(item["sha256"]) for item in entries],
         lacks_record(evidence or root, [str(item["sha256"]) for item in entries]),
@@ -161,7 +165,7 @@ def records_for(root: Path, head: str) -> list[dict[str, object]]:
 
 
 def failing_images(record: dict[str, object]) -> set[str] | None:
-    """The digests of the images that own a Fail item of the record: the image that each item names first, found through the entries of this record's own review. An owner-check line is left out, since code writes it again at each head. None when an item names no image of that review or an entry has no name, so no image can be told apart."""
+    """The digests of the images that own a Fail item of the record: the image that each item names first, found through the entries of this record's own review. An owner-check line is left out, since code writes it again at each head. A piece with no image name (an opening sentence, or words after an item) belongs to the item before it. None when a Fail line names no image of that review at all, or an image that is not in it, or an entry has no name, so no image can be told apart."""
     entries = cast(list[dict[str, object]], record.get("images", []))
     if not all(item.get("name") and item.get("sha256") for item in entries):
         return None
@@ -183,11 +187,12 @@ def failing_images(record: dict[str, object]) -> set[str] | None:
     for line in lines:
         if split_rule_line(line)[1] != "Fail":
             continue
-        parts = fail_parts(line)[0]
-        owners = [FRAME.search(part) for part in parts]
-        if not parts or any(not found or found[0] not in own for found in owners):
+        named = [
+            found[0] for part in fail_parts(line)[0] if (found := FRAME.search(part))
+        ]
+        if not named or any(name not in own for name in named):
             return None
-        failing.update(own[found[0]] for found in owners if found)
+        failing.update(own[name] for name in named)
     return failing
 
 
@@ -334,7 +339,7 @@ def earlier_findings(
 
 
 def _without_held(line: str, then: dict[str, str], current: dict[str, str]) -> str:
-    """The Fail line without the items of an image that this run does not hold, since that image has its own clean record; a line with no part left is a Pass line, so no Fail parts reach the list."""
+    """The Fail line without the items of an image that this run does not hold, since that image has its own record with no Fail on it; a line with no part left is a Pass line, so no Fail parts reach the list."""
     parts, fix = fail_parts(line)
     if split_rule_line(line)[1] != "Fail":
         return line
