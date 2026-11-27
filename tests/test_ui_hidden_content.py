@@ -20,6 +20,7 @@ HIDDEN = {
     "ancestor-content-visibility": f"<div style='content-visibility:hidden'><div>{LONG_BUTTON}</div></div>",
     "closed-dialog": f"<dialog>{LONG_BUTTON}</dialog>",
     "inert": f"<div inert>{LONG_BUTTON}</div>",
+    "faded-ancestor": f"<div style='opacity:0'><div>{LONG_BUTTON}</div></div>",
 }
 BEHIND = (
     "<main><section><h2>Card</h2>"
@@ -177,6 +178,7 @@ def test_an_unlabelled_field_that_only_screen_readers_reach_is_still_reported(
 CLOSED_MODALS = {
     "collapsed": "<div role=dialog aria-modal=true style='max-height:0;overflow:hidden'>{inner}</div>",
     "clipped": "<div role=dialog aria-modal=true style='clip-path:inset(100%)'>{inner}</div>",
+    "faded-boxless": "<div role=dialog aria-modal=true style='position:relative'><div style='position:fixed;inset:0;opacity:0'><div style='background:#fff'>{inner}</div></div></div>",
     "faded-wrapper": "<div style='position:fixed;inset:0;opacity:0;pointer-events:none'><div role=dialog aria-modal=true style='background:#fff'>{inner}</div></div>",
 }
 
