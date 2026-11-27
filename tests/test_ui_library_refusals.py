@@ -3,7 +3,6 @@
 import shutil
 from pathlib import Path
 
-import pytest
 from test_ui_single_source import build, library_message, refusal
 from ui_library import expected_index, index_text
 
@@ -78,7 +77,10 @@ def test_a_library_of_2000_parts_with_short_use_lines_reaches_look_whole(
     import look
 
     _library_project(
-        tmp_path / "big", 2000, "a part", "---\ncolors:\n  ink: '#111111'\n---\n\n# Big\n"
+        tmp_path / "big",
+        2000,
+        "a part",
+        "---\ncolors:\n  ink: '#111111'\n---\n\n# Big\n",
     )
     assert "`Part1999` — a part" in look.design_text(tmp_path / "big")
 
