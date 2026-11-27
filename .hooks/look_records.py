@@ -204,7 +204,7 @@ def failing_images(record: dict[str, object]) -> set[str] | None:
 def covering_record(
     root: Path, head: str, wanted: dict[str, str]
 ) -> tuple[dict[str, object], set[str]] | None:
-    """The clean or findings record of an earlier head that covers the most images with the wanted key (image digest to key), and the digests it covers. For each digest, only the newest record that holds it with that key decides, in the order of `_newest_paths`: an older record never covers an image that a newer record failed or did not read. A findings record covers only the images that no Fail item names first, and never the whole set."""
+    """The clean or findings record of an earlier head that covers the most images with the wanted key (image digest to key), and the digests it covers. For each digest, only the newest record that holds it with that key decides, in the order of `_newest_paths`: an older record never covers an image that a newer record failed or did not read, and a record of this head holds its images without covering them. A findings record covers only the images that no Fail item names first, and never the whole set."""
     import look_dispute
 
     decided: set[str] = set()
@@ -220,7 +220,10 @@ def covering_record(
             if str(item.get("sha256")) not in decided
             and _same(item.get("inputs"), wanted.get(str(item.get("sha256"))))
         ]
-        if record.get("head") == head or not entries:
+        if not entries:
+            continue
+        if record.get("head") == head:
+            decided.update(str(item["sha256"]) for item in entries)
             continue
         failing = set() if outcome == "clean" else failing_images(record)
         usable = failing is not None and look_dispute.cites_hold(root, head, record)
