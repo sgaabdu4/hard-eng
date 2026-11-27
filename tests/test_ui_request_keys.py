@@ -1,6 +1,5 @@
 """A repeat of an earlier finished request adds no fetch wave; any other request chain still counts."""
 
-import time
 from pathlib import Path
 from types import ModuleType
 
@@ -90,17 +89,33 @@ def test_a_chain_to_one_address_with_a_new_body_each_time_still_fails(
 
 
 BACKGROUND_POLL = (
-    "setInterval(() => fetch('/step.json?poll').then((r) => r.text()), 300);"
+    "window.polls = new Set(); "
+    "setInterval(() => { window.polls.add(window.__heRequests.length); "
+    "fetch('/step.json?poll').then((r) => r.text()); }, 300);"
 )
 
 
-def pressed(tmp_path: Path, name: str, count: int) -> None:
-    """Wait on the page itself until `count` presses have finished; a polling page is never quiet, so the fetch log cannot settle."""
+def until(tmp_path: Path, name: str, condition: str) -> None:
+    """Wait on the page itself until `condition` holds, so the order of page events decides, not the clock; a polling page is never quiet, so the fetch log cannot settle."""
     script = (
-        "(async () => { while ((window.pressed || 0) < COUNT) "
+        "(async () => { while (!(CONDITION)) "
         "await new Promise((go) => setTimeout(go, 25)); return true; })()"
-    ).replace("COUNT", str(count))
+    ).replace("CONDITION", condition)
     plain_step(tmp_path, name, "eval", script)
+
+
+def pressed(tmp_path: Path, name: str, count: int) -> None:
+    until(tmp_path, name, f"(window.pressed || 0) >= {count}")
+
+
+def quiet_apart_from_the_poll(tmp_path: Path, name: str) -> None:
+    quiet = LIMITS["action_quiet_ms"] + 100
+    until(
+        tmp_path,
+        name,
+        "(() => { const log = window.__heRequests.filter((e, i) => !window.polls.has(i)); "
+        f"return log.length > 0 && log.every((e) => e.end > 0 && performance.now() - e.end >= {quiet}); }})()",
+    )
 
 
 def test_a_polling_page_still_measures_each_press_apart_from_the_load(
@@ -112,7 +127,7 @@ def test_a_polling_page_still_measures_each_press_apart_from_the_load(
     open_board(tmp_path, site, name, "background")
     try:
         for count, button in enumerate("abc", 1):
-            time.sleep((LIMITS["action_quiet_ms"] + 800) / 1000)
+            quiet_apart_from_the_poll(tmp_path, name)
             plain_step(tmp_path, name, "click", f"#{button}")
             pressed(tmp_path, name, count)
         assert measured(tmp_path, browser, name) == []
@@ -170,7 +185,7 @@ def test_a_poll_that_carries_on_into_a_press_adds_no_wave_to_it(
     name = session()
     open_board(tmp_path, site, name, "carry")
     try:
-        time.sleep((LIMITS["action_quiet_ms"] + 800) / 1000)
+        quiet_apart_from_the_poll(tmp_path, name)
         plain_step(tmp_path, name, "click", "#a")
         pressed(tmp_path, name, 1)
         assert measured(tmp_path, browser, name) == []
@@ -205,21 +220,26 @@ def test_two_requests_at_once_for_one_address_are_no_poll(
         plain_step(tmp_path, name, "close")
 
 
+SLOW_POLL = (
+    "window.polls = new Set(); window.started = 0; window.ticks = 0; "
+    "setInterval(() => { window.started += 1; window.polls.add(window.__heRequests.length); "
+    "fetch('/step.json?poll').then((r) => r.text()).then(() => { window.ticks += 1; }); }, 1000);"
+)
+
+
 def test_a_slow_poll_does_not_keep_the_page_from_going_quiet(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    script = (
-        TAB_LOAD
-        + "setInterval(() => fetch('/step.json?poll').then((r) => r.text()), 1000);"
-    )
+    script = TAB_LOAD + SLOW_POLL
     board(tmp_path, "slow", script, press_button("a"))
     name = session()
     open_board(tmp_path, site, name, "slow")
     try:
-        time.sleep(1.0)
+        quiet_apart_from_the_poll(tmp_path, name)
+        until(tmp_path, name, "window.started >= 1")
         plain_step(tmp_path, name, "click", "#a")
         pressed(tmp_path, name, 1)
-        time.sleep(1.5)
+        until(tmp_path, name, "window.ticks >= 3")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
@@ -231,7 +251,7 @@ THREE_WAVES = (
 )
 OPEN_LIVE = (
     "(async () => { await fetch('/step.json?live').then((r) => r.text()); "
-    "setInterval(() => fetch('/step.json?live').then((r) => r.text()), 1000); "
+    "setInterval(() => fetch('/step.json?live').then((r) => r.text()).then(() => { window.live = (window.live || 0) + 1; }), 1000); "
     "window.pressed = (window.pressed || 0) + 1; })()"
 )
 
@@ -244,7 +264,7 @@ def test_a_click_that_opens_a_polling_view_is_measured_as_its_own_step(
     open_board(tmp_path, site, name, "live")
     try:
         press_clicks(tmp_path, name, "a")
-        time.sleep(2.5)
+        until(tmp_path, name, "(window.live || 0) >= 2")
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
