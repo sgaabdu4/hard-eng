@@ -165,7 +165,7 @@ def records_for(root: Path, head: str) -> list[dict[str, object]]:
 
 
 def failing_images(record: dict[str, object]) -> set[str] | None:
-    """The digests of the images that own a Fail item of the record: the image that each item names first, found through the entries of this record's own review. An owner-check line is left out, since code writes it again at each head. A piece with no image name (an opening sentence, or words after an item) belongs to the item before it. None when a Fail line names no image of that review at all, or an image that is not in it, or an entry has no name, so no image can be told apart."""
+    """The digests of the images that own a Fail item of the record: the image that each item names first, found through the entries of this record's own review. An owner-check line is left out, since code writes it again at each head. A piece with no image name (an opening sentence, or words after an item) belongs to the item before it. None when a Fail line names no image of that review at all, or an image that is not in it, or an entry has no name, or the record holds no Fail line at all (a findings verdict with only Pass lines), so no image can be told apart."""
     entries = cast(list[dict[str, object]], record.get("images", []))
     if not all(item.get("name") and item.get("sha256") for item in entries):
         return None
@@ -184,6 +184,11 @@ def failing_images(record: dict[str, object]) -> set[str] | None:
         *cast(list[str], record.get("reviewer_fails", [])),
     ]
     failing: set[str] = set()
+    if not any(
+        split_rule_line(line)[1] == "Fail"
+        for line in (*cast(list[str], record.get("rules", [])), *lines)
+    ):
+        return None
     for line in lines:
         if split_rule_line(line)[1] != "Fail":
             continue

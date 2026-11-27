@@ -62,6 +62,10 @@ def test_a_design_pair_over_the_limit_is_refused_with_each_size(
         f"{look.DESIGN_BYTE_LIMIT:,}",
     ):
         assert wanted in shown
+    (project / "DESIGN.md").write_text(f"# Design\n{TAIL}\n")
+    commit(project, "shorten the design")
+    assert look.look_main(project, ["--host", "claude", str(images[0])]) == 0
+    assert TAIL in " ".join(json.loads(log.read_text())["argv"])
 
 
 def test_a_design_pair_at_the_limit_is_sent_whole(

@@ -257,3 +257,13 @@ def test_a_piece_with_no_image_name_belongs_to_the_item_before_it(
     line = "Alignment: Fail — the cards are uneven; image-2.png: the card is cramped; it also overlaps the title Fix: change it."
     set_rule(project, old, images, "Alignment", line)
     assert covered_images(covering(project, images)) == {sha(images[0]), sha(images[2])}
+
+
+def test_a_findings_verdict_with_no_fail_line_covers_nothing(
+    tmp_path: Path, project: Path
+) -> None:
+    images, old = findings_over_three(tmp_path, project)
+    set_rule(project, old, images, "Alignment", "Alignment: Pass — looked at it")
+    extra = images[0].with_name("after-9.png")
+    extra.write_bytes(PNG + b"another image")
+    assert covering(project, [*images, extra]) is None
