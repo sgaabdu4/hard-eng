@@ -1,7 +1,6 @@
 """`look` sends the design documents whole or refuses; it never cuts them."""
 
 import hashlib
-import json
 from pathlib import Path
 
 import local_ui_proof
@@ -16,6 +15,7 @@ from test_look import (
     install_agent,
     look_project,
     make_images,
+    prompt_text,
     run_look,
 )
 
@@ -65,7 +65,7 @@ def test_a_design_pair_over_the_limit_is_refused_with_each_size(
     (project / "DESIGN.md").write_text(f"# Design\n{TAIL}\n")
     commit(project, "shorten the design")
     assert look.look_main(project, ["--host", "claude", str(images[0])]) == 0
-    assert TAIL in " ".join(json.loads(log.read_text())["argv"])
+    assert TAIL in prompt_text(log)
 
 
 def test_a_design_pair_at_the_limit_is_sent_whole(
@@ -78,7 +78,7 @@ def test_a_design_pair_at_the_limit_is_sent_whole(
     images = make_images(project, 1)
     log = install_agent(tmp_path, "claude", 1, good_answer(1))
     run_look(project, "claude", images)
-    assert TAIL in " ".join(json.loads(log.read_text())["argv"])
+    assert TAIL in prompt_text(log)
 
 
 def test_a_record_of_a_project_over_the_limit_gives_a_plain_refusal(

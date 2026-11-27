@@ -236,7 +236,7 @@ def test_the_dispute_prompt_holds_only_the_item_the_image_and_the_cited_bytes(
     dispute(project, images, item, ["src/form.ts:2-3"], measured="Chip")
     call = json.loads(log.read_text())
     assert call["files"] == ["image-1.png"]
-    prompt = next(part for part in call["argv"] if "Fail item:" in part)
+    prompt = call["stdin"]
     assert prompt == (
         "Open the image in this folder with your image reader: image-1.png. A reviewer "
         "wrote the Fail item below about it. Decide one thing: does a cited line, or the "
