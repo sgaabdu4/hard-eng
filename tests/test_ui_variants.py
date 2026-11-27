@@ -58,6 +58,10 @@ REAL_FAULTS = {
         f"<form><div style='display:flex;gap:8px'><input type=text placeholder=Search aria-label=Search style='{INPUT}'><button type=submit style='{PLAIN_BUTTON}'>Go</button></div></form>",
         "field-control",
     ),
+    "body-text-with-a-small-inner-line": (
+        f"<section><h2>Offer</h2><p style='margin:0'>Body text <small style='{META}'>fine print</small></p><p style='{META}'>Ends in three days</p></section>",
+        "extra-text",
+    ),
     "nine-secondary-lines": (
         f"<section><h2>Hero</h2><div>{MOCK_LINES}</div></section>",
         "extra-text",
@@ -74,6 +78,7 @@ REAL_FAULTS = {
 REAL_PATTERNS = {
     "off-screen-reveal-label": f"<div style='{WRAP}'><input type=password aria-label=Password style='{INPUT}'><button type=button style='{OVERLAY}'><svg aria-hidden=true width=20 height=20><circle cx=10 cy=10 r=5 /></svg><span style='position:absolute;left:-9999px'>Show password</span></button></div>",
     "sr-only-reveal-label": f"<div style='{WRAP}'><input type=password aria-label=Password style='{INPUT}'><button type=button style='{OVERLAY}'><svg aria-hidden=true width=20 height=20><circle cx=10 cy=10 r=5 /></svg><span style='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)'>Show password</span></button></div>",
+    "small-text-with-an-inner-strong": "<section><h2>Messages</h2><p style='font-size:13px;margin:0'>Text <strong>bold</strong> more</p></section>",
     "badge-after-heading": f"<section><h2>Feature</h2><span style='{BADGE}'>New</span><p style='{META}'>One short secondary line</p></section>",
     "value-card": f"<section><h2>Vitals</h2><div style='display:flex;gap:16px'><div><span style='{META}'>Heart rate</span> <strong style='font-size:24px'>72 bpm</strong></div><div><span style='{META}'>Sleep</span> <strong style='font-size:24px'>7 h</strong></div></div></section>",
     "stat-labels": f"<section><h2>Numbers</h2><div style='display:flex;gap:24px'><div><strong style='font-size:24px'>500+</strong><div style='{META}'>Patients served</div></div><div><strong style='font-size:24px'>3,000+</strong><div style='{META}'>Visits a year</div></div></div></section>",
