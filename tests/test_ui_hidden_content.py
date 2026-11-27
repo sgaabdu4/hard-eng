@@ -89,3 +89,49 @@ def test_a_page_with_no_modal_is_measured_as_before(
             width,
             found[width],
         )
+
+
+GOOD_BUTTON = (
+    "<button style='height:44px;min-width:120px;font-size:16px'>Close</button>"
+)
+SHEET_STYLE = "position:fixed;bottom:0;left:0;right:0;background:#fff;padding:8px"
+
+
+def test_with_two_modals_only_the_last_one_in_the_page_is_measured(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    first = (
+        f"<div role=dialog aria-modal=true style='{SHEET_STYLE}'>{SHORT_BUTTON}</div>"
+    )
+    last = f"<div role=dialog aria-modal=true style='{SHEET_STYLE}'>{GOOD_BUTTON}</div>"
+    limit_page(tmp_path, BEHIND + first + last)
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
+
+
+def test_a_hidden_element_marked_modal_does_not_blank_the_page(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    hidden = f"<div aria-modal=true style='display:none'>{GOOD_BUTTON}</div>"
+    limit_page(tmp_path, BEHIND + hidden + SHORT_BUTTON)
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter({"extra-text": 1, "tap-size": 1}), (
+            width,
+            found[width],
+        )
+
+
+def test_a_low_contrast_line_behind_a_modal_gives_no_finding(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    faint = "<p style='color:#ccc;font-size:16px'>Faint line behind the sheet</p>"
+    limit_page(
+        tmp_path,
+        f"<main><h1>Page</h1>{faint}</main>"
+        f"<div role=dialog aria-modal=true style='{SHEET_STYLE}'>{GOOD_BUTTON}</div>",
+    )
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])

@@ -93,11 +93,26 @@ const log = [];
 Object.defineProperty(window, "__heHold", { value: HOLD });
 Object.defineProperty(window, "__heRequests", { value: log });
 const prefetching = (headers) => [...headers].some(([name, value]) => name in SIGNS && value.toLowerCase().includes(SIGNS[name]));
+let serial = 0;
+const alone = () => JSON.stringify(["alone", ++serial]);
+const keyOf = (method, url, body) => {
+  try {
+    const text = typeof body === "string" ? body : body instanceof URLSearchParams ? body.toString() : body === undefined || body === null ? null : undefined;
+    return text === undefined ? alone() : JSON.stringify(["same", String(method).toUpperCase(), new URL(String(url), location.href).href, text]);
+  } catch { return alone(); }
+};
+const fetchKey = (input, init) => {
+  try {
+    const request = input instanceof Request ? input : null;
+    const body = init && init.body !== undefined ? init.body : request && request.body ? {} : null;
+    return keyOf((init && init.method) || (request && request.method) || "GET", request ? request.url : input, body);
+  } catch { return alone(); }
+};
 const realFetch = window.fetch;
 window.fetch = (input, init) => {
   const headers = new Headers(input instanceof Request ? input.headers : undefined);
   new Headers(init && init.headers).forEach((value, name) => headers.set(name, value));
-  const entry = { start: performance.now(), end: 0, prefetch: prefetching(headers) };
+  const entry = { start: performance.now(), end: 0, prefetch: prefetching(headers), key: fetchKey(input, init) };
   log.push(entry);
   return new Promise((resolve, reject) => setTimeout(() => {
     realFetch(input, init).then(
@@ -110,7 +125,7 @@ const states = new WeakMap();
 const proto = XMLHttpRequest.prototype;
 const realOpen = proto.open, realSend = proto.send, realSet = proto.setRequestHeader;
 proto.open = function (method, url, async = true, ...rest) {
-  const state = { sync: async === false, headers: new Headers(), entry: null };
+  const state = { sync: async === false, headers: new Headers(), entry: null, method, url };
   states.set(this, state);
   this.addEventListener("readystatechange", () => { if (this.readyState === 4 && state.entry) state.entry.end = performance.now(); });
   return realOpen.call(this, method, url, async, ...rest);
@@ -123,11 +138,22 @@ proto.setRequestHeader = function (name, value) {
 proto.send = function (body) {
   const state = states.get(this);
   if (!state || state.sync) return realSend.call(this, body);
-  state.entry = { start: performance.now(), end: 0, prefetch: prefetching(state.headers) };
+  state.entry = { start: performance.now(), end: 0, prefetch: prefetching(state.headers), key: keyOf(state.method, state.url, body) };
   log.push(state.entry);
   setTimeout(() => { try { realSend.call(this, body); } catch { state.entry.end = performance.now(); } }, HOLD);
 };
 })()"""
+SHOWN_JS = """const drawn = (el) => {
+  const s = getComputedStyle(el);
+  const b = el.getBoundingClientRect();
+  const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
+  const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
+  return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1 && !el.closest("[inert]") && (!el.checkVisibility || el.checkVisibility());
+};
+const modals = [...document.querySelectorAll("dialog,[aria-modal=true]")].filter((el) => drawn(el) && (el.matches("[aria-modal=true]") || el.matches(":modal")));
+const modal = modals.length ? modals[modals.length - 1] : null;
+const shown = (el) => drawn(el) && (!modal || modal.contains(el));
+"""
 AXE_TAGS = "wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa"
 AXE_NAMES = {
     "color-contrast": "contrast",
@@ -143,13 +169,7 @@ MEASURE_SCRIPT = """(async () => {
 const LIMITS = LIMITS_JSON;
 const found = [];
 if (!window.__heHold) return JSON.stringify({ found: [{ rule: "request-delay-missing" }], measured: {} });
-const shown = (el) => {
-  const s = getComputedStyle(el);
-  const b = el.getBoundingClientRect();
-  const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
-  const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
-  return !clipped && !away && s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && b.width > 1 && b.height > 1;
-};
+SHOWN_JSFN
 const decorated = DECORATED_JSFN;
 const visible = (el) => !decorated(el) && shown(el);
 COLOUR_JSFN
@@ -323,8 +343,9 @@ for (const heading of document.querySelectorAll(HEADINGS)) {
   const roots = [];
   if (top !== heading) roots.push(top);
   else for (let n = heading.nextElementSibling; n && !n.matches(HEADINGS) && !n.querySelector(HEADINGS); n = n.nextElementSibling) roots.push(n);
-  const lines = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
-  if (lines.some((l) => l.px < LIMITS.text_px)) continue;
+  const every = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]).filter((el) => ownText(el) && visible(el)).map(lineOf).filter(Boolean);
+  if (every.some((l) => l.px < LIMITS.text_px)) continue;
+  const lines = every.filter((l) => getComputedStyle(l.el).display !== "inline" || !every.some((o) => o !== l && o.el.contains(l.el)));
   if (lines.length > 1) found.push({ rule: "extra-text", at: name(heading), secondary_lines: lines.length });
   for (const line of lines) if (line.words > LIMITS.secondary_words) found.push({ rule: "extra-text", at: name(heading), words: line.words });
 }
@@ -426,7 +447,7 @@ for (const el of document.body.querySelectorAll("*")) {
 }
 const fetches = window.__heRequests
   .filter((e) => !e.prefetch && e.end > 0)
-  .map((e) => ({ startTime: e.start, responseEnd: e.end }))
+  .map((e) => ({ startTime: e.start, responseEnd: e.end, key: e.key }))
   .sort((a, b) => a.startTime - b.startTime);
 const wavesOf = (list) => {
   let waves = 0, waveEnd = -1;
@@ -440,8 +461,10 @@ const wavesOf = (list) => {
   }
   return waves;
 };
-const quiet = (t) => !fetches.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
-const reacts = (t) => fetches.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
+const everSeen = new Set();
+const fresh = fetches.filter((e) => !everSeen.has(e.key) && everSeen.add(e.key));
+const quiet = (t) => !fresh.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
+const reacts = (t) => fresh.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
 const taken = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin, verb }))
   .filter((c) => c.t > 0)
   .sort((a, b) => a.t - b.t);
@@ -449,7 +472,8 @@ const cuts = taken.filter((c) => quiet(c.t) && reacts(c.t));
 const parts = [{ at: "load", entries: [] }, ...cuts.map((c) => ({ at: `${c.verb} ${taken.filter((o) => o.verb === c.verb && o.t <= c.t).length}`, entries: [] }))];
 for (const entry of fetches) parts[cuts.filter((c) => c.t <= entry.startTime).length].entries.push(entry);
 for (const part of parts) {
-  const waves = wavesOf(part.entries);
+  const seen = new Set();
+  const waves = wavesOf(part.entries.filter((e) => !seen.has(e.key) && seen.add(e.key)));
   if (waves > LIMITS.fetch_waves) found.push({ rule: "fetch-waterfall", at: part.at, waves });
 }
 const shifts = [];
@@ -615,6 +639,7 @@ def measure_script(actions: Sequence[tuple[int, str]] = ()) -> str:
     script = MEASURE_SCRIPT.replace("LIMITS_JSON", json.dumps(LIMITS))
     script = script.replace("ACTIONS_JSON", json.dumps(list(actions)))
     script = script.replace("COLOUR_JSFN", COLOUR_JS)
+    script = script.replace("SHOWN_JSFN", SHOWN_JS)
     script = script.replace("DECORATED_JSFN", DECORATED_JS)
     return script.replace("DECORATION_JSON", json.dumps(DECORATION))
 
@@ -628,9 +653,9 @@ def hold_script() -> str:
 def decoration_script(selectors: list[str]) -> str:
     decorated = DECORATED_JS.replace("DECORATION_JSON", json.dumps(DECORATION))
     return (
-        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; {COLOUR_JS}const decorated = {decorated}; "
+        f"(() => {{ const LIMITS = {json.dumps(LIMITS)}; {COLOUR_JS}{SHOWN_JS}const decorated = {decorated}; "
         f"return JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
-        "const el = document.querySelector(s); return Boolean(el && decorated(el)); "
+        "const el = document.querySelector(s); return Boolean(el && (decorated(el) || !shown(el))); "
         "} catch { return false; } })); })()"
     )
 
