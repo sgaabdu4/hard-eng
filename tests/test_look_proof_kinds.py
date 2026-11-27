@@ -34,8 +34,7 @@ def kinds() -> Mapping[str, Sequence[str]]:
 
 
 def prompt_of(log: Path) -> str:
-    argv = json.loads(log.read_text())["argv"]
-    return next(part for part in argv if "\n\nRules:\n" in part)
+    return str(json.loads(log.read_text())["stdin"])
 
 
 def prompt_rule_names(prompt: str) -> list[str]:
