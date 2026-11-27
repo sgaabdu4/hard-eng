@@ -75,6 +75,17 @@ REAL_FAULTS = {
         "shared-edge",
     ),
 }
+LONG_BUTTON = (
+    "<button style='width:40px;font-size:16px'>Archive this conversation</button>"
+)
+HIDDEN_CONTENT = {
+    "closed-details": f"<details style='width:60px'><summary>More actions</summary>{LONG_BUTTON}</details>",
+    "hidden-until-found": f"<div hidden=until-found>{LONG_BUTTON}</div>",
+    "ancestor-content-visibility": f"<div style='content-visibility:hidden'><div>{LONG_BUTTON}</div></div>",
+    "closed-dialog": f"<dialog>{LONG_BUTTON}</dialog>",
+    "inert": f"<div inert>{LONG_BUTTON}</div>",
+    "faded-ancestor": f"<div style='opacity:0'><div>{LONG_BUTTON}</div></div>",
+}
 REAL_PATTERNS = {
     "off-screen-reveal-label": f"<div style='{WRAP}'><input type=password aria-label=Password style='{INPUT}'><button type=button style='{OVERLAY}'><svg aria-hidden=true width=20 height=20><circle cx=10 cy=10 r=5 /></svg><span style='position:absolute;left:-9999px'>Show password</span></button></div>",
     "sr-only-reveal-label": f"<div style='{WRAP}'><input type=password aria-label=Password style='{INPUT}'><button type=button style='{OVERLAY}'><svg aria-hidden=true width=20 height=20><circle cx=10 cy=10 r=5 /></svg><span style='position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)'>Show password</span></button></div>",
@@ -111,7 +122,11 @@ def test_real_variants_of_each_field_and_text_fault_are_found(
         assert found[width] == Counter({rule: 1}), (width, found[width])
 
 
-@pytest.mark.parametrize("body", REAL_PATTERNS.values(), ids=REAL_PATTERNS)
+@pytest.mark.parametrize(
+    "body",
+    [*REAL_PATTERNS.values(), *HIDDEN_CONTENT.values()],
+    ids=[*REAL_PATTERNS, *HIDDEN_CONTENT],
+)
 def test_real_patterns_that_look_like_faults_are_not_findings(
     tmp_path: Path, site: str, browser: ModuleType, body: str
 ) -> None:

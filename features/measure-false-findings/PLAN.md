@@ -41,8 +41,8 @@ Authority: Autonomous — the coordinator merges through ship; the user's standi
 
 ## Acceptance + steps
 
-- [x] A long label in a closed narrow `details` gives no `wrapped-label` and no `tap-size`; with `open` it keeps both → `tests/test_ui_hidden_content.py::test_a_control_the_browser_hides_is_not_measured`, `tests/test_ui_hidden_content.py::test_the_same_control_in_an_open_details_is_measured`
-- [x] Each other hidden state gives no finding → `tests/test_ui_hidden_content.py::test_a_control_the_browser_hides_is_not_measured`
+- [x] A long label in a closed narrow `details` gives no `wrapped-label` and no `tap-size`; with `open` it keeps both → `tests/test_ui_variants.py::test_real_patterns_that_look_like_faults_are_not_findings`, `tests/test_ui_hidden_content.py::test_the_same_control_in_an_open_details_is_measured`
+- [x] Each other hidden state gives no finding → `tests/test_ui_variants.py::test_real_patterns_that_look_like_faults_are_not_findings`
 - [x] A repeat request adds no wave → `tests/test_ui_request_keys.py::test_a_poll_that_repeats_after_the_load_adds_no_wave`
 - [x] A chain with a new body each time still fails → `tests/test_ui_request_keys.py::test_a_chain_to_one_address_with_a_new_body_each_time_still_fails`
 - [x] A polling page still splits parts at a press; a poll that carries on into a press adds no wave to it → `tests/test_ui_request_keys.py::test_a_polling_page_still_measures_each_press_apart_from_the_load`, `tests/test_ui_request_keys.py::test_a_poll_that_carries_on_into_a_press_adds_no_wave_to_it`
@@ -78,7 +78,7 @@ Evidence: Red first: on `origin/develop` code the first set of new tests gave 12
 Reviews: four `challenge` rounds. Round 1 found a repeat that broke a tab opened again, a poll carried into a press, axe findings behind a modal, a modal wrapper with no box, a nested `inline-flex` line and plan lines; round 2 found an axe filter that was too wide, a collapsed closed modal, a faded closed modal, two requests at once read as a poll and a slow poll; round 3 found an ancestor with opacity 0 and a click that opens a polling view. Each is fixed with a red test first. Round 4 on 96ee121a was clean.
 E2E: N/A — the proof is the real-browser tests above, which drive `browser.browser_command` and a real page; no journey of an app is changed.
 Real service: N/A — no outside service is called; the test pages are served from a local folder.
-Retro: (1) Fault on the base branch, content the browser hides and the page behind an open modal were measured → `tests/test_ui_hidden_content.py::test_a_control_the_browser_hides_is_not_measured`. (2) Fault on the base branch, a repeated poll counted as a fetch wave → `tests/test_ui_request_keys.py::test_a_poll_that_repeats_after_the_load_adds_no_wave`. (3) Fault on the base branch, a nested inline element counted as a second line → `tests/test_ui_variants.py::test_real_patterns_that_look_like_faults_are_not_findings`. (4) The first axe filter dropped real findings on controls that only screen readers reach → `tests/test_ui_hidden_content.py::test_an_unlabelled_field_that_only_screen_readers_reach_is_still_reported`.
+Retro: (1) Fault on the base branch, content the browser hides and the page behind an open modal were measured → `tests/test_ui_variants.py::test_real_patterns_that_look_like_faults_are_not_findings`. (2) Fault on the base branch, a repeated poll counted as a fetch wave → `tests/test_ui_request_keys.py::test_a_poll_that_repeats_after_the_load_adds_no_wave`. (3) Fault on the base branch, a nested inline element counted as a second line → `tests/test_ui_variants.py::test_real_patterns_that_look_like_faults_are_not_findings`. (4) The first axe filter dropped real findings on controls that only screen readers reach → `tests/test_ui_hidden_content.py::test_an_unlabelled_field_that_only_screen_readers_reach_is_still_reported`.
 
 Delivery target: Merge
 Delivery: Pending — CI, then the guarded merge into `develop` by the coordinator.
