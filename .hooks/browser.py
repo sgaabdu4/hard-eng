@@ -589,7 +589,13 @@ def measure_page(
     tool: str, folder: Path, session: str
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     """The faults and the measured values of the page as it is now: the page script and axe, before anything draws on it."""
-    from ui_measure import AXE_TAGS, axe_findings, decoration_script, measure_script
+    from ui_measure import (
+        AXE_TAGS,
+        axe_findings,
+        decoration_script,
+        measure_script,
+        unshown_script,
+    )
 
     reply = require(
         run_tool(
@@ -611,7 +617,21 @@ def measure_page(
     audit = require(
         run_tool(tool, folder, session, "a11y", "--tags", AXE_TAGS, "--json")
     )
-    found = [*page["found"], *axe_findings(audit)]
+    axe = axe_findings(audit)
+    if axe:
+        reply = require(
+            run_tool(
+                tool,
+                folder,
+                session,
+                "eval",
+                "--stdin",
+                text=unshown_script([str(item["at"]) for item in axe]),
+            )
+        )
+        gone = json.loads(json.loads(reply))
+        axe = [item for item, flag in zip(axe, gone, strict=True) if not flag]
+    found = [*page["found"], *axe]
     contrast = [item for item in found if item["rule"] == "contrast"]
     if not contrast:
         return found, measured

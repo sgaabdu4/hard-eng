@@ -135,3 +135,30 @@ def test_a_low_contrast_line_behind_a_modal_gives_no_finding(
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert found[width] == Counter(), (width, found[width])
+
+
+def test_an_unlabelled_field_behind_a_modal_gives_no_finding(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    field = "<input style='height:44px;width:200px;font-size:16px'>"
+    limit_page(
+        tmp_path,
+        f"<main><h1>Page</h1>{field}</main>"
+        f"<div role=dialog aria-modal=true style='{SHEET_STYLE}'>{GOOD_BUTTON}</div>",
+    )
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter(), (width, found[width])
+
+
+def test_a_modal_wrapper_with_no_box_of_its_own_still_covers_the_page(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    wrapper = (
+        "<div role=dialog aria-modal=true style='position:relative'>"
+        f"<div style='{SHEET_STYLE}'>{SHORT_BUTTON}</div></div>"
+    )
+    limit_page(tmp_path, BEHIND + wrapper)
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width] == Counter({"tap-size": 1}), (width, found[width])
