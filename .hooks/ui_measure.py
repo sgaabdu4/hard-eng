@@ -145,7 +145,7 @@ proto.send = function (body) {
 })()"""
 SHOWN_JS = """const alive = (el) => {
   const s = getComputedStyle(el);
-  return s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && !el.closest("[inert]") && (!el.checkVisibility || el.checkVisibility());
+  return s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && !el.closest("[inert]") && (!el.checkVisibility || el.checkVisibility({ opacityProperty: true, checkOpacity: true }));
 };
 const cutOut = (s) => (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
 const drawn = (el) => {
@@ -156,7 +156,7 @@ const drawn = (el) => {
   return !clipped && !away && b.width > 1 && b.height > 1 && alive(el);
 };
 const holds = (el) => { const s = getComputedStyle(el); return !cutOut(s) && ![s.overflowX, s.overflowY].some((v) => v === "hidden" || v === "clip"); };
-const isOpen = (el) => alive(el) && el.checkVisibility({ opacityProperty: true, checkOpacity: true }) && (drawn(el) || (holds(el) && [...el.querySelectorAll("*")].some(drawn)));
+const isOpen = (el) => alive(el) && (drawn(el) || (holds(el) && [...el.querySelectorAll("*")].some(drawn)));
 const modals = [...document.querySelectorAll("dialog,[aria-modal=true]")].filter((el) => (el.matches("[aria-modal=true]") || el.matches(":modal")) && isOpen(el));
 const modal = modals.length ? modals[modals.length - 1] : null;
 const shown = (el) => drawn(el) && (!modal || modal.contains(el));
@@ -476,7 +476,7 @@ for (const e of fetches) runs.set(e.key, [...(runs.get(e.key) || []), e]);
 const polling = (key) => runs.get(key).some((e, i, all) => i > 0 && all[i - 1].responseEnd <= e.startTime && !taken.some((c) => c.t > all[i - 1].startTime && c.t <= e.startTime));
 const fresh = fetches.filter((e) => !polling(e.key));
 const quiet = (t) => !fresh.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
-const reacts = (t) => fresh.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
+const reacts = (t) => fetches.some((e) => (!polling(e.key) || runs.get(e.key)[0] === e) && e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
 const cuts = taken.filter((c) => quiet(c.t) && reacts(c.t));
 const parts = [{ at: "load", entries: [] }, ...cuts.map((c) => ({ at: `${c.verb} ${taken.filter((o) => o.verb === c.verb && o.t <= c.t).length}`, entries: [] }))];
 for (const entry of fetches) parts[cuts.filter((c) => c.t <= entry.startTime).length].entries.push(entry);

@@ -223,3 +223,28 @@ def test_a_slow_poll_does_not_keep_the_page_from_going_quiet(
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
+
+
+THREE_WAVES = (
+    "(async () => { for (const u of ['t1', 't2', 't3']) "
+    "await fetch('/step.json?' + u).then((r) => r.text()); })();"
+)
+OPEN_LIVE = (
+    "(async () => { await fetch('/step.json?live').then((r) => r.text()); "
+    "setInterval(() => fetch('/step.json?live').then((r) => r.text()), 1000); "
+    "window.pressed = (window.pressed || 0) + 1; })()"
+)
+
+
+def test_a_click_that_opens_a_polling_view_is_measured_as_its_own_step(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    board(tmp_path, "live", THREE_WAVES, press_button("a", OPEN_LIVE))
+    name = session()
+    open_board(tmp_path, site, name, "live")
+    try:
+        press_clicks(tmp_path, name, "a")
+        time.sleep(2.5)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
