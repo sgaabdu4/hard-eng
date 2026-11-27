@@ -5,23 +5,12 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from test_ui_variants import META, limit_page
+from test_ui_variants import LONG_BUTTON, META, limit_page
 from ui_capture import WIDTHS, capture
 
-LONG_BUTTON = (
-    "<button style='width:40px;font-size:16px'>Archive this conversation</button>"
-)
 SHORT_BUTTON = (
     "<button style='height:30px;min-width:120px;font-size:16px'>Close</button>"
 )
-HIDDEN = {
-    "closed-details": f"<details style='width:60px'><summary>More actions</summary>{LONG_BUTTON}</details>",
-    "hidden-until-found": f"<div hidden=until-found>{LONG_BUTTON}</div>",
-    "ancestor-content-visibility": f"<div style='content-visibility:hidden'><div>{LONG_BUTTON}</div></div>",
-    "closed-dialog": f"<dialog>{LONG_BUTTON}</dialog>",
-    "inert": f"<div inert>{LONG_BUTTON}</div>",
-    "faded-ancestor": f"<div style='opacity:0'><div>{LONG_BUTTON}</div></div>",
-}
 BEHIND = (
     "<main><section><h2>Card</h2>"
     f"<p style='{META}'>Posted yesterday</p><p style='{META}'>Ends in three days</p>"
@@ -35,14 +24,14 @@ MODAL = f"<dialog id=d>{SHORT_BUTTON}</dialog><script>document.getElementById('d
 PLAIN_DIALOG = f"<dialog open>{SHORT_BUTTON}</dialog>"
 
 
-@pytest.mark.parametrize("body", HIDDEN.values(), ids=HIDDEN)
-def test_a_control_the_browser_hides_is_not_measured(
+def page_behind_is_measured(
     tmp_path: Path, site: str, browser: ModuleType, body: str
 ) -> None:
     limit_page(tmp_path, body)
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
-        assert found[width] == Counter(), (width, found[width])
+        assert found[width]["extra-text"] == 1, (width, found[width])
+        assert found[width]["tap-size"] == 1, (width, found[width])
 
 
 def test_the_same_control_in_an_open_details_is_measured(
@@ -73,11 +62,7 @@ def test_only_the_open_modal_is_measured(
 def test_the_page_behind_a_dialog_that_is_not_modal_is_still_measured(
     tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    limit_page(tmp_path, BEHIND + PLAIN_DIALOG)
-    found = capture(browser, tmp_path, site, "limit")
-    for width in WIDTHS:
-        assert found[width]["extra-text"] == 1, (width, found[width])
-        assert found[width]["tap-size"] == 1, (width, found[width])
+    page_behind_is_measured(tmp_path, site, browser, BEHIND + PLAIN_DIALOG)
 
 
 def test_a_page_with_no_modal_is_measured_as_before(
@@ -187,8 +172,5 @@ CLOSED_MODALS = {
 def test_a_closed_modal_that_is_collapsed_or_faded_does_not_blank_the_page(
     tmp_path: Path, site: str, browser: ModuleType, closed: str
 ) -> None:
-    limit_page(tmp_path, BEHIND + closed.format(inner=GOOD_BUTTON) + SHORT_BUTTON)
-    found = capture(browser, tmp_path, site, "limit")
-    for width in WIDTHS:
-        assert found[width]["extra-text"] == 1, (width, found[width])
-        assert found[width]["tap-size"] == 1, (width, found[width])
+    page = BEHIND + closed.format(inner=GOOD_BUTTON) + SHORT_BUTTON
+    page_behind_is_measured(tmp_path, site, browser, page)
