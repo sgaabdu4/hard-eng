@@ -592,9 +592,9 @@ def measure_page(
     from ui_measure import (
         AXE_TAGS,
         axe_findings,
+        behind_script,
         decoration_script,
         measure_script,
-        unshown_script,
     )
 
     reply = require(
@@ -626,7 +626,7 @@ def measure_page(
                 session,
                 "eval",
                 "--stdin",
-                text=unshown_script([str(item["at"]) for item in axe]),
+                text=behind_script([str(item["at"]) for item in axe]),
             )
         )
         gone = json.loads(json.loads(reply))

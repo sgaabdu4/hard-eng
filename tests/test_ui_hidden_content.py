@@ -162,3 +162,31 @@ def test_a_modal_wrapper_with_no_box_of_its_own_still_covers_the_page(
     found = capture(browser, tmp_path, site, "limit")
     for width in WIDTHS:
         assert found[width] == Counter({"tap-size": 1}), (width, found[width])
+
+
+def test_an_unlabelled_field_that_only_screen_readers_reach_is_still_reported(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    field = "<input type=checkbox style='position:absolute;width:1px;height:1px;clip:rect(0,0,0,0)'>"
+    limit_page(tmp_path, f"<main><h1>Page</h1>{field}</main>")
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width]["label"] == 1, (width, found[width])
+
+
+CLOSED_MODALS = {
+    "collapsed": "<div role=dialog aria-modal=true style='max-height:0;overflow:hidden'>{inner}</div>",
+    "clipped": "<div role=dialog aria-modal=true style='clip-path:inset(100%)'>{inner}</div>",
+    "faded-wrapper": "<div style='position:fixed;inset:0;opacity:0;pointer-events:none'><div role=dialog aria-modal=true style='background:#fff'>{inner}</div></div>",
+}
+
+
+@pytest.mark.parametrize("closed", CLOSED_MODALS.values(), ids=CLOSED_MODALS)
+def test_a_closed_modal_that_is_collapsed_or_faded_does_not_blank_the_page(
+    tmp_path: Path, site: str, browser: ModuleType, closed: str
+) -> None:
+    limit_page(tmp_path, BEHIND + closed.format(inner=GOOD_BUTTON) + SHORT_BUTTON)
+    found = capture(browser, tmp_path, site, "limit")
+    for width in WIDTHS:
+        assert found[width]["extra-text"] == 1, (width, found[width])
+        assert found[width]["tap-size"] == 1, (width, found[width])

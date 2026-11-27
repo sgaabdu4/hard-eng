@@ -147,14 +147,16 @@ SHOWN_JS = """const alive = (el) => {
   const s = getComputedStyle(el);
   return s.visibility !== "hidden" && s.display !== "none" && +s.opacity > 0 && !el.closest("[inert]") && (!el.checkVisibility || el.checkVisibility());
 };
+const cutOut = (s) => (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
 const drawn = (el) => {
   const s = getComputedStyle(el);
   const b = el.getBoundingClientRect();
-  const clipped = (s.clip && s.clip !== "auto") || /inset\\(\\s*(50|100)%|circle\\(\\s*0|polygon\\(\\s*0/.test(s.clipPath || "");
+  const clipped = cutOut(s);
   const away = b.right + scrollX <= 0 || b.bottom + scrollY <= 0;
   return !clipped && !away && b.width > 1 && b.height > 1 && alive(el);
 };
-const isOpen = (el) => alive(el) && (drawn(el) || [...el.querySelectorAll("*")].some(drawn));
+const holds = (el) => { const s = getComputedStyle(el); return !cutOut(s) && ![s.overflowX, s.overflowY].some((v) => v === "hidden" || v === "clip"); };
+const isOpen = (el) => alive(el) && el.checkVisibility({ opacityProperty: true, checkOpacity: true }) && (drawn(el) || (holds(el) && [...el.querySelectorAll("*")].some(drawn)));
 const modals = [...document.querySelectorAll("dialog,[aria-modal=true]")].filter((el) => (el.matches("[aria-modal=true]") || el.matches(":modal")) && isOpen(el));
 const modal = modals.length ? modals[modals.length - 1] : null;
 const shown = (el) => drawn(el) && (!modal || modal.contains(el));
@@ -471,8 +473,8 @@ const taken = ACTIONS_JSON.map(([ms, verb]) => ({ t: ms - performance.timeOrigin
   .sort((a, b) => a.t - b.t);
 const runs = new Map();
 for (const e of fetches) runs.set(e.key, [...(runs.get(e.key) || []), e]);
-const polling = (key) => runs.get(key).some((e, i, all) => i > 0 && !taken.some((c) => c.t > all[i - 1].startTime && c.t <= e.startTime));
-const fresh = fetches.filter((e) => runs.get(e.key).indexOf(e) === 0 || !polling(e.key));
+const polling = (key) => runs.get(key).some((e, i, all) => i > 0 && all[i - 1].responseEnd <= e.startTime && !taken.some((c) => c.t > all[i - 1].startTime && c.t <= e.startTime));
+const fresh = fetches.filter((e) => !polling(e.key));
 const quiet = (t) => !fresh.some((e) => e.startTime < t && e.responseEnd > t - LIMITS.action_quiet_ms);
 const reacts = (t) => fresh.some((e) => e.startTime >= t && e.startTime < t + LIMITS.action_reaction_ms);
 const cuts = taken.filter((c) => quiet(c.t) && reacts(c.t));
@@ -669,10 +671,10 @@ def decoration_script(selectors: list[str]) -> str:
     )
 
 
-def unshown_script(selectors: list[str]) -> str:
+def behind_script(selectors: list[str]) -> str:
     return (
         f"(() => {{ {SHOWN_JS}return JSON.stringify({json.dumps(selectors)}.map((s) => {{ try {{ "
-        "const el = document.querySelector(s); return Boolean(el && !shown(el)); "
+        "const el = document.querySelector(s); return Boolean(el && (el.closest('[inert]') || (modal && !modal.contains(el)))); "
         "} catch { return false; } })); })()"
     )
 

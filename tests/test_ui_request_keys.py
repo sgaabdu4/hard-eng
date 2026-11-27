@@ -176,3 +176,50 @@ def test_a_poll_that_carries_on_into_a_press_adds_no_wave_to_it(
         assert measured(tmp_path, browser, name) == []
     finally:
         plain_step(tmp_path, name, "close")
+
+
+TWICE_AT_LOAD = (
+    "Promise.all([0, 1].map(() => fetch('/step.json?dup').then((r) => r.text())));"
+)
+DUP_CHAIN = (
+    "(async () => { for (const u of ['dup', 'x1', 'x2', 'x3']) "
+    "await fetch('/step.json?' + u + Date.now()).then((r) => r.text()); "
+    "window.pressed = (window.pressed || 0) + 1; })()"
+)
+
+
+def test_two_requests_at_once_for_one_address_are_no_poll(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    chain = DUP_CHAIN.replace(
+        "'/step.json?' + u + Date.now()",
+        "'/step.json?' + u + (u === 'dup' ? '' : Date.now())",
+    )
+    board(tmp_path, "dup", TWICE_AT_LOAD, press_button("a", chain))
+    name = session()
+    open_board(tmp_path, site, name, "dup")
+    try:
+        press_clicks(tmp_path, name, "a")
+        assert measured(tmp_path, browser, name) == [("fetch-waterfall", "click 1")]
+    finally:
+        plain_step(tmp_path, name, "close")
+
+
+def test_a_slow_poll_does_not_keep_the_page_from_going_quiet(
+    tmp_path: Path, site: str, browser: ModuleType
+) -> None:
+    script = (
+        TAB_LOAD
+        + "setInterval(() => fetch('/step.json?poll').then((r) => r.text()), 1000);"
+    )
+    board(tmp_path, "slow", script, press_button("a"))
+    name = session()
+    open_board(tmp_path, site, name, "slow")
+    try:
+        time.sleep(1.0)
+        plain_step(tmp_path, name, "click", "#a")
+        pressed(tmp_path, name, 1)
+        time.sleep(1.5)
+        assert measured(tmp_path, browser, name) == []
+    finally:
+        plain_step(tmp_path, name, "close")
