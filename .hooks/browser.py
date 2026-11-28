@@ -655,6 +655,7 @@ def shoot_page(
 
     folder = output_folder(root)
     require_readable_document(tool, folder, session)
+    require(run_tool(tool, folder, session, "mouse", "move", "-1", "-1"))
     findings, measured = measure_page(tool, folder, session)
     script = PAGE_SCRIPT.replace("RINGS", json.dumps(rings))
     reply = require(run_tool(tool, folder, session, "eval", "--stdin", text=script))
