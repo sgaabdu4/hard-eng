@@ -334,7 +334,7 @@ def item_keys(measured: dict[str, object]) -> dict[str, frozenset[str]]:
 
 
 def claim_word(kind: str, text: str) -> str:
-    """The word of a claim form that the text holds for this kind, or an empty text: `square`, `squared` or `sharp` for a radius; `centred`, `not centred`, `uncentred` or `off-centre` for an alignment; `touch`, `touches`, `touching` or `no gap` for a gap."""
+    """The word of a claim form that the text holds for this kind, or an empty text: `square`, `squared` or `sharp` for a radius; `centred`, `not centred`, `uncentred` or `off-centre` for an alignment; `touch`, `touches`, `touching` or `no gap` for a gap; `too small to tap`, `tap target`, `touch size` or `hard to tap` for a tap size."""
     found = TRIGGER[kind].search(text) if kind in TRIGGER else None
     return found[0].lower() if found else ""
 
