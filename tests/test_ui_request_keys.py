@@ -174,7 +174,7 @@ def test_a_tab_opened_again_after_another_tab_is_measured_as_its_own_step(
 
 CARRY_PRESS = (
     "(async () => { const from = window.tickStart; "
-    "while (window.tickStart < from + 2) await new Promise((go) => setTimeout(go, 25)); "
+    "while (window.tickStart < from + 1) await new Promise((go) => setTimeout(go, 25)); "
     "while (window.tickDone < window.tickStart) await new Promise((go) => setTimeout(go, 25)); "
     "for (const u of ['c1', 'c2', 'c3']) await fetch('/step.json?' + u + Date.now()).then((r) => r.text()); "
     "window.pressed = (window.pressed || 0) + 1; })()"
