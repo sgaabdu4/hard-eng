@@ -16,6 +16,10 @@ TRIGGER = {
         r"(?i)\b(?:not\s+cent(?:red|ered)|uncent(?:red|ered)|off[- ]cent(?:re|er)(?:d)?|cent(?:red|ered))\b"
     ),
     "gap": re.compile(r"(?i)\b(?:touch(?:es|ing)?|no gap)\b"),
+    "tap": re.compile(
+        r"(?i)\b(?:too\s+(?:small|tiny|narrow|short)\s+(?:to|for)\s+(?:tap|click|press)(?:ping)?|"
+        r"(?:tap|touch)[- ](?:target|size)|hard\s+to\s+(?:tap|hit|press))\b"
+    ),
 }
 LEAD = (
     r"(?:(?!(?:not|never|no|nor|off|but|than|rather|instead|should|must|needs?|do|does|don't|doesn't|"
