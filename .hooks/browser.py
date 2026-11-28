@@ -672,8 +672,18 @@ def shoot_page(
         require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
         unread_frames(tool, folder, session, width)
         require_readable_document(tool, folder, session, masked=True)
-        route = json.loads(
-            require(run_tool(tool, folder, session, "eval", "location.pathname"))
+        route, viewport_height = json.loads(
+            json.loads(
+                require(
+                    run_tool(
+                        tool,
+                        folder,
+                        session,
+                        "eval",
+                        "JSON.stringify([location.pathname, innerHeight])",
+                    )
+                )
+            )
         )
         write_record(
             root,
@@ -683,6 +693,8 @@ def shoot_page(
             str(route),
             ring_boxes=ring_boxes,
             measured=measured,
+            image_height=int.from_bytes(image.read_bytes()[20:24], "big"),
+            viewport_height=int(viewport_height),
         )
     except BaseException:
         image.unlink(missing_ok=True)
