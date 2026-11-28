@@ -357,7 +357,11 @@ def capture_note(root: Path | None, digest: str) -> str:
         image, screen = item.get("image_height"), item.get("viewport_height")
         if item.get("sha256") == digest and isinstance(image, int) and screen:
             steps = item.get("steps")
-            after = f", after {', '.join(map(str, steps))}" if steps else ""
+            after = (
+                f", after {', '.join(map(str, steps))}"
+                if isinstance(steps, list) and steps
+                else ""
+            )
             return f"{image} px tall, screen {screen} px{after}"
     return ""
 
