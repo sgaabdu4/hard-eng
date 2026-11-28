@@ -124,8 +124,8 @@ def test_real_variants_of_each_field_and_text_fault_are_found(
 
 @pytest.mark.parametrize(
     "body",
-    [*REAL_PATTERNS.values(), *HIDDEN_CONTENT.values()],
-    ids=[*REAL_PATTERNS, *HIDDEN_CONTENT],
+    [*REAL_PATTERNS.values(), "".join(HIDDEN_CONTENT.values())],
+    ids=[*REAL_PATTERNS, "hidden-content"],
 )
 def test_real_patterns_that_look_like_faults_are_not_findings(
     tmp_path: Path, site: str, browser: ModuleType, body: str
