@@ -2,7 +2,6 @@
 
 import json
 import threading
-import time
 from collections import Counter
 from pathlib import Path
 from types import ModuleType
@@ -189,11 +188,14 @@ def test_sequential_fetch_waterfall_and_layout_shift_are_measured(
         )
 
 
+WAIT_MS = 20000
 SETTLED = (
-    "(async () => { for (;;) { const log = window.__heRequests || []; "
+    "(async () => { const stop = performance.now() + WAIT; for (;;) { const log = window.__heRequests || []; "
     "const last = Math.max(0, ...log.map((e) => e.end)); "
     "if ((window.pressed || 0) >= PRESSES && log.every((e) => e.end > 0) "
     "&& performance.now() - last >= QUIET) return true; "
+    "if (performance.now() > stop) throw new Error('the page never settled: ' + window.pressed + ' presses, requests ' "
+    "+ JSON.stringify(log.map((e) => [Math.round(e.start), Math.round(e.end)]))); "
     "await new Promise((go) => setTimeout(go, 25)); } })()"
 )
 LOAD_WAVE = "Promise.all([0,1].map((i) => fetch('/step.json?l=' + i)));"
@@ -264,18 +266,34 @@ def open_board(tmp_path: Path, site: str, name: str, page_name: str) -> None:
     plain_step(tmp_path, name, "open", f"{site}/{page_name}.html")
 
 
+def until(tmp_path: Path, name: str, condition: str) -> None:
+    """Wait on the page itself until `condition` holds, so the order of page events decides, not the clock; a polling page is never quiet, so the fetch log cannot settle."""
+    script = (
+        "(async () => { const stop = performance.now() + WAIT; while (!(CONDITION)) { "
+        "if (performance.now() > stop) throw new Error('never: ' + TEXT + ', requests ' "
+        "+ JSON.stringify(window.__heRequests.map((e) => [Math.round(e.start), Math.round(e.end)]))); "
+        "await new Promise((go) => setTimeout(go, 25)); } return true; })()"
+    )
+    plain_step(
+        tmp_path,
+        name,
+        "eval",
+        script.replace("WAIT", str(WAIT_MS))
+        .replace("TEXT", json.dumps(condition))
+        .replace("CONDITION", condition),
+    )
+
+
 def finished(tmp_path: Path, name: str) -> None:
-    for _ in range(120):
-        if plain_step(tmp_path, name, "eval", "window.done === true").strip() == "true":
-            return
-        time.sleep(0.5)
-    raise AssertionError("the page chain did not finish")
+    until(tmp_path, name, "window.done === true")
 
 
 def settled(tmp_path: Path, name: str, presses: int = 0) -> None:
     """Wait on the page itself until `presses` presses have finished and no fetch has run for longer than the quiet limit."""
-    script = SETTLED.replace("PRESSES", str(presses)).replace(
-        "QUIET", str(LIMITS["action_quiet_ms"] + 100)
+    script = (
+        SETTLED.replace("PRESSES", str(presses))
+        .replace("QUIET", str(LIMITS["action_quiet_ms"] + 100))
+        .replace("WAIT", str(WAIT_MS))
     )
     plain_step(tmp_path, name, "eval", script)
 
