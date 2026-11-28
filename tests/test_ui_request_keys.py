@@ -1,5 +1,6 @@
 """A repeat of an earlier finished request adds no fetch wave; any other request chain still counts."""
 
+import json
 from pathlib import Path
 from types import ModuleType
 
@@ -16,47 +17,43 @@ from test_ui_audit_guards import (
 )
 from ui_measure import LIMITS
 
-LOOP = (
-    "(async () => { const go = (n) => CALL; "
-    "for (let i = 0; i < COUNT; i++) { await go(i); await new Promise((r) => setTimeout(r, GAP)); } "
-    "window.done = true; })();"
-)
 POLLING = (
-    "(async () => { const go = () => CALL; "
+    "(async () => { const go = () => Promise.all([CALLS]); "
     "const polls = [0, 1, 2, 3, 4].map((i) => new Promise((r) => setTimeout(r, i * 300)).then(go)); "
     "for (const w of 'abc') await fetch('/step.json?' + w).then((r) => r.text()); "
     "await Promise.all(polls); window.done = true; })();"
 )
-FORM = (
-    "(() => { const f = new FormData(); f.append('a', '1'); "
-    "return fetch('/session', { method: 'POST', body: f }).then((r) => r.text()); })()"
+CHAIN = (
+    "(async () => { for (const call of [CALLS]) await call(); window.done = true; })();"
 )
-POST = "fetch('/session', { method: 'POST', body: BODY }).then((r) => r.text())"
+POST = "() => fetch('/session', { method: 'POST', body: BODY }).then((r) => r.text())"
 XHR = (
-    "new Promise((done) => { const q = new XMLHttpRequest(); q.open('POST', '/session'); "
+    "() => new Promise((done) => { const q = new XMLHttpRequest(); q.open('POST', '/session'); "
     "q.onload = () => done(q.responseText); q.send(BODY); })"
 )
-POLLS = {
-    "fetch-get": "fetch('/step.json?poll').then((r) => r.text())",
-    "fetch-string-body": POST.replace("BODY", "'poll=1'"),
-    "fetch-search-params": POST.replace("BODY", "new URLSearchParams({ poll: 1 })"),
-    "xhr-string-body": XHR.replace("BODY", "'poll=1'"),
-    "xhr-no-body": XHR.replace("BODY", ""),
-}
-CHAINS = {
-    "fetch-different-string-bodies": POST.replace(
-        "BODY", "JSON.stringify({ step: n })"
-    ),
-    "fetch-form-data": FORM,
-    "fetch-blob": POST.replace("BODY", "new Blob(['same'])"),
-    "fetch-request-with-body": (
-        "fetch(new Request('/session', { method: 'POST', body: 'same' })).then((r) => r.text())"
-    ),
-    "xhr-different-string-bodies": XHR.replace("BODY", "'step=' + n"),
-    "xhr-form-data": XHR.replace(
-        "BODY", "(() => { const f = new FormData(); f.append('a', '1'); return f; })()"
-    ),
-}
+FORM = "(() => { const f = new FormData(); f.append('a', '1'); return f; })()"
+POLLS = [
+    "() => fetch('/step.json?poll').then((r) => r.text())",
+    POST.replace("BODY", "'poll=1'"),
+    POST.replace("BODY", "new URLSearchParams({ q: 2 })"),
+    XHR.replace("BODY", "'poll=3'"),
+    XHR.replace("BODY", ""),
+]
+FETCH_CHAIN = [
+    POST.replace("BODY", "'step=a'"),
+    POST.replace("BODY", "'step=b'"),
+    *[POST.replace("BODY", FORM)] * 2,
+    *[POST.replace("BODY", "new Blob(['same'])")] * 2,
+    *[
+        "() => fetch(new Request('/session', { method: 'POST', body: 'same' })).then((r) => r.text())"
+    ]
+    * 2,
+]
+XHR_CHAIN_CALLS = [
+    XHR.replace("BODY", "'step=a'"),
+    XHR.replace("BODY", "'step=b'"),
+    *[XHR.replace("BODY", FORM)] * 2,
+]
 
 
 def run(
@@ -72,26 +69,37 @@ def run(
         plain_step(tmp_path, name, "close")
 
 
-@pytest.mark.parametrize("call", POLLS.values(), ids=POLLS)
-def test_a_poll_that_repeats_after_the_load_adds_no_wave(
-    tmp_path: Path, site: str, browser: ModuleType, call: str
+def waves(tmp_path: Path) -> object:
+    record = json.loads((tmp_path / ".hard-eng/browser/state-768.json").read_text())
+    return next(
+        item["waves"]
+        for item in record["findings"]
+        if item["rule"] == "fetch-waterfall"
+    )
+
+
+def test_polls_that_repeat_after_the_load_add_no_wave(
+    tmp_path: Path, site: str, browser: ModuleType
 ) -> None:
-    script = POLLING.replace("CALL", call)
+    script = POLLING.replace("CALLS", ", ".join(f"({call})()" for call in POLLS))
     assert run(tmp_path, site, browser, script) == []
 
 
-@pytest.mark.parametrize("call", CHAINS.values(), ids=CHAINS)
-def test_a_chain_to_one_address_with_a_new_body_each_time_still_fails(
-    tmp_path: Path, site: str, browser: ModuleType, call: str
+@pytest.mark.parametrize(
+    ("calls", "count"), [(FETCH_CHAIN, 8), (XHR_CHAIN_CALLS, 4)], ids=["fetch", "xhr"]
+)
+def test_a_chain_to_one_address_with_a_new_body_each_time_still_counts_every_wave(
+    tmp_path: Path, site: str, browser: ModuleType, calls: list[str], count: int
 ) -> None:
-    script = LOOP.replace("CALL", call).replace("COUNT", "4").replace("GAP", "0")
+    script = CHAIN.replace("CALLS", ", ".join(calls))
     assert run(tmp_path, site, browser, script) == [("fetch-waterfall", "load")]
+    assert waves(tmp_path) == count
 
 
 BACKGROUND_POLL = (
-    "window.polls = new Set(); "
-    "setInterval(() => { window.polls.add(window.__heRequests.length); "
-    "fetch('/step.json?poll').then((r) => r.text()); }, 300);"
+    "window.polls = new Set(); window.tickStart = 0; window.tickDone = 0; "
+    "setInterval(() => { window.tickStart += 1; window.polls.add(window.__heRequests.length); "
+    "fetch('/step.json?poll').then((r) => r.text()).then(() => { window.tickDone += 1; }); }, 300);"
 )
 
 
@@ -164,11 +172,11 @@ def test_a_tab_opened_again_after_another_tab_is_measured_as_its_own_step(
         plain_step(tmp_path, name, "close")
 
 
-LONG_PRESS = (
-    "(async () => { await new Promise((go) => setTimeout(go, 600)); "
-    "for (let i = 0; i < 3; i++) "
-    "await fetch('/step.json?long=' + i + Date.now()).then((r) => r.text()); "
-    "await new Promise((go) => setTimeout(go, 400)); "
+CARRY_PRESS = (
+    "(async () => { const from = window.tickStart; "
+    "while (window.tickStart < from + 2) await new Promise((go) => setTimeout(go, 25)); "
+    "while (window.tickDone < window.tickStart) await new Promise((go) => setTimeout(go, 25)); "
+    "for (const u of ['c1', 'c2', 'c3']) await fetch('/step.json?' + u + Date.now()).then((r) => r.text()); "
     "window.pressed = (window.pressed || 0) + 1; })()"
 )
 
@@ -180,7 +188,7 @@ def test_a_poll_that_carries_on_into_a_press_adds_no_wave_to_it(
         tmp_path,
         "carry",
         LOAD_WAVE + BACKGROUND_POLL,
-        press_button("a", LONG_PRESS),
+        press_button("a", CARRY_PRESS),
     )
     name = session()
     open_board(tmp_path, site, name, "carry")
