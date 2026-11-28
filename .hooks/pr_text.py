@@ -379,7 +379,7 @@ def ui_problem(
     except ShippingError as error:
         return f"The list of files that the PR changes is unavailable ({error})"
     try:
-        urls = attachment_urls(body, file_names(files), patterns)
+        urls = attachment_urls(body, file_names(files, patterns), patterns)
     except ValueError as error:
         return str(error)
     if urls and (problem := block_problem(body, len(urls) // 2)):

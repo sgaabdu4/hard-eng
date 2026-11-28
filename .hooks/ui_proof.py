@@ -745,16 +745,14 @@ def changed_files(
     return items
 
 
-def file_names(files: list[dict[str, JsonValue]]) -> list[str]:
-    """The new name of each changed file, and the old name of each renamed one, without the files that a Hard Eng update installs."""
-    from update import maybe_installed
-
+def file_names(files: list[dict[str, JsonValue]], patterns: list[str]) -> list[str]:
+    """The new name of each changed file, and the old name of each renamed one, that is a UI file."""
     names: set[str] = set()
     for item in files:
         names.add(cast(str, item["filename"]))
         if item.get("previous_filename") is not None:
             names.add(cast(str, item["previous_filename"]))
-    return sorted(name for name in names if not maybe_installed(name))
+    return sorted(name for name in names if matches(name, patterns))
 
 
 def check_attachment(root: Path, url: str) -> str:
@@ -840,7 +838,7 @@ def ui_evidence(
     """Raise ValueError when a PR that changes a UI file lacks its screen evidence."""
     from ship_evidence import attachment_urls
 
-    urls = attachment_urls(pull.body, file_names(files), patterns)
+    urls = attachment_urls(pull.body, file_names(files, patterns), patterns)
     kinds = {url: check_attachment(root, url) for url in urls}
     final = urls[len(urls) // 2 :]
     after = [url for url in final if kinds[url].startswith("image/")]

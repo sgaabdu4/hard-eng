@@ -6,11 +6,11 @@ import pytest
 import shipping
 from test_shipping_delivered import _PUSH_SUITE, _delivered_fake, _run_of, _verify
 
-INSTALLED_PAGE = {
+INSTALLED_PAGE: dict[str, object] = {
     "filename": ".agents/skills/client-report/assets/starter.html",
     "patch": "@@ -1 +1 @@\n-<p>a</p>\n+<p>b</p>",
 }
-PROJECT_PAGE = {
+PROJECT_PAGE: dict[str, object] = {
     "filename": "site/index.html",
     "patch": "@@ -1 +1 @@\n-<p>a</p>\n+<p>b</p>",
 }
