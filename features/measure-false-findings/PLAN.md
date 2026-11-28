@@ -15,7 +15,7 @@ Deliverables: None
 - Closed `details` content is not measured, and the same markup open still is: In scope — A long label in a closed narrow `details` gives no `wrapped-label` and no `tap-size`; with `open` it keeps both
 - Other hidden states of the same cause: In scope — Each other hidden state gives no finding
 - A repeat request adds no wave: In scope — A repeat request adds no wave
-- A chain to one address with a new body each time still fails: In scope — A chain with a new body each time still fails
+- A chain to one address with a new body each time still fails: In scope — A chain with a new body each time still counts every wave
 - A polling page still splits parts at a press, and a poll that carries on into a press adds no wave to it: In scope — A polling page still splits parts at a press; a poll that carries on into a press adds no wave to it
 - A tab opened again after another tab is its own step: In scope — A tab opened again after another tab is its own step
 - A nested inline element is not a second line: In scope — A nested inline element is not a second line, and a small inline element in a body-size line still is
