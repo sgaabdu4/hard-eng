@@ -77,6 +77,7 @@ FIND_LOCATORS = frozenset(
     {"role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last"}
 )
 MAX_ACTIONS = 500
+MAX_NOTED_STEPS = 8
 
 PAGE_SCRIPT = """(async () => {
 const phone = /(?<!\\d)(?:\\+\\d{1,3}[\\s.-]?)?(?:\\(\\d{2,5}\\)|\\d{2,5})[\\s.-]?\\d{3,5}(?:[\\s.-]?\\d{3,5})?(?!\\d)/g;
@@ -672,7 +673,7 @@ def shoot_page(
         require(run_tool(tool, folder, session, "screenshot", "--full", str(image)))
         unread_frames(tool, folder, session, width)
         require_readable_document(tool, folder, session, masked=True)
-        route, viewport_height = json.loads(
+        route, viewport_height, loaded_at = json.loads(
             json.loads(
                 require(
                     run_tool(
@@ -680,11 +681,16 @@ def shoot_page(
                         folder,
                         session,
                         "eval",
-                        "JSON.stringify([location.pathname, innerHeight])",
+                        "JSON.stringify([location.pathname, innerHeight, performance.timeOrigin])",
                     )
                 )
             )
         )
+        steps = [
+            verb
+            for stamp, verb in session_actions(folder, session)
+            if stamp > loaded_at
+        ][-MAX_NOTED_STEPS:]
         write_record(
             root,
             image,
@@ -695,6 +701,7 @@ def shoot_page(
             measured=measured,
             image_height=int.from_bytes(image.read_bytes()[20:24], "big"),
             viewport_height=int(viewport_height),
+            steps=steps,
         )
     except BaseException:
         image.unlink(missing_ok=True)
