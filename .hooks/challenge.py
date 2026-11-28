@@ -184,9 +184,8 @@ def git_text(root: Path, *arguments: str) -> str:
 
 
 def store(root: Path, revision: str, kind: str = "challenge") -> Path:
-    return (
-        root / git_text(root, "rev-parse", "--git-path", f"hard-eng/{kind}") / revision
-    )
+    common = git_text(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return Path(common) / "hard-eng" / kind / revision
 
 
 def clip(text: str, limit: int) -> str:
