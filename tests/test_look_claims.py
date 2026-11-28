@@ -257,7 +257,7 @@ TAPS = values(
 def test_a_tap_size_claim_is_checked_against_the_size_of_its_control(
     tmp_path: Path,
 ) -> None:
-    for note in ("too small to tap", "a bad tap target", "hard to tap"):
+    for note in ("too small to tap", "a tap target too small", "hard to tap"):
         refused = judged_with_keys(
             f"image-1.png: Save is {note} [judgement] Fix: enlarge it", TAPS
         )
@@ -267,6 +267,8 @@ def test_a_tap_size_claim_is_checked_against_the_size_of_its_control(
         assert refused[1] == [], note
     stays = [
         "image-1.png: Save label is blue [judgement] Fix: use the accent",
+        "image-1.png: Save tap target overlaps Cancel [judgement] Fix: space them",
+        "image-1.png: Save touch size is set by the label [judgement] Fix: pad it",
         "image-1.png: the page title is too small to tap [judgement] Fix: enlarge it",
         "image-1.png: Save [tap] too small to tap Fix: enlarge it",
     ]
