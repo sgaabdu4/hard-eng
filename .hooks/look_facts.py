@@ -16,6 +16,11 @@ TRIGGER = {
         r"(?i)\b(?:not\s+cent(?:red|ered)|uncent(?:red|ered)|off[- ]cent(?:re|er)(?:d)?|cent(?:red|ered))\b"
     ),
     "gap": re.compile(r"(?i)\b(?:touch(?:es|ing)?|no gap)\b"),
+    "tap": re.compile(
+        r"(?i)\b(?:too\s+(?:small|tiny|narrow|short)\s+(?:to|for)\s+(?:tap|click|press)(?:ping)?|"
+        r"(?:tap|touch)[- ](?:target|size)s?\s+(?:is\s+|are\s+)?(?:too\s+)?(?:small|tiny|narrow|short)|"
+        r"hard\s+to\s+(?:tap|hit|press))\b"
+    ),
 }
 LEAD = (
     r"(?:(?!(?:not|never|no|nor|off|but|than|rather|instead|should|must|needs?|do|does|don't|doesn't|"
@@ -330,7 +335,7 @@ def item_keys(measured: dict[str, object]) -> dict[str, frozenset[str]]:
 
 
 def claim_word(kind: str, text: str) -> str:
-    """The word of a claim form that the text holds for this kind, or an empty text: `square`, `squared` or `sharp` for a radius; `centred`, `not centred`, `uncentred` or `off-centre` for an alignment; `touch`, `touches`, `touching` or `no gap` for a gap."""
+    """The word of a claim form that the text holds for this kind, or an empty text: `square`, `squared` or `sharp` for a radius; `centred`, `not centred`, `uncentred` or `off-centre` for an alignment; `touch`, `touches`, `touching` or `no gap` for a gap; `too small to tap`, `tap target too small` or `hard to tap` for a tap size."""
     found = TRIGGER[kind].search(text) if kind in TRIGGER else None
     return found[0].lower() if found else ""
 

@@ -715,6 +715,9 @@ def write_record(
     route: str = "",
     ring_boxes: list[dict[str, int]] | None = None,
     measured: dict[str, object] | None = None,
+    image_height: int = 0,
+    viewport_height: int = 0,
+    steps: list[str] | None = None,
 ) -> Path:
     payload: dict[str, object] = {
         "image": image.name,
@@ -728,6 +731,11 @@ def write_record(
         payload["ring_boxes"] = list(ring_boxes)
     if measured:
         payload["measured"] = measured
+    if image_height and viewport_height:
+        payload["image_height"] = image_height
+        payload["viewport_height"] = viewport_height
+    if steps:
+        payload["steps"] = list(steps)
     record = image.with_suffix(".json")
     record.write_text(json.dumps(payload, indent=2) + "\n")
     return record

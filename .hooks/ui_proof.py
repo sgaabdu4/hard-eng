@@ -108,7 +108,12 @@ def is_visible(change: Change) -> bool:
 
 
 def matches(name: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
+    """Whether the path is a UI file: under `ui_paths` and not a file that a Hard Eng update installs."""
+    if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
+        return False
+    from update import maybe_installed
+
+    return not maybe_installed(name)
 
 
 def ui_names(item: Mapping[str, object], patterns: list[str]) -> list[tuple[str, bool]]:
@@ -740,14 +745,14 @@ def changed_files(
     return items
 
 
-def file_names(files: list[dict[str, JsonValue]]) -> list[str]:
-    """The new name of each changed file, and the old name of each renamed one."""
+def file_names(files: list[dict[str, JsonValue]], patterns: list[str]) -> list[str]:
+    """The new name of each changed file, and the old name of each renamed one, that is a UI file."""
     names: set[str] = set()
     for item in files:
         names.add(cast(str, item["filename"]))
         if item.get("previous_filename") is not None:
             names.add(cast(str, item["previous_filename"]))
-    return sorted(names)
+    return sorted(name for name in names if matches(name, patterns))
 
 
 def check_attachment(root: Path, url: str) -> str:
@@ -833,7 +838,7 @@ def ui_evidence(
     """Raise ValueError when a PR that changes a UI file lacks its screen evidence."""
     from ship_evidence import attachment_urls
 
-    urls = attachment_urls(pull.body, file_names(files), patterns)
+    urls = attachment_urls(pull.body, file_names(files, patterns), patterns)
     kinds = {url: check_attachment(root, url) for url in urls}
     final = urls[len(urls) // 2 :]
     after = [url for url in final if kinds[url].startswith("image/")]

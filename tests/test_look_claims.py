@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import look_records
-from test_look_facts import text_fact, values
+from test_look_facts import control, text_fact, values
 from test_look_keys import judged_with_keys
 
 CHIPS = [
@@ -247,3 +247,41 @@ def test_a_curly_apostrophe_or_off_centred_never_flips_a_claim(tmp_path: Path) -
         found = decided(f"{rule}: Fail — image-1.png: {item} Fix: change it.", measured)
         assert "Pass" not in found, item
         assert (" — code:" in found) == (rule == "Alignment"), item
+
+
+TAPS = values(
+    sizes={"controls": [control("Save"), control("Cancel", 60, 30), control("Go", 90)]}
+)
+
+
+def test_a_tap_size_claim_is_checked_against_the_size_of_its_control(
+    tmp_path: Path,
+) -> None:
+    for note in ("too small to tap", "a tap target too small", "hard to tap"):
+        refused = judged_with_keys(
+            f"image-1.png: Save is {note} [judgement] Fix: enlarge it", TAPS
+        )
+        assert refused[0].startswith("not done: "), note
+        assert "states a claim about a measured element" in refused[0], note
+        assert "image-1.png: Save [tap] <note>" in refused[0], note
+        assert refused[1] == [], note
+    stays = [
+        "image-1.png: Save label is blue [judgement] Fix: use the accent",
+        "image-1.png: Save tap target overlaps Cancel [judgement] Fix: space them",
+        "image-1.png: Save touch size is set by the label [judgement] Fix: pad it",
+        "image-1.png: the page title is too small to tap [judgement] Fix: enlarge it",
+        "image-1.png: Save [tap] too small to tap Fix: enlarge it",
+    ]
+    for item in stays:
+        assert not judged_with_keys(item, TAPS)[0].startswith("not done: "), item
+    disproved = decided(
+        "Usability: Fail — image-1.png: Save [tap] too small to tap Fix: enlarge it.",
+        TAPS,
+    )
+    assert disproved.startswith("Usability: Pass — code checked: ")
+    true_small = decided(
+        "Usability: Fail — image-1.png: Cancel [tap] too small to tap Fix: enlarge it.",
+        TAPS,
+    )
+    assert true_small.startswith("Usability: Fail")
+    assert "control is 60x30 px, under its 44 px floor" in true_small

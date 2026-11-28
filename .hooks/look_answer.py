@@ -19,6 +19,7 @@ CLAIM_NOTES = {
     "radius": "Start the note with the claim, such as `square corners`, only when you claim that the corners are square; any other note is judgement",
     "align": "Start the note with the claim, such as `centred`, only when you claim that the text is centred; write `not centred` when you claim that it is not",
     "gap": "Start the note with the claim, such as `chips touch`, only when you claim that the neighbours touch; any other note is judgement",
+    "tap": "Code decides the tap size of this control from its measured size, so write the note as `too small to tap`",
 }
 RECHECK_LINE = re.compile(r"(?i)^recheck\s+R(\d+)\s*:\s*(still shown|gone)\b(.*)")
 NUMBER = re.compile(r"\d+")

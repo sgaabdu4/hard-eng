@@ -48,7 +48,7 @@ def image_keys(
     import look
 
     names = [f"image-{number}.png" for number in range(1, len(digests) + 1)]
-    ringed, values = look.image_inputs(root, names, digests)
+    ringed, values, notes = look.image_inputs(root, names, digests)
     shared = look.sha256(
         json.dumps(
             [
@@ -61,6 +61,7 @@ def image_keys(
         look.sha256(
             json.dumps(
                 [shared, digest, ringed.get(name, []), values.get(name, "")]
+                + ([notes[name]] if name in notes else [])
             ).encode()
         )
         for name, digest in zip(names, digests, strict=True)
